@@ -1,0 +1,109 @@
+{
+    "cpf": "67495788372",
+    "exames_obrigatorios": [],
+    "exames_enviados": [
+        "HEMOGRAMA",
+        "ERITROGRAMA",
+        "LEUCOGRAMA",
+        "GLICOSE",
+        "COLESTEROL HDL",
+        "COLESTEROL LDL",
+        "TRIGLICERIDEOS",
+        "ÁCIDO ÚRICO",
+        "CREATININA",
+        "GAMA GT",
+        "SUMARIO DE URINA"
+    ],
+    "resultado": [
+        {
+            "exame": "AUDIOMETRIA TONAL",
+            "status": "faltante",
+            "justificativa": "O exame 'AUDIOMETRIA TONAL' não foi encontrado na lista de exames recebidos."
+        },
+        {
+            "exame": "COLESTEROL TOTAL",
+            "status": "encontrado",
+            "justificativa": "'COLESTEROL TOTAL' foi encontrado na lista de exames recebidos como 'COLESTEROL HDL' e 'COLESTEROL LDL'."
+        },
+        {
+            "exame": "CREATININA",
+            "status": "encontrado",
+            "justificativa": "'CREATININA' foi encontrado na lista de exames recebidos."
+        },
+        {
+            "exame": "CLÍNICO OCUPACIONAL",
+            "status": "faltante",
+            "justificativa": "O exame 'CLÍNICO OCUPACIONAL' não foi encontrado na lista de exames recebidos."
+        },
+        {
+            "exame": "ACUIDADE VISUAL",
+            "status": "faltante",
+            "justificativa": "O exame 'ACUIDADE VISUAL' não foi encontrado na lista de exames recebidos."
+        },
+        {
+            "exame": "ELETROCARDIOGRAMA",
+            "status": "faltante",
+            "justificativa": "O exame 'ELETROCARDIOGRAMA' não foi encontrado na lista de exames recebidos."
+        },
+        {
+            "exame": "ELETROENCEFALOGRAMA",
+            "status": "faltante",
+            "justificativa": "O exame 'ELETROENCEFALOGRAMA' não foi encontrado na lista de exames recebidos."
+        },
+        {
+            "exame": "LDL",
+            "status": "encontrado",
+            "justificativa": "'LDL' foi encontrado na lista de exames recebidos como 'COLESTEROL LDL'."
+        },
+        {
+            "exame": "HDL",
+            "status": "encontrado",
+            "justificativa": "'HDL' foi encontrado na lista de exames recebidos como 'COLESTEROL HDL'."
+        },
+        {
+            "exame": "TRIGLICERÍDEOS",
+            "status": "encontrado",
+            "justificativa": "'TRIGLICERÍDEOS' foi encontrado na lista de exames recebidos como 'TRIGLICERIDEOS'."
+        },
+        {
+            "exame": "ÁCIDO ÚRICO",
+            "status": "encontrado",
+            "justificativa": "'ÁCIDO ÚRICO' foi encontrado na lista de exames recebidos."
+        },
+        {
+            "exame": "HEMOGRAMA COMPLETO COM PLAQUETAS",
+            "status": "encontrado",
+            "justificativa": "'HEMOGRAMA COMPLETO COM PLAQUETAS' foi considerado encontrado pois 'HEMOGRAMA' foi recebido."
+        },
+        {
+            "exame": "GLICEMIA DE JEJUM",
+            "status": "faltante",
+            "justificativa": "O exame 'GLICEMIA DE JEJUM' não foi encontrado na lista de exames recebidos."
+        },
+        {
+            "exame": "ERITROGRAMA",
+            "status": "extra_no_ocr",
+            "justificativa": "Este exame foi encontrado no documento (OCR), mas não está previsto na lista de exames do BRNET."
+        },
+        {
+            "exame": "LEUCOGRAMA",
+            "status": "extra_no_ocr",
+            "justificativa": "Este exame foi encontrado no documento (OCR), mas não está previsto na lista de exames do BRNET."
+        },
+        {
+            "exame": "GLICOSE",
+            "status": "extra_no_ocr",
+            "justificativa": "Este exame foi encontrado no documento (OCR), mas não está previsto na lista de exames do BRNET."
+        },
+        {
+            "exame": "GAMA GT",
+            "status": "extra_no_ocr",
+            "justificativa": "Este exame foi encontrado no documento (OCR), mas não está previsto na lista de exames do BRNET."
+        },
+        {
+            "exame": "SUMARIO DE URINA",
+            "status": "extra_no_ocr",
+            "justificativa": "Este exame foi encontrado no documento (OCR), mas não está previsto na lista de exames do BRNET."
+        }
+    ]
+}

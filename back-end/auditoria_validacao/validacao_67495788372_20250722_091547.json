@@ -1,0 +1,33 @@
+{
+    "cpf": "67495788372",
+    "exames_obrigatorios": [
+        "HEMOGRAMA COMPLETO",
+        "GLICOSE",
+        "AUDIOMETRIA",
+        "GAMA GT"
+    ],
+    "exames_enviados": [
+        "HEMOGRAMA",
+        "ERITROGRAMA",
+        "LEUCOGRAMA",
+        "GLICOSE",
+        "COLESTEROL HDL",
+        "COLESTEROL LDL",
+        "TRIGLICERIDEOS",
+        "ÁCIDO ÚRICO",
+        "CREATININA",
+        "GAMA GT",
+        "SUMARIO DE URINA"
+    ],
+    "resultado": {
+        "status_liberado": false,
+        "exames_faltantes": [
+            "AUDIOMETRIA"
+        ],
+        "exames_presentes": [
+            "HEMOGRAMA COMPLETO",
+            "GLICOSE",
+            "GAMA GT"
+        ]
+    }
+}

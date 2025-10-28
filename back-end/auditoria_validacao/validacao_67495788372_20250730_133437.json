@@ -1,0 +1,23 @@
+{
+    "cpf": "67495788372",
+    "exames_obrigatorios": [],
+    "exames_enviados": [
+        "HEMOGRAMA",
+        "ERITROGRAMA",
+        "LEUCOGRAMA",
+        "GLICOSE",
+        "COLESTEROL HDL",
+        "COLESTEROL LDL",
+        "TRIGLICERIDEOS",
+        "ÁCIDO ÚRICO",
+        "CREATININA",
+        "GAMA GT",
+        "SUMARIO DE URINA"
+    ],
+    "resultado": {
+        "status_liberado": true,
+        "exames_comparativo": [],
+        "exames_faltantes": [],
+        "exames_presentes": []
+    }
+}

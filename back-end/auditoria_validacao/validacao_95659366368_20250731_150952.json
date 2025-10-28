@@ -1,0 +1,86 @@
+{
+    "cpf": "95659366368",
+    "exames_obrigatorios": [],
+    "exames_enviados": [
+        "ACUIDADE VISUAL",
+        "AUDIOMETRIA TONAL",
+        "HEMOGRAMA",
+        "GLICOSE",
+        "LIPIDOGRAMA COMPLETO",
+        "CREATININA",
+        "TGO",
+        "TGP",
+        "GAMA GT",
+        "FOSFATASE ALCALINA",
+        "BILIRRUBINA DIRETA",
+        "BILIRRUBINA INDIRETA",
+        "TSH ULTRA SENSIVEL"
+    ],
+    "resultado": [
+        {
+            "exame": "CREATININA",
+            "status": "encontrado",
+            "justificativa": "'CREATININA' foi encontrado na lista de exames recebidos."
+        },
+        {
+            "exame": "HEMOGRAMA COMPLETO COM PLAQUETAS",
+            "status": "encontrado",
+            "justificativa": "'HEMOGRAMA COMPLETO COM PLAQUETAS' foi considerado encontrado pois 'HEMOGRAMA' foi recebido."
+        },
+        {
+            "exame": "ACUIDADE VISUAL",
+            "status": "encontrado",
+            "justificativa": "'ACUIDADE VISUAL' foi encontrado na lista de exames recebidos."
+        },
+        {
+            "exame": "AUDIOMETRIA TONAL",
+            "status": "encontrado",
+            "justificativa": "'AUDIOMETRIA TONAL' foi encontrado na lista de exames recebidos."
+        },
+        {
+            "exame": "BILIRRUBINA TOTAL E FRAÇÕES",
+            "status": "encontrado",
+            "justificativa": "'BILIRRUBINA TOTAL E FRAÇÕES' foi considerado encontrado pois 'BILIRRUBINA DIRETA' e 'BILIRRUBINA INDIRETA' foram recebidas."
+        },
+        {
+            "exame": "FOSFATASE ALCALINA",
+            "status": "encontrado",
+            "justificativa": "'FOSFATASE ALCALINA' foi encontrado na lista de exames recebidos."
+        },
+        {
+            "exame": "HEMOGLOBINA GLICADA",
+            "status": "faltante",
+            "justificativa": "'HEMOGLOBINA GLICADA' não foi encontrado na lista de exames recebidos."
+        },
+        {
+            "exame": "GLICOSE",
+            "status": "extra_no_ocr",
+            "justificativa": "'GLICOSE' foi encontrado no documento (OCR), mas não está previsto na lista de exames do BRNET."
+        },
+        {
+            "exame": "LIPIDOGRAMA COMPLETO",
+            "status": "extra_no_ocr",
+            "justificativa": "'LIPIDOGRAMA COMPLETO' foi encontrado no documento (OCR), mas não está previsto na lista de exames do BRNET."
+        },
+        {
+            "exame": "TGO",
+            "status": "extra_no_ocr",
+            "justificativa": "'TGO' foi encontrado no documento (OCR), mas não está previsto na lista de exames do BRNET."
+        },
+        {
+            "exame": "TGP",
+            "status": "extra_no_ocr",
+            "justificativa": "'TGP' foi encontrado no documento (OCR), mas não está previsto na lista de exames do BRNET."
+        },
+        {
+            "exame": "GAMA GT",
+            "status": "extra_no_ocr",
+            "justificativa": "'GAMA GT' foi encontrado no documento (OCR), mas não está previsto na lista de exames do BRNET."
+        },
+        {
+            "exame": "TSH ULTRA SENSIVEL",
+            "status": "extra_no_ocr",
+            "justificativa": "'TSH ULTRA SENSIVEL' foi encontrado no documento (OCR), mas não está previsto na lista de exames do BRNET."
+        }
+    ]
+}

@@ -1,0 +1,129 @@
+{
+    "cpf": "67495788372",
+    "exames_obrigatorios": [],
+    "exames_enviados": [
+        "HEMOGRAMA",
+        "ERITROGRAMA",
+        "LEUCOGRAMA",
+        "GLICOSE",
+        "COLESTEROL HDL",
+        "COLESTEROL LDL",
+        "TRIGLICERIDEOS",
+        "ÁCIDO ÚRICO",
+        "CREATININA",
+        "GAMA GT",
+        "SUMARIO DE URINA"
+    ],
+    "resultado": [
+        {
+            "exame": "HEMOGRAMA",
+            "status": "encontrado",
+            "justificativa": "O exame HEMOGRAMA foi encontrado e corresponde ao esperado."
+        },
+        {
+            "exame": "ERITROGRAMA",
+            "status": "faltante",
+            "justificativa": "O exame ERITROGRAMA era esperado, mas não foi encontrado."
+        },
+        {
+            "exame": "LEUCOGRAMA",
+            "status": "faltante",
+            "justificativa": "O exame LEUCOGRAMA era esperado, mas não foi encontrado."
+        },
+        {
+            "exame": "GLICOSE",
+            "status": "faltante",
+            "justificativa": "O exame GLICOSE era esperado, mas não foi encontrado."
+        },
+        {
+            "exame": "COLESTEROL HDL",
+            "status": "encontrado",
+            "justificativa": "O exame COLESTEROL HDL foi encontrado e corresponde ao esperado."
+        },
+        {
+            "exame": "COLESTEROL LDL",
+            "status": "encontrado",
+            "justificativa": "O exame COLESTEROL LDL foi encontrado e corresponde ao esperado."
+        },
+        {
+            "exame": "TRIGLICERIDEOS",
+            "status": "encontrado",
+            "justificativa": "O exame TRIGLICERIDEOS foi encontrado e corresponde ao esperado."
+        },
+        {
+            "exame": "ÁCIDO ÚRICO",
+            "status": "encontrado",
+            "justificativa": "O exame ÁCIDO ÚRICO foi encontrado e corresponde ao esperado."
+        },
+        {
+            "exame": "CREATININA",
+            "status": "encontrado",
+            "justificativa": "O exame CREATININA foi encontrado e corresponde ao esperado."
+        },
+        {
+            "exame": "GAMA GT",
+            "status": "faltante",
+            "justificativa": "O exame GAMA GT era esperado, mas não foi encontrado."
+        },
+        {
+            "exame": "SUMARIO DE URINA",
+            "status": "faltante",
+            "justificativa": "O exame SUMARIO DE URINA era esperado, mas não foi encontrado."
+        },
+        {
+            "exame": "AUDIOMETRIA TONAL",
+            "status": "extra_no_ocr",
+            "justificativa": "O exame AUDIOMETRIA TONAL foi encontrado no documento, mas não estava na lista de exames previstos."
+        },
+        {
+            "exame": "COLESTEROL TOTAL",
+            "status": "extra_no_ocr",
+            "justificativa": "O exame COLESTEROL TOTAL foi encontrado no documento, mas não estava na lista de exames previstos."
+        },
+        {
+            "exame": "CLÍNICO OCUPACIONAL",
+            "status": "extra_no_ocr",
+            "justificativa": "O exame CLÍNICO OCUPACIONAL foi encontrado no documento, mas não estava na lista de exames previstos."
+        },
+        {
+            "exame": "ACUIDADE VISUAL",
+            "status": "extra_no_ocr",
+            "justificativa": "O exame ACUIDADE VISUAL foi encontrado no documento, mas não estava na lista de exames previstos."
+        },
+        {
+            "exame": "ELETROCARDIOGRAMA",
+            "status": "extra_no_ocr",
+            "justificativa": "O exame ELETROCARDIOGRAMA foi encontrado no documento, mas não estava na lista de exames previstos."
+        },
+        {
+            "exame": "ELETROENCEFALOGRAMA",
+            "status": "extra_no_ocr",
+            "justificativa": "O exame ELETROENCEFALOGRAMA foi encontrado no documento, mas não estava na lista de exames previstos."
+        },
+        {
+            "exame": "LDL",
+            "status": "extra_no_ocr",
+            "justificativa": "O exame LDL foi encontrado no documento, mas não estava na lista de exames previstos."
+        },
+        {
+            "exame": "HDL",
+            "status": "extra_no_ocr",
+            "justificativa": "O exame HDL foi encontrado no documento, mas não estava na lista de exames previstos."
+        },
+        {
+            "exame": "TRIGLICERÍDEOS",
+            "status": "extra_no_ocr",
+            "justificativa": "O exame TRIGLICERÍDEOS foi encontrado no documento, mas não estava na lista de exames previstos."
+        },
+        {
+            "exame": "HEMOGRAMA COMPLETO COM PLAQUETAS",
+            "status": "extra_no_ocr",
+            "justificativa": "O exame HEMOGRAMA COMPLETO COM PLAQUETAS foi encontrado no documento, mas não estava na lista de exames previstos."
+        },
+        {
+            "exame": "GLICEMIA DE JEJUM",
+            "status": "extra_no_ocr",
+            "justificativa": "O exame GLICEMIA DE JEJUM foi encontrado no documento, mas não estava na lista de exames previstos."
+        }
+    ]
+}

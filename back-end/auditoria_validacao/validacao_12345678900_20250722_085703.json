@@ -1,0 +1,22 @@
+{
+    "cpf": "12345678900",
+    "exames_obrigatorios": [
+        "HEMOGRAMA COMPLETO",
+        "GLICOSE",
+        "ELETROCARDIOGRAMA (ECG)"
+    ],
+    "exames_enviados": [
+        "HEMOGRAMA COMPLETO",
+        "GLICOSE",
+        "ELETROCARDIOGRAMA (ECG)"
+    ],
+    "resultado": {
+        "status_liberado": true,
+        "exames_faltantes": [],
+        "exames_presentes": [
+            "HEMOGRAMA COMPLETO",
+            "GLICOSE",
+            "ELETROCARDIOGRAMA (ECG)"
+        ]
+    }
+}

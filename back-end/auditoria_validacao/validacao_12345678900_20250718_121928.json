@@ -1,0 +1,19 @@
+{
+    "cpf": "12345678900",
+    "exames_obrigatorios": [
+        "HEMOGRAMA COMPLETO",
+        "GLICOSE"
+    ],
+    "exames_enviados": [
+        "hemograma completo",
+        "glicose"
+    ],
+    "resultado": {
+        "status_liberado": true,
+        "exames_faltantes": [],
+        "exames_presentes": [
+            "HEMOGRAMA COMPLETO",
+            "GLICOSE"
+        ]
+    }
+}

@@ -1,0 +1,91 @@
+{
+    "cpf": "95659366368",
+    "exames_obrigatorios": [],
+    "exames_enviados": [
+        "ACUIDADE VISUAL",
+        "AUDIOMETRIA TONAL",
+        "HEMOGRAMA",
+        "GLICOSE",
+        "LIPIDOGRAMA COMPLETO",
+        "CREATININA",
+        "TGO",
+        "TGP",
+        "GAMA GT",
+        "FOSFATASE ALCALINA",
+        "BILIRRUBINA DIRETA",
+        "BILIRRUBINA INDIRETA",
+        "TSH ULTRA SENSIVEL"
+    ],
+    "resultado": [
+        {
+            "exame": "AUDIOMETRIA TONAL",
+            "status": "encontrado",
+            "justificativa": "'AUDIOMETRIA TONAL' foi encontrado na lista de exames recebidos."
+        },
+        {
+            "exame": "CREATININE CLÍNICO OCUPACIONAL",
+            "status": "faltante",
+            "justificativa": "O exame 'CREATININE CLÍNICO OCUPACIONAL' não foi encontrado na lista de exames recebidos."
+        },
+        {
+            "exame": "ACUIDADE VISUAL",
+            "status": "encontrado",
+            "justificativa": "'ACUIDADE VISUAL' foi encontrado na lista de exames recebidos."
+        },
+        {
+            "exame": "HEMOGLOBINA GLICADA",
+            "status": "faltante",
+            "justificativa": "O exame 'HEMOGLOBINA GLICADA' não foi encontrado na lista de exames recebidos."
+        },
+        {
+            "exame": "GLICEMIA DE JEJUM",
+            "status": "encontrado",
+            "justificativa": "'GLICEMIA DE JEJUM' foi considerado encontrado pois 'GLICOSE' foi recebido."
+        },
+        {
+            "exame": "LIPIDOGRAMA COMPLETO",
+            "status": "extra_no_ocr",
+            "justificativa": "Este exame foi encontrado no documento (OCR), mas não está previsto na lista de exames do BRNET."
+        },
+        {
+            "exame": "CREATININA",
+            "status": "extra_no_ocr",
+            "justificativa": "Este exame foi encontrado no documento (OCR), mas não está previsto na lista de exames do BRNET."
+        },
+        {
+            "exame": "TGO",
+            "status": "extra_no_ocr",
+            "justificativa": "Este exame foi encontrado no documento (OCR), mas não está previsto na lista de exames do BRNET."
+        },
+        {
+            "exame": "TGP",
+            "status": "extra_no_ocr",
+            "justificativa": "Este exame foi encontrado no documento (OCR), mas não está previsto na lista de exames do BRNET."
+        },
+        {
+            "exame": "GAMA GT",
+            "status": "extra_no_ocr",
+            "justificativa": "Este exame foi encontrado no documento (OCR), mas não está previsto na lista de exames do BRNET."
+        },
+        {
+            "exame": "FOSFATASE ALCALINA",
+            "status": "extra_no_ocr",
+            "justificativa": "Este exame foi encontrado no documento (OCR), mas não está previsto na lista de exames do BRNET."
+        },
+        {
+            "exame": "BILIRRUBINA DIRETA",
+            "status": "extra_no_ocr",
+            "justificativa": "Este exame foi encontrado no documento (OCR), mas não está previsto na lista de exames do BRNET."
+        },
+        {
+            "exame": "BILIRRUBINA INDIRETA",
+            "status": "extra_no_ocr",
+            "justificativa": "Este exame foi encontrado no documento (OCR), mas não está previsto na lista de exames do BRNET."
+        },
+        {
+            "exame": "TSH ULTRA SENSIVEL",
+            "status": "extra_no_ocr",
+            "justificativa": "Este exame foi encontrado no documento (OCR), mas não está previsto na lista de exames do BRNET."
+        }
+    ]
+}

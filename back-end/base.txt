@@ -1,0 +1,614 @@
+Assunto	Pergunta	Resposta Padrão
+AET	O que é AET?	A Análise Ergonômica do Trabalho (AET) é um estudo obrigatório realizado pelo empregador para determinar as condições e diretrizes do trabalho no que diz respeito à ergonomia, de acordo com a NR-17.  É um levantamento que avalia as condições de trabalho e as características psicofisiológicas dos trabalhadores. 
+AET	Qual o órgão que fiscaliza a AET?	"O Ministério do Trabalho, através da Delegacia Regional do Trabalho (DRT). 
+Caso a empresa não desenvolva melhorias satisfatórias em ergonomia, estará sujeita a notificações, multas e até interdições. 
+As multas são calculadas com base nas NR's 17 e 28, podendo chegar até R$ 80.970,00."
+AET	Como evitar a LER/DORT no ambiente de trabalho?	"As Lesões por Esforços Repetitivos (LER) e os Distúrbios Osteomusculares Relacionados ao Trabalho (DORT) são as doenças que mais afetam os trabalhadores brasileiros.
+A melhor forma de prevenção é ter um ambiente de trabalho ergonomicamente saudável. Os elementos mobiliários e as ferramentes utilizadas pelo colaborador devem estar de acordo com a Análise Ergonômica do Trabalho (AET). Fortalecimento muscular e atividade física regular são as melhores formas de prevenção. A ginástica laboral, com exercícios de alongamentos ou fortalecimento muscular no próprio ambiente de trabalho também ajudam.  "
+Afastamento INSS	É possivel um paciente realizar ASO de retorno ao Trabalho antes da perícia do INSS?	Se o trabalhador se encontra em plena aptidão física e mental, não há contraindicações para realização do ASO de retorno ao trabalho antecipado, já que o próprio regulamento da Previdência Social aprovado pelo Decreto nº 3.048/99, e recentemente atualizado pelo Decreto nº 10.410, de 2020, no artigo 75 § 6º, dispõe que o segurado pode retornar ao trabalho antes da perícia inicial do INSS. É importante que o empregado saiba que ele pode retornar ao trabalho antes da perícia inicial e que isso não é uma possibilidade caso este já esteja recuperado, com alta médica e devidamente apto para o labor, uma vez que, ao retornar ao trabalho sem a devida recuperação, aumenta o risco de agravamento da enfermidade e consequentemente a necessidade de novo afastamento.
+Agendamento	O que é um atendimento pontual, como e quando ele pode ser solicitado? Pode ser pedido para qualquer região? 	"O atendimento pontual ocorre quando não temos credenciada e nem clínica própria no local que o cliente necessita. Existem casos em que não temos opção de outra clínica na localidade, e a clínica encontrada não trabalha com credenciamento. Para que possamos verificar com as clínicas que atuam no local, precisamos receber com antecedência do cliente a grade de exames e quantitativo de atendimentos no local.
+Após contato com a clínica e retorno positivo sobre a parceria, iniciamos a tratativa referente a valores dos exames, analisamos prazos para liberação, verificamos se todos os exames são realizados no mesmo local e explcamos sobre a utilização do kit próprio da BR MED ou do cliente. Por fim, solicitamos que a clínica emita a nota fiscal do atendimento para efetuar o pagamento e, após o envio do comprovante, a clínica nos libera o prontuário do colaborador. Esse processo dura, em média, de 10 a 20 dias."
+Agendamento	Por que um agendamento em credenciada não tem a guia liberada na hora?	Trabalhamos com algumas clínicas que necessitam de agendamento prévio por ter um limite de atendimento diário e, por isso, precisamos aguardar o retorno da clínica com a disponibilidade. Após receber a solicitação e a verificação de disponibilidade, o agendamento é confirmado no sistema e a guia é liberada.
+Agendamento	Quais os motivos de travas na confirmação de um agendamento?	"O agendamento fica travado:
+1-        Caso a clínica não possua disponibilidade para o dia e horário desejado pelo cliente.
+2-        Caso o exame seja feito de forma externa.
+3-        Caso o exame ainda não tenha sido realizado nesta clínica e, portanto, precisa cotar o valor e o prazo dos exames.
+4-        Quando o agendamento vem com observação ou anexo, precisamos analisar as informações e alinhar junto a clínica.
+5-        Quando o cliente possui particularidades específicas, entramos em contato com a clínica credenciada para alinhar o atendimento antes de confirmar o agendamento."
+Agendamento	Qual a diferença entre os exames Acuidade Visual, Acuidade Visual com Senso Cromático e Avaliação Oftalmológica? 	"A Acuidade Visual é um exame oftamológico que mede a capacidade dos olhos em distinguir detalhes espaciais, ou seja, identificar a forma e o contorno de objetos ou imagens. 
+A Acuidade Visual com Senso Cromático é semelhante à Acuidade Visual, porém também é utilizado cores. 
+Já a Avaliação Oftamológica é o exame com oftamologista, que emite o laudo e fornece diagnóstico e consulta."
+Agendamento	Qual o horário de atendimento das unidades próprias BR MED?	"De segunda à quinta, das 7h às 17h.
+Sextas das 7h às 16h.
+NOTA: O atendimento é por ordem de chegada. O paciente deve chegar 15 minutos antes do horário de atendimento e até 1 hora após o início do mesmo. "
+Agendamento	Qual o horário do atendimento médico nas unidades?	"Os médicos atendem das 7h às 16h em todas as unidades, exceto nas unidades de Vitória e Santos, que ocorre de segunda à sexta, das 07h às 12h. Na unidade de Angra dos Reis o atendimento é às segundas e sextas, das 7h às 12h, e terças, quartas e quintas das 7h às 16h.
+NOTA: O atendimento é por ordem de chegada. O paciente deve chegar 15 minutos antes do horário de atendimento e até 1 hora após o início do mesmo."
+Agendamento	Como reintegrar uma colaboradora que fez demissional e estava grávida? Qual exame devo realizar?	"Nesse caso, é necessário o agendamento de um atendimento assistencial para que a Medicina do Trabalho possa avaliar a documentação médica e confirmar se, de fato, haverá a necessidade de suspender a demissão e reintegrá-la ao quadro de funcionários. Caso fique constatado que a gestação se iniciou durante o vínculo de trabalho com a empresa, sugerimos agendar um exame periódico.
+
+O único exame capaz de confirmar a gestação em curso e o tempo de evolução é a ultrassonografia transvaginal."
+Agendamento	Toda empresa pode exigir o exame Beta HCG nos admissionais ou demissionais?	Não, tal exigência é expressamente proibida no Brasil. De acordo com o artigo 2º da Lei nº 9.029/95 (Lei Benedita da Silva), exigir teste, exame, laudo ou qualquer documento que ateste a existência de gravidez ou esterilização é crime, seja antes da contratação ou em qualquer outro momento da relação de emprego. A prática também é vedada pelo artigo 373-A, inciso II da CLT, que proíbe o empregador de recusar emprego, promoção ou dispensar trabalhadora grávida, exceto quando a natureza da atividade seja reconhecidamente incompatível com a gestação. Como exemplo de incompatibilidade, pode-se citar a função de técnica em radiologia, pois sabe-se que a exposição à radiação pode causar sérios riscos para o feto. Fora desse tipo de circunstância, exigir teste de gravidez de funcionárias ou candidatas a uma vaga de trabalho é prática discriminatória, podendo levar a punição de ordem criminal (detenção de um a dois anos e multa) e a uma ação de indenização por danos morais.
+Agendamento	O colaborador confirma que foi atendido em rede credenciada mas o sistema consta como falta. Qual o motivo?	"Há duas formas de atendimento em clínicas credenciadas:
+
+- Clinica com atendimento online. São clínicas que utilizam nosso sistema para atendimento. Assim, o colaborador comparece na clínica para atendimento e o seu exame é realizado diretamente no nosso sistema. No mesmo dia do atendimento constará a informação do atendimento, sendo possível a verificação do comparecimento do mesmo.
+
+- Clínica com atendimento offline. São clínicas que não aceitaram utilizar o nosso sistema por motivos de já utilizarem sistema próprio, por baixa demanda, falta de computador na sala do médico ou outros motivos informados no início da parceria. Dessa forma, disponibilizamos o kit de atendimento manual para a clínica e, sempre que um agendamento é confirmado, ela recebe o kit por e-mail. A clínica atende o colaborador de forma manual, e combinamos com eles que, até o dia seguinte ao atendimento, o kit do colaborador será enviado para o e-mail para realizarmos a transcrição das informações. Para isso, contamos com uma Técnica de Enfermagem, que fica responsável pela cobrança diária.
+
+Além disso, podemos ter intercorrências, na qual a clínica que atende de forma online não atendeu pelo sistema e não comunicou a nossa equipe de credenciados sobre o comparecimento do colaborador,  marcando-o como faltoso no sistema. Nesse caso, conseguimos realizar a transcrição dos atendimentos assim que ficamos ciente do ocorrido. Vale comentar que monitoramos os atendimentos do dia com as clínicas visando minimizar essa intercorrências."
+Agendamento	Por que para finalidade de avaliação dos fatores psicossociais, realizamos apenas o teste palográfico e não outros testes?	"Avaliação Psicológica Ocupacional, ou Avaliação Psicossocial, não se define como uma avaliação diagnóstica. Utiliza-se questionário de anamnese psicológica, que são informações preenchidas pelo próprio colaborador, e o teste palográfico de avaliação de personalidade, que é um projetivo que auxilia na identificação de traços comportamentais, como níveis de extroversão, introversão, produtividade, entre outros. Também é levado em conta o que é mostrado no momento da avaliação. Os testes psicológicos são exames mais demorados e não possuem uma regra específica sobre qual tipo de exame deve ser feito para esse tipo de avaliação. Sendo assim, o setor de psicologia, em conformidade com CRP, definiu por utilizar esses exames em nossa grade padrão. Mas outros tipos de testes podem ser utilizados para atender as particularidades do cliente, desde que seja previamente acordado com a operação.
+"
+Agendamento	O que é STCW?	"Para os trabalhadores aquaviários do grupo marítimos que operam embarcações classificadas para navegação em mar aberto e apoio marítimo, devem ser adotados os padrões médicos e o modelo de Certificado Médico, como Health Certificate - Convenção Internacional sobre Padrões de Instrução e Certificação e Serviço de Quarto para Marítimos (STCW). Essas informações constam no QUADRO III da NR-30. Reforçamos que tal documento não deve interferir na elaboração do Atestado de Saúde Ocupacional (ASO).
+"
+Agendamento	O que é Aso Norueguês?	Trata-se do ENG-1, que é um certificado norueguês obrigatório para quem pretende trabalhar como tripulantes em determinados cruzeiros marítimos, super iates ou embarcações de bandeira norueguesa. É preciso realizar o exame com um médico aprovado pela Maritime and Coasguard Agency (MCA). Se tiver resultados adequados às exigências e o paciente for maior de idade, será emitido certificado com validade de até dois anos. O médico que emite o certificado norueguês precisa ser autorizado e aprovado pelas autoridades norueguesas para realizar exames médicos e tomar decisões de acordo com os regulamentos relativos às atividades de funcionários em navios e unidades móveis offshore.
+Agendamento	As clínicas filiais possuem acessibilidade para cadeirantes e PcD?	"As unidades da BR MED que possuem acessibilidade, são: 
+
+unidade   endereço
+Presidente Vargas
+Avenida Presidente Vargas, 435 - 20º andar - Centro
+Barra da Tijuca
+Avenida das Américas, 3.434 - Bloco 5 - 407 a 409
+Angra dos Reis
+Rua José Belmiro da Paixão, 314 - Parque das Palmeiras
+Campos dos Goytacazes
+Avenida Pelinca, 18 - Centro
+Macaé
+Rua Velho Campos, 1176 - Centro
+Vitória
+Rua das Palmeiras, 685 - 13º andar - Santa Lucia
+
+As demais clínicas ainda não estão adequadas em termos de acessibilidade."
+Agendamento	Quais são os modelos de ASO estrangeiro que a BR MED atende?	"ASO Inglês, Panamá, Ilhas Marshall e Libéria. 
+Lembrando que esses tipos de ASO's (Atestado de Saúde Ocupacional) são bem parecidos e o que diferencia é o nome da bandeira.e a normatização de cada país vigente. "
+Agendamento	Como solicitar a contraprova do toxicológico capilar?	A resolução da Lei 691 garante ao motorista o direito de solicitar a contraprova para aqueles casos em que os resultados do exame forem positivos. Para isso, é necessário que o profissional espere o laudo ser emitido para pedir a nova avaliação. Caso seja solicitada a contraprova, o teste é analisado de maneira diferenciada. O material coletado será analisado para identificar especificamente a substância apontada, podendo ter uma variação quantitativa. De acordo com a lei, o laboratório de análise tem a obrigatoriedade de guardar a amostra por 5 anos. Portanto, durante esse período, a contraprova pode ser pedida.
+Agendamento	É possível fazer dois agendamentos para o mesmo colaborador no Sistema BR NET?	"O BR NET não permite fazer dois agendamentos de forma simultânea para o mesmo colaborador.
+É recomendado colocar na observação do agendamento a necessidade do outro exame, verificando se o setor e a função do cargo constam no sistema. "
+Agendamento	Como agendar o demissional e admissional em outra empresa do grupo no mesmo dia?	O sistema não permite realizar dois agendamentos de forma simultânea para o mesmo paciente. Recomenda-se agendar primeiro o exame demissional e colocar na observação do sistema a necessidade do exame admissional. É importante lembrar que deve ser verificado se o setor e função do cargo do admissional constam em sistema, para que o respectivo Aso esteja em conformidade para emissão. Essa dinâmica vale tanto para filiais da BR MED quanto para redes credenciadas.
+Alteração de ASO	Quais a lista de médicos responsáveis de PCMSO que a BR MED usa atualmente em nossos programas? 	Os Médicos do Trabalho que atuam na BR MED como responsáveis pelos programas são: Dr. Fabrício Netto Loche, Dr. Gustavo Azeredo Cardoso, Dr. Antônio Carlos Ferreira Campos, Dr.  Davi Barcelos Rodrigues, Dr. Vander Vinicius Soares Corteze, Dr. Vander Vinicius Costa Corteze e Dra. Fernanda Soares de Castro Rocha.
+Alteração de ASO	Como é o fluxo de alteração de exames para atendimento em rede credenciada?	Após o recebimento dos exames realizados pelo colaborador, a equipe de Técnicas de Enfermagem realiza uma segunda conferência do prontuário, analisando todos os exames dentro das particularidades de cada cliente. Quando é identificado algum exame com resultados fora do padrão estipulado pela coordenação médica, encaminhamos o prontuário ao médico coordenador da empresa para que o mesmo avalie o quadro clínico do colaborador e nos dê a conduta final para que o ASO seja liberado. As possíveis condutas são: apto, apto com encaminhamento para controle de saúde, ASO retido temporariamente para que o candidato passe por avaliação de um especialista para posterior conduta final ou inapto.
+Alteração de ASO	Em que situação podemos aproveitar os exames para uma nova emissão de ASO?	Só podemos reaproveitar os exames de ASO anterior com no máximo 90 dias da realização do mesmo, e a BR MED ainda realiza pelo menos o exame clínico. Portanto, o colaborador terá que comparecer na clínica para realizar o exame clínico e, assim, a clínica irá considerar no ASO do colaborador os exames realizados anteriormente. Caso os exames tenham passado de 90 dias, não poderemos reaproveitar os exames, e os colaboradores terão que comparecer na clínica para realizar a grade completa de acordo com sua função.
+Alteração de ASO	Quando liberar uma via do ASO para o colaborador?	Se o cliente solicitar que uma via do ASO seja entregue ao colaborador no final do atendimento, liberaremos apenas em casos de exame clínico. Em casos de exames complementares, não entregaremos uma via do ASO ao colaborador porque só compartilhamos esse documento junto com o resultado dos exames. 
+Campanhas	Podemos solicitar atendimentos em horário não convencional para campanha de in company?	A ideia do Serviço de Campanhas é levar a nossa estrutura e qualidade para o cliente. Assim, ficamos à disposição para negociar os melhores horários de atendimento. Entretanto, o alinhamento do horário e dia dependerá da nossa agenda.
+Campanhas	Qual a estrutura necessária para realização dos atendimentos em Campanhas?	A estrutura disponibilizada é definida no momento do agendamento, levando-se em conta a ordem de serviço, que contém a quantidade de atendimentos e tipos de exames a serem realizados. Por exemplo: para realizar um atendimento com radiografia, será imprescindível mobilizar uma das nossas unidades móveis de radiologia, que são dotadas com os equipamentos necessários para realizar o exame com qualidade e segurança. Ao todo, possuímos duas unidades móveis de radiologia, tendo uma delas mais um consultório, que pode ser destinado a qualquer outra especialidade. Possuímos ainda quatro unidades móveis, cada uma com dois consultórios, que também podem ser destinados a diferentes especialidades. Quando enviamos uma das unidades móveis, orientamos o cliente a reservar um espaço plano para que possamos estacioná-las. Contamos também com o apoio do cliente para fornecer a instalação elétrica das unidades. Essas especificações são detalhadas no momento do agendamento. Contudo, nem sempre o cliente tem interesse ou necessidade no uso das unidades, ou ainda não tem espaço disponível para estacioná-las em suas dependências. Para qualquer um desses casos, solicitamos, no momento do agendamento, a estrutura mínima necessária para cada um dos postos de trabalho a serem montados: em geral, uma sala climatizada com uma mesa e duas cadeiras, uma para o examinador eoutra para o paciente. Nesse segundo cenário, pode ocorrer do cliente não ter a quantidade de salas disponíveis ou mobiliário necessário. Para contornar esse entrave, a equipe pode customizar os postos de trabalho, compartilhando-os com mais de uma especialidade. Para tanto, utilizamos biombos para dividir os espaços, assegurando, assim, a privacidade do paciente durante os atendimentos.
+Campanhas	Por que um paciente pode ficar com um ou mais exames pendentes em Campanhas?	"Um exame pode ficar pendente quando o paciente não o realiza durante a campanha. Isso ocorre devido à necessidade alegada do paciente em retornar ao seu posto de trabalho, interrompendo, assim, a sua rotina de exames. Apesar da equipe sempre reiterar a necessidade de conclusão do pedido de exames, infelizmente nem sempre o colaborador consegue retornar até o final da campanha para concluir seu pedido. Diante dessa situação, nossa equipe comunica o cliente, avisando que o exame não foi realizado. Um exame também pode ficar pendente quando o colaborador apresenta uma alteração mais séria, que necessita de avaliação por parte de seu médico assistente ou por um médico especialista. Em ambos os casos, o prontuário do paciente é armazenado por 120 dias, período em que nossa equipe permanece aguardando retorno do cliente. Se não obtivermos retorno dentro do prazo, nossa equipe encerrará o caso como inconclusivo.
+É importante ressaltar que os casos inconclusivos não podem ser exportados para o eSocial. Apenas casos concluídos com apto ou inapto podem ser exportados para a plataforma."
+Campanhas	Quando solicitar o serviço de Campanhas?	O serviço de Campanhas pode ser ofertado a todos os clientes, em especial aos clientes que necessitam mobilizar um grande contingente. Por exemplo: realizar uma campanha de exame admissional, campanha de exame periódico, campanha de exame demissional, dentre outros procedimentos. Com isso, o cliente não precisará encaminhar seus colaboradores para uma das unidades BR MED ou uma de nossas unidades credenciadas. Com o serviço de Campanhas, o cliente terá à sua disposição a estrutura da BR MED dentro da própria empresa.
+Cobrança	Como solicito a prorrogação de um boleto?	Os prazos de vencimentos são calculados de acordo com o contrato e devem ser respeitados. Entretanto, entendemos que imprevistos podem acontecer, e caso não consiga realizar o pagamento do seu boleto no prazo do vencimento, solicitamos que encaminhe um e-mail para cobranca@grupobrmed.com.br informando o título e o novo vencimento. Nossa equipe analisará a solicitação e responderá em um prazo de até 48h.
+Cobrança	Por que meu sistema está bloqueado?	Caso esteja aparecendo algum pop-up de bloqueio em sua tela, pedimos que consulte o seu financeiro se há alguma pendência. Pedimos também que verifique se existem medições pendentes de aprovações ou de envio de PO’s ou BM’s com prazo superior a 10 dias. Caso não localize nenhuma inconsistência, entre em contato conosco através do e-mail cobrança@grupobrmed.com.br. Se foi realizado o pagamento de algum título vencido, o prazo para liberação do sistema é de até 48h úteis após o pagamento. Caso necessite da liberação com urgência, favor enviar e-mail com o comprovante de pagamento para cobranca@grupobrmed.com.br.
+Cobrança	Meu boleto venceu e eu não paguei, posso pagar o boleto que já possuo?	Caso seu boleto já tenha vencido, talvez você não consiga realizar mais o pagamento desse título e precisará atualiza-lo. Para isso, basta acessar o link https://www.itau.com.br/servicos/boletos/atualizar/, digitar o código de barras e seu boleto será atualizado. Lembrando que os boletos pagos após o vencimento incidem de juros e multa. Caso encontre alguma dificuldade para o pagamento do título, envie um e-mail para cobranca@grupobrmed.com.br informando o título que deseja atualização.
+Cobrança	Por que estou recebendo e-mail de nota fiscal vencida mas não recebi a nota?	Todos os nossos alertas de vencimento são realizados na mesma corrente de e-mail de envio do faturamento, portanto, caso não tenha recebido o seu faturamento, pedimos que sempre consulte a sua caixa de spam ou entre em contato conosco através do e-mail financeiro@grupobrmed.com.br.
+Credenciamento de clínicas	Qual fluxo de credenciamento de novas clinicas?	"Para que possamos verificar com as clínicas que atuam no local, precisamos receber com antecedência do cliente as seguintes informações: grade de exames e quantitativo de atendimentos no local. Também devemos:
+1-        Verificar se não existe clínica própria próximo na região solicitada;
+2-        Iniciar a busca de uma clínica que atenda o padrão da BR Med e cliente (utilização de documentação própria e atendimento dentro do nosso sistema);
+3-        Informar à clínica sobre quantitativo de atendimentos, quantidade de vidas e grade de exames (são informações essenciais para agilizarmos o processo de credenciamento);
+4-        Solicitar as informações necessárias para o início da parceria (preços, exames realizados, prazos de liberação, informações cadastrais e documentações);
+5-        Após o recebimento de todas as informações necessárias, iniciar a elaboração da minuta contratual e enviar para a clínica analisar;
+6-        Cadastrar clínica no sistema;
+7-        Realizar apresentação e treinamento do sistema próprio da BR MED para os atendimentos;
+8-        Liberar a clínica para agendamento.
+Esse processo dura, em média, de 10 a 20 dias úteis, dependendo do interesse e agilidade do parceiro.
+"
+Dúvida de Riscos	O que é o PMOC?	É o Plano de Manutenção, Operação e Controle. É uma forma de estabelecer os procedimentos e a periodicidade em que se deve verificar a integridade e os estados de limpeza e conservação dos sistemas de climatização. Esse plano deve ser assinado por um Engenheiro Mecânico.
+Dúvida de Riscos	O que é APR?	A Análise Preliminar de Risco é um estudo prévio de uma atividade. Ele é feito para mapear e identificar possíveis riscos ou falhas no que se deseja realizar dentro da organização. Isso prevê possíveis danos e evita acidentes no ambiente de trabalho.
+Dúvida de Riscos	O que é Mapa de Rota de Fuga?	Consiste no mapeamento do trajeto a ser percorrido pelo individuo no caso da necessidade de evacuação. Pode ser usado em casos de Incêndio, desabamento ou qualquer outra situação de emergência ou sinistro. Esse mapeamento deve ser sinalizado de forma vísivel e muito bem iluminada, mostrando o número do andar e a rota de saída. 
+eSocial	Os colaboradores demitdos devem ser transmitidos no evento s-2240?	Se a empresa já transmitiu o colaborador no evento de demissão (S-2299), o colaborador não deverá ser transmitido no evento S-2240. Porém, se ele não foi transmitido no evento de demissão, a empresa deverá transmitir as informações do colaborador no evento S-2240.
+eSocial	Como funciona o envio da carga inicial do evento s-2240 dos colaboradores afastados? 	"De acordo com o item 12.3 do Manual de Orientação do eSocial,  os trabalhadores afastados no início da obrigatoriedade dos eventos de SST no eSocial, devem seguir as seguintes regras:
+
+a) Afastamento por gozo de férias ou licença maternidade: a carga inicial deve ser realizada no mesmo prazo previsto para os trabalhadores ativos, refletindo a condição existente do afastamento;
+
+b) Demais afastamentos: a carga inicial precisa ser realizada somente no retorno do colaborador. Nesse caso, deve ser encaminhada até o dia 15 do mês seguinte ao retorno.     "
+eSocial	Quais são as principais inconsistências relacionadas ao evento s-2240?	"As principais inconssistências são:
+. O evento de admissão não foi enviado;
+. O número de CPF, matrícula do eSocial ou data de admissão não estão corretos;
+. O evento não foi enviado até o dia 15 do mês subsequente 
+. Por padrão, o BR NET registra a data de finalização do exame admissional realizado, e o cliente ou atendente não mudou essa informação no sistema."
+eSocial	Os colabordores afastados devem ser transmitidos?	"De acordo com o item 12.3 do Manual de Orientação do eSocial,  os trabalhadores afastados quando do início da obrigatoriedade dos eventos de SST no eSocial, devem seguir as seguintes regras:
+a) Afastamento por gozo de férias ou licença maternidade: a carga inicial deve ser realizada no
+mesmo prazo previsto para os trabalhadores ativos, refletindo a condição existente quando do
+afastamento;
+b) Demais afastamentos: a carga inicial somente precisar ser realizada quando do retorno do
+trabalhador. Nesse caso, deve ser encaminhada até o dia 15 do mês seguinte ao retorno.     "
+eSocial	O colaborador que realiza exame no final de um mês (e o ASO é liberado neste mesmo mês) porém a contratação só é realizada no mês subsequente  deve ser transmitido no próximo dia 15?	A liberação do ASO não tem relação direta com o evento S-2240, uma vez que os eventos de SST são transmitidos após o eventos de admissão (S-2200, S-2190, S-2300). Caso o ASO seja liberado no final do mês, será necessario confirmar quando será a admissão do trabalhador e, depois, transmitir o evento S-2240 até o dia 15 do mês subsequente.
+eSocial	Como é feita a mensageria para o e-Social?                                                                                                                                                                                                                                                                                                                                                                                                                                  	O serviço de transmissão ou mensageria, após solicitado pelo cliente, deverá ser precificado caso o cliente da base não tenha em contrato. Após esse alinhamento comercial, aceito da proposta e alinhamento com a área de contratos, recebemos a procuração eletrônica para iniciar a prestação desse serviço. A Transmissão é feita pelo cliente para o eSocial.
+eSocial	O que é a Procuração Eletrônica?	"A procuração digital/eletrônica é um procedimento feito online por meio do site do
+governo (portal do e-CAC), que libera a BR MED para acessar as informações em nome de empresa. Para permitir os eventos de SST, é preciso que a empresa selecione a opção ""grupo SST do eSocial""."
+eSocial	O que é o e-CAC?	"O e-CAC é o Centro Virtual de Atendimento ao Contribuinte. A procuração eletrônica/digital para
+acesso ao e-CAC possibilita que a empresa passe a representação dela para a BR MED (outorgado) ou empresa no ambiente de atendimento virtual da Receita Federal (Portal e-CAC). Ao fazer o cadastro, a empresa (outorgante) deve indicar quais serviços ela quer permitir para o outorgado (prestador). Temos um passo a passo para explicar ao cliente, caso necessário. https://cav.receita.fazenda.gov.br/ecac/ "
+eSocial	Autônomos entram nos eventos de SST?	"Não, os eventos de Saúde e Segurança do Trabalho são apenas para os trabalhadores que possuem contrato tipo CLT.
+Os eventos de SST surgem para que as empresas apliquem as legislações voltadas à saúde e segurança no trabalho, elaborando e implementando os programas de Saúde e Segurança do Trabalho. A partir de 2023, domésticos, empresas sem empregados e MEI não entram nos eventos.
+"
+eSocial	Temos uma funcionária em licença de maternidade, ela está como ativa mas não consegui enviar o evento S- 2240 dela, não aparece na lista de funcionários.	Nesse caso a empregada gestante é afastada de sua atividade ,deixando de  estar exposta a agentes nocivos. O declarante deve enviar esse evento informando o código 09.01.001. Quando ocorrer o retorno da empregada após a licença maternidade e período de lactação, caso ela volte a trabalhar exposta a agentes nocivos, esse evento deve ser novamente enviado para informar a condição de exposição.
+eSocial	Por que o envento s-2210 não será enviado pela BR MED?	Devido à baixa ocorrência, esse evento não foi priorizado. Lembrando que a coleta das informações deverá ser de maior responsabilidade por parte do cliente, pois o mesmo detém dos dados do acidente de trabalho..
+eSocial	Quais são os grupos do eSocial? Como saber a qual grupo a empresa pertence?	"As empresas obrigadas ao eSocial Saúde e Segurança do Trabalho são divididas por grupos. As empresas dos grupos 1, 2, 3 e 4 estão obrigadas aos eventos de Saúde e Segurança do Trabalho. 
+Grupo 1: Empresas com faturamento superior a R$ 78 milhões em 2016;
+Grupo 2: Entidades empresariais NÃO optantes pelo Simples Nacional, com faturamento inferior
+a R$78 milhões em 2016; 
+Grupo 3: Empregadores optantes pelo Simples Nacional, empregadores pessoa física (exceto doméstico), produtor rural PF e entidades sem fins lucrativos; 
+Grupo 4: Órgãos públicos e organizações internacionais."
+eSocial	O que é exame inicial e sequencial do ASO para o s-2220?	"O evento S-2220 detalha as informações relativas ao monitoramento da saúde do trabalhador (avaliações clínicas) durante todo o vínculo laboral com o declarante, por trabalhador, bem como os exames complementares aos quais foi submetido, com respectivas datas e conclusões.
+Deve ser entendido como exame inicial o primeiro de cada tipo que foi realizado no declarante, ainda que antes da obrigatoriedade dos eventos de Saúde e Segurança do Trabalho do e-Social. Nesse caso, o exame a ser informado após a obrigatoriedade dos eventos de SST no eSocial é o sequencial. Dessa forma, não há perda do histórico da saúde ocupacional do trabalhador. Assim, caso o primeiro exame complementar do trabalhador no declarante seja realizado após a obrigatoriedade dos eventos de SST no eSocial, esse deve ser registrado como inicial.
+Vale comentar que não há necessidade de “carga inicial” das informações do S-2220, uma vez que somente serão registrados os ASOs com data de emissão posterior ao início da obrigatoriedade desse evento.
+"
+eSocial	Riscos não contidos na Tabela 24 devem ser enviados no evento s-2240?                      	Não. Empregadores que não possuem empregados expostos a agentes nocivos (químicos, físicos, biológicos) previstos na Tabela 24 do eSocial estão desobrigados do envio S-2240.
+Upsell	Qual o fluxo para solicitaçãoes de proposta de upselling?	O time de Customer Success deverá formalizar por email para vendas@grupobrmed.com.br descrevendo o nome do cliente, tipo de serviço e escopo da proposta que o cliente deseja precificar. 
+eSocial	Riscos quantificados abaixo do limite de tolerância devem ser enviados no evento s-2240?	Não, nesses casos os eventos serão alimentados como ausência de riscos. 
+eSocial	É obrigatório informar o CA no evento S-2240?	Sim, o CA é um campo obrigatório no evento s-2240, a partir dos layouts S-1.0 NT 06/22 e versão S-1.1.
+eSocial	A descrição do EPI é obrigatória no evento S-2240?	Não, a descrição do EPI não é obrigatória nos layouts S-1.0 NT 06/22. Na versão S-1.1, o campo da descrição do EPI passa a não existir mais, sendo o CA o único identificador descritivo do EPI.
+eSocial	Quando não houver riscos no LTCAT, devo enviar o S-2240?	Mesmo com ausência de riscos no LTCAT, o evento s-2240 deve ser informado para todos os funcionários com o código "09.01.001 Ausência de agente nocivo ou de atividades previstas no Anexo IV do Decreto 3.048/1999"
+eSocial	Qual o prazo de envio dos eventos?	"S-2220: até o dia 15 do mês subsequente à realização da admissão ou exame ocupacional.
+S-2240: até o dia 15 do mês subsequente à realização da admissão, alteração nos fatores ambientais ou data da obrigatoriedade (carga inicial)."
+eSocial	O que é uma retificação?	É todo e qualquer tipo de ajuste de cadastro que precisa ser feito referente ao eSocial. Lembramos que é importante informar o número do recibo anterior para retificação.
+eSocial	Quais os erros mais comuns retornados pelo evento S-2220?	"Erro 1: Campo de preenchimento obrigatório: Categoria
+Solução: Informar a matrícula no funcionário e realizar novamente o envio.
+
+Erro 17: A estrutura do arquivo XML está em desconformidade com o esquema XSD.The element 'eSocial' in namespace 'http://www.esocial.gov.br/schema/evt/evtExpRisco/v_S_01_00_00' has incomplete content. List of possible elements expected: 'Signature' in namespace 'http://www.w3.org/2000/09/xmldsig#'.
+Solução: Configuração do certificado na empresa e/ou definir responsável pelo envio.
+
+Erro 106: Foi localizado no sistema um evento em duplicidade com o evento a ser enviado, como mesmo tipo de inscrição, número de inscrição, CPF do trabalhador, matrícula e data de início da condição.
+Ação sugerida: Evento já foi enviado ao portal do eSocial com sucesso, portanto não há necessidade de nenhuma ação.
+
+Erro 130: É necessário existir informação cadastrada do empregador para o período.
+Ação sugerida: verificar data de início da obrigatoriedade da empresa ao eSocial. Em casos de filiais, verificar se a matriz enviou o evento ""S-1000 - Empresa"" para o eSocial.
+
+Erro 174: A data de ocorrência do evento ""5/11/2021"" deve ser igual ou posterior ao início da obrigatoriedade do evento ""10/01/2022"" para o empregador ao eSocial. Para confirmar a data de obrigatoriedade do empregador, verifique o cronograma disponível no site https://portal.esocial.gov.br/.
+Ação Sugerida: Verificar se este evento não é referente a ASO feito antes da obrigatoriedade.
+
+Erro 180: O Vínculo Trabalhista não foi localizado.
+Geralmente ocorre devido a:
+- Número da matricula incorreto;
+- Numero do CPF incorreto;
+- A contabilidade ainda não enviou o evento de admissão pro eSocial;
+- A contabilidade enviou o evento de demissão desse funcionário; 
+- Se for S-2240, verificar se a data de entrada no cargo esta exatamente igual a admissão que a contabilidade enviou.
+Ação Sugerida: Utilize o evento de admissão para cadastramento do vínculo trabalhista.                                                                                                                                                                                                                             
+- CNPJ relacionado no BR NET diferente do cadastrado no evento S-2220.
+Erro 301: Código do erro: 301.3. Hash: NÚMERO HASH. Identificador: NÚMERO IDENTIFICADOR. A solicitação não pode ser atendida devido a uma falha não identificada que pode ou não ser temporária. Favor tentar novamente mais tarde. Caso o erro permaneça por um período superior a seis horas, acesse o Portal do eSocial através do endereço https://www.gov.br/esocial/pt-br/canais_atendimento. Na opção CONTATO, na seção EMPRESAS, selecione PRODUÇÃO EMPRESAS. Preencha o formulário sobre erro 301 informando o código HASH do retorno e o identificador do evento para rastreamento.
+Ação Sugerida: Aguardar e tentar mais tarde. A alta demanda de envio das informações ao eSocial pode sobrecarregar e causar esse erro.
+
+Erro 303: Não foi localizado o contrato de trabalho do trabalhador CPF: NÚMERO, Matrícula: NÚMERO e Categoria: Desconhecida.
+Ação Sugerida: Utilize o evento S-2300 - Trabalhador Sem Vínculo de Emprego/Estatutário – Início, para cadastramento do contrato de trabalho conforme tabela 1 (Categorias de Trabalhadores).
+
+Erro 304: Não existe um Contrato de Trabalho para o CPF: NÚMERO e Matrícula: NÚMERO ou esse encontra-se encerrado na data do evento.
+Ação sugerida: Corrigir número de matrícula.
+
+Erro 407: A regra de precedência na transmissão de eventos não foi seguida. Eventos desse tipo não devem ser enviados para processamento em paralelo. Ver seção 5.6.1 do Manual de Orientação do Desenvolvedor.
+Solução: O erro é devido ao grande fluxo de informações e processamentos no servidor do eSocial, ou o envio perdeu a conexão com o mesmo neste momento. Reenviar o evento.
+
+Erro: 409: Não foi possível estabelecer conexão com o Sistema de Procuração Eletrônica RFB.
+Ação sugerida: A falha pode ser temporária, tente novamente mais tarde.
+
+Erro 411: Assinante inválido. Assinante não possui perfil de procuração eletrônica para enviar este tipo de evento ou assinante não consta como representante legal da empresa. Ausência de procuração eletrônica para transmissão dos eventos. 
+Ação sugerida: Solicitar procuração eletrônica para o cliente.
+
+Erro 632: Já existe no evento um grupo com mesma chave de identificação. Erro decorrente de informação duplicada no XML. Ocorre quando há mais de um exame com o mesmo código.
+
+Erro 1327: O tipo do exame médico ocupacional não pode ser [0] - Exame médico admissional.
+Ação Sugerida: Se informado [0] - Exame Médico admissional, não poderá existir outro evento S-2220 para o mesmo contrato com a data de emissão do ASO anterior. ""
+Motivo: Já consta no eSocial este mesmo evento (ASO) com data superior ao evento transmitido."
+eSocial	Quais os erros mais comuns retornados pelo evento S-2240?	"Erro 1:Campo de preenchimento obrigatório: Categoria
+Solução: Informar a matrícula no funcionário e realizar novamente o envio.
+
+Erro 17: A estrutura do arquivo XML está em desconformidade com o esquema XSD.The element 'eSocial' in namespace 'http://www.esocial.gov.br/schema/evt/evtExpRisco/v_S_01_00_00' has incomplete content. List of possible elements expected: 'Signature' in namespace 'http://www.w3.org/2000/09/xmldsig#'.
+Solução: Configuração do certificado na empresa e/ou definir responsável pelo envio.
+
+Erro 106: Foi localizado no sistema um evento em duplicidade com o evento a ser enviado, mesmo Tipo de Inscrição. Número de Inscrição, CPF do Trabalhador, Matrícula, Data de Início da Condição.
+Ação sugerida: Evento já foi enviado ao portal do eSocial com sucesso, não há necessidade de nenhuma ação.
+
+Erro 130: É necessário existir informação cadastrada do empregador para o período.
+Ação sugerida: verificar data de início da obrigatoriedade da empresa ao eSocial. Em casos de filiais, verificar se a matriz enviou o evento ""S-1000 - Empresa"" para o eSocial.
+
+Erro 174: A data de ocorrência do evento '03/05/2021' deve ser igual ou posterior ao início da obrigatoriedade deste evento '10/01/2022' para o empregador ao eSocial. Para confirmar a data de obrigatoriedade do empregador, verifique o cronograma disponível no site https://portal.esocial.gov.br/.
+Ação Sugerida: Verificar se este evento não é referente à dados antes da obrigatoriedade.
+
+Erro 180: O Vínculo Trabalhista não foi localizado.
+Geralmente ocorre devido a:
+- Número da Matricula Incorreto;
+- Numero do CPF incorreto;
+- A contabilidade não enviou o evento de admissão ainda pro eSocial;
+- A contabilidade enviou o evento de demissão desse funcionário; 
+- Se for, S-2240 verificar se a data de entrada no cargo esta exatamente igual a admissão que a contabilidade enviou
+Ação Sugerida: Utilize o evento de admissão para cadastramento do vínculo trabalhista.
+
+Erro 272: A inscrição informada não deve ser o CPF do empregador, caso de empregador doméstico, e ser um estabelecimento do empregador devidamente cadastrado no sistema no período.
+Solução: Para que um empregador do tipo CPF consiga enviar o 2240 de forma correta, ele precisa:
+-Estar com seu CPF cadastrado no eSocial pelo envento s1000
+-Possuir pelo menos um estabelecimento (ambiente) do tipo CAEPF/CNO ou CNPJ cadastrado no eSocial pelo evento s1005
+
+Erro 301: Código do erro: 301.3. Hash: NÚMERO HASH. Identificador: NÚMERO IDENTIFICADOR. A solicitação não pode ser atendida devido a uma falha não identificada que pode ou não ser temporária. Favor tentar novamente mais tarde. Caso o erro permaneça por um período superior a 6 (seis) horas, favor acessar o Portal do eSocial através do endereço https://www.gov.br/esocial/pt-br/canais_atendimento. Na opção CONTATO, na seção EMPRESAS, selecione PRODUÇÃO EMPRESAS. Preencha o formulário sobre erro 301 informando o código HASH do retorno e o identificador do evento para rastreamento.
+Ação Sugerida: Aguardar e tentar mais tarde. A alta demanda de envio das informações ao eSocial pode sobrecarregar e causar este erro.
+
+Erro 303: Não foi localizado o contrato de trabalho do trabalhador CPF: NÚMERO, Matrícula: NÚMERO e Categoria: Desconhecida.
+Ação Sugerida: Utilize o evento S-2300 - Trabalhador Sem Vínculo de Emprego/Estatutário – Início, para cadastramento do contrato de trabalho conforme tabela 1 (Categorias de Trabalhadores).
+
+Erro 304: Não existe um Contrato de Trabalho para o CPF: NÚMERO e Matrícula: NÚMERO ou este encontra-se encerrado na data do evento.
+Corrigir número de matrícula.
+
+Erro 407: A regra de precedência na transmissão de eventos não foi seguida. Eventos desse tipo não devem ser enviados para processamento em paralelo. Ver seção 5.6.1 do Manual de Orientação do Desenvolvedor.
+Solução: O erro é devido ao grande fluxo de informações e processamentos no servidor do eSocial, ou o envio perdeu a conexão com o mesmo neste momento. Reenviar o evento.
+
+Erro: 409: Não foi possível estabelecer conexão com o Sistema de Procuração Eletrônica RFB.
+Ação sugerida: A falha pode ser temporária, tente novamente mais tarde.
+
+Erro 411: Assinante inválido. Assinante não possui perfil de procuração eletrônica para enviar este tipo de evento ou assinante não consta como representante legal da empresa.
+Ausência de procuração eletrônica para transmissão dos eventos. Solicitar procuração eletrônica para o cliente.
+
+Erro 632: Já existe no evento um grupo com mesma chave de identificação.
+Erro decorrente de informação duplicada no XML. Pode ser código de risco duplicado, descrição de EPI duplicada, descrição de EPC duplicada, etc.
+
+Erro 667: A data não pode ser superior a 30(Trinta) dias a partir da data atual.
+Ação Sugerida: Editar o CARGO em questão e verificar DATA DE INÍCIO DA VALIDADE DOS DADOS PARA O ESOCIAL.
+
+Erro 1557: Não foi localizado o contrato de trabalho do trabalhador CPF: NÚMERO, Matrícula: NÚMERO"
+eSocial	Procuração eletronica inválida. O que fazer ?	Contactar o cliente e informar sobre a invalidez, uma vez que a procuração eletrônica é uma condicionante para o formato de transmissão/mensageria.
+eSocial	Os eventos enviados após a data corte de cada mes estarão sujeitos a multa?	Sim. Melhor cenário é realizar o envio até o dia 15 do mês subsequente.
+eSocial	O cliente pode exportar as informações do s-2240 com os dados do LTCAT (BR MED) e PGR (CLIENTE)?	Sim. O cliente pode exportar as informações do LTCAT elaborado pela BR MED para o evento S-2240. Para que isso ocorra, o time de Sucesso ou Onboarding deve enviar o LTCAT para que o cliente atualize o PGR, e, somente depois da conclusão da atualização do PGR, devemos cadastrar o LTCAT no BR NET. Esse LTCAT deve ser considerado para elaboração da V7 pela equipe de Segurança do Trabalho e realizada a importação dos dados pela equipe de On-Going. Atualmente não aceitamos atender clientes para elaboração somente de LTCAT. 
+eSocial	"Descrever os principais motivos de recusa de forma comentada, conforme solicitado em 09/03/2023 no treinamento eSocial 2240 Transmissão
+
+"	"""Matricula & CPF: O eSocial trabalha fazendo a busca das duas informações no evento S-2200. Caso o declarante informe dados diferentes no evento S-2240, será motivo de recusa.;
+
+Agente Nocivo: Qualquer dado diferente de ausencia de risco (09.01.001) deverá ser acompanhado de EPC ou EPI.Caso o declarante não informe as medidas de controle, será motivo de recusa;
+
+Descrição de Atividade: O eSocial permite apenas 999 caracteres para descrição de atividade do trabalhador, considerando, também, os espaços. Caso possua mais dados que o permitido, será motivo de recusa;
+
+Data de Admissão: Visto que os eventos de admissão são predecessores aos eventos de Saúde e Segurança do Trabalho, se o trabalhador ainda não foi admitido, o eSocial não encontrará parâmetros para envio do evento S-2240. Na BR NET, por padrão consta a data de liberação do ASO, e o cliente deverá atualizar o campo ""início da condição"" com a data de admissão do trabalhador. 
+
+"
+eSocial	Quando o cliente sinalizar algum erro no envio de mensageria de responsabilidade da BR MED,  qual processo devemos seguir? 	Entender melhor a demanda ou erro, verificar se na FAQ consta alguma pergunta que possa ajudar, pedir para que o cliente formalize por email e verificar com a equipe do eSocial para devolutiva ao cliente.
+eSocial	O que é eSocial para SST?	É um projeto do Governo para as empresas unificarem o envio e armazenamento das informações de seus colaboradores, visando atender às obrigações trabalhistas, previdenciárias e tributárias. Vale ressaltar que em torno de 20% dessas informações são referentes à Saúde e Segurança do Trabalho (SST) e respectivos eventos (S-2220, S-2240 e S-2210).
+eSocial	Devo informar os riscos ergonômicos, acidentes e mecânicos para o eSocial?	Não. Apenas os riscos físicos, químicos e biológicos serão tratados no eSocial.
+eSocial	Devo enviar o PGR ao eSocial?	O PGR não deve ser enviado ao eSocial. O eSocial não aceita documentos e laudos, apenas os eventos. Por isso, enviamos um XML contendo as informações referente aos GHEs, Agentes Nocivos e CA dos EPIs através do evento S-2240.
+eSocial	Quando não houver riscos no PGR, o evento S-2240 deve ser enviado?	Mesmo com ausência de riscos no PGR, o evento S-2240 deve ser informado para todos os funcionários com o código "09.01.001. Ausência de agente nocivo ou de atividades previstas no Anexo IV do Decreto 3.048/1999"
+eSocial	Quais informação devem ser enviadas no evento S-2220?	No evento S-2220 deve ser enviado: CPF, número de matrícula, códigos e data dos exames, tipo e data do ASO, nome e CRM do médico emitente.
+eSocial	O que é o arquivo XML?	O XML é um arquivo de texto formatado nos padrões do eSocial contendo as informações solicitadas no manual e layout da versão S-1.0.
+eSocial	Devo enviar o ASO ao eSocial?	O eSocial não aceita anexos, portanto o ASO não é enviado ao eSocial. O que é enviado por meio do evento S-2220 é um arquivo XML contendo as informações contidas no ASO.  
+eSocial	O que são os eventos predecessores?	São os eventos necessários e que antecedem ao envio do S-2220 ou S-2240, como: S-2190 (pré admissional); S-2200 (admissão) e S-2300 (estagiários, estatutários, RPA, entre outros, sem vínculo CLT).
+eSocial	O que são as NRs?	No Brasil, as Normas Regulamentadoras, também conhecidas como NRs, são citadas no Capítulo V, Título II, da Consolidação das Leis do Trabalho e regulamentam e fornecem orientações sobre procedimentos obrigatórios relacionados à segurança e saúde do trabalhador. Elas estipulam quais são os requisitos mínimos para a garantia da saúde e da segurança no ambiente de trabalho. Como passam por inspeção periódica do Ministério do Trabalho e Emprego, são obrigatórias para as empresas brasileiras. Atualmente existem 38 normas.
+eSocial	Quem libera a procuração eletrônica?	"A empresa cliente da BR MED, através do site do e-CAC.CRIAR.
+"
+eSocial	"É necessário autenticar no cartório a procuração digital?
+"	"A procuração eletrônica/digital não precisa ser autenticada em cartório. Ela é autenticada automaticamente pelo site do e-CAC ao realizar o procedimento.
+"
+eSocial	É necessário o certificado digital próprio para vincular no Sistema do eSocial?	Sim, certificado digital no formato A1. Após esta etapa, a BR MED entra no circuito iniciando a prestação do serviço de transmissão, uma vez que a respectiva proposta comercial foi assinada para começo do termo aditivo.
+eSocial	Qual a diferença de Agente de Risco para Agente Nocivo?	Consideram-se agentes de risco os agentes físicos, químicos, biológicos, fatores ergonômicos e acidente existentes nos ambientes de trabalho que, em função de sua natureza e tempo de exposição, são capazes de causar danos à saúde do trabalhador. Já os agentes nocivos são aqueles que geram condições especiais de trabalho que, além de prejudicar a saúde ou condição física dos trabalhadores, podem ensejar aposentadoria especial.
+eSocial	Qual a diferença entre o número do protocolo e número de recibo?	O número de protocolo é a numeração disponibilizada pelo eSocial para os arquivos que estão em processamento, ou seja, ainda não foram analisados pelo governo. Após essa análise, a numeração passa a ser o número de protocolo.
+eSocial	O que é EPI e EPC?	De acordo com o subitem 6.3.1 da NR-6, considera-se Equipamento de Proteção Inidivudal (EPI) o dispositivo ou produto de uso individual utilizado pelo trabalhador, concebido e fabricado para oferecer proteção contra os riscos ocupacionais existentes no ambiente de trabalho. Já o Equipamento de Proteção Coletiva (EPC) é todo dispositivo ou produto que projeta o coletivo, ou seja, cercas, placas de sinalização e fitas zebradas. 
+eSocial	O que é Matriz de EPI?	A matriz é um documento que registra as entradas e saídas dos EPIs, seguindo a necessidade de sua compra e substituição dos equipamentos. É por meio dela que temos controle de qual EPI cada trabalhador deve usar.
+eSocial	O que é GHE ou GSE?	O Grupo Homogêneo de Exposição (GHE) é o agrupamento dos trabalhadores em uma empresa que têm perfis de exposição de riscos similares. Já o Grupo Similar de Exposição (GSE) corresponde a um grupo de trabalhadores sujeito a condições em que ocorram idênticas probabilidades de exposição a um determinado agente de risco
+eSocial	O que é CA?	O Certificado de Aprovação (CA) é um documento emitido pelo Ministério do Trabalho e Previdência, estabelecendo o prazo de validade para comercializar um determinado Equipamento de Proteção Individual (EPI).
+PGR	O que é PGR?	O Programa de Gerenciamento de Riscos (PGR) é um documento que substituiu o PPRA e que visa gerenciar os riscos ocupacionais (físicos, químicos, biológicos, ergonômicos e de acidentes) presentes no ambiente de trabalho. Ele é obrigatório para todas as empresas com funcionários CLT, com exceção do MEI.
+PPRA	O que é PPRA?	O PPRA é o Programa de Prevenção de Riscos Ambientais, conforme preconiza a NR-9. Vale ressaltar que, a partir de 03/01/2023, esse programa foi substituído pelo Programa de Gerenciamento de Riscos (PGR), de acordo com a NR-1.
+Exame Toxicologico	Quais os tipos de exame toxicólogico a BR MED faz e qual a finalidade cada um deles?	"A BRMED realiza dois tipos de exames toxicológicos: O toxicológico capilar e o urinário.
+O Toxicológico capilar é realizado através de amostras de pelos ou cabelo, capaz de identificar o uso de substâncias lícitas e ilícitas em um tempo mais longo que os demais testes. Por isso, é considerado um método eficaz e assertivo, podendo detectar o uso de drogas no período de 90 a 180 dias.
+O Toxicológico urinário é capaz de detectar a presença das substâncias em um período de até 7 dias. Esse é o tempo das substâncias serem diluídas pelo fígado até chegarem à urina. O teste é indicado para pacientes que precisam de uma detecção que não seja tão larga, uma vez que só é possível detectar o uso de substância nos 7 dias que antecederam a coleta. "
+Expedição	O que devo fazer com o encaminhamento anexado no prontuário do colaborador?           	"Encaminhamento anexado ao prontuário do colaborador com o ASO - significa que foi detectada alguma alteração que possa vir a comprometer a saúde do colaborador. A empresa deve entregar o encaminhamento ao mesmo e orientar esse colaborador a procurar atendimento com o especialista para que possa iniciar seu tratamento. A alteração é apenas para controle, portanto não é considerada impeditiva para que o mesmo realize suas atividades laborais.
+Encaminhamento anexado sem o ASO - indica que, devido a alteração identificada, foi necessário reter o ASO do colaborador e encaminhá-lo à coordenação médica do PCMSO para que seja avaliada as condições clínicas do colaborador e para que essa coordenação dê as orientações necessárias em relação à forma que o Atestado de Saúde Ocupacional será liberado (se o colaborador será liberado às atividades laborais e procurará um especialista para controle ou se deverá apresentar um laudo do especialista para verificarmos se está ou não em condições de exercer sua função). Nos casos mais graves, o médico pode considerar o candidato inapto para exercer a função.
+
+Esse processo é válido para clínica própria ou rede credenciada.
+"
+Expedição	Quando o ASO do colaborador será liberado em rede credenciada?	"O BR NET fornece a previsão da data da liberação em dois momentos. 
+1 - No momento da solicitação do agendamento. Abaixo da grade de exames, exibimos a previsão de liberação. 
+2 - Na timeline do colaborador exibimos a previsão de liberação. Essas prévias de liberação podem sofrer variações nas seguintes situações: 
+2.1- Cada clínica possui um prazo e o mesmo é calculado de acordo com sua grade de exames. 
+2.2- Caso o colaborador apresente alguma alteração em seus exames, o mesmo será encaminhado à área médica e precisaremos aguardar a conduta do médico coordenador para prosseguir com a liberação do ASO. O prazo para liberação do ASO nos casos de alteração é, em média, de 2 dias úteis, salvo em alguns casos com particularidades específicas. 
+2.3- Caso o colaborador deixe de realizar algum exame e precise retornar à clínica, o prazo é recalculado de acordo com o exame que foi feito posterior a seu agendamento. "
+Expedição	Qual o prazo para liberação dos ASOs retidos após conduta médico do cliente?	O prazo para liberação dos ASOs após o retorno da coordenação médica é de, em média, 2 dias úteis. Salvo em alguns casos com particularidade específica.
+Expedição	Por que o exame de Coprocultura e Cultura Ungueal demoram para sair o resultado?	Todo exame de cultura precisa ter um tempo de proliferação dos microorganismos, e essa etapa impacta no SLA de liberação do respectivo exame. No caso da Coprocultura, são 4 dias úteis; para Cultura Ungueal, 30 dias úteis.
+Faturamento	Por que o valor do boleto está diferente do valor da NF?	Alguns tipos de serviços estão sujeitos a retenção de impostos. São eles: PIS, Cofins, Contribuição Social, Imposto de Renda ou ISS. A retenção de impostos na nota fiscal corresponde aos tributos pagos na venda de algum serviço ofertado pela empresa. E, dessa forma, o valor dos tributos será descontado diretamente na nota fiscal. Portanto, se o seu boleto está com o valor diferente da nota, é porque houve a retenção dos impostos, e para verificação basta consultar a nota fiscal. Para mais informações sobre alíquotas, emissões e recolhimentos de DARFs, pedimos que consulte diretamente a sua contabilidade.
+Faturamento	Por que estou recebendo cobrança se solicitei o distrato?	Conforme cláusula contratual, os distratos precisam ser solicitados com 30 dias de antecedência. Diante disso, os serviços ficam ativos por 30 dias após o pedido. Após esse período, os serviços não serão mais prestados, porém, se por algum motivo do nosso cliente ocorrer a necessidade, será cobrado normalmente.
+Faturamento	Por que meus ativos estão diferentes do real quantitativo da minha empresa?	Caso o seu modelo de contrato contemple o serviço de saúde e gestão, você receberá a cobrança de acordo com o número de ativos cadastrados no BR NET. Lembrando que é responsabilidade do contratante (cliente BR MED) a atualização dos colaboradores ativos no BR NET. Pedimos que nossos clientes mantenham esses dados sempre atualizados.
+Faturamento	O que se refere a cobrança de Alteração do PCMSo/PGR?	Foram realizadas atualizações no documento, com isso gera uma cobrança de 25%.
+Faturamento	Minha fatura vai chegar até que dia?  	Algumas faturas podem estar pendentes de envio por causa de alguma inconsistência na informação. E isso pode gerar algum atraso. Provavelmente nosso setor de faturamento já entrou em contato para sanar a inconsistência. Caso não tenha identificado nossa tentativa de contato, pedimos que envie um email para financeiro@grupobrmed.com.br. Responderemos em até 48 horas.
+Faturamento	Estamos sendo cobrados por documentos que não recebemos até o momento	O cliente deve entrar em contato com o Gestor do contrato (ponto focal do time de Sucesso) para melhor entender o caso.
+Faturamento	Poderia informar qual foi nosso índice de reajuste?	O índice de reajuste é informado no contrato assinado entre todas as partes. Por padrão, o reajuste é realizado anualmente no aniversário de contrato e enviamos o comunicado para o email cadastrado. Caso ocorra alguma necessidade de reajuste devido a algum reequilíbrio econômico por causa da complexidade do serviço prestado, o contratante será informado.
+Gestão de CIPA	O que é CIPAA? E CIPATR?	A Comissão interna de Prevenção de Acidentes e Assédio (CIPAA), que está presente na NR-5, é um grupo formado por empregados e empregadores de uma mesma empresa que são escolhidos por meio de eleições. O objetivo dessa equipe é mapear e prevenir acidentes de trabalho e promover a saúde do funcionário. A CIPATR é semelhante, porém é referente ao segmento rural.
+Gestão de CIPA	Como é feita a organização da CIPAA?	"A comissão é composta por colaboradores da empresa, organizada pela composição de representantes do empregador (indicados) e dos empregados (que são escolhidos através de eleições), de acordo com dimensionamento previsto no Quadro I da NR-5. 
+
+Seguindo o item 5.4 desta norma
+
+""5.4 Constituição e estruturação
+
+5.4.1 A CIPA será constituída por estabelecimento e composta de representantes da organização e dos empregados, de acordo com o dimensionamento previsto no Quadro I desta NR, ressalvadas
+as disposições para setores econômicos específicos."""
+Gestão de CIPA	Quando um membro da CIPAA pode ser desligado da empresa?	Todo Cipeiro tem direito a estabilidade no emprego de até 2 anos, desde o registro da sua candidatura até 1 ano após o fim do seu mandato, de acordo com a NR-5, Art. 165 da CLT. Com isso, após o término da estabilidade, o colaborador pode ser dispensado de suas atividades sem justa causa. De acordo com a 5.6.6, o membro titular perderá o mandato e será substituído por suplente quando faltar a mais de quatro reuniões ordinárias sem justificativa.
+Gestão de CIPA	Quantas reeleições o colaborador que é membro eleito da CIPAA pode ter?	O mandato dos membros eleitpos da CIPAA, terá duração de 1 ano permitindo somente uma reeleição, porém o mesmo poderá permanecer como cipeiro se for indicado pelo empregador.
+Gestão de CIPA	Quais são os riscos em caso de desligamento do cipeiro antes dos 2 anos de estabilidade?	Conforme o Art. 165 da CLT e a NR-5, não poderá realizar dispensa sem justa causa do cipeiro com estabilidade, porém, seguindo o parágrafo único do Art. 165 da CLT, a empresa que optar mesmo assim por essa dispensa, terá que comprovar na justiça o motivo do desligamento sob a pena de reintegrar o cipeiro.
+LTCAT	As informações do LTCAT, quando elaborado pela BR MED, estão subindo no sistema BR NET com  avaliação ambiental? 	"Dependendo resultado das avaliações, os fluxos acorrem da seguinte forma:
+Se o resultado da avaliação ambiental estiver abaixo do Limite de Tolerância, não há necessidade de subir as informações para o BR NET. 
+Se o resultado da avaliação ambiental estiver acima do Limite de Tolerância, os resultados serão importados no sistema."
+LTCAT	O que é LTCAT?	O LTCAT é laudo técnico das condições ambientais do trabalho. É um documento que descreve, de forma detalhada, todas as condições de trabalho. Ele precisa ser elaborado para atestar as condições de trabalho na qual o colaborador foi submetido. 
+LTI	Para que serve o LTI?	O LTI é o laudo técnico de insalubridade. Tem finalidade de identificar e caracterizar a insalubridade presente no ambiente ocupacional. Além de regulamentar as operações da empresa de acordo com a legislação, ele também explicita se existe a necessidade do pagamento do adicional de insalubridade para os funcionários.
+LTI	Em qual Norma se enquadra o LTI?	Se enquadra na NR-15 - Atividades Insalubres.
+LTP	O que é LTP? 	O Laudo Técnico de Periculosidade (LTP) é um laudo obrigatório elaborado com o objetivo de documentar as condições ambientais de trabalho, identificando as atividades ou operações perigosas previstas pela NR-16, Lei 7369/85 e Decreto 93412/86.
+LTP	Em qual norma regulamentadora se enquadra o LTP?	Na NR-16 - Atividades Periculosas.
+LTP	Qual artigo da CLT cita os riscos sobre atividades e operações perigosas?	O artigo nº 193 da CLT - Consolidação das leis trabalhistas.
+Malote físico	Em quanto tempo recebo um malote físico de ASO feito em credenciada?	O tempo de recebimento do malote físico varia de acordo com a localidade da credenciada. Em média, o recebimento em nossa sede administrativa é até a segunda semana do mês subsequente aos atendimentos. Com a chegada da via física, temos um prazo de 7 dias úteis para realizamos a conferência do prontuário e enviarmos a aprovação para a clínica emitir a documentação para pagamento. Caso tenha alguma divergência, como algum exame físico não enviado ou documentação física não assinada, informamos a clínica e aguardamos o envio. Quando não encontramos intercorrência, encaminhamos os prontuários para a equipe responsável pelos malotes. Dentro da nossa área de credenciados, o malote é protocolado e enviado via correios ou motoboy para a empresa. É necessário o retorno deste protocolo assinado pelo cliente via e-mail ou pelo motoboy. Após recebermos o protocolo assinado, digitalizamos essa via e disponibilizamos no Único-doc.
+Mapa de Risco	Quais os benefícios do Mapa de Riscos para a empresa?	"Prevenção de riscos existentes nos locais de trabalho onde os trabalhadores poderão estar expostos;
+Redução de gastos com acidentes e doenças, medicação, indenização, substituição de trabalhadores e danos patrimoniais;
+Otimização da gestão de saúde e segurança no trabalho com aumento da segurança interna e externa; 
+Melhoria do clima organizacional, aumentando a produtividade, competitividade e lucratividade."
+Mapa de Risco	Quem elabora o Mapa de Riscos?	De acordo com a Portaria nº 25, o Mapa de Riscos deve ser elaborado pela CIPAA, com participação dos trabalhadores envolvidos no processo produtivo e com orientação do Serviço Especializado em Engenharia de Segurança e Medicina do Trabalho (SESMT).
+Mapa de Risco	Podemos utilizar outra ferramenta apropriada para substituir o Mapa de Risco?	"Segundo a NR-5:
+
+5.3 Atribuições
+5.3.1 A CIPAA tem por atribuição:
+b) registrar a percepção dos riscos dos trabalhadores, em conformidade com o subitem 1.5.3.3 da
+NR-1, por meio do mapa de risco ou outra técnica ou ferramenta apropriada à sua escolha, sem
+ordem de preferência, com assessoria do Serviço Especializado em Segurança e em Medicina do
+Trabalho - SESMT, onde houver."
+Mapa de Risco	Quais as cores que classificam os riscos no Mapa de Riscos?	"Físico: Verde;
+Químico: Vermelho;
+Biológico: Marrom;
+Ergonômico: Amarelo;
+Acidente: Azul."
+Mapa de Risco	Qual o órgão que fiscaliza o Mapa de Riscos?	Departamento Nacional de Segurança e Saúde do Trabalhador, do Ministério do Trabalho
+Mapa de Risco	Quais informações são necessárias para a elaboração do Mapa de Risco?	É necessário verificar com o cliente se possui a planta baixa do local. Geralmente o Mapa de Risco é feito por pavimento, de forma que não fique poluído visualmente. Importante fazer uma visita de reconhecimento no local ou ter acesso ao PGR vigente para identificar tais informaçõess e transcrever para o respectivo mapa de risco.
+eSocial	Para os clientes que não conseguiram a transmissão no primeiro ciclo, a cobrança do serviço da mensageria vai ser cobrada no faturamento?	A cobrança de qualquer serviço inicia sempre no mês subsequente ao mês de início da prestação do serviço, ou seja, se o serviço iniciar em março, a primeira cobrança será em abril conforme fluxo de faturamento do cliente.
+Mobilização	Como devemos contextualizar sobre o valor de mobilização de Campanha aos clientes?	Importante que o time de sucesso verifique o contrato do cliente e identifique o formato de serviço/ e cobrança que consta. Em paralelo, atualmente temos dois formatos utilizados nesse caso: o fixo para clientes específicos e conforme determinados em contrato; e o variável, que precisamos verificar detalhadamente, uma vez que tem impacto direto no custo, como: local, grade de exames, horário, escalas, tipo de profissional, quantidade de vidas e exames. Importante reforçar que precisamos receber as informações completas para que a respectiva área consiga precificar o custo de forma efetiva. Para isso, é fundamental checar o contrato do cliente.
+Mudança na Legislação	"Quando é exigido o exame toxicológico para motoristas? 
+"	"A Lei 13.103/2015 (conhecida como Lei dos Caminhoneiros) valida que todas as empresas são obrigadas a realizar o exame toxicológico de larga janela de detecção na admissão ou desligamento de motoristas das categorias C, D e E e que estão em regime CLT. O exame toxicológico identifica o uso de substâncias psicoativas em um período de, pelo menos, 90 dias anteriores à coleta. Esse exame deve ser realizado em laboratório credenciado pelo Ministério do Trabalho e custeado pelo empregador. 
+É importante saber que, em relação à antiga portaria (116/2015, artigo 1.3), o exame toxicológico não deve fazer parte do PCMSO, constar em Atestados de Saúde Ocupacional e estar vinculado à definição de aptidão do trabalhador. A legislação também autoriza o empregador a exigir que os motoristas se submetam a exames toxicológicos e a programas de controle de uso de droga e de bebida alcoólica pelo menos uma vez a cada dois anos e seis meses."
+Mudança na Legislação	Quando é necessário realizar o exame Orto-Cresol?	"O exame Orto-Cresol é utilizado para monitoração das exposições ocupacionais ao agente químico tolueno, conforme disposto no ANEXO I da NR-7. Em relação à rotina, o mesmo dispositivo preconiza, no subitem 7.5.13, que os exames previstos nesse anexo devem ser realizados a cada seis meses, e o subitem 7.5.15 informa que não serão obrigatórios em exame admissional, retorno ao trabalho, mudança de risco ocupacional e exame demissional. Nesse contexto, o Orto-Cresol entrará obrigatoriamente no periódico anual e semestral. 
+Em relação à substituição desse exame, a medida foi utilizada em conformidade com o Artigo 3º da Portaria Nº 6.734, de 9 de março de 2020. Os exames do anexo I deverão ser considerados a partir dos prazos estabelecidos e suas respectivas observações. Dessa forma, a preferência é que o monitoramento do tolueno seja feito através do exame do tolueno, via sangue ou urina, ou do Orto-cresol urinário. No entanto, até que esses indicadores estejam disponíveis, a exposição ao Tolueno deve ser monitorada por meio do Ácido Hipúrico.
+"
+Palestras e/ou Treinamentos	A BR MED elabora palestras de saúde presencial?	Por causa da pandemia, propusemos a nova metodologia de palestras online, na qual, por meio de um invite criado pelo próprio cliente, ministramos o conteúdo diretamente na plataforma no dia e horário previamente agendados. Nessa nova modalidade, além da flexibilidade de horários e dias, temos um grande facilitador: uma maior abrangência, visto que empresas que possuem mais de uma filial em outros estados pelo Brasil também conseguem ter acesso ao conteúdo compartilhado. Visando uma melhor experiencia ao cliente, nossa indicação sempre é nessa modalidade, mas, caso haja algum impeditivo, podemos verificar a disponibilidade da agenda para o formato presencial. A agenda para eventos presenciais, no entanto, é mais restrita.
+Palestras e/ou Treinamentos	o que é a SIPAT ?	É a Semana interna de prevenção de acidentes no trabalho.O principal objetivo é promover conhecimentos e reflexões, despertando o olhar crítico sobre a importância da prevenção de acidentes, combate ao adoecimento e segurança e qualidade de vida no local de trabalho. Esse evento é realizado pela CIPAA.
+PCA	O que é o PCA?	É o Programa de Controle Auditivo. Na BR MED, esse serviço é realizado pela área de Saúde por meio da emissão do relatório anual, e, na sequência, pela área de Segurança. Importante reforçar que a necessidade de elaboração do PCA está diretamente ligada ao risco físico ou ruído, na qual é preciso realizar exame complementar de audiometria.
+PCA	Em qual Norma Regulamentadora se enquadra o PCA?	A principal Norma Regulamentadora sobre as medidas de prevenção do PCA é a NR-7 (Programa de Controle Médico de Saúde Ocupacional).
+PCMSO	Como são liberados os programas PCMSO elaborados via Portal De Serviços?	As solicitações que vem por meio do portal de serviços também serão respondidas pela ferramenta. Os chamados são finalizados com link do respectivo documento salvo na plataforma Único-doc.
+PCMSO	Qual o fluxo de atualização da planilha de médicos das nossas clínicas credenciadas?	As informações com os dados dos médicos que realizam atendimentos em nossas clínicas credenciadas são enviadas pelo time de Credenciados para o time de Saúde via e-mail e, posteriormente, atualizamos a listagem padronizada com as informações repassadas.
+PCMSO	A BR MED atualmente faz essa atualização da planilha de médicos? Se sim em qual periodicidade?	A listagem de médicos é solicitada à clínica no início de nossa parceria com a mesma. Pedimos atualização quando houver mudança no quadro de médicos ou inclusão de algum que ainda não foi cadastrado. A atualização da planilha é feita sempre que recebemos novas informações das clínicas credenciadas.
+PCMSO	O que é necessário para elaborar um PCMSO?	"Para elaboração do PCMSO, faz-se necessário o envio dos itens abaixo:
+- PGR (preferencialmente em Word ou PDF);
+- Nome do médico responsável pelo PCMSO;
+- Cronograma de palestra (opcional);
+- Lista de Hospitais de referência em caso de urgência ou emergência (opcional);
+- Listagem de exigências contratuais (opcional);
+- Grade padrão BR MED ou cliente;
+- Exames exigidos pela empresa (exigência contratual);
+- Dados do responsável pela implementação do PCMSO na empresa.
+
+"
+PCMSO	O que é PCMSO?	O Programa de Controle Médico de Saúde Ocupacional (PCMSO), referente à NR-7, tem objetivo de proteger e preservar a saúde dos empregados em relação aos riscos ocupacionais e garantir, conforme avaliação de riscos do Programa de Gerenciamento de Risco (PGR), um ambiente de trabalho seguro.
+PCMSO	Para que serve o PCMSO?	O PCMSO tem como objetivo proteger e preservar a saúde dos empregados em relação aos riscos ocupacionais, conforme avaliação de riscos do Programa de Gerenciamento de Risco (PGR). Além disso, o PCMSO é parte integrante do conjunto mais amplo de iniciativas da organização no campo da saúde dos colaboradores, devendo estar harmonizado com o disposto nas NRs relacionadas.
+PCMSO	Qual o campo de aplicação do PCMSO?	Esta Norma se aplica à qualquer organização, órgão público ou órgãos dos poderes legislativos e judiciário, além do Ministério Público, que possuam empregados regidos pela Consolidação das Leis Trabalhistas (CLT). De acordo com o subitem 1.8.6 da NR-1, as empresas devem realizar e custear os exames médicos ocupacionais admissionais, demissionais e periódicos, que deve ser feito a cada dois anos. MEI, ME e EPP são desobrigados de elaborar o PCMSO.
+PCMSO	Quem é o responsável pela elaboração do PCMSO?	Conforme NR-7, o médico responsável designado pelo empregador irá elaborar o PCMSO em concordância com as normativas dispostas na NR e analisando o respectivo PGR. No entanto, a implementação é de responsabilidade da organização.
+PCMSO	Quais são as diretrizes do PCMSO?	São diretrizes do PCMSO: rastrear e detectar precocemente os agravos à saúde relacionados ao trabalho;  detectar possíveis exposições excessivas a agentes nocivos ocupacionais; definir a aptidão de cada empregado para exercer suas funções ou tarefas determinadas; subsidiar a implantação e o monitoramento da eficácia das medidas de prevenção adotadas na organização; subsidiar análises epidemiológicas e estatísticas sobre os agravos à saúde e sua relação com os riscos ocupacionais;  subsidiar decisões sobre o afastamento de empregados de situações de trabalho que possam comprometer a saúde; subsidiar a emissão de notificações de agravos relacionados ao trabalho, de acordo com a regulamentação pertinente;  subsidiar o encaminhamento de empregados à Previdência Social; acompanhar de forma diferenciada o empregado cujo estado de saúde possa ser especialmente afetado pelos riscos ocupacionais; subsidiar a Previdência Social nas ações de reabilitação profissional; subsidiar ações de readaptação profissional;  controlar a imunização ativa dos empregados relacionada a riscos ocupacionais sempre que houver recomendação do Ministério da Saúde.
+PCMSO	Qual o órgão fiscalizador que exige o PCMSO?	Ministério do Trabalho e Previdência.
+PCMSO	O que é o PCMSO NR-32?	Programa de Controle Médico da Saúde Ocupacional conforme preconiza a NR-32 para atendimento à serviços e estabelecimentos de saúde.Tem o objetivo de proteger e preservar a saúde dos empregados em relação aos riscos ocupacionais, conforme avaliação de riscos do Programa de Gerenciamento de Risco (PGR) da organização. Além disso, o PCMSO é parte integrante do conjunto mais amplo de iniciativas da organização no campo da saúde dos colaboradores, devendo estar harmonizado com o disposto nas NRs relacionadas.
+PCMSO	O que é ASO?	O Atestado de Saúde Ocupacional (ASO) é uma declaração médica que indica se o trabalhador está em condições de realizar determinadas atividades ou funções dentro de uma empresa.
+PCMSO	O PCMSO deve ser enviado ao eSocial?	O PCMSO não é enviado ao eSocial. O eSocial não aceita programas, documentos ou laudos.
+PCMSO	Qual local da NR-7 informa que a renovação do PCMSO deve ser anual?	Conforme constante no texto normativo da NR-7, subitem 7.6.2, o médico responsável pelo PCMSO deve elaborar relatório analítico do Programa anualmente, considerando a data do último relatório. Nesse sentido, em concordância com o subitem 7.5.4, pelo relatório analítico ser parte integrante obrigatória do PCMSO, a renovação do documento se dará de forma anual.
+PCMSO	Por que para motoristas a grade de exames é diferenciada? Quais exames são incluídos?	"As funções relacionadas à condução de veículos são consideradas atividades críticas, logo exige maior critério e controle com o objetivo de evitar mal súbito desses colaboradores. PARA MOTORISTAS PROFISSIONAIS CATEGORIA, C, D e E, a grade de exames estabelecida é: CLÍNICO OCUPACIONAL, AUDIOMETRIA TONAL, ACUIDADE VISUAL COM SENSO CROMÁTICO, GLICEMIA DE JEJUM, HEMOGRAMA COMPLETO COM PLAQUETAS, ELETROCARDIOGRAMA, ELETROENCEFALOGRAMA e AVALIAÇÃO PSICOLÓGICA.
+Caso a função seja apenas para motorista de veículos leves (Categoria A e/ou B), indicamos uma grade de exames menor que consiste em: CLÍNICO OCUPACIONAL, AUDIOMETRIA TONAL, ACUIDADE VISUAL COM SENSO CROMÁTICO, GLICEMIA DE JEJUM e HEMOGRAMA COMPLETO COM PLAQUETAS. 
+"
+PCMSO	Por que os documento padrão BR MED vem apenas a listagem de clínicas ao invés de clínicas e médicos examinadores?	"A NR-7 não obriga a inclusão do nome dos médicos examinadores no PCMSO, apenas orienta que estes médicos estejam familiarizados com os ambientes de trabalho aos quais os trabalhadores estão expostos e com as patologias ocupacionais presentes no mesmo.
+Sendo assim, nosso padrão é incluir nos PCMSOs, no item “LOCAL DE REALIZAÇÃO DOS EXAMES / CLÍNICAS AUTORIZADAS”, um texto que explica a não obrigatoriedade e suas condições, logo após, a lista de todas as clínicas próprias e credenciadas habilitadas à realização dos exames ocupacionais. Essa estratégia visa acabar com a não conformidade de um Atestado de Saúde Ocupacional (ASO) ser assinado por um médico não listado no PCMSO.
+"
+PCMSO	Quais são os exames utilizados para fumos metálicos? Quais as rotinas?	Os fumos metálicos geram alterações de cunho pulmonar, por conta disso é necessário o monitoramento através da ESPIROMETRIA, RADIOGRAFIA DE TÓRAX PADRÃO OIT (24 MESES) e dos metais descritos na NR-7 (ANEXO I MONITORAÇÃO DA EXPOSIÇÃO OCUPACIONAL A AGENTES QUÍMICOS - QUADROS I E II). Sendo assim obrigatória a realização dos exames CÁDMIO URINÁRIO, CHUMBO SÉRICO, CROMO URINARIO e do ÁCIDO DELTA AMINOLEVULÍNICO. Em relação a rotina de exames, a NR-7, por meio do item 7.5.13, evidencia a necessidade de monitoramento semestral. 
+PCMSO	Quais são os exames utilizados para vapores orgânicos? Quais as rotinas?	"A exposição ou inalação de Vapores Orgânicos geram danos à saúde que podem estar relacionadas ao contato de produtos químicos tóxicos com a pele e olhos, resultando em doenças respiratórias crônicas, doenças do sistema nervoso, doenças nos rins e fígado, e em alguns tipos de câncer. Por conta disso, é necessário o monitoramento através do HEMOGRAMA COMPLETO COM PLAQUETAS e RETICULÓCITOS, em conjunto com os ácidos descritos na NR-7 (ANEXO I MONITORAÇÃO DA EXPOSIÇÃO OCUPACIONAL A AGENTES QUÍMICOS - QUADROS I E II). Sendo assim, é obrigatória a realização dos exames para BENZENO – ÁCIDO TRANS - TRANS MUCÔNICO, TOLUENO – TOLUENO NA URINA/ ORTO-CRESOL/ ÁCIDO HIPÚRICO (Artigo 3º da PORTARIA Nº 6.734, DE 9 DE MARÇO DE 2020), XILENO – ÁCIDO METIL HIPURICO, ETILBENZENO – ÁCIDO MANDÉLICO E ÁCIDO FENILGLIOXÍLICO. Ressaltamos, ainda, que no caso da substância BENZENO, pelo seu alto potencial cancerígeno, o monitoramento deverá ser realizado independentemente do nível de risco informado no PGR.
+Em relação à rotina de exames, a NR-7, por meio do item 7.5.13, evidencia a necessidade de monitoramento semestral.
+"
+PCMSO	Quais são os temas para palestras informativas ministrados pelo time de Saúde?	"•        CÂNCER DE MAMA - OUTUBRO ROSA
+•        CÂNCER DE PRÓSTATA - NOVEMBRO AZUL
+•        DIABETES MELLITUS
+•        HIPERTENSÃO ARTERIAL
+•        IST – HIV
+•        PRIMEIROS SOCORROS
+•        QUALIDADE DE VIDA
+•        COVID-19
+
+Vale comentar que as palestras são apenas de cunho informativo e não se enquadram como treinamentos.
+"
+PCMSO	É preciso o médico coordenador do PCMSO ter CRM de cada local do Brasil aonde a empresa atua?	"A BR MED não considera necessário que o médico coordenador do PCMSO tenha registro profissional vigente em cada CRM da região de atuação da empresa. Conforme descrito no Despacho MTb/SSST n. 01/1996: “O médico do trabalho coordenador pode elaborar e ser responsável pelo PCMSO de várias empresas, filiais, unidades, frentes de trabalho, inclusive em várias Unidades da Federação. Por outro lado, o profissional encarregado pelo médico coordenador de realizar os exames médicos, como pratica ato médico (exame médico) e assina o ASO, deve estar registrado no CRM da Unidade da Federação em que atua”.
+Já o art. 5 da Resolução CFM n. 2.183/2018 afirma que o médico coordenador do PCMSO estará obrigado a estar presente, com a regularidade que for necessária, nas empresas e em suas filiais para coordenar o referido programa. Desse modo, especialistas defendem que um médico pode estar presente em uma empresa com a regularidade que for necessária, sem que isso se configure um exercício de modo permanente ou habitual, ou seja, sem que tenha necessariamente que ter inscrição secundária naquele local.
+De qualquer forma, importante saber que temos médicos próprios com registro no Rio de Janeiro, São Paulo, Minas Gerais e Bahia."
+PCMSO	Quais são as informações obrigatórias que devem constar no ASO?	O ASO deve conter, no mínimo: razão social e CNPJ ou CAEPF da organização; nome completo do empregado, número de CPF e função;  a descrição dos perigos ou fatores de risco identificados e classificados no PGR que necessitem de controle médico previsto no PCMSO, ou a sua inexistência; indicação e data de realização dos exames ocupacionais clínicos e complementares a que foi submetido o empregado;  definição de apto ou inapto para a função do empregado; o nome e número de registro profissional do médico responsável pelo PCMSO, se houver; data, número de registro profissional e assinatura do médico que realizou o exame clínico. Além disso, é importante reforçar que a aptidão para trabalho em atividades específicas deve ser consignada no ASO.
+PCMSO	Quais são os critérios de aptidão do PCMSO?	O PCMSO deve atuar com objetivo de prevenção, rastreamento e diagnóstico precoce dos agravos à saúde relacionados ao trabalho, inclusive de natureza subclínica, além da constatação da existência de casos de doenças profissionais ou danos irreversíveis à saúde dos trabalhadores. Este documento tem finalidade de garantir que o candidato tenha capacidade funcional para assumir determinada função em segurança, sem colocar a própria vida e a de terceiros em risco. Para isso, deve ser levado em consideração também a avaliação do estado de saúde dos empregados em atividades críticas, como definidas nesta Norma, considerando os riscos envolvidos em cada situação, e a investigação de patologias que possam impedir o exercício de tais atividades com segurança. Esta avaliação é feita por meio de exames médicos clínicos e complementares necessários, conforme os riscos ocupacionais identificados, atendendo ao determinado nos Anexos da NR-7.
+PCMSO	Visando que muitas empresas não tem SESMT, quais orientações dar ao cliente sobre o que ele deve fazer ao receber o PCMSO de seu estabelecimento? 	"A empresa deverá seguir as orientações contidas no documento e providenciar a realização dos tópicos do Cronograma de Atividades do PCMSO. Vale reforçar que as datas de execução de cada item são de responsabilidade da empresa. Além disso, as informações de grade de exames e periodicidade devem ser realizadas em concordância com o que foi determinado.
+Lembramos, também, que o PCMSO é um documento de constante atualização, na qual é necessária modificação sempre que a realidade do local de trabalho sofra alterações, as quais deverão ser informadas à BR MED.
+"
+PCMSO	Quais são os exames obrigatórios que devem constar no PCMSO de acordo com a NR-7?	Em conformidade com o subitem 7.5.6, o PCMSO deve incluir a realização obrigatória dos exames médicos: admissional; periódico; de retorno ao trabalho; de mudança de riscos ocupacionais e demissional. Estes exames médicos compreendem exames clínicos e exames complementares. Os exames serão relacionados aos riscos indicados no PGR e/ou atividade crítica desempenhada pela função.
+PCMSO	Por qual motivo o exame Toxicológico Capilar não é inserido no PCMSO?	Esse exame não consta no PCMSO por se tratar de legislação diferente. O exame toxicológico não se trata de um exame ocupacional, ou seja, não está relacionado aos critérios de aptidão dos colaboradores.
+PCMSO	O exame clínico vigente pode ser utilizado para fins de demissão?	Conforme subitem 7.5.11 da NR-7, referente ao exame demissional, o exame clínico deve ser realizado em até dez dias contados do término do contrato, podendo ser dispensado caso o exame clínico ocupacional mais recente tenha sido realizado há menos de 135 dias, para as organizações graus de risco 1 e 2, e há menos de 90 dias para as organizações graus de risco 3 e 4. 
+PCMSO	O exame de audiometria tonal deve ser realizado na rotina 6 meses após a admissão?	Não. Em relação à periodicidade deste exame, tivemos uma alteração da legislação por meio da NR-7 no subitem 4.1 do Anexo II estipulando que o exame audiométrico deve ser realizado, no mínimo: na admissão; anualmente, tendo como referência o exame da admissional, e na demissão.
+PCMSO	O que é  Relatório Analítico?	 É parte integrante do PCMSO, resumindo tudo aquilo que foi feito e analisado ao longo de sua vigência. Tem objetivo de comprovar a eficácia do programa e todo o gerenciamento de risco da corporação. Sua análise é feita em cima da quantidade de exames alterados.
+PCMSO	Quais os itens que compõe o Relatório Analítico?	O médico responsável pelo PCMSO deve elaborar relatório analítico do Programa, anualmente, considerando a data do último relatório, contendo o número de exames clínicos realizados; o número e tipos de exames complementares realizados; estatística de resultados anormais dos exames complementares, categorizados por tipo do exame e por unidade operacional, setor ou função; incidência e prevalência de doenças relacionadas ao trabalho, categorizadas por unidade operacional, setor ou função; informações sobre o número, tipo de eventos e doenças informadas nas CAT, emitidas pela organização, referentes a seus empregados e  análise comparativa em relação ao relatório anterior e discussão sobre as variações nos resultados. 
+PCMSO	Quais são os itens necessários para emissão do Relatório Analítico quando o PCMSO não é elaborado pela BR MED? 	Nesses casos, precisamos do PCMSO da vigência anterior e PCMSO atual, para extrairmos as informações de setores, grade de exames e quantitativo previsto. É preciso também precificar o valor desse serviço com o time de Sales como um Upsell para esse cliente.
+PCMSO	Qual é o prazo para liberação do Relátorio Analítico?	O prazo padrão da elaboração do documento é de 10 dias úteis. Reforçamos que os casos de urgência, devem ser repassados a equipe com prioridade para avaliarmos a viabilidade conforme demanda.
+PCMSO	O que é Relatório Epidemiológico?	"Contempla todas as informações de saúde de uma população específica, tendo como base as informações contidas no BR NET. Sendo assim é possível estratificar as informações de acordo com o filtro adotado:
+- Doenças crônicas;
+- IMC;
+- Pressão arterial;
+- Grupos farmacológicos;
+-  Afastamento pelo INSS;
+- Histórico familiar;
+- Etilismos;
+- Circunferência abdominal;
+- Atividade física;
+- Tabagismo.
+"
+PCMSO	O ASO periódico semestral pode conter aptidão para atividade crítica?	Não, o ASO periódico semestral é responsável pela monitoração da exposição ocupacional a agentes químicos, conforme exigência do item 7.5.13 da NR-7, não podendo assim ser utilizado para avaliação de aptidão para atividades críticas. Além disso, nos exames realizados nessa rotina não estão contidos os necessários para análise de tal atividade. 
+PCMSO	Por que para elaboração do PCMSO da NR-32 é solicitado a listagem de ativos?	O PCMSO da NR-32, além do previsto na NR-7, e observando o disposto no inciso I do item 32.2.2.1, deve contemplar a relação contendo a identificação nominal dos trabalhadores, sua função, o local em que desempenham suas atividades e o risco a que estão expostos. Reforçamos que tais dados devem ser atualizados em concomitância com o documento, por isso é ideal que a cada alteração no quadro de colaboradores as informações sejam atualizadas.
+PCMSO	É obrigatório incluir CID no atestado médico?	"Não se pode exigir informação sobre a Classificação Internacional de Doenças (CID) em atestado médico e odontológico como requisito para o abono de faltas para empregados. Se o paciente desejar, esta informação pode ser inserida, porém não é obrigatória.
+A Resolução 1685/2002 do Conselho Federal de Medicina, que normatiza a emissão de atestados médicos, determina que a indicação do diagnóstico  só deve constar no documento, caso expressamente autorizado pelo paciente.
+"
+PCMSO	Toda empresa precisa elaborar o PCMSO?	 Os MEI, ME e EPP são desobrigadas de elaborar PCMSO, de acordo com o subitem 1.8.6 da NR-1. Porém, elas devem realizar e custear exames médicos ocupacionais admissionais, demissionais e periódicos a cada dois anos.
+PCMSO	O que abrange o serviço de remoção de ambulância? 	Esse serviço garante a disponibilidade de uma ambulância sempre que houver necessidade de remoção de um colaborador para atendimento de emergência. Pode ser utilizado como complementar ao serviço de Alarme Center ao desembarcar trabalhadores offshore ou em situações de emergência por conta de complicações em teste ergométrico ou sobreaviso em algum posto de trabalho. É preciso que esse serviço esteja precificado na proposta do cliente.
+PCMSO	Quando deve ser realizado o exame de retorno ao trabalho?	No exame de retorno ao trabalho, o exame clínico deve ser realizado antes que o empregado reassuma suas funções, quando ausente por período igual ou superior a 30 (trinta) dias por motivo de doença ou acidente, de natureza ocupacional ou não. Nesse contexto, a avaliação médica deve definir a necessidade de retorno gradativo ao trabalho.
+PCMSO	Tenho colaboradores na mesma função, onde alguns podem realizar atividades esporádicas de altura e espaço confinado, mas não todos. Como informar isso nos programas?  	"Nesses casos as funções devem estar em GHE’s separados com setores diferentes para conseguirmos realizar a diferenciação no PCMSO e o cadastro no sistema com os riscos de acidentes relacionados a tais atividades críticas.
+Ex:
+GHE 01: SETOR OPERACIONAL – FUNÇÃO AUXILIAR DE OPERAÇÕES
+GHE 01: SETOR OPERACIONAL/ ATIVIDADE CRÍTICA – FUNÇÃO AUXILIAR DE OPERAÇÕES.
+"
+PGR	Quais informações são necessárias para emissão de ART?	"Para emissão da ART se faz necessário os seguintes itens: 
+Dados da empresa contratante da BR MED (cliente):
+CNPJ:
+NOME DA CONTRATANTE (CONFORME CNPJ):
+CEP:
+LOGRADOURO (RUA, ESTRADA, AVENIDA, ENTRE OUTROS):
+ENDEREÇO (NOME DA RUA COM NÚMERO E COMPLEMENTO):
+ESTADO:
+MUNICÍPIO:
+BAIRRO:
+
+Dados da obra, estabelecimento ou local de prestação do serviço (cliente do cliente, se for o caso):
+N° DO CONTRATO:
+DATA DA CELEBRAÇÃO DO CONTRATO:
+CNPJ:
+NOME DA CONTRATANTE (CONFORME CNPJ):
+CEP:
+LOGRADOURO (RUA, ESTRADA, AVENIDA, ENTRE OUTROS):
+ENDEREÇO (NOME DA RUA COM NÚMERO E COMPLEMENTO):
+ESTADO:
+MUNICÍPIO:
+BAIRRO:
+SERVIÇOS CONTRATADOS PELA EMPRESA E QUE DEVEM SER COBERTOS PELA ART (PGR, LTCAT, LTI, LTP, PARECER TÉCNICO, AVALIAÇÕES AMBIENTAIS, ENTRE OUTROS):
+"
+PPP 	O que é PPP eletrônico?	"Este documento traz os dados informados pela empresa sobre as condições de trabalho e de exposição a agentes prejudiciais à saúde do colaborador (empregado, prestador de serviço cooperado ou trabalhador avulso). A emissão do PPP de forma eletrônica tornou-se obrigatória para os períodos trabalhados a partir de 01/01/2023.
+Este pedido é realizado totalmente pela internet, ou seja, não é preciso ir ao INSS. O PPP Eletrônico vem em substituição ao PPP em papel. O formato muda, mas seu objetivo permanece o mesmo: fornecer informações sobre as condições do ambiente de trabalho, principalmente para requisição de aposentadoria especial.
+Embora o Manual de Orientações do eSocial – MOS defina que a partir de 1º de janeiro de 2023 o perfil profissiográfico previdenciário deva ser elaborado por meio eletrônico, os incisos 8, 9 e 10 do Decreto Nº 10.410 de 30 de junho de 2020 definem que organização deverá elaborar e manter atualizado o PPP e manter a disposição do trabalhador. Sendo assim, recomendamos que sempre que algum trabalhador solicitar o seu PPP, a empresa deverá fornecer."
+PPR	O que é o PPR?	É o Programa de Proteção Respiratória. Na BR MED este serviço é realizado em parceria pelas áreas de saúde, com a emissão do relatório anual, e, na sequência, pela área de segurança, que desenvolve o programa. Importante reforçar que a necessidade de elaboração do PPR está diretamente ligada aos risco químicos que tenham como meio de propagação as vias respiratórias, na qual se faz necessária a realização dos exames complementares Espirometria Simples e Radiografia  para fins de monitoramento da saúde dos colaboradores com essa exposição.
+PPR	Em qual norma regulamentadora se enquadra o PPR?	NR-15, que aborda as atividades e operações insalubres.
+eSocial	 Os envios fora do prazo estabelecido pelo governo serão multados?	O empregador que não enviou as informações já pode estar sujeito a multa. Porém, caso o mesmo preste esclarecimento espontâneo sobre o atraso ou correção de alguma informação antes de qualquer cobrança fiscal, terá o valor da multa reduzido em 40%.
+eSocial	Quais os benefícios do eSocial para as empresas?	Unificar o envio das informações trabalhistas e previdenciárias em um único ambiente e aumentar o controle de não conformidades das empresas. 
+SESMT	"Como  funciona o dimensionamento de SESMT ?
+Podemos terceirizar esses serviços para nossos clientes?"	"O dimensionamento do SESMT se faz com base no grau de risco da atividade principal e o número de funcionários no estabelecimento da empresa. O grau de risco é a informação que encontramos no Quadro I da NR-4, para então dimensionar o SESMT, com base no Quadro II da mesma Norma.
+O SESMT pode ser terceirizado, dada a Lei Nº 13.429/2017, que permite a terceirização de empresa prestadora para empresa tomadora, de maneira ilimitada e irrestrita, para todas as atividades."
+SESMT	O que é, como funciona e o que o Alarm engloba? 	Serviço médico para atendimento de emergência realizado de forma remota para suporte de trabalhadores OFFSHORE. Sempre que necessário, o colaborador embarcado pode entrar em contato com a central médica e será acompanhado por um médico especializado em situações de emergências, que irá prescrever medicação, caso necessário, além de acompanhar sua evolução e, em último caso, indicar seu desembarque. Esse serviço precisa estar precificado na proposta do cliente. 
+SESMT	Como funciona a precificação do Alarm Center?	Precisa ser verificado com o cliente qual a cidade de atuação e, na sequência, verificar com o prestador. A área de Sales atualmente possui um único preço para esse tipo de serviço. 
+SESMT	O que é o PPEOB?	O Programa de Prevenção da Exposição Ocupacional ao Benzeno é um documento com uma série de normas e diretrizes que orientam, previnem e planejam ações para controlar e evitar as consequências nocivas da exposição ao Benzeno. O PPEOB é orientado, executado e ensinado por um profissional devidamente certificado. Além de proteger a integridade física de funcionários, estende-se sua proteção para recursos naturais e de animais.
+SESMT	O que é GFIP?	GFIP é uma abreviação usada para denominar a Guia de Recolhimento do Fundo de Garantia de Serviço. Ele tem como principal função recolher dados de vínculos de emprego e remunerações.
+SESMT	Quais são os códigos GFIP utilizados e o que significam?	"Cada código define se o trabalhador foi exposto a algum agente nocivo durante o período de trabalho e são divididos da seguinte forma: 
+00: O trabalhador não foi exposto a nenhum agente nocivo durante o período de trabalho.
+01: O trabalhador foi exposto a algum agente nocivo em algum momento, mas posteriormente foi neutralizado por uma medida de controle eficaz.
+02: Como previsto na legislação, exposição a agente nocivo que concede aposentadoria especial após 15 anos.
+03: Como previsto na legislação, exposição a agente nocivo que concede aposentadoria especial após 20 anos.
+04: Como previsto na legislação, exposição a agente nocivo que concede aposentadoria especial após 25 anos."
+SESMT	Como é feito o dimensionamento para fins de enquadramento de PcD? Qual a lei?	O principal mecanismo de inserção laboral das pessoas com deficiência e dos beneficiários reabilitados pela Previdência Social  é a determinação legal contida no art. 93 da Lei nº 8.213, de 1991, para que empresas de qualquer natureza com 100 ou mais empregados preencham de 2 a 5% dos seus postos de trabalho com Pessoas com Deficiência (PcD) e/ou beneficiários reabilitados pela Previdência Social. Conforme a Legislação, as proporções para empregar pessoas com deficiência variam de acordo com a quantidade de funcionários. De 100 a 200 empregados, a reserva legal é de 2%; de 201 a 500, de 3%; de 501 a 1.000, de 4%. As empresas com mais de 1001 empregados devem reservar 5% das vagas para esse grupo.
+SESMT	Qual o decreto utilizado para enquadramento de PcD?	Estes temas são tratados de acordo com os dispositivos da Convenção sobre os Direitos das Pessoas com deficiência, Lei Brasileira de Inclusão, Estatuto da Pessoa com Deficiência, Lei 13.146/2015, Lei 12764/12, Decreto 3.298/1999, e da Instrução Normativa SIT/ MTE n.º 98 de 15/08/2012. 
+SESMT	Algum tipo de deficiência estabelecido no decreto nº xxxx é passivel de reversão?	Não, pois o enquadramento só deve ser realizado para situações permanentes e irreversíveis.
+SESMT	Caso o colaborador seja elegível à PcD e possua laudo do especialista atualizado, ainda sim precisa realizar o exame clínico?	"Existem quatro formas de realizarmos o enquadramento:
+
+1- Cliente novo ou colaborador que já possui laudo caracterizador que não foi feito pela BR MED - O laudo pode ser aceito, uma vez que o documento já informa a condição do trabalhador. No entanto, pode ser necessária uma nova avaliação médica, como, por exemplo, no caso do laudo apresentado ter sido feito de maneira errada e, assim, a responsabilidade técnica passa para a BR MED.
+
+2- Identificação de PcD durante exame ocupacional - Entramos em contato com o cliente explicando da possibilidade. O cliente deve avaliar se deseja o enquadramento e caso positivo, entrar em contato com seu colaborador, para que este também esteja de acordo .Estando todos em sintonia, seremos informados e assim gerado o laudo caracterizador. A comunicação funciona igual a um comunicado de alteração
+
+3- Quando o cliente tem uma suspeita e pede uma avaliação - Colaborador deverá realizar exame clínico
+
+4- Colaborador reabilitado pelo INSS - É considerado como integrante da cota de PcD
+
+Importante destacar que em alguns casos serão necessários além da avaliação do Médico do Trabalho, exames complementares e laudos de Médico Especialista para que se consiga chegar a uma definição sobre o enquadramento.   "
+SESMT	O que é fazer atividade compatível na homologação de atestado?	Atividade compatível é aquela em que um colaborador, em vigência de atestado médico ou após sofrer um acidente de trabalho em que tenha sua capacidade funcional reduzida, sofre restrições definidas por um médico do trabalho na qual deve ter até total recuperação. Essa atividade é temporária, e permanece em vigor somente até total recuperação do colaborador. Importante ressaltar que a atividade compatível só vai ser possível se a nova atividade não causar nenhum prejuízo ao colaborador ou para a recuperação.
+SESMT	O ASO de retorno ao trabalho sobrepõe o ASO periódico quando o colaborador está afastado pelo INSS?	A substituição vai depender da grade de exames definida na rotina para retorno ao trabalho, visto que algumas empresas optam por realizar apenas o exame clínico ocupacional. Para que a sobreposição ocorra, a grade de exames do RETORNO AO TRABALHO deve ser equivalente à grade de exames do PERIÓDICO em relação aos exames realizados.  
+SESMT	Quais são os efeitos na saúde do trabalhador quando é exposto aos riscos químicos?	Os efeitos relacionados à exposição ao risco químico são diversos e variam de acordo com a substância, tipo e tempo de exposição. Mas os principais são doenças respiratórias crônicas, doenças do sistema nervoso, doenças nos rins e fígado, e alguns tipos de cânceres.
+SESMT	O exame RAIO X é prejudicial a saúde? 	Mesmo se tratando de um exame tão comum, o raio-x é categorizado como carcinógeno pela Organização Mundial de Saúde (OMS). A razão está no efeito de muitos exames de raio-x, que podem alterar o DNA humano, causando o câncer. Porém, os benefícios desse exame são maiores do que as consequências que possam surgir. Estudos mostram que o risco de desenvolver a doença aumenta de 0,6 a 1,8%, mas, ainda assim, são valores mínimos comparados aos benefícios. Portanto, a sua realização se faz necessária.
+Telemedicina	A BR MED realiza exame clínico por Telemedicina?	Conforme orientação do CFM e da ANAMT, ao médico que atende o trabalhador, é vedado realizar exames médicos ocupacionais com recursos de telemedicina sem proceder o exame clínico direto no colaborador para emissão do ASO.
+Triagem Pipefy	Como funciona a triagem do setor de saúde no Pipefy? Quais itens são considerados?	"Todos os cards que são enviados à coluna TRIGEM TÉCNICA (SÁUDE OCUPACIONAL) são analisados considerando os seguintes itens: 
+
+- Verificamos se todos os anexos necessários para elaboração do PCMSO estão inseridos ao card.
+           PGR CLIENTE – PGR preferencialmente em Word ou PDF 
+           PGR BRMED - PGR Word, Excel e PDF
+
+- Conferimos se os prazos pré-definidos estão de acordo com os inclusos no card. Em caso de urgência, também verificamos se etiqueta específica foi inserida.
+
+- Analisamos se o prazo estabelecido para execução do documento foi respeitado pelo time de Segurança do Trabalho.
+
+- Validamos se a demanda é pertinente ao time de Saúde do Trabalho.
+
+- Separamos os cards por complexidade, sempre considerando os fatores abaixo:
+Quantidade de GHE
+Tipo de demanda 
+PGR CLIENTE ou SEGURANÇA
+
+- Confirmamos se todas as informações necessárias à realização da demanda foram devidamente preenchidas nos campos correspondentes do card, bem como comentários e/ou descrições da atividade a ser realizada.
+
+Nesse sentido, é de extrema importância reforçarmos que a análise de riscos e informações técnicas contidas no PGR serão analisadas apenas durante a elaboração do documento, devido à complexidade e atenção que devem ser dedicadas ao processo.
+"
+eSocial	Onde devo inserir o documento do eSocial que extraímos do sistema BR NET? Onde conseguiremos o passo a passo?	Temos os manuais dos eventos s-2220 e s-2240 do eSocial, conforme treinamento ministrado durante o mês de Março para a equipe de CS.
+Dúvida de Riscos	O que é ABNT?	ABNT é a sigla de Associação Brasileira de Normas Técnicas, um órgão privado e sem fins-lucrativos que se destina a padronizar as técnicas de produção realizadas no país.
+Exames	Qual prazo legal de validade do exame toxicológico?	O exame toxicológico é válido por 2 anos. O teste tem validade útil de 90 dias após a realização da coleta.
+PCMSO	É necessário a realização do exame de mudança de função quando não existe alteração de riscos?	A NR-7 não prevê mais o exame de função, somente o de mudança de riscos ocupacionais. Dessa forma, não há necessidade de atualização do ASO, pois o documento com a nomenclatura da função "antiga" permanece válido e atesta a aptidão para o trabalho na função nova. Caso o cliente queira, ainda que não seja obrigatório, emitir um novo ASO, será necessário realizar um exame periódico na nova função, e se os exames anteriores estiverem fora do prazo de 90 dias, deverão ser repetidos.
+PCMSO	A avaliação de peso e IMC devem ser considerados para as NR-30, 33 e 35?	"Tanto o peso absoluto quanto o IMC devem ser levados em consideração ao
+se avaliar a aptidão para determinadas atividades de trabalho, em especial NR-30, 33 e 35. O peso absoluto elevado pode ultrapassar os limites de tolerância
+do EPI anti queda. Já o IMC elevado indica grande desproporção entre peso e
+altura do colaborador, o que altera o centro de massa corporal e acarreta maior
+risco de acidentes como quedas da própria altura e de plataforma elevada,
+além de comprometer a aptidão física, limitar o acesso a determinados
+ambientes e dificultar o resgate em situações de crise."
+PCMSO	Quais são as orientações para casos de desidratação?	"A orientação adequada é a seguinte:
+1. Hidratação com água mineral de acordo com a demanda de cada funcionário
+2. Praticar rodízio da atividade, diminuir o tempo de exposição do trabalhador
+ao sol, disponibilizar área climatizada para descanso, atuar através da
+engenharia modificando a temperatura do ambiente, etc.
+3. Os isotônicos podem ser oferecidos de forma esporádica aos colaboradores,
+já que o uso excessivo pode levar à formação de cálculos renais, hipertensão
+arterial, elevação da glicemia e distúrbios hidroeletrolíticos. Dessa forma, não é
+recomendada a sua ingestão diária.
+4. Esporadicamente, também é possível oferecer água de côco e sucos de
+fruta naturais."
+PPP 	Quais os dados obrigatórios do Representante Legal da empresa devem constar no PPP?	Devem constar o Nome Completo e CPF. 
+Proposta / Upselling	Qual o SLA de envio das propostas de Upsell?	Tier 3: 4 dias / Tier: 2: 3 dias / Tier 1: 2 dias / Exames: mesmo dia útil / Urgências sinalizar e negociar com a área de sales (Natália saramago)
+eSocial	Por que o CNPJ de terceiros é um item obrigatório ? 	"Não vemos essa informação como padrão obrigatório, visto que para definir se usaremos o CNPJ do terceiro precisamos entender em qual estabelecimento os trabalhadores dessa empresa exercem suas atividades laborais (informação localAmb do eSocial). 
+Precisamos entender se os trabalhadores constituídos nesse documento exercem suas atividades no estabelecimento do empregador ou de empresa contratante de serviço; Quando dizemos que este item não deve ser um padrão obrigatório, estamos nos referindo que nem sempre este dado será um impeditivo para a elaboração das aplicações do eSocial de nossos clientes."
+Prontuários	O que é o serviço de Gestão e Guarda de Arquivos?	Este serviço é referente ao recebimento da guarda dos prontuários dos colaboradores ativos da empresa cliente. Geralmente na fase de negociação esse tema é abordado para devida tratativa e precificação.
+PCMSO	Quais são os exames realizados com maior frequência?	"Os exames mais realizados comumente são Clínico ocupacional, Acuidade Visual com senso cromático, Audiometria tonal, Avaliação Psicológica, Eletrocardiograma, Eletroencefalograma, Espirometria, Glicemia, Hemograma Completo com plaquetas, Radiografia de Tórax padrão OIT e Homologação de Atestado.
+Reforçamos ainda, que os exames estão diretamente relacionados aos riscos e com as normativas da NR-7. Portanto, a seleção dos exames não pode ser realizada utilizando os critérios de exames realizados com frequencia, mas sim após uma análise criteriosa do reconhecimento de riscos identificados no PGR.
+"
+LTCAT	Quais são as avaliações quantitativas realizados com maior frequência?	Dosimetria de Ruído, Avaliação de Calor, PNOS Inalável, PNOS Respirável, Poeira Mineral de Sílica, Fumos Metálicos, Poeira Metálica, BTXE, Vapores Orgânicos e Vibração.
+Proposta / Upselling	Qual a validade de nossa proposta comercial?	A validade é de 30 dias.
+PCMSO	Temos um modelo de carta de transferência de prontuários?	Sim, nesses casos o responsável do time CS deve criar um card de demanda no PIPEFY com o serviço de CONSULTORIA PRODUÇÃO (DÚVIDAS TECNICAS) com as informações para preenchimento. O time saúde irá anexar no próprio card a carta para que o responsável do time CS de prosseguimento ao processo de transferência.
+PGR	Quando o cliente faz alteração de quantitativo de funcionários com certa frequência, como podemos deixá-lo resguardado com relação ao PGR?	Pode ser feita a inclusão de uma nota informando que a quantidade poderá sofrer alteração durante a vigência do PGR.
+PGR	Quais os segmentos que demandam PGR's mais específicos?	"NR-1, NR-18, NR-22  NR-29 e NR-30 com seus respectivos anexos.
+"
+Norma Regulamentadora	Qual a norma regulamentadora que orienta sobre multa e/ou penalidades a serem aplicadas em caso de scumprimento da legislação de SST?	É a norma regulamentadora NR-28 Fiscalização e Penalidades. . https://www.gov.br/trabalho-e-previdencia/pt-br/acesso-a-informacao/participacao-social/conselhos-e-orgaos-colegiados/ctpp/normas-regulamentadora/normas-regulamentadoras-vigentes/norma-regulamentadora-no-28-nr-28
+Norma Regulamentadora	De que se trata o Anexo I da NR-28?	Esse anexo da NR-28 fala sobre sobre a gradação de multas.
+Norma Regulamentadora	De que se trata o Anexo IA da NR-28?	Esse anexo da NR-28 fala sobre a gradação de multas específicas de trabalho portuário (Norma Regulamentadora nº 29 – Segurança e Saúde no Trabalho Portuário);
+Norma Regulamentadora	De que se trata o Anexo II da NR-28?	"Esse anexo da NR-28 elenca as possíveis infrações às disposições das normas regulamentadoras. O Anexo II operacionaliza a aplicação de penalidades por parte da auditoria fiscal do trabalho. Nesse anexo, para cada norma regulamentadora, há um quadro, com quatro colunas: 
+1ª coluna: o item da norma;
+2ª coluna: o código (remete a uma ementa, que é a descrição da conduta irregular);
+3ª coluna: a gradação da infração (de 1 a 4);
+4ª coluna: o tipo da infração (S – segurança do trabalho ou M – medicina do trabalho)."
+Mapa de Risco	Qual a vigência do Mapa de Riscos?	"Não há validade estabelecida para o mapa de risco, mas é fundamental que ele seja atualizado sempre que houver alteração no processo produtivo ou no ambiente de trabalho. Por exemplo, adoção de procedimentos, chegada de equipamentos, mudança na disposição das instalações, etc.
+
+O mapa de risco deve ser feito anualmente, toda vez que se renova a CIPAA. A exigência faz parte da NR-5. Por isso, certifique-se que seu posto já tenha a representação gráfica dos riscos de acidentes"
+Exame Toxicologico	Qual a marca do teste rápido Multidrogas?	O teste Multidrogas utilizado atualmente pela BR MED é do fornecedor Assure Tech, contemplando 8 tipos  de drogas.
+Exame Toxicologico	Quais são as drogas analisadas no teste rápido Multidrogas?	"COCAINA (COC) – 300ng/ml
+MACONHA (THC) – 50ng/ml
+ANFETAMINA (AMP) – 1000ng/ml
+METANFETAMINA (MET) - 1000ng/ml
+OPIÁCEO (OPI) – 2000ng/ml
+FENCICLIDINA (PCP) – 25ng/ml
+BENZODIAZENINOS (BZO) – 300ng/ml
+ANTIDEPRESSIVOS TRICICLICOS (TCA) – 1000ng/ml
+ECSTASY (MDMA) – 500ng/ml
+BARBITURICOS (BAR) – 300ng/ml
+METADONA (MTD) - 300ng/ml
+MOREINA (MOR) - 300ng/ml
+"
+Exame Toxicologico	Qual da janela de detecção por drogra no teste rápido Multidrogas?	"-Canabinoide - Janela de detecção 1 - 4 dias
+- Cocaína - Janela de detecção 2 - 3 dias
+- Opiáceo - Janela de detecção 2 - 3 dias
+- Morfina  - Janela de detecção 2 - 3 dias
+- Fenciclidina - Janela de detecção 3 - 5 dias
+- Benzodiazepínicos - Janela de detecção entre 24h e 7 dias
+- Anfetamina - Janela de detecção 1 - 3 dias
+- Metanfetamina - Janela de detecção 1 - 3 dias
+- Metadona - Janela de detecção 1 - 2 dias
+- Barbitúrico - Janela de detecção 1 - 7 dias
+- Tramadol - Janela de detecção 3 - 5 dias
+- Antidepressivos tricíclicos
+     Dose terapêutica: 1 - 3 dias
+     Dose de manutenção - 10 - 12 dias"
+Exame Toxicologico	Temos o teste rápido de multi-drogas em todas as Filiais? 	Atualmente não temos esse teste rápido em estoque, como o mesmo possui prazo de validade, precisamos de volumetria para não ter desperdícios, o prazo para entrega no teste, pode variar com disponibilidade do fornecedor.
+EXAMES	Ainda é necessário fazer o exame de retorno ao trabalho, após licença maternidade? Se sim, quando deve ser realizado?	"Não, o ASO de retorno ao trabalho após licença maternidade não é mais exigido pela legislação.
+A mudança foi aprovada com a publicação da Portaria 6.732/2020, que entrou em vigor em março de 2021.
+A norma alterou a NR-7, estabelecendo, em seu item 7.5.9, que:
+“No exame de retorno ao trabalho, o exame clínico deve ser realizado antes que o empregado reassuma suas funções, quando ausente por período igual ou superior a 30 (trinta) dias por motivo de doença ou acidente, de natureza ocupacional ou não”.
+Portanto, o texto restringiu a obrigatoriedade do ASO de retorno ao trabalho a doenças ou acidentes, excluindo a licença maternidade e outras situações.
+Então, não há necessidade de exames após a licença maternidade para que a colaboradora reassuma suas responsabilidades na empresa.
+Mas a BR MED orienta que seja nesses casos, visando um controle melhor a saúde dessa colaboradores que está retornando suas atividades seja realizado o exame periódico antecipadamente."
+Exames	Qual a diferença entre os exames de avaliação psicológica e avaliação psicossocial? Como são realizados?	"Avaliação psicossocial - Compreende aspectos relacionados ao perfil do indivíduo, tendo como foco a estrutura psicológica em interface com suas relações sociais correlacionados com questões ocupacionais. O objetivo é investigar fatores individuais e organizacionais que podem afetar a saúde da(o/e) trabalhador(a/e) em relação aos aspectos psicossociais. Deve ser realizada principalmente em profissionais que irão atuar em áreas com a presença de possíveis riscos psicossociais, de acordo com as normas regulamentadoras (NRs). 
+
+Avaliação psicológica - É um método de avaliação utilizado por psicólogos e tem como objetivo analisar os traços de personalidade e características psicológicas dos indivíduos. Tem a finalidade de levantar características para entender como um candidato administra seu tempo, qual o nível de concentração de um profissional, entre outros diferentes tipos de avaliação. Quando realizada, ela é composta por instrumentos como entrevistas, testes psicológicos, questionários de avaliação psicossocial, entre outros, com pauta no objetivo das características psicológicas a serem investigadas."
+Agendamento	Quando solicitar o agendamento de EXAMES COMPLEMENTARES no sistema?	"É orientado a agendar no BRNET exames complementares quando:
+1- for necessário agendamento de exames que não fazem parte do PCMSO do cliente.
+2- em casos de repetição por alteração de exames."
+Expedição	Quais os prazos para liberação de ASOs em Filial e Credenciada?	Os prazos para a liberação do ASO variam de acordo com a grade de exames do colaborador, tanto para filial, quando para credenciada. O sistema mostra uma PRÉVIA DE LIBERAÇÃO no ato do agendamento.

@@ -1,0 +1,1667 @@
+2025-07-18 12:19:28,669 [INFO] httpx: HTTP Request: POST http://testserver/v1/validacao "HTTP/1.1 200 OK"
+2025-07-18 12:21:01,711 [INFO] httpx: HTTP Request: POST http://testserver/v1/brmed/exames-obrigatorios?cpf=12345678900 "HTTP/1.1 200 OK"
+2025-07-18 12:21:01,717 [INFO] httpx: HTTP Request: POST http://testserver/v1/ocr "HTTP/1.1 200 OK"
+2025-07-18 12:21:01,725 [INFO] httpx: HTTP Request: POST http://testserver/v1/validacao "HTTP/1.1 200 OK"
+2025-07-18 12:23:06,613 [INFO] httpx: HTTP Request: POST http://testserver/v1/brmed/exames-obrigatorios?cpf=12345678900 "HTTP/1.1 200 OK"
+2025-07-18 12:23:06,628 [INFO] httpx: HTTP Request: POST http://testserver/v1/ocr "HTTP/1.1 200 OK"
+2025-07-18 12:23:06,635 [INFO] httpx: HTTP Request: POST http://testserver/v1/validacao "HTTP/1.1 200 OK"
+2025-07-18 12:23:37,061 [INFO] httpx: HTTP Request: POST http://testserver/v1/brmed/exames-obrigatorios?cpf=12345678900 "HTTP/1.1 200 OK"
+2025-07-18 12:23:37,076 [INFO] httpx: HTTP Request: POST http://testserver/v1/ocr "HTTP/1.1 200 OK"
+2025-07-18 12:23:37,083 [INFO] httpx: HTTP Request: POST http://testserver/v1/validacao "HTTP/1.1 200 OK"
+2025-07-18 12:25:11,010 [INFO] httpx: HTTP Request: POST http://testserver/v1/brmed/exames-obrigatorios?cpf=12345678900 "HTTP/1.1 200 OK"
+2025-07-18 12:25:11,025 [INFO] httpx: HTTP Request: POST http://testserver/v1/ocr "HTTP/1.1 200 OK"
+2025-07-18 12:25:11,030 [INFO] httpx: HTTP Request: POST http://testserver/v1/validacao "HTTP/1.1 200 OK"
+2025-07-18 12:26:08,997 [INFO] httpx: HTTP Request: POST http://testserver/v1/brmed/exames-obrigatorios?cpf=12345678900 "HTTP/1.1 200 OK"
+2025-07-18 12:26:09,013 [INFO] httpx: HTTP Request: POST http://testserver/v1/ocr "HTTP/1.1 200 OK"
+2025-07-18 12:26:09,019 [INFO] httpx: HTTP Request: POST http://testserver/v1/validacao "HTTP/1.1 200 OK"
+2025-07-18 12:28:03,340 [INFO] httpx: HTTP Request: POST http://testserver/v1/brmed/exames-obrigatorios?cpf=12345678900 "HTTP/1.1 200 OK"
+2025-07-18 12:28:03,348 [INFO] httpx: HTTP Request: POST http://testserver/v1/ocr "HTTP/1.1 200 OK"
+2025-07-18 12:28:03,354 [INFO] httpx: HTTP Request: POST http://testserver/v1/validacao "HTTP/1.1 200 OK"
+2025-07-22 08:55:12,805 [ERROR] app.api.v1_ocr: Erro inesperado no OCR: 'UploadFile' object has no attribute 'save'
+Traceback (most recent call last):
+  File "/home/brmed/Área de trabalho/API_IA/app/api/v1_ocr.py", line 14, in processar_ocr
+    resultado = ocr_service.ocr_pipeline(arquivo)
+  File "/home/brmed/Área de trabalho/API_IA/app/services/ocr_service.py", line 74, in ocr_pipeline
+    file.save(temp.name)
+AttributeError: 'UploadFile' object has no attribute 'save'
+2025-07-22 08:55:12,806 [INFO] httpx: HTTP Request: POST http://testserver/v1/ocr "HTTP/1.1 500 Internal Server Error"
+2025-07-22 08:55:12,889 [ERROR] app.api.v1_ocr: Erro inesperado no OCR: 'UploadFile' object has no attribute 'save'
+Traceback (most recent call last):
+  File "/home/brmed/Área de trabalho/API_IA/app/api/v1_ocr.py", line 14, in processar_ocr
+    resultado = ocr_service.ocr_pipeline(arquivo)
+  File "/home/brmed/Área de trabalho/API_IA/app/services/ocr_service.py", line 74, in ocr_pipeline
+    file.save(temp.name)
+AttributeError: 'UploadFile' object has no attribute 'save'
+2025-07-22 08:55:12,890 [INFO] httpx: HTTP Request: POST http://testserver/v1/ocr "HTTP/1.1 500 Internal Server Error"
+2025-07-22 08:55:52,518 [ERROR] app.api.v1_ocr: Erro inesperado no OCR: a bytes-like object is required, not 'coroutine'
+Traceback (most recent call last):
+  File "/home/brmed/Área de trabalho/API_IA/app/api/v1_ocr.py", line 14, in processar_ocr
+    resultado = ocr_service.ocr_pipeline(arquivo)
+  File "/home/brmed/Área de trabalho/API_IA/app/services/ocr_service.py", line 76, in ocr_pipeline
+    temp.write(content)    # Escreve o conteúdo no arquivo temporário
+  File "/home/brmed/.pyenv/versions/3.10.13/lib/python3.10/tempfile.py", line 483, in func_wrapper
+    return func(*args, **kwargs)
+TypeError: a bytes-like object is required, not 'coroutine'
+2025-07-22 08:55:52,527 [INFO] httpx: HTTP Request: POST http://testserver/v1/ocr "HTTP/1.1 500 Internal Server Error"
+2025-07-22 08:55:52,607 [ERROR] app.api.v1_ocr: Erro inesperado no OCR: a bytes-like object is required, not 'coroutine'
+Traceback (most recent call last):
+  File "/home/brmed/Área de trabalho/API_IA/app/api/v1_ocr.py", line 14, in processar_ocr
+    resultado = ocr_service.ocr_pipeline(arquivo)
+  File "/home/brmed/Área de trabalho/API_IA/app/services/ocr_service.py", line 76, in ocr_pipeline
+    temp.write(content)    # Escreve o conteúdo no arquivo temporário
+  File "/home/brmed/.pyenv/versions/3.10.13/lib/python3.10/tempfile.py", line 483, in func_wrapper
+    return func(*args, **kwargs)
+TypeError: a bytes-like object is required, not 'coroutine'
+2025-07-22 08:55:52,608 [INFO] httpx: HTTP Request: POST http://testserver/v1/ocr "HTTP/1.1 500 Internal Server Error"
+2025-07-22 08:56:25,405 [INFO] docling.datamodel.document: detected formats: [<InputFormat.XML_USPTO: 'xml_uspto'>]
+2025-07-22 08:56:25,406 [ERROR] docling.datamodel.document: Input document tmpc8ncoab3.txt with format None does not match any allowed format: (dict_keys([<InputFormat.DOCX: 'docx'>, <InputFormat.PPTX: 'pptx'>, <InputFormat.HTML: 'html'>, <InputFormat.IMAGE: 'image'>, <InputFormat.PDF: 'pdf'>, <InputFormat.ASCIIDOC: 'asciidoc'>, <InputFormat.MD: 'md'>, <InputFormat.CSV: 'csv'>, <InputFormat.XLSX: 'xlsx'>, <InputFormat.XML_USPTO: 'xml_uspto'>, <InputFormat.XML_JATS: 'xml_jats'>, <InputFormat.JSON_DOCLING: 'json_docling'>, <InputFormat.AUDIO: 'audio'>]))
+2025-07-22 08:56:25,406 [INFO] docling.document_converter: Going to convert document batch...
+2025-07-22 08:56:25,406 [ERROR] app.api.v1_ocr: Erro inesperado no OCR: File format not allowed: tmpc8ncoab3.txt
+Traceback (most recent call last):
+  File "/home/brmed/Área de trabalho/API_IA/app/api/v1_ocr.py", line 14, in processar_ocr
+    resultado = await ocr_service.ocr_pipeline(arquivo)
+  File "/home/brmed/Área de trabalho/API_IA/app/services/ocr_service.py", line 80, in ocr_pipeline
+    markdown = processar_arquivo_docling(temp_path)
+  File "/home/brmed/Área de trabalho/API_IA/app/services/ocr_service.py", line 39, in processar_arquivo_docling
+    resultado = converter.convert(file)
+  File "/home/brmed/.pyenv/versions/3.10.13/envs/api/lib/python3.10/site-packages/pydantic/_internal/_validate_call.py", line 39, in wrapper_function
+    return wrapper(*args, **kwargs)
+  File "/home/brmed/.pyenv/versions/3.10.13/envs/api/lib/python3.10/site-packages/pydantic/_internal/_validate_call.py", line 136, in __call__
+    res = self.__pydantic_validator__.validate_python(pydantic_core.ArgsKwargs(args, kwargs))
+  File "/home/brmed/.pyenv/versions/3.10.13/envs/api/lib/python3.10/site-packages/docling/document_converter.py", line 235, in convert
+    return next(all_res)
+  File "/home/brmed/.pyenv/versions/3.10.13/envs/api/lib/python3.10/site-packages/docling/document_converter.py", line 258, in convert_all
+    for conv_res in conv_res_iter:
+  File "/home/brmed/.pyenv/versions/3.10.13/envs/api/lib/python3.10/site-packages/docling/document_converter.py", line 293, in _convert
+    for item in map(
+  File "/home/brmed/.pyenv/versions/3.10.13/envs/api/lib/python3.10/site-packages/docling/document_converter.py", line 343, in _process_document
+    raise ConversionError(error_message)
+docling.exceptions.ConversionError: File format not allowed: tmpc8ncoab3.txt
+2025-07-22 08:56:25,415 [INFO] httpx: HTTP Request: POST http://testserver/v1/ocr "HTTP/1.1 500 Internal Server Error"
+2025-07-22 08:56:25,500 [INFO] docling.datamodel.document: detected formats: [<InputFormat.XML_USPTO: 'xml_uspto'>]
+2025-07-22 08:56:25,501 [ERROR] docling.datamodel.document: Input document tmpif2iokk_.txt with format None does not match any allowed format: (dict_keys([<InputFormat.DOCX: 'docx'>, <InputFormat.PPTX: 'pptx'>, <InputFormat.HTML: 'html'>, <InputFormat.IMAGE: 'image'>, <InputFormat.PDF: 'pdf'>, <InputFormat.ASCIIDOC: 'asciidoc'>, <InputFormat.MD: 'md'>, <InputFormat.CSV: 'csv'>, <InputFormat.XLSX: 'xlsx'>, <InputFormat.XML_USPTO: 'xml_uspto'>, <InputFormat.XML_JATS: 'xml_jats'>, <InputFormat.JSON_DOCLING: 'json_docling'>, <InputFormat.AUDIO: 'audio'>]))
+2025-07-22 08:56:25,501 [INFO] docling.document_converter: Going to convert document batch...
+2025-07-22 08:56:25,501 [ERROR] app.api.v1_ocr: Erro inesperado no OCR: File format not allowed: tmpif2iokk_.txt
+Traceback (most recent call last):
+  File "/home/brmed/Área de trabalho/API_IA/app/api/v1_ocr.py", line 14, in processar_ocr
+    resultado = await ocr_service.ocr_pipeline(arquivo)
+  File "/home/brmed/Área de trabalho/API_IA/app/services/ocr_service.py", line 80, in ocr_pipeline
+    markdown = processar_arquivo_docling(temp_path)
+  File "/home/brmed/Área de trabalho/API_IA/app/services/ocr_service.py", line 39, in processar_arquivo_docling
+    resultado = converter.convert(file)
+  File "/home/brmed/.pyenv/versions/3.10.13/envs/api/lib/python3.10/site-packages/pydantic/_internal/_validate_call.py", line 39, in wrapper_function
+    return wrapper(*args, **kwargs)
+  File "/home/brmed/.pyenv/versions/3.10.13/envs/api/lib/python3.10/site-packages/pydantic/_internal/_validate_call.py", line 136, in __call__
+    res = self.__pydantic_validator__.validate_python(pydantic_core.ArgsKwargs(args, kwargs))
+  File "/home/brmed/.pyenv/versions/3.10.13/envs/api/lib/python3.10/site-packages/docling/document_converter.py", line 235, in convert
+    return next(all_res)
+  File "/home/brmed/.pyenv/versions/3.10.13/envs/api/lib/python3.10/site-packages/docling/document_converter.py", line 258, in convert_all
+    for conv_res in conv_res_iter:
+  File "/home/brmed/.pyenv/versions/3.10.13/envs/api/lib/python3.10/site-packages/docling/document_converter.py", line 293, in _convert
+    for item in map(
+  File "/home/brmed/.pyenv/versions/3.10.13/envs/api/lib/python3.10/site-packages/docling/document_converter.py", line 343, in _process_document
+    raise ConversionError(error_message)
+docling.exceptions.ConversionError: File format not allowed: tmpif2iokk_.txt
+2025-07-22 08:56:25,502 [INFO] httpx: HTTP Request: POST http://testserver/v1/ocr "HTTP/1.1 500 Internal Server Error"
+2025-07-22 08:57:03,537 [INFO] httpx: HTTP Request: POST http://testserver/v1/ocr "HTTP/1.1 200 OK"
+2025-07-22 08:57:03,540 [INFO] httpx: HTTP Request: POST http://testserver/v1/validacao "HTTP/1.1 200 OK"
+2025-07-22 08:57:03,546 [INFO] httpx: HTTP Request: POST http://testserver/v1/ocr "HTTP/1.1 200 OK"
+2025-07-22 08:57:03,549 [INFO] httpx: HTTP Request: POST http://testserver/v1/validacao "HTTP/1.1 200 OK"
+2025-07-22 08:59:27,192 [INFO] docling.datamodel.document: detected formats: [<InputFormat.PDF: 'pdf'>]
+2025-07-22 08:59:27,200 [INFO] docling.document_converter: Going to convert document batch...
+2025-07-22 08:59:27,200 [INFO] docling.document_converter: Initializing pipeline for StandardPdfPipeline with options hash d291d1f79894f05d312cc90dd3fdf3d3
+2025-07-22 08:59:27,206 [INFO] docling.models.factories.base_factory: Loading plugin 'docling_defaults'
+2025-07-22 08:59:27,206 [INFO] docling.models.factories: Registered ocr engines: ['easyocr', 'ocrmac', 'rapidocr', 'tesserocr', 'tesseract']
+2025-07-22 08:59:27,257 [INFO] docling.utils.accelerator_utils: Accelerator device: 'cuda:0'
+2025-07-22 08:59:28,959 [INFO] docling.utils.accelerator_utils: Accelerator device: 'cuda:0'
+2025-07-22 08:59:29,823 [INFO] docling.utils.accelerator_utils: Accelerator device: 'cuda:0'
+2025-07-22 08:59:30,262 [INFO] docling.models.factories.base_factory: Loading plugin 'docling_defaults'
+2025-07-22 08:59:30,262 [INFO] docling.models.factories: Registered picture descriptions: ['vlm', 'api']
+2025-07-22 08:59:30,263 [INFO] docling.pipeline.base_pipeline: Processing document tmpbhajd9uj.pdf
+2025-07-22 08:59:47,320 [INFO] docling.document_converter: Finished converting document tmpbhajd9uj.pdf in 20.13 sec.
+2025-07-22 08:59:47,341 [INFO] docling_core.types.doc.document: deleted item in tree at stack: (55, 6) => #/texts/288
+2025-07-22 08:59:47,351 [INFO] docling_core.types.doc.document: deleted item in tree at stack: (55, 4) => #/texts/286
+2025-07-22 08:59:47,361 [INFO] docling_core.types.doc.document: deleted item in tree at stack: (55, 2) => #/texts/284
+2025-07-22 08:59:47,370 [INFO] docling_core.types.doc.document: deleted item in tree at stack: (52, 2) => #/texts/274
+2025-07-22 08:59:47,443 [INFO] httpx: HTTP Request: POST http://testserver/v1/ocr "HTTP/1.1 200 OK"
+2025-07-22 08:59:47,447 [INFO] httpx: HTTP Request: POST http://testserver/v1/validacao "HTTP/1.1 200 OK"
+2025-07-22 09:00:26,647 [INFO] docling.datamodel.document: detected formats: [<InputFormat.PDF: 'pdf'>]
+2025-07-22 09:00:26,654 [INFO] docling.document_converter: Going to convert document batch...
+2025-07-22 09:00:26,655 [INFO] docling.document_converter: Initializing pipeline for StandardPdfPipeline with options hash d291d1f79894f05d312cc90dd3fdf3d3
+2025-07-22 09:00:26,660 [INFO] docling.models.factories.base_factory: Loading plugin 'docling_defaults'
+2025-07-22 09:00:26,660 [INFO] docling.models.factories: Registered ocr engines: ['easyocr', 'ocrmac', 'rapidocr', 'tesserocr', 'tesseract']
+2025-07-22 09:00:26,711 [INFO] docling.utils.accelerator_utils: Accelerator device: 'cuda:0'
+2025-07-22 09:00:28,332 [INFO] docling.utils.accelerator_utils: Accelerator device: 'cuda:0'
+2025-07-22 09:00:29,736 [INFO] docling.utils.accelerator_utils: Accelerator device: 'cuda:0'
+2025-07-22 09:00:30,138 [INFO] docling.models.factories.base_factory: Loading plugin 'docling_defaults'
+2025-07-22 09:00:30,138 [INFO] docling.models.factories: Registered picture descriptions: ['vlm', 'api']
+2025-07-22 09:00:30,138 [INFO] docling.pipeline.base_pipeline: Processing document tmp14b5344b.pdf
+2025-07-22 09:00:47,212 [INFO] docling.document_converter: Finished converting document tmp14b5344b.pdf in 20.57 sec.
+2025-07-22 09:00:47,236 [INFO] docling_core.types.doc.document: deleted item in tree at stack: (55, 6) => #/texts/288
+2025-07-22 09:00:47,247 [INFO] docling_core.types.doc.document: deleted item in tree at stack: (55, 4) => #/texts/286
+2025-07-22 09:00:47,257 [INFO] docling_core.types.doc.document: deleted item in tree at stack: (55, 2) => #/texts/284
+2025-07-22 09:00:47,267 [INFO] docling_core.types.doc.document: deleted item in tree at stack: (52, 2) => #/texts/274
+2025-07-22 09:00:47,341 [INFO] httpx: HTTP Request: POST http://testserver/v1/ocr "HTTP/1.1 200 OK"
+2025-07-22 09:00:47,344 [INFO] httpx: HTTP Request: POST http://testserver/v1/validacao "HTTP/1.1 200 OK"
+2025-07-22 09:06:08,687 [INFO] docling.datamodel.document: detected formats: [<InputFormat.PDF: 'pdf'>]
+2025-07-22 09:06:08,695 [INFO] docling.document_converter: Going to convert document batch...
+2025-07-22 09:06:08,695 [INFO] docling.document_converter: Initializing pipeline for StandardPdfPipeline with options hash d291d1f79894f05d312cc90dd3fdf3d3
+2025-07-22 09:06:08,701 [INFO] docling.models.factories.base_factory: Loading plugin 'docling_defaults'
+2025-07-22 09:06:08,701 [INFO] docling.models.factories: Registered ocr engines: ['easyocr', 'ocrmac', 'rapidocr', 'tesserocr', 'tesseract']
+2025-07-22 09:06:08,751 [INFO] docling.utils.accelerator_utils: Accelerator device: 'cuda:0'
+2025-07-22 09:06:10,348 [INFO] docling.utils.accelerator_utils: Accelerator device: 'cuda:0'
+2025-07-22 09:06:11,139 [INFO] docling.utils.accelerator_utils: Accelerator device: 'cuda:0'
+2025-07-22 09:06:11,539 [INFO] docling.models.factories.base_factory: Loading plugin 'docling_defaults'
+2025-07-22 09:06:11,539 [INFO] docling.models.factories: Registered picture descriptions: ['vlm', 'api']
+2025-07-22 09:06:11,539 [INFO] docling.pipeline.base_pipeline: Processing document tmp4_5kkj7y.pdf
+2025-07-22 09:06:28,609 [INFO] docling.document_converter: Finished converting document tmp4_5kkj7y.pdf in 19.92 sec.
+2025-07-22 09:06:28,628 [INFO] docling_core.types.doc.document: deleted item in tree at stack: (55, 6) => #/texts/288
+2025-07-22 09:06:28,638 [INFO] docling_core.types.doc.document: deleted item in tree at stack: (55, 4) => #/texts/286
+2025-07-22 09:06:28,649 [INFO] docling_core.types.doc.document: deleted item in tree at stack: (55, 2) => #/texts/284
+2025-07-22 09:06:28,658 [INFO] docling_core.types.doc.document: deleted item in tree at stack: (52, 2) => #/texts/274
+2025-07-22 09:06:28,734 [INFO] httpx: HTTP Request: POST http://testserver/v1/ocr "HTTP/1.1 200 OK"
+2025-07-22 09:06:28,737 [INFO] httpx: HTTP Request: POST http://testserver/v1/validacao "HTTP/1.1 200 OK"
+2025-07-22 09:13:26,279 [INFO] docling.datamodel.document: detected formats: [<InputFormat.PDF: 'pdf'>]
+2025-07-22 09:13:26,287 [INFO] docling.document_converter: Going to convert document batch...
+2025-07-22 09:13:26,287 [INFO] docling.document_converter: Initializing pipeline for StandardPdfPipeline with options hash d291d1f79894f05d312cc90dd3fdf3d3
+2025-07-22 09:13:26,292 [INFO] docling.models.factories.base_factory: Loading plugin 'docling_defaults'
+2025-07-22 09:13:26,292 [INFO] docling.models.factories: Registered ocr engines: ['easyocr', 'ocrmac', 'rapidocr', 'tesserocr', 'tesseract']
+2025-07-22 09:13:26,343 [INFO] docling.utils.accelerator_utils: Accelerator device: 'cuda:0'
+2025-07-22 09:13:28,040 [INFO] docling.utils.accelerator_utils: Accelerator device: 'cuda:0'
+2025-07-22 09:13:28,876 [INFO] docling.utils.accelerator_utils: Accelerator device: 'cuda:0'
+2025-07-22 09:13:29,311 [INFO] docling.models.factories.base_factory: Loading plugin 'docling_defaults'
+2025-07-22 09:13:29,311 [INFO] docling.models.factories: Registered picture descriptions: ['vlm', 'api']
+2025-07-22 09:13:29,311 [INFO] docling.pipeline.base_pipeline: Processing document tmpsftgxu10.pdf
+2025-07-22 09:13:46,475 [INFO] docling.document_converter: Finished converting document tmpsftgxu10.pdf in 20.20 sec.
+2025-07-22 09:13:46,497 [INFO] docling_core.types.doc.document: deleted item in tree at stack: (55, 6) => #/texts/288
+2025-07-22 09:13:46,507 [INFO] docling_core.types.doc.document: deleted item in tree at stack: (55, 4) => #/texts/286
+2025-07-22 09:13:46,516 [INFO] docling_core.types.doc.document: deleted item in tree at stack: (55, 2) => #/texts/284
+2025-07-22 09:13:46,527 [INFO] docling_core.types.doc.document: deleted item in tree at stack: (52, 2) => #/texts/274
+2025-07-22 09:13:46,604 [INFO] httpx: HTTP Request: POST http://testserver/v1/ocr "HTTP/1.1 200 OK"
+2025-07-22 09:14:12,365 [INFO] docling.datamodel.document: detected formats: [<InputFormat.PDF: 'pdf'>]
+2025-07-22 09:14:12,372 [INFO] docling.document_converter: Going to convert document batch...
+2025-07-22 09:14:12,373 [INFO] docling.document_converter: Initializing pipeline for StandardPdfPipeline with options hash d291d1f79894f05d312cc90dd3fdf3d3
+2025-07-22 09:14:12,378 [INFO] docling.models.factories.base_factory: Loading plugin 'docling_defaults'
+2025-07-22 09:14:12,379 [INFO] docling.models.factories: Registered ocr engines: ['easyocr', 'ocrmac', 'rapidocr', 'tesserocr', 'tesseract']
+2025-07-22 09:14:12,431 [INFO] docling.utils.accelerator_utils: Accelerator device: 'cuda:0'
+2025-07-22 09:14:14,065 [INFO] docling.utils.accelerator_utils: Accelerator device: 'cuda:0'
+2025-07-22 09:14:14,909 [INFO] docling.utils.accelerator_utils: Accelerator device: 'cuda:0'
+2025-07-22 09:14:15,341 [INFO] docling.models.factories.base_factory: Loading plugin 'docling_defaults'
+2025-07-22 09:14:15,342 [INFO] docling.models.factories: Registered picture descriptions: ['vlm', 'api']
+2025-07-22 09:14:15,342 [INFO] docling.pipeline.base_pipeline: Processing document tmpof_pfenu.pdf
+2025-07-22 09:15:26,930 [INFO] docling.datamodel.document: detected formats: [<InputFormat.PDF: 'pdf'>]
+2025-07-22 09:15:26,938 [INFO] docling.document_converter: Going to convert document batch...
+2025-07-22 09:15:26,939 [INFO] docling.document_converter: Initializing pipeline for StandardPdfPipeline with options hash d291d1f79894f05d312cc90dd3fdf3d3
+2025-07-22 09:15:26,943 [INFO] docling.models.factories.base_factory: Loading plugin 'docling_defaults'
+2025-07-22 09:15:26,944 [INFO] docling.models.factories: Registered ocr engines: ['easyocr', 'ocrmac', 'rapidocr', 'tesserocr', 'tesseract']
+2025-07-22 09:15:26,995 [INFO] docling.utils.accelerator_utils: Accelerator device: 'cuda:0'
+2025-07-22 09:15:28,673 [INFO] docling.utils.accelerator_utils: Accelerator device: 'cuda:0'
+2025-07-22 09:15:29,559 [INFO] docling.utils.accelerator_utils: Accelerator device: 'cuda:0'
+2025-07-22 09:15:30,002 [INFO] docling.models.factories.base_factory: Loading plugin 'docling_defaults'
+2025-07-22 09:15:30,002 [INFO] docling.models.factories: Registered picture descriptions: ['vlm', 'api']
+2025-07-22 09:15:30,003 [INFO] docling.pipeline.base_pipeline: Processing document tmpdbgg2qbc.pdf
+2025-07-22 09:15:47,183 [INFO] docling.document_converter: Finished converting document tmpdbgg2qbc.pdf in 20.25 sec.
+2025-07-22 09:15:47,205 [INFO] docling_core.types.doc.document: deleted item in tree at stack: (55, 6) => #/texts/288
+2025-07-22 09:15:47,215 [INFO] docling_core.types.doc.document: deleted item in tree at stack: (55, 4) => #/texts/286
+2025-07-22 09:15:47,227 [INFO] docling_core.types.doc.document: deleted item in tree at stack: (55, 2) => #/texts/284
+2025-07-22 09:15:47,237 [INFO] docling_core.types.doc.document: deleted item in tree at stack: (52, 2) => #/texts/274
+2025-07-22 09:15:47,314 [INFO] httpx: HTTP Request: POST http://testserver/v1/ocr "HTTP/1.1 200 OK"
+2025-07-22 09:15:47,317 [INFO] httpx: HTTP Request: POST http://testserver/v1/validacao "HTTP/1.1 200 OK"
+2025-07-22 09:26:03,205 [INFO] docling.datamodel.document: detected formats: [<InputFormat.PDF: 'pdf'>]
+2025-07-22 09:26:03,213 [INFO] docling.document_converter: Going to convert document batch...
+2025-07-22 09:26:03,213 [INFO] docling.document_converter: Initializing pipeline for StandardPdfPipeline with options hash d291d1f79894f05d312cc90dd3fdf3d3
+2025-07-22 09:26:03,219 [INFO] docling.models.factories.base_factory: Loading plugin 'docling_defaults'
+2025-07-22 09:26:03,219 [INFO] docling.models.factories: Registered ocr engines: ['easyocr', 'ocrmac', 'rapidocr', 'tesserocr', 'tesseract']
+2025-07-22 09:26:03,271 [INFO] docling.utils.accelerator_utils: Accelerator device: 'cuda:0'
+2025-07-22 09:26:04,972 [INFO] docling.utils.accelerator_utils: Accelerator device: 'cuda:0'
+2025-07-22 09:26:05,797 [INFO] docling.utils.accelerator_utils: Accelerator device: 'cuda:0'
+2025-07-22 09:26:06,209 [INFO] docling.models.factories.base_factory: Loading plugin 'docling_defaults'
+2025-07-22 09:26:06,209 [INFO] docling.models.factories: Registered picture descriptions: ['vlm', 'api']
+2025-07-22 09:26:06,210 [INFO] docling.pipeline.base_pipeline: Processing document tmp1vsy4wjr.pdf
+2025-07-22 09:26:23,083 [INFO] docling.document_converter: Finished converting document tmp1vsy4wjr.pdf in 19.88 sec.
+2025-07-22 09:26:23,102 [INFO] docling_core.types.doc.document: deleted item in tree at stack: (55, 6) => #/texts/288
+2025-07-22 09:26:23,112 [INFO] docling_core.types.doc.document: deleted item in tree at stack: (55, 4) => #/texts/286
+2025-07-22 09:26:23,122 [INFO] docling_core.types.doc.document: deleted item in tree at stack: (55, 2) => #/texts/284
+2025-07-22 09:26:23,133 [INFO] docling_core.types.doc.document: deleted item in tree at stack: (52, 2) => #/texts/274
+2025-07-22 09:26:23,207 [INFO] httpx: HTTP Request: POST http://testserver/v1/ocr "HTTP/1.1 200 OK"
+2025-07-22 09:26:23,211 [INFO] httpx: HTTP Request: POST http://testserver/v1/validacao "HTTP/1.1 200 OK"
+2025-07-22 09:26:23,220 [INFO] docling.datamodel.document: detected formats: [<InputFormat.PDF: 'pdf'>]
+2025-07-22 09:26:23,222 [INFO] docling.document_converter: Going to convert document batch...
+2025-07-22 09:26:23,222 [INFO] docling.document_converter: Initializing pipeline for StandardPdfPipeline with options hash d291d1f79894f05d312cc90dd3fdf3d3
+2025-07-22 09:26:23,222 [INFO] docling.utils.accelerator_utils: Accelerator device: 'cuda:0'
+2025-07-22 09:26:24,765 [INFO] docling.utils.accelerator_utils: Accelerator device: 'cuda:0'
+2025-07-22 09:26:25,719 [INFO] docling.utils.accelerator_utils: Accelerator device: 'cuda:0'
+2025-07-22 09:26:26,139 [INFO] docling.pipeline.base_pipeline: Processing document tmp1fqachnf.pdf
+2025-07-22 09:26:54,682 [INFO] docling.document_converter: Finished converting document tmp1fqachnf.pdf in 31.46 sec.
+2025-07-22 09:26:54,690 [INFO] docling_core.types.doc.document: deleted item in tree at stack: (2, 27) => #/texts/28
+2025-07-22 09:26:54,700 [INFO] docling_core.types.doc.document: deleted item in tree at stack: (2, 26) => #/texts/27
+2025-07-22 09:26:54,709 [INFO] docling_core.types.doc.document: deleted item in tree at stack: (2, 24) => #/texts/25
+2025-07-22 09:26:54,718 [INFO] docling_core.types.doc.document: deleted item in tree at stack: (2, 17) => #/texts/18
+2025-07-22 09:26:54,726 [INFO] docling_core.types.doc.document: deleted item in tree at stack: (2, 9) => #/texts/10
+2025-07-22 09:26:54,824 [INFO] httpx: HTTP Request: POST http://testserver/v1/ocr "HTTP/1.1 200 OK"
+2025-07-22 09:26:54,828 [INFO] httpx: HTTP Request: POST http://testserver/v1/validacao "HTTP/1.1 200 OK"
+2025-07-22 10:24:14,685 [INFO] docling.datamodel.document: detected formats: [<InputFormat.PDF: 'pdf'>]
+2025-07-22 10:24:14,692 [INFO] docling.document_converter: Going to convert document batch...
+2025-07-22 10:24:14,693 [INFO] docling.document_converter: Initializing pipeline for StandardPdfPipeline with options hash d291d1f79894f05d312cc90dd3fdf3d3
+2025-07-22 10:24:14,699 [INFO] docling.models.factories.base_factory: Loading plugin 'docling_defaults'
+2025-07-22 10:24:14,699 [INFO] docling.models.factories: Registered ocr engines: ['easyocr', 'ocrmac', 'rapidocr', 'tesserocr', 'tesseract']
+2025-07-22 10:24:14,750 [INFO] docling.utils.accelerator_utils: Accelerator device: 'cuda:0'
+2025-07-22 10:24:16,443 [INFO] docling.utils.accelerator_utils: Accelerator device: 'cuda:0'
+2025-07-22 10:24:17,501 [INFO] docling.utils.accelerator_utils: Accelerator device: 'cuda:0'
+2025-07-22 10:24:17,927 [INFO] docling.models.factories.base_factory: Loading plugin 'docling_defaults'
+2025-07-22 10:24:17,927 [INFO] docling.models.factories: Registered picture descriptions: ['vlm', 'api']
+2025-07-22 10:24:17,927 [INFO] docling.pipeline.base_pipeline: Processing document tmpk83sh4cc.pdf
+2025-07-22 10:24:35,057 [INFO] docling.document_converter: Finished converting document tmpk83sh4cc.pdf in 20.37 sec.
+2025-07-22 10:24:35,078 [INFO] docling_core.types.doc.document: deleted item in tree at stack: (55, 6) => #/texts/288
+2025-07-22 10:24:35,087 [INFO] docling_core.types.doc.document: deleted item in tree at stack: (55, 4) => #/texts/286
+2025-07-22 10:24:35,097 [INFO] docling_core.types.doc.document: deleted item in tree at stack: (55, 2) => #/texts/284
+2025-07-22 10:24:35,106 [INFO] docling_core.types.doc.document: deleted item in tree at stack: (52, 2) => #/texts/274
+2025-07-22 10:24:35,182 [INFO] httpx: HTTP Request: POST http://testserver/v1/ocr "HTTP/1.1 200 OK"
+2025-07-22 10:24:35,185 [INFO] httpx: HTTP Request: POST http://testserver/v1/validacao "HTTP/1.1 200 OK"
+2025-07-22 10:24:35,195 [INFO] docling.datamodel.document: detected formats: [<InputFormat.PDF: 'pdf'>]
+2025-07-22 10:24:35,196 [INFO] docling.document_converter: Going to convert document batch...
+2025-07-22 10:24:35,197 [INFO] docling.document_converter: Initializing pipeline for StandardPdfPipeline with options hash d291d1f79894f05d312cc90dd3fdf3d3
+2025-07-22 10:24:35,197 [INFO] docling.utils.accelerator_utils: Accelerator device: 'cuda:0'
+2025-07-22 10:24:36,775 [INFO] docling.utils.accelerator_utils: Accelerator device: 'cuda:0'
+2025-07-22 10:24:37,736 [INFO] docling.utils.accelerator_utils: Accelerator device: 'cuda:0'
+2025-07-22 10:24:38,149 [INFO] docling.pipeline.base_pipeline: Processing document tmpk6vrcr7x.pdf
+2025-07-22 10:25:07,083 [INFO] docling.document_converter: Finished converting document tmpk6vrcr7x.pdf in 31.89 sec.
+2025-07-22 10:25:07,091 [INFO] docling_core.types.doc.document: deleted item in tree at stack: (2, 27) => #/texts/28
+2025-07-22 10:25:07,100 [INFO] docling_core.types.doc.document: deleted item in tree at stack: (2, 26) => #/texts/27
+2025-07-22 10:25:07,109 [INFO] docling_core.types.doc.document: deleted item in tree at stack: (2, 24) => #/texts/25
+2025-07-22 10:25:07,118 [INFO] docling_core.types.doc.document: deleted item in tree at stack: (2, 17) => #/texts/18
+2025-07-22 10:25:07,126 [INFO] docling_core.types.doc.document: deleted item in tree at stack: (2, 9) => #/texts/10
+2025-07-22 10:25:07,221 [INFO] httpx: HTTP Request: POST http://testserver/v1/ocr "HTTP/1.1 200 OK"
+2025-07-22 10:25:07,224 [INFO] httpx: HTTP Request: POST http://testserver/v1/validacao "HTTP/1.1 200 OK"
+2025-07-22 10:25:07,233 [INFO] docling.datamodel.document: detected formats: [<InputFormat.PDF: 'pdf'>]
+2025-07-22 10:25:07,235 [INFO] docling.document_converter: Going to convert document batch...
+2025-07-22 10:25:07,235 [INFO] docling.document_converter: Initializing pipeline for StandardPdfPipeline with options hash d291d1f79894f05d312cc90dd3fdf3d3
+2025-07-22 10:25:07,235 [INFO] docling.utils.accelerator_utils: Accelerator device: 'cuda:0'
+2025-07-22 10:25:08,814 [INFO] docling.utils.accelerator_utils: Accelerator device: 'cuda:0'
+2025-07-22 10:25:09,721 [INFO] docling.utils.accelerator_utils: Accelerator device: 'cuda:0'
+2025-07-22 10:25:10,135 [INFO] docling.pipeline.base_pipeline: Processing document tmpa319vugg.pdf
+2025-07-22 10:25:11,199 [WARNING] docling.pipeline.base_pipeline: Encountered an error during conversion of document 8068a748016dd6a6c91b829f7ae39a7a10cce2e8b4df0f053136970c3b8b7a67:
+Traceback (most recent call last):
+
+  File "/home/brmed/.pyenv/versions/3.10.13/envs/api/lib/python3.10/site-packages/docling/pipeline/base_pipeline.py", line 160, in _build_document
+    for p in pipeline_pages:  # Must exhaust!
+
+  File "/home/brmed/.pyenv/versions/3.10.13/envs/api/lib/python3.10/site-packages/docling/pipeline/base_pipeline.py", line 126, in _apply_on_pages
+    yield from page_batch
+
+  File "/home/brmed/.pyenv/versions/3.10.13/envs/api/lib/python3.10/site-packages/docling/models/page_assemble_model.py", line 70, in __call__
+    for page in page_batch:
+
+  File "/home/brmed/.pyenv/versions/3.10.13/envs/api/lib/python3.10/site-packages/docling/models/table_structure_model.py", line 175, in __call__
+    for page in page_batch:
+
+  File "/home/brmed/.pyenv/versions/3.10.13/envs/api/lib/python3.10/site-packages/docling/models/layout_model.py", line 142, in __call__
+    for page in page_batch:
+
+  File "/home/brmed/.pyenv/versions/3.10.13/envs/api/lib/python3.10/site-packages/docling/models/easyocr_model.py", line 150, in __call__
+    result = self.reader.readtext(im)
+
+  File "/home/brmed/.pyenv/versions/3.10.13/envs/api/lib/python3.10/site-packages/easyocr/easyocr.py", line 456, in readtext
+    horizontal_list, free_list = self.detect(img,
+
+  File "/home/brmed/.pyenv/versions/3.10.13/envs/api/lib/python3.10/site-packages/easyocr/easyocr.py", line 321, in detect
+    text_box_list = self.get_textbox(self.detector,
+
+  File "/home/brmed/.pyenv/versions/3.10.13/envs/api/lib/python3.10/site-packages/easyocr/detection.py", line 95, in get_textbox
+    bboxes_list, polys_list = test_net(canvas_size, mag_ratio, detector,
+
+  File "/home/brmed/.pyenv/versions/3.10.13/envs/api/lib/python3.10/site-packages/easyocr/detection.py", line 46, in test_net
+    y, feature = net(x)
+
+  File "/home/brmed/.pyenv/versions/3.10.13/envs/api/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1751, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+
+  File "/home/brmed/.pyenv/versions/3.10.13/envs/api/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1762, in _call_impl
+    return forward_call(*args, **kwargs)
+
+  File "/home/brmed/.pyenv/versions/3.10.13/envs/api/lib/python3.10/site-packages/torch/nn/parallel/data_parallel.py", line 192, in forward
+    return self.module(*inputs[0], **module_kwargs[0])
+
+  File "/home/brmed/.pyenv/versions/3.10.13/envs/api/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1751, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+
+  File "/home/brmed/.pyenv/versions/3.10.13/envs/api/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1762, in _call_impl
+    return forward_call(*args, **kwargs)
+
+  File "/home/brmed/.pyenv/versions/3.10.13/envs/api/lib/python3.10/site-packages/easyocr/craft.py", line 75, in forward
+    y = torch.cat([y, sources[4]], dim=1)
+
+torch.OutOfMemoryError: CUDA out of memory. Tried to allocate 830.00 MiB. GPU 0 has a total capacity of 3.69 GiB of which 742.19 MiB is free. Including non-PyTorch memory, this process has 2.95 GiB memory in use. Of the allocated memory 2.00 GiB is allocated by PyTorch, and 883.04 MiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://pytorch.org/docs/stable/notes/cuda.html#environment-variables)
+
+2025-07-22 10:25:11,199 [ERROR] app.api.v1_ocr: Erro inesperado no OCR: CUDA out of memory. Tried to allocate 830.00 MiB. GPU 0 has a total capacity of 3.69 GiB of which 742.19 MiB is free. Including non-PyTorch memory, this process has 2.95 GiB memory in use. Of the allocated memory 2.00 GiB is allocated by PyTorch, and 883.04 MiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://pytorch.org/docs/stable/notes/cuda.html#environment-variables)
+Traceback (most recent call last):
+  File "/home/brmed/Área de trabalho/API_IA/app/api/v1_ocr.py", line 14, in processar_ocr
+    resultado = await ocr_service.ocr_pipeline(arquivo)
+  File "/home/brmed/Área de trabalho/API_IA/app/services/ocr_service.py", line 116, in ocr_pipeline
+    markdown = processar_arquivo_docling(temp_path)
+  File "/home/brmed/Área de trabalho/API_IA/app/services/ocr_service.py", line 68, in processar_arquivo_docling
+    resultado = converter.convert(file)
+  File "/home/brmed/.pyenv/versions/3.10.13/envs/api/lib/python3.10/site-packages/pydantic/_internal/_validate_call.py", line 39, in wrapper_function
+    return wrapper(*args, **kwargs)
+  File "/home/brmed/.pyenv/versions/3.10.13/envs/api/lib/python3.10/site-packages/pydantic/_internal/_validate_call.py", line 136, in __call__
+    res = self.__pydantic_validator__.validate_python(pydantic_core.ArgsKwargs(args, kwargs))
+  File "/home/brmed/.pyenv/versions/3.10.13/envs/api/lib/python3.10/site-packages/docling/document_converter.py", line 235, in convert
+    return next(all_res)
+  File "/home/brmed/.pyenv/versions/3.10.13/envs/api/lib/python3.10/site-packages/docling/document_converter.py", line 258, in convert_all
+    for conv_res in conv_res_iter:
+  File "/home/brmed/.pyenv/versions/3.10.13/envs/api/lib/python3.10/site-packages/docling/document_converter.py", line 293, in _convert
+    for item in map(
+  File "/home/brmed/.pyenv/versions/3.10.13/envs/api/lib/python3.10/site-packages/docling/document_converter.py", line 339, in _process_document
+    conv_res = self._execute_pipeline(in_doc, raises_on_error=raises_on_error)
+  File "/home/brmed/.pyenv/versions/3.10.13/envs/api/lib/python3.10/site-packages/docling/document_converter.py", line 362, in _execute_pipeline
+    conv_res = pipeline.execute(in_doc, raises_on_error=raises_on_error)
+  File "/home/brmed/.pyenv/versions/3.10.13/envs/api/lib/python3.10/site-packages/docling/pipeline/base_pipeline.py", line 54, in execute
+    raise e
+  File "/home/brmed/.pyenv/versions/3.10.13/envs/api/lib/python3.10/site-packages/docling/pipeline/base_pipeline.py", line 46, in execute
+    conv_res = self._build_document(conv_res)
+  File "/home/brmed/.pyenv/versions/3.10.13/envs/api/lib/python3.10/site-packages/docling/pipeline/base_pipeline.py", line 194, in _build_document
+    raise e
+  File "/home/brmed/.pyenv/versions/3.10.13/envs/api/lib/python3.10/site-packages/docling/pipeline/base_pipeline.py", line 160, in _build_document
+    for p in pipeline_pages:  # Must exhaust!
+  File "/home/brmed/.pyenv/versions/3.10.13/envs/api/lib/python3.10/site-packages/docling/pipeline/base_pipeline.py", line 126, in _apply_on_pages
+    yield from page_batch
+  File "/home/brmed/.pyenv/versions/3.10.13/envs/api/lib/python3.10/site-packages/docling/models/page_assemble_model.py", line 70, in __call__
+    for page in page_batch:
+  File "/home/brmed/.pyenv/versions/3.10.13/envs/api/lib/python3.10/site-packages/docling/models/table_structure_model.py", line 175, in __call__
+    for page in page_batch:
+  File "/home/brmed/.pyenv/versions/3.10.13/envs/api/lib/python3.10/site-packages/docling/models/layout_model.py", line 142, in __call__
+    for page in page_batch:
+  File "/home/brmed/.pyenv/versions/3.10.13/envs/api/lib/python3.10/site-packages/docling/models/easyocr_model.py", line 150, in __call__
+    result = self.reader.readtext(im)
+  File "/home/brmed/.pyenv/versions/3.10.13/envs/api/lib/python3.10/site-packages/easyocr/easyocr.py", line 456, in readtext
+    horizontal_list, free_list = self.detect(img,
+  File "/home/brmed/.pyenv/versions/3.10.13/envs/api/lib/python3.10/site-packages/easyocr/easyocr.py", line 321, in detect
+    text_box_list = self.get_textbox(self.detector,
+  File "/home/brmed/.pyenv/versions/3.10.13/envs/api/lib/python3.10/site-packages/easyocr/detection.py", line 95, in get_textbox
+    bboxes_list, polys_list = test_net(canvas_size, mag_ratio, detector,
+  File "/home/brmed/.pyenv/versions/3.10.13/envs/api/lib/python3.10/site-packages/easyocr/detection.py", line 46, in test_net
+    y, feature = net(x)
+  File "/home/brmed/.pyenv/versions/3.10.13/envs/api/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1751, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/home/brmed/.pyenv/versions/3.10.13/envs/api/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1762, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/home/brmed/.pyenv/versions/3.10.13/envs/api/lib/python3.10/site-packages/torch/nn/parallel/data_parallel.py", line 192, in forward
+    return self.module(*inputs[0], **module_kwargs[0])
+  File "/home/brmed/.pyenv/versions/3.10.13/envs/api/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1751, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/home/brmed/.pyenv/versions/3.10.13/envs/api/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1762, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/home/brmed/.pyenv/versions/3.10.13/envs/api/lib/python3.10/site-packages/easyocr/craft.py", line 75, in forward
+    y = torch.cat([y, sources[4]], dim=1)
+torch.OutOfMemoryError: CUDA out of memory. Tried to allocate 830.00 MiB. GPU 0 has a total capacity of 3.69 GiB of which 742.19 MiB is free. Including non-PyTorch memory, this process has 2.95 GiB memory in use. Of the allocated memory 2.00 GiB is allocated by PyTorch, and 883.04 MiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://pytorch.org/docs/stable/notes/cuda.html#environment-variables)
+2025-07-22 10:25:11,201 [INFO] httpx: HTTP Request: POST http://testserver/v1/ocr "HTTP/1.1 500 Internal Server Error"
+2025-07-22 10:47:09,729 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2025-07-22 10:47:11,728 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-22 10:47:11,730 [INFO] app.services.faq_service: Tokens do prompt: 523 | Tokens de completação: 12 | Total: 535
+2025-07-22 10:47:11,730 [INFO] app.services.faq_service: Distâncias dos vizinhos: [1.5985638 1.6348933]
+2025-07-22 10:50:01,231 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2025-07-22 10:50:02,394 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-22 10:50:02,397 [INFO] app.services.faq_service: Tokens do prompt: 502 | Tokens de completação: 17 | Total: 519
+2025-07-22 10:50:02,397 [INFO] app.services.faq_service: Distâncias dos vizinhos: [1.4697288 1.4741434]
+2025-07-22 10:52:09,507 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2025-07-22 10:52:10,354 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-22 10:52:10,357 [INFO] app.services.faq_service: Tokens do prompt: 503 | Tokens de completação: 17 | Total: 520
+2025-07-22 10:52:10,357 [INFO] app.services.faq_service: Distâncias dos vizinhos: [1.3876103 1.3954248]
+2025-07-22 10:57:26,699 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2025-07-22 10:57:29,107 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-22 10:57:29,124 [INFO] app.services.faq_service: Tokens do prompt: 535 | Tokens de completação: 75 | Total: 610
+2025-07-22 10:57:29,124 [INFO] app.services.faq_service: Distâncias dos vizinhos: [0.92298216 0.9614925 ]
+2025-07-22 10:58:30,779 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2025-07-22 10:58:33,706 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-22 10:58:33,714 [INFO] app.services.faq_service: Tokens do prompt: 714 | Tokens de completação: 96 | Total: 810
+2025-07-22 10:58:33,715 [INFO] app.services.faq_service: Distâncias dos vizinhos: [0.57039994 0.89697504]
+2025-07-22 10:59:30,870 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2025-07-22 10:59:32,727 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-22 10:59:32,728 [INFO] app.services.faq_service: Tokens do prompt: 734 | Tokens de completação: 68 | Total: 802
+2025-07-22 10:59:32,728 [INFO] app.services.faq_service: Distâncias dos vizinhos: [0.9487011 1.0240141]
+2025-07-22 11:00:56,340 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2025-07-22 11:00:59,456 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-22 11:00:59,484 [INFO] app.services.faq_service: Tokens do prompt: 507 | Tokens de completação: 81 | Total: 588
+2025-07-22 11:00:59,484 [INFO] app.services.faq_service: Distâncias dos vizinhos: [0.9486227 1.0239309]
+2025-07-22 11:01:19,214 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2025-07-22 11:01:21,763 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-22 11:01:21,765 [INFO] app.services.faq_service: Tokens do prompt: 692 | Tokens de completação: 92 | Total: 784
+2025-07-22 11:01:21,766 [INFO] app.services.faq_service: Distâncias dos vizinhos: [0.57048875 0.89711946]
+2025-07-22 11:02:53,873 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2025-07-22 11:02:56,218 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-22 11:02:56,221 [INFO] app.services.faq_service: Tokens do prompt: 507 | Tokens de completação: 87 | Total: 594
+2025-07-22 11:02:56,221 [INFO] app.services.faq_service: Distâncias dos vizinhos: [0.9486227 1.0239309]
+2025-07-22 11:03:11,777 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2025-07-22 11:03:14,273 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-22 11:03:14,284 [INFO] app.services.faq_service: Tokens do prompt: 698 | Tokens de completação: 95 | Total: 793
+2025-07-22 11:03:14,284 [INFO] app.services.faq_service: Distâncias dos vizinhos: [0.57048875 0.89711946]
+2025-07-22 11:05:49,267 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2025-07-22 11:05:51,467 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-22 11:05:51,482 [INFO] app.services.faq_service: Tokens do prompt: 803 | Tokens de completação: 78 | Total: 881
+2025-07-22 11:05:51,482 [INFO] app.services.faq_service: Distâncias dos vizinhos: [0.9486227 1.0239309]
+2025-07-22 11:06:20,004 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2025-07-22 11:06:23,298 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-22 11:06:23,301 [INFO] app.services.faq_service: Tokens do prompt: 987 | Tokens de completação: 98 | Total: 1085
+2025-07-22 11:06:23,302 [INFO] app.services.faq_service: Distâncias dos vizinhos: [0.57048875 0.89711946]
+2025-07-22 11:06:44,901 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2025-07-22 11:06:49,247 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-22 11:06:49,253 [INFO] app.services.faq_service: Tokens do prompt: 1099 | Tokens de completação: 94 | Total: 1193
+2025-07-22 11:06:49,253 [INFO] app.services.faq_service: Distâncias dos vizinhos: [0.57039994 0.89697504]
+2025-07-22 11:14:56,085 [INFO] docling.datamodel.document: detected formats: [<InputFormat.PDF: 'pdf'>]
+2025-07-22 11:14:56,098 [INFO] docling.document_converter: Going to convert document batch...
+2025-07-22 11:14:56,099 [INFO] docling.document_converter: Initializing pipeline for StandardPdfPipeline with options hash d291d1f79894f05d312cc90dd3fdf3d3
+2025-07-22 11:14:56,107 [INFO] docling.models.factories.base_factory: Loading plugin 'docling_defaults'
+2025-07-22 11:14:56,107 [INFO] docling.models.factories: Registered ocr engines: ['easyocr', 'ocrmac', 'rapidocr', 'tesserocr', 'tesseract']
+2025-07-22 11:14:56,165 [INFO] docling.utils.accelerator_utils: Accelerator device: 'cuda:0'
+2025-07-22 11:14:58,052 [INFO] docling.utils.accelerator_utils: Accelerator device: 'cuda:0'
+2025-07-22 11:14:58,979 [INFO] docling.utils.accelerator_utils: Accelerator device: 'cuda:0'
+2025-07-22 11:14:59,432 [INFO] docling.models.factories.base_factory: Loading plugin 'docling_defaults'
+2025-07-22 11:14:59,432 [INFO] docling.models.factories: Registered picture descriptions: ['vlm', 'api']
+2025-07-22 11:14:59,432 [INFO] docling.pipeline.base_pipeline: Processing document tmpmsft82a_.pdf
+2025-07-22 11:15:17,352 [INFO] docling.document_converter: Finished converting document tmpmsft82a_.pdf in 21.27 sec.
+2025-07-22 11:15:17,375 [INFO] docling_core.types.doc.document: deleted item in tree at stack: (55, 6) => #/texts/288
+2025-07-22 11:15:17,386 [INFO] docling_core.types.doc.document: deleted item in tree at stack: (55, 4) => #/texts/286
+2025-07-22 11:15:17,396 [INFO] docling_core.types.doc.document: deleted item in tree at stack: (55, 2) => #/texts/284
+2025-07-22 11:15:17,407 [INFO] docling_core.types.doc.document: deleted item in tree at stack: (52, 2) => #/texts/274
+2025-07-22 11:15:19,408 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-22 12:06:52,563 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2025-07-22 12:06:53,998 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-22 12:06:54,000 [INFO] app.services.faq_service: Tokens do prompt: 503 | Tokens de completação: 17 | Total: 520
+2025-07-22 12:06:54,001 [INFO] app.services.faq_service: Distâncias dos vizinhos: [1.3845683 1.3947346]
+2025-07-22 12:07:07,174 [INFO] docling.datamodel.document: detected formats: [<InputFormat.PDF: 'pdf'>]
+2025-07-22 12:07:07,181 [INFO] docling.document_converter: Going to convert document batch...
+2025-07-22 12:07:07,182 [INFO] docling.document_converter: Initializing pipeline for StandardPdfPipeline with options hash d291d1f79894f05d312cc90dd3fdf3d3
+2025-07-22 12:07:07,187 [INFO] docling.models.factories.base_factory: Loading plugin 'docling_defaults'
+2025-07-22 12:07:07,187 [INFO] docling.models.factories: Registered ocr engines: ['easyocr', 'ocrmac', 'rapidocr', 'tesserocr', 'tesseract']
+2025-07-22 12:07:07,238 [INFO] docling.utils.accelerator_utils: Accelerator device: 'cuda:0'
+2025-07-22 12:07:09,082 [INFO] docling.utils.accelerator_utils: Accelerator device: 'cuda:0'
+2025-07-22 12:07:09,901 [INFO] docling.utils.accelerator_utils: Accelerator device: 'cuda:0'
+2025-07-22 12:07:10,352 [INFO] docling.models.factories.base_factory: Loading plugin 'docling_defaults'
+2025-07-22 12:07:10,352 [INFO] docling.models.factories: Registered picture descriptions: ['vlm', 'api']
+2025-07-22 12:07:10,352 [INFO] docling.pipeline.base_pipeline: Processing document tmpm3fj2npz.pdf
+2025-07-22 12:07:29,089 [INFO] docling.document_converter: Finished converting document tmpm3fj2npz.pdf in 21.92 sec.
+2025-07-22 12:07:29,111 [INFO] docling_core.types.doc.document: deleted item in tree at stack: (55, 6) => #/texts/288
+2025-07-22 12:07:29,122 [INFO] docling_core.types.doc.document: deleted item in tree at stack: (55, 4) => #/texts/286
+2025-07-22 12:07:29,132 [INFO] docling_core.types.doc.document: deleted item in tree at stack: (55, 2) => #/texts/284
+2025-07-22 12:07:29,143 [INFO] docling_core.types.doc.document: deleted item in tree at stack: (52, 2) => #/texts/274
+2025-07-22 12:07:32,508 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-22 12:07:32,548 [INFO] app.services.workflow_service: Tentando consultar BRMED com CPF inicial: 67495788372
+2025-07-22 12:07:32,548 [ERROR] app.api.v1_brmed: Erro inesperado no processamento completo do documento: It looks like you are using Playwright Sync API inside the asyncio loop.
+Please use the Async API instead.
+Traceback (most recent call last):
+  File "/home/brmed/Área de trabalho/API_IA/app/api/v1_brmed.py", line 26, in processar_documento_completo_api
+    resultado = await workflow_service.processar_documento_completo(arquivo, exames_obrigatorios_list)
+  File "/home/brmed/Área de trabalho/API_IA/app/services/workflow_service.py", line 104, in processar_documento_completo
+    brmed_resultado = brmed_service.consultar_exames_brmed(cpf_inicial)
+  File "/home/brmed/Área de trabalho/API_IA/app/services/brmed_service.py", line 38, in consultar_exames_brmed
+    with sync_playwright() as p:
+  File "/home/brmed/.pyenv/versions/3.10.13/envs/api/lib/python3.10/site-packages/playwright/sync_api/_context_manager.py", line 47, in __enter__
+    raise Error(
+playwright._impl._errors.Error: It looks like you are using Playwright Sync API inside the asyncio loop.
+Please use the Async API instead.
+2025-07-22 12:10:11,231 [INFO] docling.datamodel.document: detected formats: [<InputFormat.PDF: 'pdf'>]
+2025-07-22 12:10:11,239 [INFO] docling.document_converter: Going to convert document batch...
+2025-07-22 12:10:11,239 [INFO] docling.document_converter: Initializing pipeline for StandardPdfPipeline with options hash d291d1f79894f05d312cc90dd3fdf3d3
+2025-07-22 12:10:11,245 [INFO] docling.models.factories.base_factory: Loading plugin 'docling_defaults'
+2025-07-22 12:10:11,246 [INFO] docling.models.factories: Registered ocr engines: ['easyocr', 'ocrmac', 'rapidocr', 'tesserocr', 'tesseract']
+2025-07-22 12:10:11,304 [INFO] docling.utils.accelerator_utils: Accelerator device: 'cuda:0'
+2025-07-22 12:10:13,255 [INFO] docling.utils.accelerator_utils: Accelerator device: 'cuda:0'
+2025-07-22 12:10:14,195 [INFO] docling.utils.accelerator_utils: Accelerator device: 'cuda:0'
+2025-07-22 12:10:14,664 [INFO] docling.models.factories.base_factory: Loading plugin 'docling_defaults'
+2025-07-22 12:10:14,664 [INFO] docling.models.factories: Registered picture descriptions: ['vlm', 'api']
+2025-07-22 12:10:14,665 [INFO] docling.pipeline.base_pipeline: Processing document tmpf7xmze_u.pdf
+2025-07-22 12:10:32,062 [INFO] docling.document_converter: Finished converting document tmpf7xmze_u.pdf in 20.83 sec.
+2025-07-22 12:10:32,083 [INFO] docling_core.types.doc.document: deleted item in tree at stack: (55, 6) => #/texts/288
+2025-07-22 12:10:32,093 [INFO] docling_core.types.doc.document: deleted item in tree at stack: (55, 4) => #/texts/286
+2025-07-22 12:10:32,104 [INFO] docling_core.types.doc.document: deleted item in tree at stack: (55, 2) => #/texts/284
+2025-07-22 12:10:32,115 [INFO] docling_core.types.doc.document: deleted item in tree at stack: (52, 2) => #/texts/274
+2025-07-22 12:10:39,233 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-22 12:10:39,273 [INFO] app.services.workflow_service: Tentando consultar BRMED com CPF inicial: 67495788372
+2025-07-22 12:10:58,378 [INFO] app.services.workflow_service: Realizando validação para CPF: 67495788372
+2025-07-22 12:10:58,379 [INFO] app.services.workflow_service: Não há exames suficientes para comparação OpenAI (OCR ou BRNET vazios).
+2025-07-22 12:12:21,587 [INFO] docling.datamodel.document: detected formats: [<InputFormat.PDF: 'pdf'>]
+2025-07-22 12:12:21,597 [INFO] docling.document_converter: Going to convert document batch...
+2025-07-22 12:12:21,597 [INFO] docling.document_converter: Initializing pipeline for StandardPdfPipeline with options hash d291d1f79894f05d312cc90dd3fdf3d3
+2025-07-22 12:12:21,604 [INFO] docling.models.factories.base_factory: Loading plugin 'docling_defaults'
+2025-07-22 12:12:21,604 [INFO] docling.models.factories: Registered ocr engines: ['easyocr', 'ocrmac', 'rapidocr', 'tesserocr', 'tesseract']
+2025-07-22 12:12:21,663 [INFO] docling.utils.accelerator_utils: Accelerator device: 'cuda:0'
+2025-07-22 12:12:23,489 [INFO] docling.utils.accelerator_utils: Accelerator device: 'cuda:0'
+2025-07-22 12:12:24,324 [INFO] docling.utils.accelerator_utils: Accelerator device: 'cuda:0'
+2025-07-22 12:12:24,763 [INFO] docling.models.factories.base_factory: Loading plugin 'docling_defaults'
+2025-07-22 12:12:24,763 [INFO] docling.models.factories: Registered picture descriptions: ['vlm', 'api']
+2025-07-22 12:12:24,764 [INFO] docling.pipeline.base_pipeline: Processing document tmpeu5czbho.pdf
+2025-07-22 12:12:42,060 [INFO] docling.document_converter: Finished converting document tmpeu5czbho.pdf in 20.47 sec.
+2025-07-22 12:12:42,083 [INFO] docling_core.types.doc.document: deleted item in tree at stack: (55, 6) => #/texts/288
+2025-07-22 12:12:42,094 [INFO] docling_core.types.doc.document: deleted item in tree at stack: (55, 4) => #/texts/286
+2025-07-22 12:12:42,105 [INFO] docling_core.types.doc.document: deleted item in tree at stack: (55, 2) => #/texts/284
+2025-07-22 12:12:42,116 [INFO] docling_core.types.doc.document: deleted item in tree at stack: (52, 2) => #/texts/274
+2025-07-22 12:12:44,190 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-22 12:12:44,233 [INFO] app.services.workflow_service: Tentando consultar BRMED com CPF inicial: 67495788372
+2025-07-22 12:13:01,459 [WARNING] app.services.workflow_service: Consulta BRMED falhou para CPF 67495788372: Erro na automação: local variable 'ts' referenced before assignment
+2025-07-22 12:13:01,459 [INFO] app.services.workflow_service: CPF inicial falhou ou não encontrado. Buscando CPFs alternativos via IA...
+2025-07-22 12:13:02,482 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-22 12:13:02,483 [INFO] app.services.workflow_service: Tentando consultar BRMED com CPF alternativo: 93002142929
+2025-07-22 12:13:28,507 [WARNING] app.services.workflow_service: Consulta BRMED falhou para CPF alternativo 93002142929: Erro na automação: Page.click: Target page, context or browser has been closed
+Call log:
+  - waiting for locator("table.tabledata a[href*='/paciente/']")
+
+2025-07-22 12:13:28,508 [ERROR] app.services.workflow_service: Não foi possível encontrar um CPF válido para consulta BRMED.
+2025-07-22 12:13:59,730 [INFO] docling.datamodel.document: detected formats: [<InputFormat.PDF: 'pdf'>]
+2025-07-22 12:13:59,739 [INFO] docling.document_converter: Going to convert document batch...
+2025-07-22 12:13:59,739 [INFO] docling.document_converter: Initializing pipeline for StandardPdfPipeline with options hash d291d1f79894f05d312cc90dd3fdf3d3
+2025-07-22 12:13:59,745 [INFO] docling.models.factories.base_factory: Loading plugin 'docling_defaults'
+2025-07-22 12:13:59,745 [INFO] docling.models.factories: Registered ocr engines: ['easyocr', 'ocrmac', 'rapidocr', 'tesserocr', 'tesseract']
+2025-07-22 12:13:59,802 [INFO] docling.utils.accelerator_utils: Accelerator device: 'cuda:0'
+2025-07-22 12:14:01,598 [INFO] docling.utils.accelerator_utils: Accelerator device: 'cuda:0'
+2025-07-22 12:14:02,422 [INFO] docling.utils.accelerator_utils: Accelerator device: 'cuda:0'
+2025-07-22 12:14:02,869 [INFO] docling.models.factories.base_factory: Loading plugin 'docling_defaults'
+2025-07-22 12:14:02,870 [INFO] docling.models.factories: Registered picture descriptions: ['vlm', 'api']
+2025-07-22 12:14:02,870 [INFO] docling.pipeline.base_pipeline: Processing document tmp5k36v_gz.pdf
+2025-07-22 12:14:20,175 [INFO] docling.document_converter: Finished converting document tmp5k36v_gz.pdf in 20.45 sec.
+2025-07-22 12:14:20,198 [INFO] docling_core.types.doc.document: deleted item in tree at stack: (55, 6) => #/texts/288
+2025-07-22 12:14:20,208 [INFO] docling_core.types.doc.document: deleted item in tree at stack: (55, 4) => #/texts/286
+2025-07-22 12:14:20,219 [INFO] docling_core.types.doc.document: deleted item in tree at stack: (55, 2) => #/texts/284
+2025-07-22 12:14:20,230 [INFO] docling_core.types.doc.document: deleted item in tree at stack: (52, 2) => #/texts/274
+2025-07-22 12:14:22,831 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-22 12:14:22,868 [INFO] app.services.workflow_service: Tentando consultar BRMED com CPF inicial: 67495788372
+2025-07-22 12:14:40,673 [WARNING] app.services.workflow_service: Consulta BRMED falhou para CPF 67495788372: Erro na automação: local variable 'ts' referenced before assignment
+2025-07-22 12:14:40,673 [INFO] app.services.workflow_service: CPF inicial falhou ou não encontrado. Buscando CPFs alternativos via IA...
+2025-07-22 12:14:43,151 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-22 12:14:43,171 [INFO] app.services.workflow_service: Tentando consultar BRMED com CPF alternativo: 93002142929
+2025-07-22 12:15:24,985 [WARNING] app.services.workflow_service: Consulta BRMED falhou para CPF alternativo 93002142929: Erro na automação: Page.click: Timeout 30000ms exceeded.
+Call log:
+  - waiting for locator("table.tabledata a[href*='/paciente/']")
+
+2025-07-22 12:15:24,986 [ERROR] app.services.workflow_service: Não foi possível encontrar um CPF válido para consulta BRMED.
+2025-07-22 12:17:10,049 [INFO] docling.datamodel.document: detected formats: [<InputFormat.PDF: 'pdf'>]
+2025-07-22 12:17:10,056 [INFO] docling.document_converter: Going to convert document batch...
+2025-07-22 12:17:10,056 [INFO] docling.document_converter: Initializing pipeline for StandardPdfPipeline with options hash d291d1f79894f05d312cc90dd3fdf3d3
+2025-07-22 12:17:10,063 [INFO] docling.models.factories.base_factory: Loading plugin 'docling_defaults'
+2025-07-22 12:17:10,063 [INFO] docling.models.factories: Registered ocr engines: ['easyocr', 'ocrmac', 'rapidocr', 'tesserocr', 'tesseract']
+2025-07-22 12:17:10,122 [INFO] docling.utils.accelerator_utils: Accelerator device: 'cuda:0'
+2025-07-22 12:17:11,985 [INFO] docling.utils.accelerator_utils: Accelerator device: 'cuda:0'
+2025-07-22 12:17:13,256 [INFO] docling.utils.accelerator_utils: Accelerator device: 'cuda:0'
+2025-07-22 12:17:13,696 [INFO] docling.models.factories.base_factory: Loading plugin 'docling_defaults'
+2025-07-22 12:17:13,696 [INFO] docling.models.factories: Registered picture descriptions: ['vlm', 'api']
+2025-07-22 12:17:13,696 [INFO] docling.pipeline.base_pipeline: Processing document tmpuezhyz9c.pdf
+2025-07-22 12:17:31,213 [INFO] docling.document_converter: Finished converting document tmpuezhyz9c.pdf in 21.17 sec.
+2025-07-22 12:17:31,236 [INFO] docling_core.types.doc.document: deleted item in tree at stack: (55, 6) => #/texts/288
+2025-07-22 12:17:31,246 [INFO] docling_core.types.doc.document: deleted item in tree at stack: (55, 4) => #/texts/286
+2025-07-22 12:17:31,257 [INFO] docling_core.types.doc.document: deleted item in tree at stack: (55, 2) => #/texts/284
+2025-07-22 12:17:31,267 [INFO] docling_core.types.doc.document: deleted item in tree at stack: (52, 2) => #/texts/274
+2025-07-22 12:17:33,223 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-22 12:17:33,259 [INFO] app.services.workflow_service: Tentando consultar BRMED com CPF inicial: 67495788372
+2025-07-22 12:17:33,892 [INFO] app.services.brmed_service: Iniciando automação Playwright...
+2025-07-22 12:17:33,892 [INFO] app.services.brmed_service: Navegando para a página de login...
+2025-07-22 12:17:43,875 [INFO] app.services.brmed_service: Login e seleção de CPF concluídos.
+2025-07-22 12:17:43,875 [INFO] app.services.brmed_service: Consultando CPF: 67495788372
+2025-07-22 12:17:46,256 [INFO] app.services.brmed_service: Consulta de CPF realizada.
+2025-07-22 12:17:48,645 [INFO] app.services.brmed_service: Clicando em 'Guia de Encaminhamento'...
+2025-07-22 12:17:50,439 [INFO] app.services.brmed_service: Nova página da guia carregada.
+2025-07-22 12:17:50,457 [INFO] app.services.brmed_service: Conteúdo bruto da página salvo em: resultados/debug_conteudo_67495788372_20250722_121733.txt
+2025-07-22 12:17:50,457 [INFO] app.services.brmed_service: Conteúdo recebido para extração: Olá, thiago.simoes
+
+Você está logado em: Operações
+
+Logout
+
+Página inicial
+Cadastrar paciente
+Agenda
+10 pendência(s)
+7 grupos faltando dados financeiros
+30 exame(s) sem preço
+28 exame(s) sem valor de repasse
+Relatório
+Área administrativa
+Está em:
+Início >
+Consulta de Paciente >
+Imprimir guia de agendamento
+
+
+VOUCHER
+
+
+PERIÓDICO
+
+
+Periodical
+
+
+
+Prezado(a) / Dear,
+Recebemos sua solicitação e confirmamos o agendamento conforme detalhes a seguir / Your request has been received and your scheduling i...
+2025-07-22 12:17:50,457 [INFO] app.services.brmed_service: Resultado da extração salvo em: resultados/guia_67495788372_20250722_121733.json
+2025-07-22 12:17:50,548 [INFO] app.services.brmed_service: Navegador Playwright fechado.
+2025-07-22 12:17:50,555 [INFO] app.services.workflow_service: Realizando validação para CPF: 67495788372
+2025-07-22 12:17:50,555 [INFO] app.services.workflow_service: Não há exames suficientes para comparação OpenAI (OCR ou BRNET vazios).
+2025-07-22 12:18:37,448 [INFO] docling.datamodel.document: detected formats: [<InputFormat.PDF: 'pdf'>]
+2025-07-22 12:18:37,458 [INFO] docling.document_converter: Going to convert document batch...
+2025-07-22 12:18:37,458 [INFO] docling.document_converter: Initializing pipeline for StandardPdfPipeline with options hash d291d1f79894f05d312cc90dd3fdf3d3
+2025-07-22 12:18:37,467 [INFO] docling.models.factories.base_factory: Loading plugin 'docling_defaults'
+2025-07-22 12:18:37,468 [INFO] docling.models.factories: Registered ocr engines: ['easyocr', 'ocrmac', 'rapidocr', 'tesserocr', 'tesseract']
+2025-07-22 12:18:37,532 [INFO] docling.utils.accelerator_utils: Accelerator device: 'cuda:0'
+2025-07-22 12:18:39,409 [INFO] docling.utils.accelerator_utils: Accelerator device: 'cuda:0'
+2025-07-22 12:18:40,229 [INFO] docling.utils.accelerator_utils: Accelerator device: 'cuda:0'
+2025-07-22 12:18:40,684 [INFO] docling.models.factories.base_factory: Loading plugin 'docling_defaults'
+2025-07-22 12:18:40,685 [INFO] docling.models.factories: Registered picture descriptions: ['vlm', 'api']
+2025-07-22 12:18:40,685 [INFO] docling.pipeline.base_pipeline: Processing document tmp7kyihnw9.pdf
+2025-07-22 12:18:58,139 [INFO] docling.document_converter: Finished converting document tmp7kyihnw9.pdf in 20.69 sec.
+2025-07-22 12:18:58,161 [INFO] docling_core.types.doc.document: deleted item in tree at stack: (55, 6) => #/texts/288
+2025-07-22 12:18:58,172 [INFO] docling_core.types.doc.document: deleted item in tree at stack: (55, 4) => #/texts/286
+2025-07-22 12:18:58,183 [INFO] docling_core.types.doc.document: deleted item in tree at stack: (55, 2) => #/texts/284
+2025-07-22 12:18:58,193 [INFO] docling_core.types.doc.document: deleted item in tree at stack: (52, 2) => #/texts/274
+2025-07-22 12:19:00,222 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-22 12:19:00,258 [INFO] app.services.workflow_service: Tentando consultar BRMED com CPF inicial: 67495788372
+2025-07-22 12:19:00,901 [INFO] app.services.brmed_service: Iniciando automação Playwright...
+2025-07-22 12:19:00,902 [INFO] app.services.brmed_service: Navegando para a página de login...
+2025-07-22 12:19:11,306 [INFO] app.services.brmed_service: Login e seleção de CPF concluídos.
+2025-07-22 12:19:11,306 [INFO] app.services.brmed_service: Consultando CPF: 67495788372
+2025-07-22 12:19:13,987 [INFO] app.services.brmed_service: Consulta de CPF realizada.
+2025-07-22 12:19:17,392 [INFO] app.services.brmed_service: Clicando em 'Guia de Encaminhamento'...
+2025-07-22 12:19:22,197 [INFO] app.services.brmed_service: Nova página da guia carregada e aguardando.
+2025-07-22 12:19:22,216 [INFO] app.services.brmed_service: Conteúdo bruto da página salvo em: resultados/debug_conteudo_67495788372_20250722_121900.txt
+2025-07-22 12:19:22,216 [INFO] app.services.brmed_service: Conteúdo recebido para extração: Olá, thiago.simoes
+
+Você está logado em: Operações
+
+Logout
+
+Página inicial
+Cadastrar paciente
+Agenda
+10 pendência(s)
+7 grupos faltando dados financeiros
+30 exame(s) sem preço
+28 exame(s) sem valor de repasse
+Relatório
+Área administrativa
+Está em:
+Início >
+Consulta de Paciente >
+Imprimir guia de agendamento
+
+
+VOUCHER
+
+
+PERIÓDICO
+
+
+Periodical
+
+
+
+Prezado(a) / Dear,
+Recebemos sua solicitação e confirmamos o agendamento conforme detalhes a seguir / Your request has been received and your scheduling i...
+2025-07-22 12:19:22,224 [INFO] app.services.brmed_service: Resultado da extração salvo em: resultados/guia_67495788372_20250722_121900.json
+2025-07-22 12:19:22,308 [INFO] app.services.brmed_service: Navegador Playwright fechado.
+2025-07-22 12:19:22,314 [INFO] app.services.workflow_service: Realizando validação para CPF: 67495788372
+2025-07-22 12:19:22,315 [INFO] app.services.workflow_service: Não há exames suficientes para comparação OpenAI (OCR ou BRNET vazios).
+2025-07-22 12:22:06,208 [INFO] docling.datamodel.document: detected formats: [<InputFormat.PDF: 'pdf'>]
+2025-07-22 12:22:06,217 [INFO] docling.document_converter: Going to convert document batch...
+2025-07-22 12:22:06,217 [INFO] docling.document_converter: Initializing pipeline for StandardPdfPipeline with options hash d291d1f79894f05d312cc90dd3fdf3d3
+2025-07-22 12:22:06,224 [INFO] docling.models.factories.base_factory: Loading plugin 'docling_defaults'
+2025-07-22 12:22:06,224 [INFO] docling.models.factories: Registered ocr engines: ['easyocr', 'ocrmac', 'rapidocr', 'tesserocr', 'tesseract']
+2025-07-22 12:22:06,283 [INFO] docling.utils.accelerator_utils: Accelerator device: 'cuda:0'
+2025-07-22 12:22:08,228 [INFO] docling.utils.accelerator_utils: Accelerator device: 'cuda:0'
+2025-07-22 12:22:09,043 [INFO] docling.utils.accelerator_utils: Accelerator device: 'cuda:0'
+2025-07-22 12:22:09,486 [INFO] docling.models.factories.base_factory: Loading plugin 'docling_defaults'
+2025-07-22 12:22:09,487 [INFO] docling.models.factories: Registered picture descriptions: ['vlm', 'api']
+2025-07-22 12:22:09,487 [INFO] docling.pipeline.base_pipeline: Processing document tmpa4yblgw6.pdf
+2025-07-22 12:22:26,963 [INFO] docling.document_converter: Finished converting document tmpa4yblgw6.pdf in 20.76 sec.
+2025-07-22 12:22:26,986 [INFO] docling_core.types.doc.document: deleted item in tree at stack: (55, 6) => #/texts/288
+2025-07-22 12:22:26,997 [INFO] docling_core.types.doc.document: deleted item in tree at stack: (55, 4) => #/texts/286
+2025-07-22 12:22:27,008 [INFO] docling_core.types.doc.document: deleted item in tree at stack: (55, 2) => #/texts/284
+2025-07-22 12:22:27,019 [INFO] docling_core.types.doc.document: deleted item in tree at stack: (52, 2) => #/texts/274
+2025-07-22 12:22:29,154 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-22 12:22:29,193 [INFO] app.services.workflow_service: Tentando consultar BRMED com CPF inicial: 67495788372
+2025-07-22 12:22:29,809 [INFO] app.services.brmed_service: Iniciando automação Playwright...
+2025-07-22 12:22:29,809 [INFO] app.services.brmed_service: Navegando para a página de login...
+2025-07-22 12:22:40,310 [INFO] app.services.brmed_service: Login e seleção de CPF concluídos.
+2025-07-22 12:22:40,310 [INFO] app.services.brmed_service: Consultando CPF: 67495788372
+2025-07-22 12:22:42,804 [INFO] app.services.brmed_service: Consulta de CPF realizada.
+2025-07-22 12:22:45,313 [INFO] app.services.brmed_service: Clicando em 'Guia de Encaminhamento'...
+2025-07-22 12:22:50,101 [INFO] app.services.brmed_service: Nova página da guia carregada e aguardando.
+2025-07-22 12:22:50,129 [INFO] app.services.brmed_service: Conteúdo bruto da página salvo em: resultados/debug_conteudo_67495788372_20250722_122229.txt
+2025-07-22 12:22:50,129 [INFO] app.services.brmed_service: Conteúdo recebido para extração: <html xmlns="http://www.w3.org/1999/xhtml"><head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<title>brnet 3.0</title>
+<link href="https://brmed-production-brnet.s3.amazonaws.com/static/css/admin-blue.css" rel="stylesheet" type="text/css" media="screen">
+<link href="https://brmed-production-brnet.s3.amazonaws.com/static/css/brmed_novo.css" rel="stylesheet" type="text/css" media="screen">
+<script src="https://brmed-production-brnet.s3.amazonaws.com/static/js/jquery-1.11.1....
+2025-07-22 12:22:50,129 [INFO] app.services.brmed_service: Resultado da extração salvo em: resultados/guia_67495788372_20250722_122229.json
+2025-07-22 12:22:50,214 [INFO] app.services.brmed_service: Navegador Playwright fechado.
+2025-07-22 12:22:50,219 [INFO] app.services.workflow_service: Realizando validação para CPF: 67495788372
+2025-07-22 12:22:50,219 [INFO] app.services.workflow_service: Não há exames suficientes para comparação OpenAI (OCR ou BRNET vazios).
+2025-07-22 12:25:11,153 [INFO] docling.datamodel.document: detected formats: [<InputFormat.PDF: 'pdf'>]
+2025-07-22 12:25:11,162 [INFO] docling.document_converter: Going to convert document batch...
+2025-07-22 12:25:11,162 [INFO] docling.document_converter: Initializing pipeline for StandardPdfPipeline with options hash d291d1f79894f05d312cc90dd3fdf3d3
+2025-07-22 12:25:11,169 [INFO] docling.models.factories.base_factory: Loading plugin 'docling_defaults'
+2025-07-22 12:25:11,169 [INFO] docling.models.factories: Registered ocr engines: ['easyocr', 'ocrmac', 'rapidocr', 'tesserocr', 'tesseract']
+2025-07-22 12:25:11,227 [INFO] docling.utils.accelerator_utils: Accelerator device: 'cuda:0'
+2025-07-22 12:25:13,066 [INFO] docling.utils.accelerator_utils: Accelerator device: 'cuda:0'
+2025-07-22 12:25:14,020 [INFO] docling.utils.accelerator_utils: Accelerator device: 'cuda:0'
+2025-07-22 12:25:14,466 [INFO] docling.models.factories.base_factory: Loading plugin 'docling_defaults'
+2025-07-22 12:25:14,466 [INFO] docling.models.factories: Registered picture descriptions: ['vlm', 'api']
+2025-07-22 12:25:14,467 [INFO] docling.pipeline.base_pipeline: Processing document tmpj49aqc46.pdf
+2025-07-22 12:25:31,814 [INFO] docling.document_converter: Finished converting document tmpj49aqc46.pdf in 20.66 sec.
+2025-07-22 12:25:31,837 [INFO] docling_core.types.doc.document: deleted item in tree at stack: (55, 6) => #/texts/288
+2025-07-22 12:25:31,847 [INFO] docling_core.types.doc.document: deleted item in tree at stack: (55, 4) => #/texts/286
+2025-07-22 12:25:31,858 [INFO] docling_core.types.doc.document: deleted item in tree at stack: (55, 2) => #/texts/284
+2025-07-22 12:25:31,870 [INFO] docling_core.types.doc.document: deleted item in tree at stack: (52, 2) => #/texts/274
+2025-07-22 12:25:34,803 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-22 12:25:34,843 [INFO] app.services.workflow_service: Tentando consultar BRMED com CPF inicial: 67495788372
+2025-07-22 12:25:35,474 [INFO] app.services.brmed_service: Iniciando automação Playwright...
+2025-07-22 12:25:35,475 [INFO] app.services.brmed_service: Navegando para a página de login...
+2025-07-22 12:25:46,187 [INFO] app.services.brmed_service: Login e seleção de CPF concluídos.
+2025-07-22 12:25:46,187 [INFO] app.services.brmed_service: Consultando CPF: 67495788372
+2025-07-22 12:25:48,880 [INFO] app.services.brmed_service: Consulta de CPF realizada.
+2025-07-22 12:25:51,409 [INFO] app.services.brmed_service: Clicando em 'Guia de Encaminhamento'...
+2025-07-22 12:25:56,220 [INFO] app.services.brmed_service: Nova página da guia carregada e aguardando.
+2025-07-22 12:25:56,241 [INFO] app.services.brmed_service: Conteúdo bruto da página salvo em: resultados/debug_conteudo_67495788372_20250722_122535.txt
+2025-07-22 12:25:56,241 [INFO] app.services.brmed_service: Conteúdo recebido para extração: <html xmlns="http://www.w3.org/1999/xhtml"><head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<title>brnet 3.0</title>
+<link href="https://brmed-production-brnet.s3.amazonaws.com/static/css/admin-blue.css" rel="stylesheet" type="text/css" media="screen">
+<link href="https://brmed-production-brnet.s3.amazonaws.com/static/css/brmed_novo.css" rel="stylesheet" type="text/css" media="screen">
+<script src="https://brmed-production-brnet.s3.amazonaws.com/static/js/jquery-1.11.1....
+2025-07-22 12:25:56,242 [INFO] app.services.brmed_service: Resultado da extração salvo em: resultados/guia_67495788372_20250722_122535.json
+2025-07-22 12:25:56,344 [INFO] app.services.brmed_service: Navegador Playwright fechado.
+2025-07-22 12:25:56,352 [INFO] app.services.workflow_service: Realizando validação para CPF: 67495788372
+2025-07-22 12:25:56,352 [INFO] app.services.workflow_service: Não há exames suficientes para comparação OpenAI (OCR ou BRNET vazios).
+2025-07-22 12:28:40,699 [INFO] docling.datamodel.document: detected formats: [<InputFormat.PDF: 'pdf'>]
+2025-07-22 12:28:40,706 [INFO] docling.document_converter: Going to convert document batch...
+2025-07-22 12:28:40,706 [INFO] docling.document_converter: Initializing pipeline for StandardPdfPipeline with options hash d291d1f79894f05d312cc90dd3fdf3d3
+2025-07-22 12:28:40,712 [INFO] docling.models.factories.base_factory: Loading plugin 'docling_defaults'
+2025-07-22 12:28:40,712 [INFO] docling.models.factories: Registered ocr engines: ['easyocr', 'ocrmac', 'rapidocr', 'tesserocr', 'tesseract']
+2025-07-22 12:28:40,770 [INFO] docling.utils.accelerator_utils: Accelerator device: 'cuda:0'
+2025-07-22 12:28:42,650 [INFO] docling.utils.accelerator_utils: Accelerator device: 'cuda:0'
+2025-07-22 12:28:43,503 [INFO] docling.utils.accelerator_utils: Accelerator device: 'cuda:0'
+2025-07-22 12:28:43,950 [INFO] docling.models.factories.base_factory: Loading plugin 'docling_defaults'
+2025-07-22 12:28:43,950 [INFO] docling.models.factories: Registered picture descriptions: ['vlm', 'api']
+2025-07-22 12:28:43,951 [INFO] docling.pipeline.base_pipeline: Processing document tmpg30xzut9.pdf
+2025-07-22 12:29:01,365 [INFO] docling.document_converter: Finished converting document tmpg30xzut9.pdf in 20.67 sec.
+2025-07-22 12:29:01,386 [INFO] docling_core.types.doc.document: deleted item in tree at stack: (55, 6) => #/texts/288
+2025-07-22 12:29:01,397 [INFO] docling_core.types.doc.document: deleted item in tree at stack: (55, 4) => #/texts/286
+2025-07-22 12:29:01,407 [INFO] docling_core.types.doc.document: deleted item in tree at stack: (55, 2) => #/texts/284
+2025-07-22 12:29:01,418 [INFO] docling_core.types.doc.document: deleted item in tree at stack: (52, 2) => #/texts/274
+2025-07-22 12:29:03,818 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-22 12:29:03,854 [INFO] app.services.workflow_service: Tentando consultar BRMED com CPF inicial: 67495788372
+2025-07-22 12:29:04,477 [INFO] app.services.brmed_service: Iniciando automação Playwright...
+2025-07-22 12:29:04,478 [INFO] app.services.brmed_service: Navegando para a página de login...
+2025-07-22 12:29:14,763 [INFO] app.services.brmed_service: Login e seleção de CPF concluídos.
+2025-07-22 12:29:14,763 [INFO] app.services.brmed_service: Consultando CPF: 67495788372
+2025-07-22 12:29:17,253 [INFO] app.services.brmed_service: Consulta de CPF realizada.
+2025-07-22 12:29:19,650 [INFO] app.services.brmed_service: Clicando em 'Guia de Encaminhamento'...
+2025-07-22 12:29:24,667 [INFO] app.services.brmed_service: Nova página da guia carregada e aguardando.
+2025-07-22 12:29:24,695 [INFO] app.services.brmed_service: Conteúdo bruto da página salvo em: resultados/debug_conteudo_67495788372_20250722_122904.txt
+2025-07-22 12:29:24,695 [INFO] app.services.brmed_service: Conteúdo recebido para extração: Olá, thiago.simoes
+
+Você está logado em: Operações
+
+Logout
+
+Página inicial
+Cadastrar paciente
+Agenda
+10 pendência(s)
+7 grupos faltando dados financeiros
+30 exame(s) sem preço
+28 exame(s) sem valor de repasse
+Relatório
+Área administrativa
+Está em:
+Início >
+Consulta de Paciente >
+Imprimir guia de agendamento
+
+
+VOUCHER
+
+
+PERIÓDICO
+
+
+Periodical
+
+
+
+Prezado(a) / Dear,
+Recebemos sua solicitação e confirmamos o agendamento conforme detalhes a seguir / Your request has been received and your scheduling i...
+2025-07-22 12:29:24,697 [INFO] app.services.brmed_service: Resultado da extração salvo em: resultados/guia_67495788372_20250722_122904.json
+2025-07-22 12:29:24,781 [INFO] app.services.brmed_service: Navegador Playwright fechado.
+2025-07-22 12:29:24,786 [INFO] app.services.workflow_service: Realizando validação para CPF: 67495788372
+2025-07-22 12:29:24,787 [INFO] app.services.workflow_service: Comparando exames OCR e BRNET com OpenAI...
+2025-07-22 12:29:24,787 [ERROR] app.api.v1_brmed: Erro inesperado no processamento completo do documento: Invalid format specifier
+Traceback (most recent call last):
+  File "/home/brmed/Área de trabalho/API_IA/app/api/v1_brmed.py", line 26, in processar_documento_completo_api
+    resultado = await workflow_service.processar_documento_completo(arquivo, exames_obrigatorios_list)
+  File "/home/brmed/Área de trabalho/API_IA/app/services/workflow_service.py", line 149, in processar_documento_completo
+    comparacao_openai = await comparar_exames_openai(exames_enviados, exames_brnet)
+  File "/home/brmed/Área de trabalho/API_IA/app/services/workflow_service.py", line 15, in comparar_exames_openai
+    prompt = f"""
+ValueError: Invalid format specifier
+2025-07-22 12:31:19,096 [INFO] docling.datamodel.document: detected formats: [<InputFormat.PDF: 'pdf'>]
+2025-07-22 12:31:19,108 [INFO] docling.document_converter: Going to convert document batch...
+2025-07-22 12:31:19,109 [INFO] docling.document_converter: Initializing pipeline for StandardPdfPipeline with options hash d291d1f79894f05d312cc90dd3fdf3d3
+2025-07-22 12:31:19,117 [INFO] docling.models.factories.base_factory: Loading plugin 'docling_defaults'
+2025-07-22 12:31:19,117 [INFO] docling.models.factories: Registered ocr engines: ['easyocr', 'ocrmac', 'rapidocr', 'tesserocr', 'tesseract']
+2025-07-22 12:31:19,195 [INFO] docling.utils.accelerator_utils: Accelerator device: 'cuda:0'
+2025-07-22 12:31:21,138 [INFO] docling.utils.accelerator_utils: Accelerator device: 'cuda:0'
+2025-07-22 12:31:21,993 [INFO] docling.utils.accelerator_utils: Accelerator device: 'cuda:0'
+2025-07-22 12:31:22,450 [INFO] docling.models.factories.base_factory: Loading plugin 'docling_defaults'
+2025-07-22 12:31:22,451 [INFO] docling.models.factories: Registered picture descriptions: ['vlm', 'api']
+2025-07-22 12:31:22,451 [INFO] docling.pipeline.base_pipeline: Processing document tmpbumjl91v.pdf
+2025-07-22 12:31:39,654 [INFO] docling.document_converter: Finished converting document tmpbumjl91v.pdf in 20.56 sec.
+2025-07-22 12:31:39,677 [INFO] docling_core.types.doc.document: deleted item in tree at stack: (55, 6) => #/texts/288
+2025-07-22 12:31:39,689 [INFO] docling_core.types.doc.document: deleted item in tree at stack: (55, 4) => #/texts/286
+2025-07-22 12:31:39,700 [INFO] docling_core.types.doc.document: deleted item in tree at stack: (55, 2) => #/texts/284
+2025-07-22 12:31:39,710 [INFO] docling_core.types.doc.document: deleted item in tree at stack: (52, 2) => #/texts/274
+2025-07-22 12:31:42,219 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-22 12:31:42,260 [INFO] app.services.workflow_service: Tentando consultar BRMED com CPF inicial: 67495788372
+2025-07-22 12:31:42,887 [INFO] app.services.brmed_service: Iniciando automação Playwright...
+2025-07-22 12:31:42,888 [INFO] app.services.brmed_service: Navegando para a página de login...
+2025-07-22 12:31:52,964 [INFO] app.services.brmed_service: Login e seleção de CPF concluídos.
+2025-07-22 12:31:52,964 [INFO] app.services.brmed_service: Consultando CPF: 67495788372
+2025-07-22 12:31:55,388 [INFO] app.services.brmed_service: Consulta de CPF realizada.
+2025-07-22 12:31:57,961 [INFO] app.services.brmed_service: Clicando em 'Guia de Encaminhamento'...
+2025-07-22 12:32:02,732 [INFO] app.services.brmed_service: Nova página da guia carregada e aguardando.
+2025-07-22 12:32:02,751 [INFO] app.services.brmed_service: Conteúdo bruto da página salvo em: resultados/debug_conteudo_67495788372_20250722_123142.txt
+2025-07-22 12:32:02,752 [INFO] app.services.brmed_service: Conteúdo recebido para extração: Olá, thiago.simoes
+
+Você está logado em: Operações
+
+Logout
+
+Página inicial
+Cadastrar paciente
+Agenda
+10 pendência(s)
+7 grupos faltando dados financeiros
+30 exame(s) sem preço
+28 exame(s) sem valor de repasse
+Relatório
+Área administrativa
+Está em:
+Início >
+Consulta de Paciente >
+Imprimir guia de agendamento
+
+
+VOUCHER
+
+
+PERIÓDICO
+
+
+Periodical
+
+
+
+Prezado(a) / Dear,
+Recebemos sua solicitação e confirmamos o agendamento conforme detalhes a seguir / Your request has been received and your scheduling i...
+2025-07-22 12:32:02,752 [INFO] app.services.brmed_service: Exames texto extraído: 4. Exames / Exams:
+
+4.1 Realizados na própria clínica / Performed at the clinic itself:
+
+
+AUDIOMETRIA TONAL * / PURE TONE AUDIOMETRY *	COLESTEROL TOTAL * / TOTAL CHOLESTEROL *
+CREATININA * / CREATININE *	CLÍNICO OCUPACIONAL * / CLINICAL EXAMINATION *
+ACUIDADE VISUAL * / VISUAL ACUITY *	ELETROCARDIOGRAMA * / ELECTROCARDIOGRAM *
+ELETROENCEFALOGRAMA * / ELECTROENCEPHALOGRAM *	LDL * / LDL *
+HDL * / HDL *	TRIGLICERÍDEOS * / TRIGLYCERIDES *
+ÁCIDO ÚRICO * / URIC ACID *	HEMOGRAMA COMPLETO COM PLAQUETAS ...
+2025-07-22 12:32:02,752 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 4. Exames / Exams:
+2025-07-22 12:32:02,752 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 12:32:02,752 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 4.1 Realizados na própria clínica / Performed at the clinic itself:
+2025-07-22 12:32:02,752 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 12:32:02,752 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 12:32:02,752 [INFO] app.services.brmed_service: Linha limpa para extração de exames: AUDIOMETRIA TONAL * / PURE TONE AUDIOMETRY * COLESTEROL TOTAL * / TOTAL CHOLESTEROL *
+2025-07-22 12:32:02,752 [INFO] app.services.brmed_service: Linha limpa para extração de exames: CREATININA * / CREATININE * CLÍNICO OCUPACIONAL * / CLINICAL EXAMINATION *
+2025-07-22 12:32:02,752 [INFO] app.services.brmed_service: Linha limpa para extração de exames: ACUIDADE VISUAL * / VISUAL ACUITY * ELETROCARDIOGRAMA * / ELECTROCARDIOGRAM *
+2025-07-22 12:32:02,752 [INFO] app.services.brmed_service: Linha limpa para extração de exames: ELETROENCEFALOGRAMA * / ELECTROENCEPHALOGRAM * LDL * / LDL *
+2025-07-22 12:32:02,752 [INFO] app.services.brmed_service: Linha limpa para extração de exames: HDL * / HDL * TRIGLICERÍDEOS * / TRIGLYCERIDES *
+2025-07-22 12:32:02,752 [INFO] app.services.brmed_service: Linha limpa para extração de exames: ÁCIDO ÚRICO * / URIC ACID * HEMOGRAMA COMPLETO COM PLAQUETAS * / COMPLETE BLOOD COUNT WITH PLATELETS *
+2025-07-22 12:32:02,752 [INFO] app.services.brmed_service: Linha limpa para extração de exames: SUMÁRIO DE URINA (EAS) * / URINALYSIS (UA) * GLICEMIA DE JEJUM * / GLUCOSE *
+2025-07-22 12:32:02,752 [INFO] app.services.brmed_service: Linha limpa para extração de exames: GGT (GAMA-GT) * / GGT (GAMMA-GT) *
+2025-07-22 12:32:02,753 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 12:32:02,753 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 12:32:02,753 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 4.2 Realizados em parceiro externo / Performed at an external partner:
+2025-07-22 12:32:02,753 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 12:32:02,753 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 12:32:02,753 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 12:32:02,753 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 12:32:02,753 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 12:32:02,753 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 12:32:02,753 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 12:32:02,753 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 12:32:02,753 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 12:32:02,753 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 12:32:02,753 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 12:32:02,753 [INFO] app.services.brmed_service: Linha limpa para extração de exames: Obrigatório * / Mandatory *
+2025-07-22 12:32:02,753 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 12:32:02,753 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 12:32:02,753 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 5. Observações importantes / Important notice:
+2025-07-22 12:32:02,753 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 12:32:02,753 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 1) Obrigatória a apresentação do CPF, juntamente com documento oficial com foto e/ou documento digital / The passport must be presented.
+2025-07-22 12:32:02,753 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 2) Se necessária remarcação, favor solicitar novamente através do BR NET / If reschedule is required, please request again through BR NET.
+2025-07-22 12:32:02,753 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 3) Pacientes que irão realizar exame de fezes e/ou urina devem apresentar o material para início do atendimento / Patients who will perform feces and / or urine tests should present the material to begin the care.
+2025-07-22 12:32:02,753 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 4) Não é permitida a coleta de fezes e/ou urina em ambientes da BR MED / Feces and / or urine collection is not allowed in BR MED medical clinics.
+2025-07-22 12:32:02,753 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 12:32:02,753 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 12:32:02,754 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 12:32:02,754 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 6. Orientações de preparo para exame / Exam preparation guidelines:
+2025-07-22 12:32:02,754 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 12:32:02,754 [INFO] app.services.brmed_service: Linha limpa para extração de exames: ÁCIDO ÚRICO / URIC ACID
+2025-07-22 12:32:02,754 [INFO] app.services.brmed_service: Linha limpa para extração de exames: Não requer preparo prévio / No previous preparation
+2025-07-22 12:32:02,754 [INFO] app.services.brmed_service: Linha limpa para extração de exames: ACUIDADE VISUAL / VISUAL ACUITY
+2025-07-22 12:32:02,754 [INFO] app.services.brmed_service: Linha limpa para extração de exames: Caso faça uso de óculos, é necessário que os leve para a realização do exame. / If you wear glasses, it is necessary to bring them for the exam.
+2025-07-22 12:32:02,754 [INFO] app.services.brmed_service: Linha limpa para extração de exames: AUDIOMETRIA TONAL / PURE TONE AUDIOMETRY
+2025-07-22 12:32:02,754 [INFO] app.services.brmed_service: Linha limpa para extração de exames: Não se expor a sons fortes e não usar aparelhos sonoros pelo menos 14 horas antes do exame / Do not expose yourself to strong sounds and not use sound appliances at least 14 hours before the exam
+2025-07-22 12:32:02,754 [INFO] app.services.brmed_service: Linha limpa para extração de exames: COLESTEROL TOTAL / TOTAL CHOLESTEROL
+2025-07-22 12:32:02,754 [INFO] app.services.brmed_service: Linha limpa para extração de exames: Manter dieta habitual nos 5 dias antes da coleta; Este exame não necessita de jejum. / Keep a habitual diet within 5 days before collection; This exam does not need fasting.
+2025-07-22 12:32:02,754 [INFO] app.services.brmed_service: Linha limpa para extração de exames: CREATININA / CREATININE
+2025-07-22 12:32:02,754 [INFO] app.services.brmed_service: Linha limpa para extração de exames: Este exame não necessita de jejum. Informar os medicamentos em uso. / This exam does not need fasting. Inform the medicines in use.
+2025-07-22 12:32:02,754 [INFO] app.services.brmed_service: Linha limpa para extração de exames: ELETROCARDIOGRAMA / ELECTROCARDIOGRAM
+2025-07-22 12:32:02,754 [INFO] app.services.brmed_service: Linha limpa para extração de exames: Não requer preparo prévio / No previous preparation
+2025-07-22 12:32:02,754 [INFO] app.services.brmed_service: Linha limpa para extração de exames: ELETROENCEFALOGRAMA / ELECTROENCEPHALOGRAM
+2025-07-22 12:32:02,754 [INFO] app.services.brmed_service: Linha limpa para extração de exames: É orientado a comparecer ao local do exame com o cabelo limpo e seco para permitir melhor fixação dos eletrodos. / It is oriented to attend the exam site with clean and dry hair to allow better fixation of the electrodes.
+2025-07-22 12:32:02,755 [INFO] app.services.brmed_service: Linha limpa para extração de exames: GGT (GAMA-GT) / GGT (GAMMA-GT)
+2025-07-22 12:32:02,755 [INFO] app.services.brmed_service: Linha limpa para extração de exames: Não requer preparo prévio / No previous preparation
+2025-07-22 12:32:02,755 [INFO] app.services.brmed_service: Linha limpa para extração de exames: GLICEMIA DE JEJUM / GLUCOSE
+2025-07-22 12:32:02,755 [INFO] app.services.brmed_service: Linha limpa para extração de exames: Jejum de 8 a 12 horas. Não realizar esforço físico 12 horas antes da coleta. / Fasting 8 to 12 hours. Do not perform physical effort 12 hours before collection.
+2025-07-22 12:32:02,755 [INFO] app.services.brmed_service: Linha limpa para extração de exames: HDL / HDL
+2025-07-22 12:32:02,755 [INFO] app.services.brmed_service: Linha limpa para extração de exames: Manter dieta habitual nos 5 dias antes da coleta;Este exame não necessita de jejum. / Maintain a usual diet within 5 days before collection; this exam does not need fasting.
+2025-07-22 12:32:02,755 [INFO] app.services.brmed_service: Linha limpa para extração de exames: HEMOGRAMA COMPLETO COM PLAQUETAS / COMPLETE BLOOD COUNT WITH PLATELETS
+2025-07-22 12:32:02,755 [INFO] app.services.brmed_service: Linha limpa para extração de exames: Não ingerir bebidas alcoólicas 72 horas antes do exame, evitar exercícios físicos antes do exame / Do not ingest alcoholic beverages 72 hours before examination, avoid exercise before examination
+2025-07-22 12:32:02,755 [INFO] app.services.brmed_service: Linha limpa para extração de exames: LDL / LDL
+2025-07-22 12:32:02,755 [INFO] app.services.brmed_service: Linha limpa para extração de exames: Não requer preparo prévio / No previous preparation
+2025-07-22 12:32:02,755 [INFO] app.services.brmed_service: Linha limpa para extração de exames: SUMÁRIO DE URINA (EAS) / URINALYSIS (UA)
+2025-07-22 12:32:02,755 [INFO] app.services.brmed_service: Linha limpa para extração de exames: Realizar higienização da região genital com água / Perform cleaning of the genital region with water
+2025-07-22 12:32:02,755 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 12:32:02,755 [INFO] app.services.brmed_service: Linha limpa para extração de exames: Voltar Imprimir
+2025-07-22 12:32:02,755 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 12:32:02,755 [INFO] app.services.brmed_service: Linha limpa para extração de exames: Copyright Intensys/BR MED
+2025-07-22 12:32:02,755 [INFO] app.services.brmed_service: Exames extraídos: ['AUDIOMETRIA TONAL', 'COLESTEROL TOTAL', 'CREATININA', 'CLÍNICO OCUPACIONAL', 'ACUIDADE VISUAL', 'ELETROCARDIOGRAMA', 'ELETROENCEFALOGRAMA', 'LDL', 'HDL', 'TRIGLICERÍDEOS', 'ÁCIDO ÚRICO', 'HEMOGRAMA COMPLETO COM PLAQUETAS', 'GLICEMIA DE JEJUM', 'Obrigatório']
+2025-07-22 12:32:02,755 [INFO] app.services.brmed_service: Resultado da extração salvo em: resultados/guia_67495788372_20250722_123142.json
+2025-07-22 12:32:02,858 [INFO] app.services.brmed_service: Navegador Playwright fechado.
+2025-07-22 12:32:02,864 [INFO] app.services.workflow_service: Realizando validação para CPF: 67495788372
+2025-07-22 12:32:02,865 [INFO] app.services.workflow_service: Comparando exames OCR e BRNET com OpenAI...
+2025-07-22 12:32:02,865 [ERROR] app.api.v1_brmed: Erro inesperado no processamento completo do documento: Invalid format specifier
+Traceback (most recent call last):
+  File "/home/brmed/Área de trabalho/API_IA/app/api/v1_brmed.py", line 26, in processar_documento_completo_api
+    resultado = await workflow_service.processar_documento_completo(arquivo, exames_obrigatorios_list)
+  File "/home/brmed/Área de trabalho/API_IA/app/services/workflow_service.py", line 149, in processar_documento_completo
+    comparacao_openai = await comparar_exames_openai(exames_enviados, exames_brnet)
+  File "/home/brmed/Área de trabalho/API_IA/app/services/workflow_service.py", line 15, in comparar_exames_openai
+    prompt = f"""
+ValueError: Invalid format specifier
+2025-07-22 12:33:43,181 [INFO] docling.datamodel.document: detected formats: [<InputFormat.PDF: 'pdf'>]
+2025-07-22 12:33:43,189 [INFO] docling.document_converter: Going to convert document batch...
+2025-07-22 12:33:43,189 [INFO] docling.document_converter: Initializing pipeline for StandardPdfPipeline with options hash d291d1f79894f05d312cc90dd3fdf3d3
+2025-07-22 12:33:43,195 [INFO] docling.models.factories.base_factory: Loading plugin 'docling_defaults'
+2025-07-22 12:33:43,195 [INFO] docling.models.factories: Registered ocr engines: ['easyocr', 'ocrmac', 'rapidocr', 'tesserocr', 'tesseract']
+2025-07-22 12:33:43,254 [INFO] docling.utils.accelerator_utils: Accelerator device: 'cuda:0'
+2025-07-22 12:33:45,137 [INFO] docling.utils.accelerator_utils: Accelerator device: 'cuda:0'
+2025-07-22 12:33:45,977 [INFO] docling.utils.accelerator_utils: Accelerator device: 'cuda:0'
+2025-07-22 12:33:46,432 [INFO] docling.models.factories.base_factory: Loading plugin 'docling_defaults'
+2025-07-22 12:33:46,432 [INFO] docling.models.factories: Registered picture descriptions: ['vlm', 'api']
+2025-07-22 12:33:46,432 [INFO] docling.pipeline.base_pipeline: Processing document tmp8wtfl55b.pdf
+2025-07-22 12:34:03,799 [INFO] docling.document_converter: Finished converting document tmp8wtfl55b.pdf in 20.62 sec.
+2025-07-22 12:34:03,822 [INFO] docling_core.types.doc.document: deleted item in tree at stack: (55, 6) => #/texts/288
+2025-07-22 12:34:03,833 [INFO] docling_core.types.doc.document: deleted item in tree at stack: (55, 4) => #/texts/286
+2025-07-22 12:34:03,844 [INFO] docling_core.types.doc.document: deleted item in tree at stack: (55, 2) => #/texts/284
+2025-07-22 12:34:03,855 [INFO] docling_core.types.doc.document: deleted item in tree at stack: (52, 2) => #/texts/274
+2025-07-22 12:34:06,126 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-22 12:34:06,169 [INFO] app.services.workflow_service: Tentando consultar BRMED com CPF inicial: 67495788372
+2025-07-22 12:34:06,787 [INFO] app.services.brmed_service: Iniciando automação Playwright...
+2025-07-22 12:34:06,787 [INFO] app.services.brmed_service: Navegando para a página de login...
+2025-07-22 12:34:17,559 [INFO] app.services.brmed_service: Login e seleção de CPF concluídos.
+2025-07-22 12:34:17,560 [INFO] app.services.brmed_service: Consultando CPF: 67495788372
+2025-07-22 12:34:20,026 [INFO] app.services.brmed_service: Consulta de CPF realizada.
+2025-07-22 12:34:23,407 [INFO] app.services.brmed_service: Clicando em 'Guia de Encaminhamento'...
+2025-07-22 12:34:28,357 [INFO] app.services.brmed_service: Nova página da guia carregada e aguardando.
+2025-07-22 12:34:28,376 [INFO] app.services.brmed_service: Conteúdo bruto da página salvo em: resultados/debug_conteudo_67495788372_20250722_123406.txt
+2025-07-22 12:34:28,376 [INFO] app.services.brmed_service: Conteúdo recebido para extração: Olá, thiago.simoes
+
+Você está logado em: Operações
+
+Logout
+
+Página inicial
+Cadastrar paciente
+Agenda
+10 pendência(s)
+7 grupos faltando dados financeiros
+30 exame(s) sem preço
+28 exame(s) sem valor de repasse
+Relatório
+Área administrativa
+Está em:
+Início >
+Consulta de Paciente >
+Imprimir guia de agendamento
+
+
+VOUCHER
+
+
+PERIÓDICO
+
+
+Periodical
+
+
+
+Prezado(a) / Dear,
+Recebemos sua solicitação e confirmamos o agendamento conforme detalhes a seguir / Your request has been received and your scheduling i...
+2025-07-22 12:34:28,376 [INFO] app.services.brmed_service: Nome match object: <re.Match object; span=(664, 730), match='Nome / Name: ANA BEATRIZ DE SOUSA DA SILVA\tIdent>
+2025-07-22 12:34:28,376 [INFO] app.services.brmed_service: Nome extraído: ANA BEATRIZ DE SOUSA DA SILVA
+2025-07-22 12:34:28,376 [INFO] app.services.brmed_service: Exames texto extraído: 4. Exames / Exams:
+
+4.1 Realizados na própria clínica / Performed at the clinic itself:
+
+
+AUDIOMETRIA TONAL * / PURE TONE AUDIOMETRY *	COLESTEROL TOTAL * / TOTAL CHOLESTEROL *
+CREATININA * / CREATININE *	CLÍNICO OCUPACIONAL * / CLINICAL EXAMINATION *
+ACUIDADE VISUAL * / VISUAL ACUITY *	ELETROCARDIOGRAMA * / ELECTROCARDIOGRAM *
+ELETROENCEFALOGRAMA * / ELECTROENCEPHALOGRAM *	LDL * / LDL *
+HDL * / HDL *	TRIGLICERÍDEOS * / TRIGLYCERIDES *
+ÁCIDO ÚRICO * / URIC ACID *	HEMOGRAMA COMPLETO COM PLAQUETAS ...
+2025-07-22 12:34:28,377 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 4. Exames / Exams:
+2025-07-22 12:34:28,377 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 12:34:28,377 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 4.1 Realizados na própria clínica / Performed at the clinic itself:
+2025-07-22 12:34:28,377 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 12:34:28,377 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 12:34:28,377 [INFO] app.services.brmed_service: Linha limpa para extração de exames: AUDIOMETRIA TONAL * / PURE TONE AUDIOMETRY * COLESTEROL TOTAL * / TOTAL CHOLESTEROL *
+2025-07-22 12:34:28,377 [INFO] app.services.brmed_service: Linha limpa para extração de exames: CREATININA * / CREATININE * CLÍNICO OCUPACIONAL * / CLINICAL EXAMINATION *
+2025-07-22 12:34:28,377 [INFO] app.services.brmed_service: Linha limpa para extração de exames: ACUIDADE VISUAL * / VISUAL ACUITY * ELETROCARDIOGRAMA * / ELECTROCARDIOGRAM *
+2025-07-22 12:34:28,377 [INFO] app.services.brmed_service: Linha limpa para extração de exames: ELETROENCEFALOGRAMA * / ELECTROENCEPHALOGRAM * LDL * / LDL *
+2025-07-22 12:34:28,377 [INFO] app.services.brmed_service: Linha limpa para extração de exames: HDL * / HDL * TRIGLICERÍDEOS * / TRIGLYCERIDES *
+2025-07-22 12:34:28,377 [INFO] app.services.brmed_service: Linha limpa para extração de exames: ÁCIDO ÚRICO * / URIC ACID * HEMOGRAMA COMPLETO COM PLAQUETAS * / COMPLETE BLOOD COUNT WITH PLATELETS *
+2025-07-22 12:34:28,378 [INFO] app.services.brmed_service: Linha limpa para extração de exames: SUMÁRIO DE URINA (EAS) * / URINALYSIS (UA) * GLICEMIA DE JEJUM * / GLUCOSE *
+2025-07-22 12:34:28,378 [INFO] app.services.brmed_service: Linha limpa para extração de exames: GGT (GAMA-GT) * / GGT (GAMMA-GT) *
+2025-07-22 12:34:28,378 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 12:34:28,378 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 12:34:28,378 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 4.2 Realizados em parceiro externo / Performed at an external partner:
+2025-07-22 12:34:28,378 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 12:34:28,378 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 12:34:28,378 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 12:34:28,378 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 12:34:28,378 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 12:34:28,378 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 12:34:28,378 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 12:34:28,378 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 12:34:28,378 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 12:34:28,378 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 12:34:28,378 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 12:34:28,378 [INFO] app.services.brmed_service: Linha limpa para extração de exames: Obrigatório * / Mandatory *
+2025-07-22 12:34:28,378 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 12:34:28,378 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 12:34:28,378 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 5. Observações importantes / Important notice:
+2025-07-22 12:34:28,378 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 12:34:28,378 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 1) Obrigatória a apresentação do CPF, juntamente com documento oficial com foto e/ou documento digital / The passport must be presented.
+2025-07-22 12:34:28,379 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 2) Se necessária remarcação, favor solicitar novamente através do BR NET / If reschedule is required, please request again through BR NET.
+2025-07-22 12:34:28,379 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 3) Pacientes que irão realizar exame de fezes e/ou urina devem apresentar o material para início do atendimento / Patients who will perform feces and / or urine tests should present the material to begin the care.
+2025-07-22 12:34:28,379 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 4) Não é permitida a coleta de fezes e/ou urina em ambientes da BR MED / Feces and / or urine collection is not allowed in BR MED medical clinics.
+2025-07-22 12:34:28,379 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 12:34:28,379 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 12:34:28,379 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 12:34:28,379 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 6. Orientações de preparo para exame / Exam preparation guidelines:
+2025-07-22 12:34:28,379 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 12:34:28,379 [INFO] app.services.brmed_service: Linha limpa para extração de exames: ÁCIDO ÚRICO / URIC ACID
+2025-07-22 12:34:28,379 [INFO] app.services.brmed_service: Linha limpa para extração de exames: Não requer preparo prévio / No previous preparation
+2025-07-22 12:34:28,379 [INFO] app.services.brmed_service: Linha limpa para extração de exames: ACUIDADE VISUAL / VISUAL ACUITY
+2025-07-22 12:34:28,379 [INFO] app.services.brmed_service: Linha limpa para extração de exames: Caso faça uso de óculos, é necessário que os leve para a realização do exame. / If you wear glasses, it is necessary to bring them for the exam.
+2025-07-22 12:34:28,379 [INFO] app.services.brmed_service: Linha limpa para extração de exames: AUDIOMETRIA TONAL / PURE TONE AUDIOMETRY
+2025-07-22 12:34:28,380 [INFO] app.services.brmed_service: Linha limpa para extração de exames: Não se expor a sons fortes e não usar aparelhos sonoros pelo menos 14 horas antes do exame / Do not expose yourself to strong sounds and not use sound appliances at least 14 hours before the exam
+2025-07-22 12:34:28,380 [INFO] app.services.brmed_service: Linha limpa para extração de exames: COLESTEROL TOTAL / TOTAL CHOLESTEROL
+2025-07-22 12:34:28,380 [INFO] app.services.brmed_service: Linha limpa para extração de exames: Manter dieta habitual nos 5 dias antes da coleta; Este exame não necessita de jejum. / Keep a habitual diet within 5 days before collection; This exam does not need fasting.
+2025-07-22 12:34:28,380 [INFO] app.services.brmed_service: Linha limpa para extração de exames: CREATININA / CREATININE
+2025-07-22 12:34:28,380 [INFO] app.services.brmed_service: Linha limpa para extração de exames: Este exame não necessita de jejum. Informar os medicamentos em uso. / This exam does not need fasting. Inform the medicines in use.
+2025-07-22 12:34:28,380 [INFO] app.services.brmed_service: Linha limpa para extração de exames: ELETROCARDIOGRAMA / ELECTROCARDIOGRAM
+2025-07-22 12:34:28,380 [INFO] app.services.brmed_service: Linha limpa para extração de exames: Não requer preparo prévio / No previous preparation
+2025-07-22 12:34:28,380 [INFO] app.services.brmed_service: Linha limpa para extração de exames: ELETROENCEFALOGRAMA / ELECTROENCEPHALOGRAM
+2025-07-22 12:34:28,380 [INFO] app.services.brmed_service: Linha limpa para extração de exames: É orientado a comparecer ao local do exame com o cabelo limpo e seco para permitir melhor fixação dos eletrodos. / It is oriented to attend the exam site with clean and dry hair to allow better fixation of the electrodes.
+2025-07-22 12:34:28,380 [INFO] app.services.brmed_service: Linha limpa para extração de exames: GGT (GAMA-GT) / GGT (GAMMA-GT)
+2025-07-22 12:34:28,381 [INFO] app.services.brmed_service: Linha limpa para extração de exames: Não requer preparo prévio / No previous preparation
+2025-07-22 12:34:28,381 [INFO] app.services.brmed_service: Linha limpa para extração de exames: GLICEMIA DE JEJUM / GLUCOSE
+2025-07-22 12:34:28,381 [INFO] app.services.brmed_service: Linha limpa para extração de exames: Jejum de 8 a 12 horas. Não realizar esforço físico 12 horas antes da coleta. / Fasting 8 to 12 hours. Do not perform physical effort 12 hours before collection.
+2025-07-22 12:34:28,381 [INFO] app.services.brmed_service: Linha limpa para extração de exames: HDL / HDL
+2025-07-22 12:34:28,381 [INFO] app.services.brmed_service: Linha limpa para extração de exames: Manter dieta habitual nos 5 dias antes da coleta;Este exame não necessita de jejum. / Maintain a usual diet within 5 days before collection; this exam does not need fasting.
+2025-07-22 12:34:28,381 [INFO] app.services.brmed_service: Linha limpa para extração de exames: HEMOGRAMA COMPLETO COM PLAQUETAS / COMPLETE BLOOD COUNT WITH PLATELETS
+2025-07-22 12:34:28,381 [INFO] app.services.brmed_service: Linha limpa para extração de exames: Não ingerir bebidas alcoólicas 72 horas antes do exame, evitar exercícios físicos antes do exame / Do not ingest alcoholic beverages 72 hours before examination, avoid exercise before examination
+2025-07-22 12:34:28,381 [INFO] app.services.brmed_service: Linha limpa para extração de exames: LDL / LDL
+2025-07-22 12:34:28,381 [INFO] app.services.brmed_service: Linha limpa para extração de exames: Não requer preparo prévio / No previous preparation
+2025-07-22 12:34:28,381 [INFO] app.services.brmed_service: Linha limpa para extração de exames: SUMÁRIO DE URINA (EAS) / URINALYSIS (UA)
+2025-07-22 12:34:28,381 [INFO] app.services.brmed_service: Linha limpa para extração de exames: Realizar higienização da região genital com água / Perform cleaning of the genital region with water
+2025-07-22 12:34:28,381 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 12:34:28,381 [INFO] app.services.brmed_service: Linha limpa para extração de exames: Voltar Imprimir
+2025-07-22 12:34:28,381 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 12:34:28,381 [INFO] app.services.brmed_service: Linha limpa para extração de exames: Copyright Intensys/BR MED
+2025-07-22 12:34:28,382 [INFO] app.services.brmed_service: Exames extraídos: ['AUDIOMETRIA TONAL', 'COLESTEROL TOTAL', 'CREATININA', 'CLÍNICO OCUPACIONAL', 'ACUIDADE VISUAL', 'ELETROCARDIOGRAMA', 'ELETROENCEFALOGRAMA', 'LDL', 'HDL', 'TRIGLICERÍDEOS', 'ÁCIDO ÚRICO', 'HEMOGRAMA COMPLETO COM PLAQUETAS', 'GLICEMIA DE JEJUM']
+2025-07-22 12:34:28,382 [INFO] app.services.brmed_service: Resultado da extração salvo em: resultados/guia_67495788372_20250722_123406.json
+2025-07-22 12:34:28,509 [INFO] app.services.brmed_service: Navegador Playwright fechado.
+2025-07-22 12:34:28,515 [INFO] app.services.workflow_service: Realizando validação para CPF: 67495788372
+2025-07-22 12:34:28,515 [INFO] app.services.workflow_service: Comparando exames OCR e BRNET com OpenAI...
+2025-07-22 12:34:28,515 [ERROR] app.api.v1_brmed: Erro inesperado no processamento completo do documento: Invalid format specifier
+Traceback (most recent call last):
+  File "/home/brmed/Área de trabalho/API_IA/app/api/v1_brmed.py", line 26, in processar_documento_completo_api
+    resultado = await workflow_service.processar_documento_completo(arquivo, exames_obrigatorios_list)
+  File "/home/brmed/Área de trabalho/API_IA/app/services/workflow_service.py", line 149, in processar_documento_completo
+    comparacao_openai = await comparar_exames_openai(exames_enviados, exames_brnet)
+  File "/home/brmed/Área de trabalho/API_IA/app/services/workflow_service.py", line 15, in comparar_exames_openai
+    prompt = f"""
+ValueError: Invalid format specifier
+2025-07-22 12:36:17,326 [INFO] docling.datamodel.document: detected formats: [<InputFormat.PDF: 'pdf'>]
+2025-07-22 12:36:17,334 [INFO] docling.document_converter: Going to convert document batch...
+2025-07-22 12:36:17,334 [INFO] docling.document_converter: Initializing pipeline for StandardPdfPipeline with options hash d291d1f79894f05d312cc90dd3fdf3d3
+2025-07-22 12:36:17,340 [INFO] docling.models.factories.base_factory: Loading plugin 'docling_defaults'
+2025-07-22 12:36:17,340 [INFO] docling.models.factories: Registered ocr engines: ['easyocr', 'ocrmac', 'rapidocr', 'tesserocr', 'tesseract']
+2025-07-22 12:36:17,400 [INFO] docling.utils.accelerator_utils: Accelerator device: 'cuda:0'
+2025-07-22 12:36:19,301 [INFO] docling.utils.accelerator_utils: Accelerator device: 'cuda:0'
+2025-07-22 12:36:20,454 [INFO] docling.utils.accelerator_utils: Accelerator device: 'cuda:0'
+2025-07-22 12:36:20,905 [INFO] docling.models.factories.base_factory: Loading plugin 'docling_defaults'
+2025-07-22 12:36:20,905 [INFO] docling.models.factories: Registered picture descriptions: ['vlm', 'api']
+2025-07-22 12:36:20,905 [INFO] docling.pipeline.base_pipeline: Processing document tmpqyyadsbp.pdf
+2025-07-22 12:36:38,209 [INFO] docling.document_converter: Finished converting document tmpqyyadsbp.pdf in 20.88 sec.
+2025-07-22 12:36:38,232 [INFO] docling_core.types.doc.document: deleted item in tree at stack: (55, 6) => #/texts/288
+2025-07-22 12:36:38,243 [INFO] docling_core.types.doc.document: deleted item in tree at stack: (55, 4) => #/texts/286
+2025-07-22 12:36:38,253 [INFO] docling_core.types.doc.document: deleted item in tree at stack: (55, 2) => #/texts/284
+2025-07-22 12:36:38,264 [INFO] docling_core.types.doc.document: deleted item in tree at stack: (52, 2) => #/texts/274
+2025-07-22 12:36:40,886 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-22 12:36:40,932 [INFO] app.services.workflow_service: Tentando consultar BRMED com CPF inicial: 67495788372
+2025-07-22 12:36:41,565 [INFO] app.services.brmed_service: Iniciando automação Playwright...
+2025-07-22 12:36:41,565 [INFO] app.services.brmed_service: Navegando para a página de login...
+2025-07-22 12:36:51,180 [INFO] app.services.brmed_service: Login e seleção de CPF concluídos.
+2025-07-22 12:36:51,180 [INFO] app.services.brmed_service: Consultando CPF: 67495788372
+2025-07-22 12:36:53,652 [INFO] app.services.brmed_service: Consulta de CPF realizada.
+2025-07-22 12:36:56,236 [INFO] app.services.brmed_service: Clicando em 'Guia de Encaminhamento'...
+2025-07-22 12:37:00,986 [INFO] app.services.brmed_service: Nova página da guia carregada e aguardando.
+2025-07-22 12:37:01,015 [INFO] app.services.brmed_service: Conteúdo bruto da página salvo em: resultados/debug_conteudo_67495788372_20250722_123641.txt
+2025-07-22 12:37:01,015 [INFO] app.services.brmed_service: Conteúdo recebido para extração: Olá, thiago.simoes
+
+Você está logado em: Operações
+
+Logout
+
+Página inicial
+Cadastrar paciente
+Agenda
+10 pendência(s)
+7 grupos faltando dados financeiros
+30 exame(s) sem preço
+28 exame(s) sem valor de repasse
+Relatório
+Área administrativa
+Está em:
+Início >
+Consulta de Paciente >
+Imprimir guia de agendamento
+
+
+VOUCHER
+
+
+PERIÓDICO
+
+
+Periodical
+
+
+
+Prezado(a) / Dear,
+Recebemos sua solicitação e confirmamos o agendamento conforme detalhes a seguir / Your request has been received and your scheduling i...
+2025-07-22 12:37:01,015 [INFO] app.services.brmed_service: Nome match object: <re.Match object; span=(664, 730), match='Nome / Name: ANA BEATRIZ DE SOUSA DA SILVA\tIdent>
+2025-07-22 12:37:01,015 [INFO] app.services.brmed_service: Nome extraído: ANA BEATRIZ DE SOUSA DA SILVA
+2025-07-22 12:37:01,015 [INFO] app.services.brmed_service: Exames texto extraído: 4. Exames / Exams:
+
+4.1 Realizados na própria clínica / Performed at the clinic itself:
+
+
+AUDIOMETRIA TONAL * / PURE TONE AUDIOMETRY *	COLESTEROL TOTAL * / TOTAL CHOLESTEROL *
+CREATININA * / CREATININE *	CLÍNICO OCUPACIONAL * / CLINICAL EXAMINATION *
+ACUIDADE VISUAL * / VISUAL ACUITY *	ELETROCARDIOGRAMA * / ELECTROCARDIOGRAM *
+ELETROENCEFALOGRAMA * / ELECTROENCEPHALOGRAM *	LDL * / LDL *
+HDL * / HDL *	TRIGLICERÍDEOS * / TRIGLYCERIDES *
+ÁCIDO ÚRICO * / URIC ACID *	HEMOGRAMA COMPLETO COM PLAQUETAS ...
+2025-07-22 12:37:01,015 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 4. Exames / Exams:
+2025-07-22 12:37:01,015 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 12:37:01,015 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 4.1 Realizados na própria clínica / Performed at the clinic itself:
+2025-07-22 12:37:01,016 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 12:37:01,016 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 12:37:01,016 [INFO] app.services.brmed_service: Linha limpa para extração de exames: AUDIOMETRIA TONAL * / PURE TONE AUDIOMETRY * COLESTEROL TOTAL * / TOTAL CHOLESTEROL *
+2025-07-22 12:37:01,016 [INFO] app.services.brmed_service: Linha limpa para extração de exames: CREATININA * / CREATININE * CLÍNICO OCUPACIONAL * / CLINICAL EXAMINATION *
+2025-07-22 12:37:01,016 [INFO] app.services.brmed_service: Linha limpa para extração de exames: ACUIDADE VISUAL * / VISUAL ACUITY * ELETROCARDIOGRAMA * / ELECTROCARDIOGRAM *
+2025-07-22 12:37:01,016 [INFO] app.services.brmed_service: Linha limpa para extração de exames: ELETROENCEFALOGRAMA * / ELECTROENCEPHALOGRAM * LDL * / LDL *
+2025-07-22 12:37:01,016 [INFO] app.services.brmed_service: Linha limpa para extração de exames: HDL * / HDL * TRIGLICERÍDEOS * / TRIGLYCERIDES *
+2025-07-22 12:37:01,016 [INFO] app.services.brmed_service: Linha limpa para extração de exames: ÁCIDO ÚRICO * / URIC ACID * HEMOGRAMA COMPLETO COM PLAQUETAS * / COMPLETE BLOOD COUNT WITH PLATELETS *
+2025-07-22 12:37:01,016 [INFO] app.services.brmed_service: Linha limpa para extração de exames: SUMÁRIO DE URINA (EAS) * / URINALYSIS (UA) * GLICEMIA DE JEJUM * / GLUCOSE *
+2025-07-22 12:37:01,016 [INFO] app.services.brmed_service: Linha limpa para extração de exames: GGT (GAMA-GT) * / GGT (GAMMA-GT) *
+2025-07-22 12:37:01,016 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 12:37:01,016 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 12:37:01,016 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 4.2 Realizados em parceiro externo / Performed at an external partner:
+2025-07-22 12:37:01,016 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 12:37:01,016 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 12:37:01,016 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 12:37:01,016 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 12:37:01,016 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 12:37:01,016 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 12:37:01,016 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 12:37:01,016 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 12:37:01,016 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 12:37:01,016 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 12:37:01,016 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 12:37:01,016 [INFO] app.services.brmed_service: Linha limpa para extração de exames: Obrigatório * / Mandatory *
+2025-07-22 12:37:01,017 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 12:37:01,017 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 12:37:01,017 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 5. Observações importantes / Important notice:
+2025-07-22 12:37:01,017 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 12:37:01,017 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 1) Obrigatória a apresentação do CPF, juntamente com documento oficial com foto e/ou documento digital / The passport must be presented.
+2025-07-22 12:37:01,017 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 2) Se necessária remarcação, favor solicitar novamente através do BR NET / If reschedule is required, please request again through BR NET.
+2025-07-22 12:37:01,017 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 3) Pacientes que irão realizar exame de fezes e/ou urina devem apresentar o material para início do atendimento / Patients who will perform feces and / or urine tests should present the material to begin the care.
+2025-07-22 12:37:01,017 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 4) Não é permitida a coleta de fezes e/ou urina em ambientes da BR MED / Feces and / or urine collection is not allowed in BR MED medical clinics.
+2025-07-22 12:37:01,017 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 12:37:01,017 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 12:37:01,017 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 12:37:01,017 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 6. Orientações de preparo para exame / Exam preparation guidelines:
+2025-07-22 12:37:01,017 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 12:37:01,017 [INFO] app.services.brmed_service: Linha limpa para extração de exames: ÁCIDO ÚRICO / URIC ACID
+2025-07-22 12:37:01,017 [INFO] app.services.brmed_service: Linha limpa para extração de exames: Não requer preparo prévio / No previous preparation
+2025-07-22 12:37:01,017 [INFO] app.services.brmed_service: Linha limpa para extração de exames: ACUIDADE VISUAL / VISUAL ACUITY
+2025-07-22 12:37:01,017 [INFO] app.services.brmed_service: Linha limpa para extração de exames: Caso faça uso de óculos, é necessário que os leve para a realização do exame. / If you wear glasses, it is necessary to bring them for the exam.
+2025-07-22 12:37:01,018 [INFO] app.services.brmed_service: Linha limpa para extração de exames: AUDIOMETRIA TONAL / PURE TONE AUDIOMETRY
+2025-07-22 12:37:01,018 [INFO] app.services.brmed_service: Linha limpa para extração de exames: Não se expor a sons fortes e não usar aparelhos sonoros pelo menos 14 horas antes do exame / Do not expose yourself to strong sounds and not use sound appliances at least 14 hours before the exam
+2025-07-22 12:37:01,018 [INFO] app.services.brmed_service: Linha limpa para extração de exames: COLESTEROL TOTAL / TOTAL CHOLESTEROL
+2025-07-22 12:37:01,018 [INFO] app.services.brmed_service: Linha limpa para extração de exames: Manter dieta habitual nos 5 dias antes da coleta; Este exame não necessita de jejum. / Keep a habitual diet within 5 days before collection; This exam does not need fasting.
+2025-07-22 12:37:01,018 [INFO] app.services.brmed_service: Linha limpa para extração de exames: CREATININA / CREATININE
+2025-07-22 12:37:01,018 [INFO] app.services.brmed_service: Linha limpa para extração de exames: Este exame não necessita de jejum. Informar os medicamentos em uso. / This exam does not need fasting. Inform the medicines in use.
+2025-07-22 12:37:01,018 [INFO] app.services.brmed_service: Linha limpa para extração de exames: ELETROCARDIOGRAMA / ELECTROCARDIOGRAM
+2025-07-22 12:37:01,018 [INFO] app.services.brmed_service: Linha limpa para extração de exames: Não requer preparo prévio / No previous preparation
+2025-07-22 12:37:01,018 [INFO] app.services.brmed_service: Linha limpa para extração de exames: ELETROENCEFALOGRAMA / ELECTROENCEPHALOGRAM
+2025-07-22 12:37:01,018 [INFO] app.services.brmed_service: Linha limpa para extração de exames: É orientado a comparecer ao local do exame com o cabelo limpo e seco para permitir melhor fixação dos eletrodos. / It is oriented to attend the exam site with clean and dry hair to allow better fixation of the electrodes.
+2025-07-22 12:37:01,018 [INFO] app.services.brmed_service: Linha limpa para extração de exames: GGT (GAMA-GT) / GGT (GAMMA-GT)
+2025-07-22 12:37:01,019 [INFO] app.services.brmed_service: Linha limpa para extração de exames: Não requer preparo prévio / No previous preparation
+2025-07-22 12:37:01,019 [INFO] app.services.brmed_service: Linha limpa para extração de exames: GLICEMIA DE JEJUM / GLUCOSE
+2025-07-22 12:37:01,019 [INFO] app.services.brmed_service: Linha limpa para extração de exames: Jejum de 8 a 12 horas. Não realizar esforço físico 12 horas antes da coleta. / Fasting 8 to 12 hours. Do not perform physical effort 12 hours before collection.
+2025-07-22 12:37:01,019 [INFO] app.services.brmed_service: Linha limpa para extração de exames: HDL / HDL
+2025-07-22 12:37:01,019 [INFO] app.services.brmed_service: Linha limpa para extração de exames: Manter dieta habitual nos 5 dias antes da coleta;Este exame não necessita de jejum. / Maintain a usual diet within 5 days before collection; this exam does not need fasting.
+2025-07-22 12:37:01,019 [INFO] app.services.brmed_service: Linha limpa para extração de exames: HEMOGRAMA COMPLETO COM PLAQUETAS / COMPLETE BLOOD COUNT WITH PLATELETS
+2025-07-22 12:37:01,019 [INFO] app.services.brmed_service: Linha limpa para extração de exames: Não ingerir bebidas alcoólicas 72 horas antes do exame, evitar exercícios físicos antes do exame / Do not ingest alcoholic beverages 72 hours before examination, avoid exercise before examination
+2025-07-22 12:37:01,019 [INFO] app.services.brmed_service: Linha limpa para extração de exames: LDL / LDL
+2025-07-22 12:37:01,019 [INFO] app.services.brmed_service: Linha limpa para extração de exames: Não requer preparo prévio / No previous preparation
+2025-07-22 12:37:01,019 [INFO] app.services.brmed_service: Linha limpa para extração de exames: SUMÁRIO DE URINA (EAS) / URINALYSIS (UA)
+2025-07-22 12:37:01,019 [INFO] app.services.brmed_service: Linha limpa para extração de exames: Realizar higienização da região genital com água / Perform cleaning of the genital region with water
+2025-07-22 12:37:01,019 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 12:37:01,019 [INFO] app.services.brmed_service: Linha limpa para extração de exames: Voltar Imprimir
+2025-07-22 12:37:01,019 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 12:37:01,019 [INFO] app.services.brmed_service: Linha limpa para extração de exames: Copyright Intensys/BR MED
+2025-07-22 12:37:01,019 [INFO] app.services.brmed_service: Exames extraídos: ['AUDIOMETRIA TONAL', 'COLESTEROL TOTAL', 'CREATININA', 'CLÍNICO OCUPACIONAL', 'ACUIDADE VISUAL', 'ELETROCARDIOGRAMA', 'ELETROENCEFALOGRAMA', 'LDL', 'HDL', 'TRIGLICERÍDEOS', 'ÁCIDO ÚRICO', 'HEMOGRAMA COMPLETO COM PLAQUETAS', 'GLICEMIA DE JEJUM']
+2025-07-22 12:37:01,020 [INFO] app.services.brmed_service: Resultado da extração salvo em: resultados/guia_67495788372_20250722_123641.json
+2025-07-22 12:37:01,106 [INFO] app.services.brmed_service: Navegador Playwright fechado.
+2025-07-22 12:37:01,112 [INFO] app.services.workflow_service: Realizando validação para CPF: 67495788372
+2025-07-22 12:37:01,113 [INFO] app.services.workflow_service: Comparando exames OCR e BRNET com OpenAI...
+2025-07-22 12:37:01,113 [ERROR] app.api.v1_brmed: Erro inesperado no processamento completo do documento: Invalid format specifier
+Traceback (most recent call last):
+  File "/home/brmed/Área de trabalho/API_IA/app/api/v1_brmed.py", line 26, in processar_documento_completo_api
+    resultado = await workflow_service.processar_documento_completo(arquivo, exames_obrigatorios_list)
+  File "/home/brmed/Área de trabalho/API_IA/app/services/workflow_service.py", line 149, in processar_documento_completo
+    comparacao_openai = await comparar_exames_openai(exames_enviados, exames_brnet)
+  File "/home/brmed/Área de trabalho/API_IA/app/services/workflow_service.py", line 15, in comparar_exames_openai
+    prompt = f"""
+ValueError: Invalid format specifier
+2025-07-22 12:43:27,858 [INFO] docling.datamodel.document: detected formats: [<InputFormat.PDF: 'pdf'>]
+2025-07-22 12:43:27,869 [INFO] docling.document_converter: Going to convert document batch...
+2025-07-22 12:43:27,870 [INFO] docling.document_converter: Initializing pipeline for StandardPdfPipeline with options hash d291d1f79894f05d312cc90dd3fdf3d3
+2025-07-22 12:43:27,878 [INFO] docling.models.factories.base_factory: Loading plugin 'docling_defaults'
+2025-07-22 12:43:27,878 [INFO] docling.models.factories: Registered ocr engines: ['easyocr', 'ocrmac', 'rapidocr', 'tesserocr', 'tesseract']
+2025-07-22 12:43:27,949 [INFO] docling.utils.accelerator_utils: Accelerator device: 'cuda:0'
+2025-07-22 12:43:29,860 [INFO] docling.utils.accelerator_utils: Accelerator device: 'cuda:0'
+2025-07-22 12:43:30,730 [INFO] docling.utils.accelerator_utils: Accelerator device: 'cuda:0'
+2025-07-22 12:43:31,177 [INFO] docling.models.factories.base_factory: Loading plugin 'docling_defaults'
+2025-07-22 12:43:31,177 [INFO] docling.models.factories: Registered picture descriptions: ['vlm', 'api']
+2025-07-22 12:43:31,177 [INFO] docling.pipeline.base_pipeline: Processing document tmp0g_e_s0n.pdf
+2025-07-22 12:43:49,306 [INFO] docling.document_converter: Finished converting document tmp0g_e_s0n.pdf in 21.45 sec.
+2025-07-22 12:43:49,333 [INFO] docling_core.types.doc.document: deleted item in tree at stack: (55, 6) => #/texts/288
+2025-07-22 12:43:49,344 [INFO] docling_core.types.doc.document: deleted item in tree at stack: (55, 4) => #/texts/286
+2025-07-22 12:43:49,354 [INFO] docling_core.types.doc.document: deleted item in tree at stack: (55, 2) => #/texts/284
+2025-07-22 12:43:49,365 [INFO] docling_core.types.doc.document: deleted item in tree at stack: (52, 2) => #/texts/274
+2025-07-22 12:43:58,018 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-22 12:43:58,074 [INFO] app.services.workflow_service: Tentando consultar BRMED com CPF inicial: 67495788372
+2025-07-22 12:43:58,725 [INFO] app.services.brmed_service: Iniciando automação Playwright...
+2025-07-22 12:43:58,725 [INFO] app.services.brmed_service: Navegando para a página de login...
+2025-07-22 12:44:08,968 [INFO] app.services.brmed_service: Login e seleção de CPF concluídos.
+2025-07-22 12:44:08,968 [INFO] app.services.brmed_service: Consultando CPF: 67495788372
+2025-07-22 12:44:11,564 [INFO] app.services.brmed_service: Consulta de CPF realizada.
+2025-07-22 12:44:14,109 [INFO] app.services.brmed_service: Clicando em 'Guia de Encaminhamento'...
+2025-07-22 12:44:18,863 [INFO] app.services.brmed_service: Nova página da guia carregada e aguardando.
+2025-07-22 12:44:18,891 [INFO] app.services.brmed_service: Conteúdo bruto da página salvo em: resultados/debug_conteudo_67495788372_20250722_124358.txt
+2025-07-22 12:44:18,891 [INFO] app.services.brmed_service: Conteúdo recebido para extração: Olá, thiago.simoes
+
+Você está logado em: Operações
+
+Logout
+
+Página inicial
+Cadastrar paciente
+Agenda
+11 pendência(s)
+7 grupos faltando dados financeiros
+30 exame(s) sem preço
+28 exame(s) sem valor de repasse
+Relatório
+Área administrativa
+Está em:
+Início >
+Consulta de Paciente >
+Imprimir guia de agendamento
+
+
+VOUCHER
+
+
+PERIÓDICO
+
+
+Periodical
+
+
+
+Prezado(a) / Dear,
+Recebemos sua solicitação e confirmamos o agendamento conforme detalhes a seguir / Your request has been received and your scheduling i...
+2025-07-22 12:44:18,891 [INFO] app.services.brmed_service: Nome match object: <re.Match object; span=(664, 730), match='Nome / Name: ANA BEATRIZ DE SOUSA DA SILVA\tIdent>
+2025-07-22 12:44:18,891 [INFO] app.services.brmed_service: Nome extraído: ANA BEATRIZ DE SOUSA DA SILVA
+2025-07-22 12:44:18,891 [INFO] app.services.brmed_service: Exames texto extraído: 4. Exames / Exams:
+
+4.1 Realizados na própria clínica / Performed at the clinic itself:
+
+
+AUDIOMETRIA TONAL * / PURE TONE AUDIOMETRY *	COLESTEROL TOTAL * / TOTAL CHOLESTEROL *
+CREATININA * / CREATININE *	CLÍNICO OCUPACIONAL * / CLINICAL EXAMINATION *
+ACUIDADE VISUAL * / VISUAL ACUITY *	ELETROCARDIOGRAMA * / ELECTROCARDIOGRAM *
+ELETROENCEFALOGRAMA * / ELECTROENCEPHALOGRAM *	LDL * / LDL *
+HDL * / HDL *	TRIGLICERÍDEOS * / TRIGLYCERIDES *
+ÁCIDO ÚRICO * / URIC ACID *	HEMOGRAMA COMPLETO COM PLAQUETAS ...
+2025-07-22 12:44:18,891 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 4. Exames / Exams:
+2025-07-22 12:44:18,891 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 12:44:18,891 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 4.1 Realizados na própria clínica / Performed at the clinic itself:
+2025-07-22 12:44:18,892 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 12:44:18,892 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 12:44:18,892 [INFO] app.services.brmed_service: Linha limpa para extração de exames: AUDIOMETRIA TONAL * / PURE TONE AUDIOMETRY * COLESTEROL TOTAL * / TOTAL CHOLESTEROL *
+2025-07-22 12:44:18,892 [INFO] app.services.brmed_service: Linha limpa para extração de exames: CREATININA * / CREATININE * CLÍNICO OCUPACIONAL * / CLINICAL EXAMINATION *
+2025-07-22 12:44:18,892 [INFO] app.services.brmed_service: Linha limpa para extração de exames: ACUIDADE VISUAL * / VISUAL ACUITY * ELETROCARDIOGRAMA * / ELECTROCARDIOGRAM *
+2025-07-22 12:44:18,892 [INFO] app.services.brmed_service: Linha limpa para extração de exames: ELETROENCEFALOGRAMA * / ELECTROENCEPHALOGRAM * LDL * / LDL *
+2025-07-22 12:44:18,892 [INFO] app.services.brmed_service: Linha limpa para extração de exames: HDL * / HDL * TRIGLICERÍDEOS * / TRIGLYCERIDES *
+2025-07-22 12:44:18,892 [INFO] app.services.brmed_service: Linha limpa para extração de exames: ÁCIDO ÚRICO * / URIC ACID * HEMOGRAMA COMPLETO COM PLAQUETAS * / COMPLETE BLOOD COUNT WITH PLATELETS *
+2025-07-22 12:44:18,892 [INFO] app.services.brmed_service: Linha limpa para extração de exames: SUMÁRIO DE URINA (EAS) * / URINALYSIS (UA) * GLICEMIA DE JEJUM * / GLUCOSE *
+2025-07-22 12:44:18,892 [INFO] app.services.brmed_service: Linha limpa para extração de exames: GGT (GAMA-GT) * / GGT (GAMMA-GT) *
+2025-07-22 12:44:18,892 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 12:44:18,892 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 12:44:18,892 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 4.2 Realizados em parceiro externo / Performed at an external partner:
+2025-07-22 12:44:18,892 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 12:44:18,892 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 12:44:18,892 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 12:44:18,892 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 12:44:18,892 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 12:44:18,892 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 12:44:18,892 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 12:44:18,892 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 12:44:18,892 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 12:44:18,892 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 12:44:18,892 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 12:44:18,892 [INFO] app.services.brmed_service: Linha limpa para extração de exames: Obrigatório * / Mandatory *
+2025-07-22 12:44:18,892 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 12:44:18,892 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 12:44:18,892 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 5. Observações importantes / Important notice:
+2025-07-22 12:44:18,892 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 12:44:18,893 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 1) Obrigatória a apresentação do CPF, juntamente com documento oficial com foto e/ou documento digital / The passport must be presented.
+2025-07-22 12:44:18,893 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 2) Se necessária remarcação, favor solicitar novamente através do BR NET / If reschedule is required, please request again through BR NET.
+2025-07-22 12:44:18,893 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 3) Pacientes que irão realizar exame de fezes e/ou urina devem apresentar o material para início do atendimento / Patients who will perform feces and / or urine tests should present the material to begin the care.
+2025-07-22 12:44:18,893 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 4) Não é permitida a coleta de fezes e/ou urina em ambientes da BR MED / Feces and / or urine collection is not allowed in BR MED medical clinics.
+2025-07-22 12:44:18,893 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 12:44:18,893 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 12:44:18,893 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 12:44:18,893 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 6. Orientações de preparo para exame / Exam preparation guidelines:
+2025-07-22 12:44:18,893 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 12:44:18,893 [INFO] app.services.brmed_service: Linha limpa para extração de exames: ÁCIDO ÚRICO / URIC ACID
+2025-07-22 12:44:18,893 [INFO] app.services.brmed_service: Linha limpa para extração de exames: Não requer preparo prévio / No previous preparation
+2025-07-22 12:44:18,893 [INFO] app.services.brmed_service: Linha limpa para extração de exames: ACUIDADE VISUAL / VISUAL ACUITY
+2025-07-22 12:44:18,893 [INFO] app.services.brmed_service: Linha limpa para extração de exames: Caso faça uso de óculos, é necessário que os leve para a realização do exame. / If you wear glasses, it is necessary to bring them for the exam.
+2025-07-22 12:44:18,893 [INFO] app.services.brmed_service: Linha limpa para extração de exames: AUDIOMETRIA TONAL / PURE TONE AUDIOMETRY
+2025-07-22 12:44:18,893 [INFO] app.services.brmed_service: Linha limpa para extração de exames: Não se expor a sons fortes e não usar aparelhos sonoros pelo menos 14 horas antes do exame / Do not expose yourself to strong sounds and not use sound appliances at least 14 hours before the exam
+2025-07-22 12:44:18,893 [INFO] app.services.brmed_service: Linha limpa para extração de exames: COLESTEROL TOTAL / TOTAL CHOLESTEROL
+2025-07-22 12:44:18,894 [INFO] app.services.brmed_service: Linha limpa para extração de exames: Manter dieta habitual nos 5 dias antes da coleta; Este exame não necessita de jejum. / Keep a habitual diet within 5 days before collection; This exam does not need fasting.
+2025-07-22 12:44:18,894 [INFO] app.services.brmed_service: Linha limpa para extração de exames: CREATININA / CREATININE
+2025-07-22 12:44:18,894 [INFO] app.services.brmed_service: Linha limpa para extração de exames: Este exame não necessita de jejum. Informar os medicamentos em uso. / This exam does not need fasting. Inform the medicines in use.
+2025-07-22 12:44:18,894 [INFO] app.services.brmed_service: Linha limpa para extração de exames: ELETROCARDIOGRAMA / ELECTROCARDIOGRAM
+2025-07-22 12:44:18,894 [INFO] app.services.brmed_service: Linha limpa para extração de exames: Não requer preparo prévio / No previous preparation
+2025-07-22 12:44:18,894 [INFO] app.services.brmed_service: Linha limpa para extração de exames: ELETROENCEFALOGRAMA / ELECTROENCEPHALOGRAM
+2025-07-22 12:44:18,894 [INFO] app.services.brmed_service: Linha limpa para extração de exames: É orientado a comparecer ao local do exame com o cabelo limpo e seco para permitir melhor fixação dos eletrodos. / It is oriented to attend the exam site with clean and dry hair to allow better fixation of the electrodes.
+2025-07-22 12:44:18,894 [INFO] app.services.brmed_service: Linha limpa para extração de exames: GGT (GAMA-GT) / GGT (GAMMA-GT)
+2025-07-22 12:44:18,894 [INFO] app.services.brmed_service: Linha limpa para extração de exames: Não requer preparo prévio / No previous preparation
+2025-07-22 12:44:18,894 [INFO] app.services.brmed_service: Linha limpa para extração de exames: GLICEMIA DE JEJUM / GLUCOSE
+2025-07-22 12:44:18,894 [INFO] app.services.brmed_service: Linha limpa para extração de exames: Jejum de 8 a 12 horas. Não realizar esforço físico 12 horas antes da coleta. / Fasting 8 to 12 hours. Do not perform physical effort 12 hours before collection.
+2025-07-22 12:44:18,895 [INFO] app.services.brmed_service: Linha limpa para extração de exames: HDL / HDL
+2025-07-22 12:44:18,895 [INFO] app.services.brmed_service: Linha limpa para extração de exames: Manter dieta habitual nos 5 dias antes da coleta;Este exame não necessita de jejum. / Maintain a usual diet within 5 days before collection; this exam does not need fasting.
+2025-07-22 12:44:18,895 [INFO] app.services.brmed_service: Linha limpa para extração de exames: HEMOGRAMA COMPLETO COM PLAQUETAS / COMPLETE BLOOD COUNT WITH PLATELETS
+2025-07-22 12:44:18,895 [INFO] app.services.brmed_service: Linha limpa para extração de exames: Não ingerir bebidas alcoólicas 72 horas antes do exame, evitar exercícios físicos antes do exame / Do not ingest alcoholic beverages 72 hours before examination, avoid exercise before examination
+2025-07-22 12:44:18,895 [INFO] app.services.brmed_service: Linha limpa para extração de exames: LDL / LDL
+2025-07-22 12:44:18,895 [INFO] app.services.brmed_service: Linha limpa para extração de exames: Não requer preparo prévio / No previous preparation
+2025-07-22 12:44:18,895 [INFO] app.services.brmed_service: Linha limpa para extração de exames: SUMÁRIO DE URINA (EAS) / URINALYSIS (UA)
+2025-07-22 12:44:18,895 [INFO] app.services.brmed_service: Linha limpa para extração de exames: Realizar higienização da região genital com água / Perform cleaning of the genital region with water
+2025-07-22 12:44:18,895 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 12:44:18,895 [INFO] app.services.brmed_service: Linha limpa para extração de exames: Voltar Imprimir
+2025-07-22 12:44:18,895 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 12:44:18,895 [INFO] app.services.brmed_service: Linha limpa para extração de exames: Copyright Intensys/BR MED
+2025-07-22 12:44:18,895 [INFO] app.services.brmed_service: Exames extraídos: ['AUDIOMETRIA TONAL', 'COLESTEROL TOTAL', 'CREATININA', 'CLÍNICO OCUPACIONAL', 'ACUIDADE VISUAL', 'ELETROCARDIOGRAMA', 'ELETROENCEFALOGRAMA', 'LDL', 'HDL', 'TRIGLICERÍDEOS', 'ÁCIDO ÚRICO', 'HEMOGRAMA COMPLETO COM PLAQUETAS', 'GLICEMIA DE JEJUM']
+2025-07-22 12:44:18,895 [INFO] app.services.brmed_service: Resultado da extração salvo em: resultados/guia_67495788372_20250722_124358.json
+2025-07-22 12:44:19,031 [INFO] app.services.brmed_service: Navegador Playwright fechado.
+2025-07-22 12:44:19,037 [INFO] app.services.workflow_service: Realizando validação para CPF: 67495788372
+2025-07-22 12:44:19,037 [INFO] app.services.workflow_service: Comparando exames OCR e BRNET com OpenAI...
+2025-07-22 12:44:19,037 [INFO] app.services.workflow_service: Prompt enviado ao OpenAI: 
+    Você é um assistente especializado em comparar listas de exames médicos.
+    Receberá duas listas de exames:
+    1. Exames extraídos via OCR de um documento.
+    2. Exames obtidos do sistema BRNET.
+
+    Sua tarefa é comparar essas duas listas e gerar um array JSON de objetos, onde cada objeto representa um exame e contém as seguintes informações:
+    - "exame": Nome do exame.
+    - "presente_no_ocr": true se o exame estiver na lista do OCR, false caso contrário.
+    - "presente_no_brnet": true se o exame estiver na lista do BRNET, false caso contrário.
+    - "status":
+        - "OK" se o exame estiver presente em ambas as listas.
+        - "Faltando no OCR" se o exame estiver no BRNET mas não no OCR.
+        - "Extra no OCR" se o exame estiver no OCR mas não no BRNET.
+
+    Considere variações de nomes (ex: "Hemograma Completo" e "Hemograma") como o mesmo exame se a essência for a mesma. Use sua inteligência para agrupar exames similares.
+
+    Exemplo de entrada:
+    OCR: ["Hemograma", "Glicemia"]
+    BRNET: ["Hemograma Completo", "Colesterol"]
+
+    Exemplo de saída JSON:
+    [
+        {
+            "exame": "Hemograma Completo",
+            "presente_no_ocr": true,
+            "presente_no_brnet": true,
+            "status": "OK"
+        },
+        {
+            "exame": "Glicemia",
+            "presente_no_ocr": true,
+            "presente_no_brnet": false,
+            "status": "Extra no OCR"
+        },
+        {
+            "exame": "Colesterol",
+            "presente_no_ocr": false,
+            "presente_no_brnet": true,
+            "status": "Faltando no OCR"
+        }
+    ]
+
+    Listas de exames para comparar:
+    OCR: ["HEMOGRAMA", "ERITROGRAMA", "LEUCOGRAMA", "GLICOSE", "COLESTEROL HDL", "COLESTEROL LDL", "TRIGLICERIDEOS", "ACIDO URICO", "CREATININA", "GAMA GT", "SUMARIO DE URINA"]
+    BRNET: ["AUDIOMETRIA TONAL", "COLESTEROL TOTAL", "CREATININA", "CL\u00cdNICO OCUPACIONAL", "ACUIDADE VISUAL", "ELETROCARDIOGRAMA", "ELETROENCEFALOGRAMA", "LDL", "HDL", "TRIGLICER\u00cdDEOS", "\u00c1CIDO \u00daRICO", "HEMOGRAMA COMPLETO COM PLAQUETAS", "GLICEMIA DE JEJUM"]
+    
+2025-07-22 12:44:30,902 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-22 14:03:33,948 [INFO] docling.datamodel.document: detected formats: [<InputFormat.PDF: 'pdf'>]
+2025-07-22 14:03:33,957 [INFO] docling.document_converter: Going to convert document batch...
+2025-07-22 14:03:33,957 [INFO] docling.document_converter: Initializing pipeline for StandardPdfPipeline with options hash d291d1f79894f05d312cc90dd3fdf3d3
+2025-07-22 14:03:33,963 [INFO] docling.models.factories.base_factory: Loading plugin 'docling_defaults'
+2025-07-22 14:03:33,963 [INFO] docling.models.factories: Registered ocr engines: ['easyocr', 'ocrmac', 'rapidocr', 'tesserocr', 'tesseract']
+2025-07-22 14:03:34,023 [INFO] docling.utils.accelerator_utils: Accelerator device: 'cuda:0'
+2025-07-22 14:03:35,828 [INFO] docling.utils.accelerator_utils: Accelerator device: 'cuda:0'
+2025-07-22 14:03:36,709 [INFO] docling.utils.accelerator_utils: Accelerator device: 'cuda:0'
+2025-07-22 14:03:37,163 [INFO] docling.models.factories.base_factory: Loading plugin 'docling_defaults'
+2025-07-22 14:03:37,163 [INFO] docling.models.factories: Registered picture descriptions: ['vlm', 'api']
+2025-07-22 14:03:37,164 [INFO] docling.pipeline.base_pipeline: Processing document tmpx2zj6kf8.pdf
+2025-07-22 14:03:55,164 [INFO] docling.document_converter: Finished converting document tmpx2zj6kf8.pdf in 21.22 sec.
+2025-07-22 14:03:55,188 [INFO] docling_core.types.doc.document: deleted item in tree at stack: (55, 6) => #/texts/288
+2025-07-22 14:03:55,199 [INFO] docling_core.types.doc.document: deleted item in tree at stack: (55, 4) => #/texts/286
+2025-07-22 14:03:55,211 [INFO] docling_core.types.doc.document: deleted item in tree at stack: (55, 2) => #/texts/284
+2025-07-22 14:03:55,222 [INFO] docling_core.types.doc.document: deleted item in tree at stack: (52, 2) => #/texts/274
+2025-07-22 14:03:57,798 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-22 14:03:57,840 [INFO] app.services.workflow_service: Tentando consultar BRMED com CPF inicial: 67495788372
+2025-07-22 14:03:58,468 [INFO] app.services.brmed_service: Iniciando automação Playwright...
+2025-07-22 14:03:58,469 [INFO] app.services.brmed_service: Navegando para a página de login...
+2025-07-22 14:04:12,931 [INFO] app.services.brmed_service: Login e seleção de CPF concluídos.
+2025-07-22 14:04:12,931 [INFO] app.services.brmed_service: Consultando CPF: 67495788372
+2025-07-22 14:04:15,909 [INFO] app.services.brmed_service: Consulta de CPF realizada.
+2025-07-22 14:04:18,896 [INFO] app.services.brmed_service: Clicando em 'Guia de Encaminhamento'...
+2025-07-22 14:04:35,649 [INFO] app.services.brmed_service: Nova página da guia carregada e aguardando.
+2025-07-22 14:04:35,669 [INFO] app.services.brmed_service: Conteúdo bruto da página salvo em: resultados/debug_conteudo_67495788372_20250722_140358.txt
+2025-07-22 14:04:35,669 [INFO] app.services.brmed_service: Conteúdo recebido para extração: Olá, thiago.simoes
+
+Você está logado em: Operações
+
+Logout
+
+Página inicial
+Cadastrar paciente
+Agenda
+11 pendência(s)
+6 grupos faltando dados financeiros
+30 exame(s) sem preço
+28 exame(s) sem valor de repasse
+Relatório
+Área administrativa
+Está em:
+Início >
+Consulta de Paciente >
+Imprimir guia de agendamento
+
+
+VOUCHER
+
+
+PERIÓDICO
+
+
+Periodical
+
+
+
+Prezado(a) / Dear,
+Recebemos sua solicitação e confirmamos o agendamento conforme detalhes a seguir / Your request has been received and your scheduling i...
+2025-07-22 14:04:35,669 [INFO] app.services.brmed_service: Nome match object: <re.Match object; span=(664, 730), match='Nome / Name: ANA BEATRIZ DE SOUSA DA SILVA\tIdent>
+2025-07-22 14:04:35,669 [INFO] app.services.brmed_service: Nome extraído: ANA BEATRIZ DE SOUSA DA SILVA
+2025-07-22 14:04:35,669 [INFO] app.services.brmed_service: Exames texto extraído: 4. Exames / Exams:
+
+4.1 Realizados na própria clínica / Performed at the clinic itself:
+
+
+AUDIOMETRIA TONAL * / PURE TONE AUDIOMETRY *	COLESTEROL TOTAL * / TOTAL CHOLESTEROL *
+CREATININA * / CREATININE *	CLÍNICO OCUPACIONAL * / CLINICAL EXAMINATION *
+ACUIDADE VISUAL * / VISUAL ACUITY *	ELETROCARDIOGRAMA * / ELECTROCARDIOGRAM *
+ELETROENCEFALOGRAMA * / ELECTROENCEPHALOGRAM *	LDL * / LDL *
+HDL * / HDL *	TRIGLICERÍDEOS * / TRIGLYCERIDES *
+ÁCIDO ÚRICO * / URIC ACID *	HEMOGRAMA COMPLETO COM PLAQUETAS ...
+2025-07-22 14:04:35,669 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 4. Exames / Exams:
+2025-07-22 14:04:35,669 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 14:04:35,669 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 4.1 Realizados na própria clínica / Performed at the clinic itself:
+2025-07-22 14:04:35,670 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 14:04:35,670 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 14:04:35,670 [INFO] app.services.brmed_service: Linha limpa para extração de exames: AUDIOMETRIA TONAL * / PURE TONE AUDIOMETRY * COLESTEROL TOTAL * / TOTAL CHOLESTEROL *
+2025-07-22 14:04:35,670 [INFO] app.services.brmed_service: Linha limpa para extração de exames: CREATININA * / CREATININE * CLÍNICO OCUPACIONAL * / CLINICAL EXAMINATION *
+2025-07-22 14:04:35,670 [INFO] app.services.brmed_service: Linha limpa para extração de exames: ACUIDADE VISUAL * / VISUAL ACUITY * ELETROCARDIOGRAMA * / ELECTROCARDIOGRAM *
+2025-07-22 14:04:35,670 [INFO] app.services.brmed_service: Linha limpa para extração de exames: ELETROENCEFALOGRAMA * / ELECTROENCEPHALOGRAM * LDL * / LDL *
+2025-07-22 14:04:35,670 [INFO] app.services.brmed_service: Linha limpa para extração de exames: HDL * / HDL * TRIGLICERÍDEOS * / TRIGLYCERIDES *
+2025-07-22 14:04:35,670 [INFO] app.services.brmed_service: Linha limpa para extração de exames: ÁCIDO ÚRICO * / URIC ACID * HEMOGRAMA COMPLETO COM PLAQUETAS * / COMPLETE BLOOD COUNT WITH PLATELETS *
+2025-07-22 14:04:35,670 [INFO] app.services.brmed_service: Linha limpa para extração de exames: SUMÁRIO DE URINA (EAS) * / URINALYSIS (UA) * GLICEMIA DE JEJUM * / GLUCOSE *
+2025-07-22 14:04:35,670 [INFO] app.services.brmed_service: Linha limpa para extração de exames: GGT (GAMA-GT) * / GGT (GAMMA-GT) *
+2025-07-22 14:04:35,670 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 14:04:35,670 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 14:04:35,670 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 4.2 Realizados em parceiro externo / Performed at an external partner:
+2025-07-22 14:04:35,670 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 14:04:35,670 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 14:04:35,670 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 14:04:35,670 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 14:04:35,670 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 14:04:35,670 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 14:04:35,670 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 14:04:35,670 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 14:04:35,670 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 14:04:35,670 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 14:04:35,670 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 14:04:35,670 [INFO] app.services.brmed_service: Linha limpa para extração de exames: Obrigatório * / Mandatory *
+2025-07-22 14:04:35,670 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 14:04:35,670 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 14:04:35,670 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 5. Observações importantes / Important notice:
+2025-07-22 14:04:35,671 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 14:04:35,671 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 1) Obrigatória a apresentação do CPF, juntamente com documento oficial com foto e/ou documento digital / The passport must be presented.
+2025-07-22 14:04:35,671 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 2) Se necessária remarcação, favor solicitar novamente através do BR NET / If reschedule is required, please request again through BR NET.
+2025-07-22 14:04:35,671 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 3) Pacientes que irão realizar exame de fezes e/ou urina devem apresentar o material para início do atendimento / Patients who will perform feces and / or urine tests should present the material to begin the care.
+2025-07-22 14:04:35,671 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 4) Não é permitida a coleta de fezes e/ou urina em ambientes da BR MED / Feces and / or urine collection is not allowed in BR MED medical clinics.
+2025-07-22 14:04:35,671 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 14:04:35,671 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 14:04:35,671 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 14:04:35,671 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 6. Orientações de preparo para exame / Exam preparation guidelines:
+2025-07-22 14:04:35,671 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 14:04:35,671 [INFO] app.services.brmed_service: Linha limpa para extração de exames: ÁCIDO ÚRICO / URIC ACID
+2025-07-22 14:04:35,671 [INFO] app.services.brmed_service: Linha limpa para extração de exames: Não requer preparo prévio / No previous preparation
+2025-07-22 14:04:35,671 [INFO] app.services.brmed_service: Linha limpa para extração de exames: ACUIDADE VISUAL / VISUAL ACUITY
+2025-07-22 14:04:35,671 [INFO] app.services.brmed_service: Linha limpa para extração de exames: Caso faça uso de óculos, é necessário que os leve para a realização do exame. / If you wear glasses, it is necessary to bring them for the exam.
+2025-07-22 14:04:35,671 [INFO] app.services.brmed_service: Linha limpa para extração de exames: AUDIOMETRIA TONAL / PURE TONE AUDIOMETRY
+2025-07-22 14:04:35,671 [INFO] app.services.brmed_service: Linha limpa para extração de exames: Não se expor a sons fortes e não usar aparelhos sonoros pelo menos 14 horas antes do exame / Do not expose yourself to strong sounds and not use sound appliances at least 14 hours before the exam
+2025-07-22 14:04:35,672 [INFO] app.services.brmed_service: Linha limpa para extração de exames: COLESTEROL TOTAL / TOTAL CHOLESTEROL
+2025-07-22 14:04:35,672 [INFO] app.services.brmed_service: Linha limpa para extração de exames: Manter dieta habitual nos 5 dias antes da coleta; Este exame não necessita de jejum. / Keep a habitual diet within 5 days before collection; This exam does not need fasting.
+2025-07-22 14:04:35,672 [INFO] app.services.brmed_service: Linha limpa para extração de exames: CREATININA / CREATININE
+2025-07-22 14:04:35,672 [INFO] app.services.brmed_service: Linha limpa para extração de exames: Este exame não necessita de jejum. Informar os medicamentos em uso. / This exam does not need fasting. Inform the medicines in use.
+2025-07-22 14:04:35,672 [INFO] app.services.brmed_service: Linha limpa para extração de exames: ELETROCARDIOGRAMA / ELECTROCARDIOGRAM
+2025-07-22 14:04:35,672 [INFO] app.services.brmed_service: Linha limpa para extração de exames: Não requer preparo prévio / No previous preparation
+2025-07-22 14:04:35,672 [INFO] app.services.brmed_service: Linha limpa para extração de exames: ELETROENCEFALOGRAMA / ELECTROENCEPHALOGRAM
+2025-07-22 14:04:35,672 [INFO] app.services.brmed_service: Linha limpa para extração de exames: É orientado a comparecer ao local do exame com o cabelo limpo e seco para permitir melhor fixação dos eletrodos. / It is oriented to attend the exam site with clean and dry hair to allow better fixation of the electrodes.
+2025-07-22 14:04:35,672 [INFO] app.services.brmed_service: Linha limpa para extração de exames: GGT (GAMA-GT) / GGT (GAMMA-GT)
+2025-07-22 14:04:35,672 [INFO] app.services.brmed_service: Linha limpa para extração de exames: Não requer preparo prévio / No previous preparation
+2025-07-22 14:04:35,672 [INFO] app.services.brmed_service: Linha limpa para extração de exames: GLICEMIA DE JEJUM / GLUCOSE
+2025-07-22 14:04:35,672 [INFO] app.services.brmed_service: Linha limpa para extração de exames: Jejum de 8 a 12 horas. Não realizar esforço físico 12 horas antes da coleta. / Fasting 8 to 12 hours. Do not perform physical effort 12 hours before collection.
+2025-07-22 14:04:35,672 [INFO] app.services.brmed_service: Linha limpa para extração de exames: HDL / HDL
+2025-07-22 14:04:35,672 [INFO] app.services.brmed_service: Linha limpa para extração de exames: Manter dieta habitual nos 5 dias antes da coleta;Este exame não necessita de jejum. / Maintain a usual diet within 5 days before collection; this exam does not need fasting.
+2025-07-22 14:04:35,672 [INFO] app.services.brmed_service: Linha limpa para extração de exames: HEMOGRAMA COMPLETO COM PLAQUETAS / COMPLETE BLOOD COUNT WITH PLATELETS
+2025-07-22 14:04:35,673 [INFO] app.services.brmed_service: Linha limpa para extração de exames: Não ingerir bebidas alcoólicas 72 horas antes do exame, evitar exercícios físicos antes do exame / Do not ingest alcoholic beverages 72 hours before examination, avoid exercise before examination
+2025-07-22 14:04:35,673 [INFO] app.services.brmed_service: Linha limpa para extração de exames: LDL / LDL
+2025-07-22 14:04:35,673 [INFO] app.services.brmed_service: Linha limpa para extração de exames: Não requer preparo prévio / No previous preparation
+2025-07-22 14:04:35,673 [INFO] app.services.brmed_service: Linha limpa para extração de exames: SUMÁRIO DE URINA (EAS) / URINALYSIS (UA)
+2025-07-22 14:04:35,673 [INFO] app.services.brmed_service: Linha limpa para extração de exames: Realizar higienização da região genital com água / Perform cleaning of the genital region with water
+2025-07-22 14:04:35,673 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 14:04:35,673 [INFO] app.services.brmed_service: Linha limpa para extração de exames: Voltar Imprimir
+2025-07-22 14:04:35,673 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2025-07-22 14:04:35,673 [INFO] app.services.brmed_service: Linha limpa para extração de exames: Copyright Intensys/BR MED
+2025-07-22 14:04:35,673 [INFO] app.services.brmed_service: Exames extraídos: ['AUDIOMETRIA TONAL', 'COLESTEROL TOTAL', 'CREATININA', 'CLÍNICO OCUPACIONAL', 'ACUIDADE VISUAL', 'ELETROCARDIOGRAMA', 'ELETROENCEFALOGRAMA', 'LDL', 'HDL', 'TRIGLICERÍDEOS', 'ÁCIDO ÚRICO', 'HEMOGRAMA COMPLETO COM PLAQUETAS', 'GLICEMIA DE JEJUM']
+2025-07-22 14:04:35,673 [INFO] app.services.brmed_service: Resultado da extração salvo em: resultados/guia_67495788372_20250722_140358.json
+2025-07-22 14:04:35,758 [INFO] app.services.brmed_service: Navegador Playwright fechado.
+2025-07-22 14:04:35,764 [INFO] app.services.workflow_service: Realizando validação para CPF: 67495788372
+2025-07-22 14:04:35,764 [INFO] app.services.workflow_service: Comparando exames OCR e BRNET com OpenAI...
+2025-07-22 14:04:54,062 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-30 07:35:55,086 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2025-07-30 07:35:56,539 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-30 07:35:56,548 [INFO] app.services.faq_service: Tokens do prompt: 502 | Tokens de completação: 17 | Total: 519
+2025-07-30 07:35:56,549 [INFO] app.services.faq_service: Distâncias dos vizinhos: [1.4697288 1.4741434]
+2025-07-30 07:36:23,437 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2025-07-30 07:36:26,452 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-30 07:36:26,454 [INFO] app.services.faq_service: Tokens do prompt: 619 | Tokens de completação: 69 | Total: 688
+2025-07-30 07:36:26,455 [INFO] app.services.faq_service: Distâncias dos vizinhos: [0.94863546 1.0239552 ]

@@ -1,0 +1,34 @@
+{
+    "cpf": "95659366368",
+    "exames_obrigatorios": [
+        "AUDIOMETRIA TONAL",
+        "HEMOGRAMA",
+        "RAIO-X DE TÓRAX",
+        "GLICOSE"
+    ],
+    "exames_enviados": [
+        "ACUIDADE VISUAL",
+        "AUDIOMETRIA TONAL",
+        "HEMOGRAMA",
+        "GLICOSE",
+        "LIPIDOGRAMA COMPLETO",
+        "CREATININA",
+        "TGO",
+        "TGP",
+        "GAMA GT",
+        "FOSFATASE ALCALINA",
+        "BILIRRUBINA INDIRETA",
+        "TSH ULTRA SENSIVEL"
+    ],
+    "resultado": {
+        "status_liberado": false,
+        "exames_faltantes": [
+            "RAIO-X DE TÓRAX"
+        ],
+        "exames_presentes": [
+            "AUDIOMETRIA TONAL",
+            "HEMOGRAMA",
+            "GLICOSE"
+        ]
+    }
+}
