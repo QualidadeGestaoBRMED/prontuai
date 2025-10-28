@@ -1,0 +1,19 @@
+{
+  "name": "prontuai",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "front-end"
+  ],
+  "scripts": {
+    "build": "npm run build --workspace=front-end",
+    "dev": "npm run dev --workspace=front-end",
+    "start": "npm run start --workspace=front-end",
+    "vercel-build": "npm run build --workspace=front-end"
+  },
+  "dependencies": {
+    "next": "15.3.3",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  }
+}
