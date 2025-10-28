@@ -1,0 +1,132 @@
+Olá, thiago.simoes
+
+Você está logado em: Operações
+
+Logout
+
+Página inicial
+Cadastrar paciente
+Agenda
+28 pendência(s)
+8 grupos faltando dados financeiros
+11 exame(s) sem preço
+28 exame(s) sem valor de repasse
+Relatório
+Área administrativa
+Está em:
+Início >
+Consulta de Paciente >
+Imprimir guia de agendamento
+
+
+VOUCHER
+
+
+PERIÓDICO
+
+
+Periodical
+
+
+
+Prezado(a) / Dear,
+Recebemos sua solicitação e confirmamos o agendamento conforme detalhes a seguir / Your request has been received and your scheduling is confirmed as folowing:
+
+
+
+ARCELORMITTAL BRASIL S.A. / COMERCIAL - CDB - GALPAO, VENDAS REG E CORP Fortaleza (ABERTTA SAÚDE)
+
+
+1. Identificação / Identification:
+
+Nome / Name: ANA BEATRIZ DE SOUSA DA SILVA	Identidade / ID Number: 93002142929
+CPF / Passport: 67495788372	Matrícula / Register:
+Nascimento / Birth: 14/03/1975	Idade / Age: 50
+Função / Function: VENDEDOR INTERNO JR	Setor / Section: EG00306500
+
+
+2. Local de atendimento / Care Location:
+
+MARACANAÚ - CE - QUALITY
+ROD. DR. MENDEL STEINBRUCH, 10293 - SALA 3335, PAJUCARA, MARACANAU - CE - 61932-971	Telefone / Phone number: (85) 9890-24883
+
+
+3. Data e horário do atendimento / Service date and time:
+	Data / Date: 13/05/2025	Hora / Hour: 07h00
+
+
+NOTA / Note: O atendimento é por ordem de chegada. O paciente deve chegar 15 minutos antes do horário de atendimento e até 1 hora após o início do mesmo. Caso contrário, a recepção poderá reagendar o paciente. / The service is in order of arrival. The patient should arrive 15 minutes before the opening hours and up to 1 hour after it's begun. Otherwise, the reception can reschedule the patient.
+
+
+
+4. Exames / Exams:
+
+4.1 Realizados na própria clínica / Performed at the clinic itself:
+
+
+AUDIOMETRIA TONAL * / PURE TONE AUDIOMETRY *	COLESTEROL TOTAL * / TOTAL CHOLESTEROL *
+CREATININA * / CREATININE *	CLÍNICO OCUPACIONAL * / CLINICAL EXAMINATION *
+ACUIDADE VISUAL * / VISUAL ACUITY *	ELETROCARDIOGRAMA * / ELECTROCARDIOGRAM *
+ELETROENCEFALOGRAMA * / ELECTROENCEPHALOGRAM *	LDL * / LDL *
+HDL * / HDL *	TRIGLICERÍDEOS * / TRIGLYCERIDES *
+ÁCIDO ÚRICO * / URIC ACID *	HEMOGRAMA COMPLETO COM PLAQUETAS * / COMPLETE BLOOD COUNT WITH PLATELETS *
+SUMÁRIO DE URINA (EAS) * / URINALYSIS (UA) *	GLICEMIA DE JEJUM * / GLUCOSE *
+GGT (GAMA-GT) * / GGT (GAMMA-GT) *
+
+
+4.2 Realizados em parceiro externo / Performed at an external partner:
+
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+	
+Obrigatório * / Mandatory *
+
+
+5. Observações importantes / Important notice:
+
+1) Obrigatória a apresentação do CPF, juntamente com documento oficial com foto e/ou documento digital / The passport must be presented.
+2) Se necessária remarcação, favor solicitar novamente através do BR NET / If reschedule is required, please request again through BR NET.
+3) Pacientes que irão realizar exame de fezes e/ou urina devem apresentar o material para início do atendimento / Patients who will perform feces and / or urine tests should present the material to begin the care.
+4) Não é permitida a coleta de fezes e/ou urina em ambientes da BR MED / Feces and / or urine collection is not allowed in BR MED medical clinics.
+
+
+
+6. Orientações de preparo para exame / Exam preparation guidelines:
+
+ÁCIDO ÚRICO / URIC ACID
+Não requer preparo prévio / No previous preparation
+ACUIDADE VISUAL / VISUAL ACUITY
+Caso faça uso de óculos, é necessário que os leve para a realização do exame. / If you wear glasses, it is necessary to bring them for the exam.
+AUDIOMETRIA TONAL / PURE TONE AUDIOMETRY
+Não se expor a sons fortes e não usar aparelhos sonoros pelo menos 14 horas antes do exame / Do not expose yourself to strong sounds and not use sound appliances at least 14 hours before the exam
+COLESTEROL TOTAL / TOTAL CHOLESTEROL
+Manter dieta habitual nos 5 dias antes da coleta; Este exame não necessita de jejum. / Keep a habitual diet within 5 days before collection; This exam does not need fasting.
+CREATININA / CREATININE
+Este exame não necessita de jejum. Informar os medicamentos em uso. / This exam does not need fasting. Inform the medicines in use.
+ELETROCARDIOGRAMA / ELECTROCARDIOGRAM
+Não requer preparo prévio / No previous preparation
+ELETROENCEFALOGRAMA / ELECTROENCEPHALOGRAM
+É orientado a comparecer ao local do exame com o cabelo limpo e seco para permitir melhor fixação dos eletrodos. / It is oriented to attend the exam site with clean and dry hair to allow better fixation of the electrodes.
+GGT (GAMA-GT) / GGT (GAMMA-GT)
+Não requer preparo prévio / No previous preparation
+GLICEMIA DE JEJUM / GLUCOSE
+Jejum de 8 a 12 horas. Não realizar esforço físico 12 horas antes da coleta. / Fasting 8 to 12 hours. Do not perform physical effort 12 hours before collection.
+HDL / HDL
+Manter dieta habitual nos 5 dias antes da coleta;Este exame não necessita de jejum. / Maintain a usual diet within 5 days before collection; this exam does not need fasting.
+HEMOGRAMA COMPLETO COM PLAQUETAS / COMPLETE BLOOD COUNT WITH PLATELETS
+Não ingerir bebidas alcoólicas 72 horas antes do exame, evitar exercícios físicos antes do exame / Do not ingest alcoholic beverages 72 hours before examination, avoid exercise before examination
+LDL / LDL
+Não requer preparo prévio / No previous preparation
+SUMÁRIO DE URINA (EAS) / URINALYSIS (UA)
+Realizar higienização da região genital com água / Perform cleaning of the genital region with water
+
+Voltar Imprimir
+
+Copyright Intensys/BR MED

@@ -1,0 +1,84 @@
+Aqui estão minhas sugestões, divididas por categoria:
+
+  1. Performance e Escalabilidade
+
+
+  A maior oportunidade de ganho de performance está em como as tarefas demoradas (automação com Playwright e OCR) são executadas.
+
+
+   * Problema: As rotas /consultar-brmed e /ocr são síncronas (bloqueantes). Isso significa que, quando uma requisição chega, o servidor fica totalmente
+     ocupado até que a automação ou o OCR terminem. Se duas pessoas tentarem consultar um CPF ao mesmo tempo, uma terá que esperar.
+   * Sugestão: Implementar uma fila de tarefas assíncrona.
+       * Como: Utilizar uma biblioteca como Celery com um message broker como Redis ou RabbitMQ.
+       * Funcionamento:
+           1. A rota Flask (/consultar-brmed) não executa mais a automação diretamente. Em vez disso, ela adiciona uma "tarefa" à fila do Celery e retorna
+              imediatamente um ID de tarefa para o usuário (ex: {"task_id": "some-unique-id"}).
+           2. Um ou mais "workers" do Celery, rodando em processos separados, pegam as tarefas da fila e as executam em segundo plano.
+           3. Você pode criar um novo endpoint (ex: /resultado/<task_id>) que o cliente pode consultar para verificar o status da tarefa (Pendente, Em
+              Progresso, Concluído) e obter o resultado quando estiver pronto.
+       * Vantagens: Libera o servidor Flask para lidar com novas requisições instantaneamente, tornando a API muito mais responsiva e escalável.
+
+  2. Robustez e Confiabilidade
+
+  Podemos tornar a automação e a extração de dados menos "quebradiças".
+
+
+   * Problema: O script de automação (automacao.py) usa time.sleep(). Isso é arriscado, pois o tempo de carregamento da página pode variar. Se a página
+     demorar mais que o sleep, o script falha. Se demorar menos, o script espera desnecessariamente.
+   * Sugestão: Substituir todos os time.sleep() por esperas explícitas do Playwright. O código já usa algumas, o que é ótimo! A ideia é usar apenas elas.
+       * Exemplo: Em vez de time.sleep(2), use page.wait_for_load_state("networkidle") ou page.wait_for_selector(...) para garantir que o elemento com o qual
+         você quer interagir esteja realmente visível e pronto.
+
+
+   * Problema: A extração de CPF e exames em api.py depende de expressões regulares (regex) complexas. Se o layout do OCR mudar um pouco, a regex pode falhar.
+   * Sugestão (Funcionalidade Nova): Usar a própria IA para extrair as informações.
+       * Como: Após obter o texto do OCR, em vez de passar para a função extrair_info, envie o texto para o gpt-4o-mini com um prompt específico, pedindo a
+         ele para retornar um JSON estruturado.
+       * Exemplo de Prompt:
+
+
+   1         "Você é um assistente de extração de dados. Analise o texto de OCR a seguir e retorne um objeto JSON com as chaves 'cpf' (contendo apenas
+     os 11 dígitos) e 'exames' (uma lista de nomes de exames encontrados). Texto: \n\n{texto_do_ocr}"
+
+       * Vantagens: Muito mais flexível e robusto a pequenas variações no texto do que as expressões regulares.
+
+  3. Qualidade do Código e Manutenção
+
+
+   * Problema: O arquivo api.py está começando a ficar grande, misturando lógica de API (Flask), lógica de negócio (RAG, extração de dados) e chamadas de
+     serviços.
+   * Sugestão: Refatorar o código em módulos mais específicos.
+       * services/rag_service.py: Conteria toda a lógica do FAQ (carregar índice, buscar, criar prompt).
+       * services/ocr_service.py: Conteria a lógica de OCR e extração de informações.
+       * api.py: Se tornaria um "controlador" mais limpo, apenas recebendo as requisições, chamando as funções dos serviços e retornando as respostas.
+
+
+   * Problema: O código usa print() para logs. Em produção, isso não é ideal.
+   * Sugestão: Implementar o módulo logging do Python.
+       * Vantagens: Permite configurar níveis de log (DEBUG, INFO, WARNING, ERROR), salvar logs em arquivos, formatar as mensagens com data/hora e ter um
+         controle muito melhor do que está acontecendo na aplicação.
+
+  4. Sugestões de Novas Funcionalidades ("Cool Suggestions")
+
+
+   * Cache para Consultas: A consulta na BR Med pode ser demorada e talvez custosa. Se o mesmo CPF for consultado várias vezes no mesmo dia, você está
+     refazendo o trabalho.
+       * Sugestão: Implementar um cache simples (com Redis, por exemplo). Antes de iniciar a automação, verifique se o resultado para aquele CPF já está no
+         cache e não expirou (ex: cache válido por 6 horas). Se estiver, retorne o resultado do cache instantaneamente.
+
+
+   * Script para Indexação: Como os arquivos faq_index.faiss e faq_data.pkl são criados? Provavelmente de forma manual.
+       * Sugestão: Criar um script build_index.py. Esse script leria um arquivo de origem mais simples (como um CSV ou JSON com perguntas e respostas),
+         geraria os embeddings e salvaria os arquivos de índice e dados. Isso torna a atualização da base de conhecimento do FAQ muito mais fácil.
+
+
+  Resumo das principais ações que eu recomendaria:
+
+
+   1. Prioridade Alta: Refatorar as rotas /consultar-brmed e /ocr para serem assíncronas com Celery e Redis. Isso trará o maior ganho de performance e
+      escalabilidade.
+   2. Prioridade Média: Substituir os time.sleep() por esperas explícitas do Playwright para aumentar a robustez do robô.
+   3. "Sugestão Legal": Trocar a extração de dados via regex por uma chamada à LLM para um sistema mais inteligente e flexível.
+
+
+  O que você acha dessas ideias? Qual delas te interessa mais para começarmos a detalhar ou até mesmo implementar?

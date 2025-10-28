@@ -1,0 +1,9 @@
+
+Relatório Médico
+Paciente: JOSÉ DA SILVA
+CPF: 123.456.789-00
+
+Exames realizados:
+- HEMOGRAMA COMPLETO
+- GLICOSE
+- ELETROCARDIOGRAMA (ECG)

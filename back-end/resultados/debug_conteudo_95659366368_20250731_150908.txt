@@ -1,0 +1,124 @@
+Olá, thiago.simoes
+
+Você está logado em: Operações
+
+Logout
+
+Página inicial
+Cadastrar paciente
+Agenda
+30 pendência(s)
+8 grupos faltando dados financeiros
+10 exame(s) sem preço
+28 exame(s) sem valor de repasse
+Relatório
+Área administrativa
+Está em:
+Início >
+Consulta de Paciente >
+Imprimir guia de agendamento
+
+
+VOUCHER
+
+
+PERIÓDICO
+
+
+Periodical
+
+
+
+Prezado(a) / Dear,
+Recebemos sua solicitação e confirmamos o agendamento conforme detalhes a seguir / Your request has been received and your scheduling is confirmed as folowing:
+
+
+
+CHESF - CE - SUBESTAÇÃO DE FORTALEZA - SE FTZ (ELETROBRAS)
+
+
+1. Identificação / Identification:
+
+Nome / Name: RAFAEL BARROSO DE SOUZA FARIAS	Identidade / ID Number:
+CPF / Passport: 95659366368	Matrícula / Register: 338992
+Nascimento / Birth: 16/12/1982	Idade / Age: 42
+Função / Function: ANALISTA I	Setor / Section: OBRAS E ACOMPANHAMENTOS ATIVIDADES - SE E USINA
+
+
+2. Local de atendimento / Care Location:
+
+FORTALEZA - CE - QUALITY MEDICINA E ENGENHARIA DO TRABALHO
+Rua Dr. José Lourenço, 2422, Aldeota, FORTALEZA - CE - 60115-281	Telefone / Phone number: (85) 3033-6900
+
+
+3. Data e horário do atendimento / Service date and time:
+	Data / Date: 09/06/2025	Hora / Hour: 07h00
+
+
+NOTA / Note: O atendimento é por ordem de chegada. O paciente deve chegar 15 minutos antes do horário de atendimento e até 1 hora após o início do mesmo. Caso contrário, a recepção poderá reagendar o paciente. / The service is in order of arrival. The patient should arrive 15 minutes before the opening hours and up to 1 hour after it's begun. Otherwise, the reception can reschedule the patient.
+
+
+
+4. Exames / Exams:
+
+4.1 Realizados na própria clínica / Performed at the clinic itself:
+
+
+AUDIOMETRIA TONAL * / PURE TONE AUDIOMETRY *	TSH / TSH
+CREATININA / CREATININE	CLÍNICO OCUPACIONAL * / CLINICAL EXAMINATION *
+ACUIDADE VISUAL * / VISUAL ACUITY *	HEMOGLOBINA GLICADA * / GLYCATED HEMOGLOBIN *
+HEMOGRAMA COMPLETO COM PLAQUETAS / COMPLETE BLOOD COUNT WITH PLATELETS	LIPIDOGRAMA (PERFIL LIPÍDICO) / LIPIDOGRAM (LIPID PROFILE)
+GLICEMIA DE JEJUM * / GLUCOSE *	FOSFATASE ALCALINA / ALKALINE PHOSPHATASE
+TGO (AST) / TGO (AST)	TGP (ALT) / TGP (ALT)
+GGT (GAMA-GT) / GGT (GAMMA-GT)	BILIRRUBINA TOTAL E FRAÇÕES / TOTAL BILIRUBIN AND FRACTIONS
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+	
+Obrigatório * / Mandatory *
+
+
+5. Observações importantes / Important notice:
+
+1) Obrigatória a apresentação do CPF, juntamente com documento oficial com foto e/ou documento digital / The passport must be presented.
+2) Se necessária remarcação, favor solicitar novamente através do BR NET / If reschedule is required, please request again through BR NET.
+3) Pacientes que irão realizar exame de fezes e/ou urina devem apresentar o material para início do atendimento / Patients who will perform feces and / or urine tests should present the material to begin the care.
+4) Não é permitida a coleta de fezes e/ou urina em ambientes da BR MED / Feces and / or urine collection is not allowed in BR MED medical clinics.
+
+
+
+6. Orientações de preparo para exame / Exam preparation guidelines:
+
+ACUIDADE VISUAL / VISUAL ACUITY
+Caso faça uso de óculos, é necessário que os leve para a realização do exame. / If you wear glasses, it is necessary to bring them for the exam.
+AUDIOMETRIA TONAL / PURE TONE AUDIOMETRY
+Não se expor a sons fortes e não usar aparelhos sonoros pelo menos 14 horas antes do exame / Do not expose yourself to strong sounds and not use sound appliances at least 14 hours before the exam
+BILIRRUBINA TOTAL E FRAÇÕES / TOTAL BILIRUBIN AND FRACTIONS
+Não requer preparo prévio / No previous preparation
+CREATININA / CREATININE
+Este exame não necessita de jejum. Informar os medicamentos em uso. / This exam does not need fasting. Inform the medicines in use.
+FOSFATASE ALCALINA / ALKALINE PHOSPHATASE
+Não requer preparo prévio / No previous preparation
+GGT (GAMA-GT) / GGT (GAMMA-GT)
+Não requer preparo prévio / No previous preparation
+GLICEMIA DE JEJUM / GLUCOSE
+Jejum de 8 a 12 horas. Não realizar esforço físico 12 horas antes da coleta. / Fasting 8 to 12 hours. Do not perform physical effort 12 hours before collection.
+HEMOGLOBINA GLICADA / GLYCATED HEMOGLOBIN
+Evitar dieta rica em gordura antes da coleta. / Avoid high fat diet before collection.
+HEMOGRAMA COMPLETO COM PLAQUETAS / COMPLETE BLOOD COUNT WITH PLATELETS
+Não ingerir bebidas alcoólicas 72 horas antes do exame, evitar exercícios físicos antes do exame / Do not ingest alcoholic beverages 72 hours before examination, avoid exercise before examination
+LIPIDOGRAMA (PERFIL LIPÍDICO) / LIPIDOGRAM (LIPID PROFILE)
+Jejum não necessário; Manter dieta habitual nos 5 dias que antecedem a coleta; Não ingerir bebidas alcoólicas 72 horas antes do exame. / Not necessary fasting; Maintain a usual diet in the 5 days before the collection; Do not ingest alcoholic beverages 72 hours before the exam.
+TGO (AST) / TGO (AST)
+Não requer preparo prévio / No previous preparation
+TGP (ALT) / TGP (ALT)
+Não requer preparo prévio / No previous preparation
+
+Voltar Imprimir
+
+Copyright Intensys/BR MED

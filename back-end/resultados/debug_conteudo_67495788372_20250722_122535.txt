@@ -1,0 +1,1090 @@
+<html xmlns="http://www.w3.org/1999/xhtml"><head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<title>brnet 3.0</title>
+<link href="https://brmed-production-brnet.s3.amazonaws.com/static/css/admin-blue.css" rel="stylesheet" type="text/css" media="screen">
+<link href="https://brmed-production-brnet.s3.amazonaws.com/static/css/brmed_novo.css" rel="stylesheet" type="text/css" media="screen">
+<script src="https://brmed-production-brnet.s3.amazonaws.com/static/js/jquery-1.11.1.min.js"></script>
+<script src="https://brmed-production-brnet.s3.amazonaws.com/static/js/jquery-migrate-1.2.1.min.js"></script>
+
+  <link href="https://brmed-production-brnet.s3.amazonaws.com/static/css/page-specific/full_aso.css" rel="stylesheet" type="text/css"><!-- ATENCAO! Este css é para estilo de impressao! -->
+  <link href="https://brmed-production-brnet.s3.amazonaws.com/static/css/brmed-print-document.css" rel="stylesheet" type="text/css">
+  <style type="text/css">
+  #container img.logo {
+    max-width: calc(100% - 2px);
+    max-height: calc(100% - 2px);
+    display: block;
+    margin: 1px auto;
+  }
+  .brmed-document img.logo {
+    margin: 0 !important;
+    width: 250px !important;
+    padding: 15px !important;
+  }
+  #container > table {
+    border-bottom: 1px solid #000000;
+  }
+  table.extra-padding {
+    padding: 15px 10px;
+  }
+  #container table.inner-data {
+    padding: 2px 10px 11px;
+  }
+  #container table.inner-data tr:first-child td {
+    padding-top: 5px;
+    padding-bottom: 5px;
+  }
+  #container > table table,
+  #container table td {
+    border: none;
+    line-height: 1.5;
+  }
+  #container table .sm-line-height {
+    line-height: 1.2;
+  }
+  #container table td.border-bottom-right {
+    border-bottom: 1px solid #000;
+    border-right: 1px solid #000;
+  }
+  #container table td.border-bottom,
+  #container table.border-bottom {
+    border-bottom: 1px solid #000;
+  }
+  #container > table table.border,
+  #container table#header {
+    border: 1px solid #000;
+    border-bottom: none;
+  }
+  #patients-company {
+    padding: 8px 0;
+  }
+  #container h4 {
+    font-size: 1.2em;
+  }
+  #container table.inner-data strong {
+    font-size: 1.1em;
+  }
+  #container table.exams.safari tr:not(.no-hide):nth-last-child(-n+8) {
+    display: none;
+  }
+  #container table.inner-data strong.lg-font,
+  .lg-font {
+    font-size: 1.3em;
+  }
+  td span.en-tex {
+    font-style: italic;
+  }
+  @media print {
+   @page {
+      margin: 1cm;
+   }
+   p, .sm-line-height {
+       padding: 0px !important; 
+       font-size: .9em;
+       line-height: 1em;
+   }
+   #container img.logo {
+       max-height: 131px;
+   }
+   table#header h1 {
+       line-height: 80px;
+   }
+  }
+  </style>
+
+</head>
+<body>
+
+<div id="outer">
+  <div id="header" class="print-disabled">
+      <div id="header-container" class="clearfix">
+          <div class="contentwidth">
+              <div id="logo">
+                    <a href="/">
+                      <img alt="logo" class="brmed-logo" src="https://brmed-production-brnet.s3.amazonaws.com/static/images/brmed-new-logo.png">
+                    </a>
+                </div>
+              <div id="headertools">
+                  <p class="welcome">Olá, thiago.simoes</p>
+                  
+                      
+                      
+                    
+                    <p>Você está logado em: Operações</p>
+                    
+                    <p>
+                        <a class="img-button" href="/document360/base-conhecimento/">
+                            <img class="img-help" src="https://brmed-production-brnet.s3.amazonaws.com/static/button/button_help.png" alt=""></a>
+                        <a href="/sso-logout/" class="logout">Logout</a>
+                    </p>
+                </div>
+            </div>
+        </div>
+        <div id="menu-container" class="clearfix">
+            
+            <div class="contentwidth">
+              <div id="menu" class="clearfix">
+                    <ul id="nav">
+                        
+                        
+                        <li><a href="/">Página inicial</a></li>
+                        <li><a href="/paciente/adicionar">Cadastrar paciente</a></li>
+                        <li><a href="/scheduled_report">Agenda</a></li>
+                        <li id="pendencyChecker">
+<a href="#">10 pendência(s)</a>
+
+<ul>
+    
+    <li class="dropDownItem"><a href="/confirmar_criacao_pedido_exame/999750?solicitacao_id=1616370">JULIO CESAR DA SILVA PEREIRA - CORPORATE OFFICE (MODEC) - 21/07/2025 - 10:19</a></li>
+    
+    <li class="dropDownItem"><a href="/confirmar_criacao_pedido_exame/1001488?solicitacao_id=1616382">HAMILTON TAVARES NERY - BASE MACAÉ LOGÍSTICA (MODEC) - 21/07/2025 - 10:30</a></li>
+    
+    <li class="dropDownItem"><a href="/confirmar_criacao_pedido_exame/1715158?solicitacao_id=1616737">RODRIGO DA SILVA GALVES - CORPORATE OFFICE (MODEC) - 21/07/2025 - 14:25</a></li>
+    
+    <li class="dropDownItem"><a href="/confirmar_criacao_pedido_exame/2719208?solicitacao_id=1617378">THAIS ALVES DOS PRAZERES - BR MED - SEDE (BR MED) - 22/07/2025 - 11:05</a></li>
+    
+    <li class="dropDownItem"><a href="/confirmar_criacao_pedido_exame/2413789?solicitacao_id=1617407">WILLIAM WAGNER LIMA DE FREITAS - INSTITUTO FERNANDES FIGUEIRA (... - 22/07/2025 - 11:19</a></li>
+    
+    <li class="dropDownItem"><a href="/confirmar_criacao_pedido_exame/2779083?solicitacao_id=1617416">GLAUBER MARQUES RIBEIRO NOGINO - GERDAU COSIGUA - RJ (GRUPO SER... - 22/07/2025 - 11:20</a></li>
+    
+    <li class="dropDownItem"><a href="/confirmar_criacao_pedido_exame/2775444?solicitacao_id=1617418">LEILANE LOUZADA LIMA - ESCRITÓRIO DO RIO DE JANEIRO (... - 22/07/2025 - 11:22</a></li>
+    
+    <li class="dropDownItem"><a href="/confirmar_criacao_pedido_exame/2779107?solicitacao_id=1617449">MARIA VITÓRIA DE ALMEIDA AYRES - SESC - SÃO JOÃO DE MERITI (SES... - 22/07/2025 - 11:34</a></li>
+    
+    <li class="dropDownItem"><a href="/confirmar_criacao_pedido_exame/1326731?solicitacao_id=1617479">PAULO ROBERTO LAUBE - OGMORJ - NOVO (OGMORJ) - 22/07/2025 - 11:59</a></li>
+    
+    <li class="dropDownItem"><a href="/confirmar_criacao_pedido_exame/1014535?solicitacao_id=1617490">RODRIGO DI CREDDO MAXIMO - CORPORATE OFFICE (MODEC) - 22/07/2025 - 12:07</a></li>
+    
+</ul>
+
+</li>
+                        <li id="pendingFinancialDataChecker">
+ <a href="#">7 grupos faltando dados financeiros</a>
+ 
+ <ul>
+ 
+ <li class="dropDownItem"><a href="https://financeiro.grupobrmed.com.br/settings/group/3203/return_brnet">NIO</a></li>
+ 
+ <li class="dropDownItem"><a href="https://financeiro.grupobrmed.com.br/settings/group/3174/return_brnet">ARGENBRAS RG</a></li>
+ 
+ <li class="dropDownItem"><a href="https://financeiro.grupobrmed.com.br/settings/group/3181/return_brnet">GN SERVIÇOS MÉDICOS</a></li>
+ 
+ <li class="dropDownItem"><a href="https://financeiro.grupobrmed.com.br/settings/group/3216/return_brnet">ESKINA CHOPERIA (RG)</a></li>
+ 
+ <li class="dropDownItem"><a href="https://financeiro.grupobrmed.com.br/settings/group/3157/return_brnet">PENSIONATO NOSSO LAR (RG)</a></li>
+ 
+ <li class="dropDownItem"><a href="https://financeiro.grupobrmed.com.br/settings/group/3169/return_brnet">CONSTRUTORA CACHAPUZ (RG)</a></li>
+ 
+ <li class="dropDownItem"><a href="https://financeiro.grupobrmed.com.br/settings/group/3219/return_brnet">REFIT - ADMINISTRATIVAS</a></li>
+ 
+ </ul>
+ 
+</li>
+                        <li id="pendingExamPriceChecker">
+<a href="/preco-exame/pendencia/lista">30 exame(s) sem preço</a>
+</li><li id="pendingExamPackagePriceChecker">
+<a href="#">28 exame(s) sem valor de repasse</a>
+
+<ul>
+    
+    <li class="dropDownItem"><a href="/preco-exame/pendencia/per-capita/resolver/1">EXAME ANTROPOMÉTRICO</a></li>
+    
+    <li class="dropDownItem"><a href="/preco-exame/pendencia/per-capita/resolver/2">DOSAGEM DE ÁLCOOL ETÍLICO (SANGUE)</a></li>
+    
+    <li class="dropDownItem"><a href="/preco-exame/pendencia/per-capita/resolver/3">ANAMNESE ESPECIAL</a></li>
+    
+    <li class="dropDownItem"><a href="/preco-exame/pendencia/per-capita/resolver/4">TOXICOLÓGICO CAPILAR</a></li>
+    
+    <li class="dropDownItem"><a href="/preco-exame/pendencia/per-capita/resolver/5">ATENDIMENTO ASSISTENCIAL</a></li>
+    
+    <li class="dropDownItem"><a href="/preco-exame/pendencia/per-capita/resolver/6">TESTE DO EQUILÍBRIO ESTÁTICO E DINÂMICO</a></li>
+    
+    <li class="dropDownItem"><a href="/preco-exame/pendencia/per-capita/resolver/7">RESSONÂNCIA MAGNÉTICA DE COLUNA LOMBAR (EXTERNO)</a></li>
+    
+    <li class="dropDownItem"><a href="/preco-exame/pendencia/per-capita/resolver/8">RESSONÂNCIA MAGNÉTICA DE JOELHO AMBOS (EXTERNO)</a></li>
+    
+    <li class="dropDownItem"><a href="/preco-exame/pendencia/per-capita/resolver/9">COLESTEROL TOTAL E FRAÇÕES</a></li>
+    
+    <li class="dropDownItem"><a href="/preco-exame/pendencia/per-capita/resolver/10">COBALTO - URINÁRIO</a></li>
+    
+    <li class="dropDownItem"><a href="/preco-exame/pendencia/per-capita/resolver/11">CAMPIMETRIA VISUAL (EXTERNO)</a></li>
+    
+    <li class="dropDownItem"><a href="/preco-exame/pendencia/per-capita/resolver/12">ATENDIMENTO PREVIDENCIÁRIO</a></li>
+    
+    <li class="dropDownItem"><a href="/preco-exame/pendencia/per-capita/resolver/13">VITAMINA D</a></li>
+    
+    <li class="dropDownItem"><a href="/preco-exame/pendencia/per-capita/resolver/14">METAHEMOGLOBINA</a></li>
+    
+    <li class="dropDownItem"><a href="/preco-exame/pendencia/per-capita/resolver/15">ÁCIDO BUTOXIACÉTICO - URINA</a></li>
+    
+    <li class="dropDownItem"><a href="/preco-exame/pendencia/per-capita/resolver/16">ÁCIDO FÓLICO</a></li>
+    
+    <li class="dropDownItem"><a href="/preco-exame/pendencia/per-capita/resolver/17">FERRITINA</a></li>
+    
+    <li class="dropDownItem"><a href="/preco-exame/pendencia/per-capita/resolver/18">VITAMINA B12</a></li>
+    
+    <li class="dropDownItem"><a href="/preco-exame/pendencia/per-capita/resolver/19">CA 125</a></li>
+    
+    <li class="dropDownItem"><a href="/preco-exame/pendencia/per-capita/resolver/20">25 OH</a></li>
+    
+    <li class="dropDownItem"><a href="/preco-exame/pendencia/per-capita/resolver/21">ORTO-CRESOL</a></li>
+    
+    <li class="dropDownItem"><a href="/preco-exame/pendencia/per-capita/resolver/22">CULTURA DE URINA</a></li>
+    
+    <li class="dropDownItem"><a href="/preco-exame/pendencia/per-capita/resolver/23">ESTRADIOL (E2)</a></li>
+    
+    <li class="dropDownItem"><a href="/preco-exame/pendencia/per-capita/resolver/24">LH</a></li>
+    
+    <li class="dropDownItem"><a href="/preco-exame/pendencia/per-capita/resolver/25">FSH</a></li>
+    
+    <li class="dropDownItem"><a href="/preco-exame/pendencia/per-capita/resolver/26">PROLACTINA</a></li>
+    
+    <li class="dropDownItem"><a href="/preco-exame/pendencia/per-capita/resolver/27">RADIOGRAFIA DE CRÂNIO AP</a></li>
+    
+    <li class="dropDownItem"><a href="/preco-exame/pendencia/per-capita/resolver/28">CLÍNICO</a></li>
+    
+</ul>
+
+</li><li><a href="/relatorios/">Relatório</a></li>
+                        
+                        
+                        
+                            <li><a href="/administrativo/">Área administrativa</a></li>
+                        
+                        
+                        
+                    </ul>
+                </div>
+            </div>
+            
+      </div>
+    </div>
+    
+    <div id="main">
+      <div class="contentwidth clearfix">
+          <div id="breadcrumbs" class="print-disabled">
+<ul class="nav-bar">
+  <li><span>Está em:</span></li>
+  <li><a href="/">Início</a> &gt;</li>
+  <li><a href="/paciente/1782502">Consulta de Paciente</a> &gt;</li>
+  <li>Imprimir guia de agendamento</li>
+</ul>
+</div>
+           <div id="singleCol">
+                <div class="content borders">
+                
+                <!--p class="success">Success! You made it to the one-column layout, this is a sample "success" message. - <a href="javascript:void(null);" class="hideSuccess">Hide Message</a></p -->
+                 <div id="container">
+              
+  <table class="brmed-document">
+    <tbody><tr>
+      <td>
+        <table id="header">
+          <tbody><tr>
+            <td>
+              <table>
+                <tbody><tr>
+                  <td width="40%" rowspan="4" class="border-bottom-right" align="center">
+                    <img class="logo" src="https://brmed-production-brnet.s3.amazonaws.com/static/images/logo_brmed_black_and_white.png" title="BR MED">
+                  </td>
+                </tr>
+                <tr>
+                  <td class="center-text border-bottom">
+                      <h1 class="title">VOUCHER</h1>
+                  </td>
+                </tr>
+                <tr>
+                  <td class="center-text border-bottom">
+                      <h2>PERIÓDICO</h2>
+                  </td>
+                </tr>
+                <tr>
+                   <td class="center-text en-text border-bottom">
+                       <h4>Periodical</h4>
+                   </td>
+                </tr>
+              </tbody></table>
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <table class="border-bottom extra-padding">
+                <tbody><tr>
+                  <td>
+                    <p class="sm-line-height">Prezado(a) / <span class="ent-text">Dear</span>,<br>
+                        Recebemos sua solicitação e confirmamos o agendamento conforme detalhes a seguir / <span class="en-text">Your request has been received and your scheduling is confirmed as folowing</span>:</p>
+                  </td>
+                </tr>
+              </tbody></table>
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <table>
+                <tbody><tr>
+                  <td class="center-text">
+                    <h3 id="patients-company">ARCELORMITTAL BRASIL S.A. / COMERCIAL - CDB - GALPAO, VENDAS REG E CORP Fortaleza (ABERTTA SAÚDE)</h3>
+                  </td>
+                </tr>
+              </tbody></table>
+            </td>
+          </tr>
+        </tbody></table>
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <table class="border">
+          <tbody><tr>
+            <td>
+              <table class="inner-data" border="1">
+                <tbody><tr>
+                  <td>
+                    <h4>1. Identificação / <span class="en-text">Identification</span>:</h4>
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <label>Nome / <span class="en-text">Name</span>:</label>
+                    <span id="patients-name">ANA BEATRIZ DE SOUSA DA SILVA</span>
+                  </td>
+                  
+                    <td>
+                      <label>Identidade / <span class="en-text">ID Number</span>:</label>
+                      <span id="patients-id-number">93002142929</span>
+                    </td>
+                  
+                </tr>
+                <tr>
+                  <td width="60%">
+                    <label>CPF / <span class="en-text">Passport</span>:</label>
+                    <span id="patients-cpf">67495788372</span>
+                  </td>
+                  <td>
+                    <label>Matrícula / <span class="en-text">Register</span>:</label>
+                    <span id="patients-registration"></span>
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <label>Nascimento / <span class="en-text">Birth</span>:</label>
+                    <span id="patients-birthday">14/03/1975</span>
+                  </td>
+                  <td>
+                    <label>Idade / <span class="en-text">Age</span>:</label>
+                    <span id="patients-age">50</span>
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <label>Função / <span class="en-text">Function</span>:</label>
+                    <span id="patients-job">VENDEDOR INTERNO JR</span>
+                  </td>
+                  <td>
+                    <label>Setor / <span class="en-text">Section</span>:</label>
+                    <span id="patients-sector">EG00306500</span>
+                  </td>
+                </tr>
+              </tbody></table>
+            </td>
+          </tr>
+        </tbody></table>
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <table class="border">
+          <tbody><tr>
+            <td>
+              <table class="inner-data" border="1">
+                <tbody><tr>
+                  <td>
+                    <h4>2. Local de atendimento / <span class="en-text">Care Location</span>:</h4>
+                  </td>
+                </tr>
+                <tr>
+                  <td colspan="2">
+                    <strong class="lg-font">
+                    MARACANAÚ - CE - QUALITY<br>
+                    </strong>
+                    ROD. DR. MENDEL STEINBRUCH, 10293 - SALA 3335, PAJUCARA, MARACANAU - CE - 61932-971
+                  </td>
+                  <td>
+                    <label>Telefone / <span class="en-text">Phone number</span>:</label>
+                    <span>(85) 9890-24883</span>
+                  </td>
+                </tr>
+              </tbody></table>
+            </td>
+          </tr>
+        </tbody></table>
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <table class="border">
+          <tbody><tr>
+            <td>
+              <table class="inner-data" border="1">
+                <tbody><tr>
+                  <td width="50%">
+                    <h4>3. Data e horário do atendimento / <span class="en-text">Service date and time</span>:</h4>
+                  </td>
+                  <td width="25%" class="lg-font">
+                    <label>Data / <span class="en-text">Date</span>: </label>
+                    <span><strong>13/05/2025</strong></span>
+                  </td>
+                  <td width="25%" class="lg-font">
+                    <label>Hora / <span class="en-text">Hour</span>:</label>
+                    <span><strong>07h00</strong></span>
+                  </td>
+                </tr>
+                <tr>
+                  
+                  <td colspan="3" class="sm-line-height">
+                    <p>NOTA / <span class="ent-text">Note</span>: O atendimento é por ordem de chegada. O paciente deve chegar 15 minutos antes do horário de atendimento e até 1 hora após o início do mesmo. Caso contrário, a recepção poderá reagendar o paciente. / <span class="en-text"> The service is in order of arrival. The patient should arrive 15 minutes before the opening hours and up to 1 hour after it's begun. Otherwise, the reception can reschedule the patient.</span></p>
+                  </td>
+                  
+                </tr>
+              </tbody></table>
+            </td>
+          </tr>
+        </tbody></table>
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <table class="border">
+          <tbody><tr>
+            <td>
+              
+                <table class="inner-data exams" border="1">
+                    <tbody><tr>
+                      <td>
+                        <h4>4. Exames / <span class="en-tex">Exams</span>:</h4>
+                        <p><b>4.1 Realizados na própria clínica / <span class="en-tex">Performed at the clinic itself</span>:</b></p>
+                      </td>
+                    </tr>
+                    
+                      
+                        <tr class="no-hide">
+                          <td width="50%">
+                            <span>AUDIOMETRIA TONAL *
+                              /
+                            <span class="en-text">
+                              PURE TONE AUDIOMETRY *
+                            </span></span>
+                          </td>
+                        
+                      
+                    
+                      
+                        
+                          <td width="50%">
+                            <span>COLESTEROL TOTAL *
+                              /
+                            <span class="en-text">
+                              TOTAL CHOLESTEROL *
+                            </span></span>
+                          </td>
+                        </tr>
+                      
+                    
+                      
+                        <tr class="no-hide">
+                          <td width="50%">
+                            <span>CREATININA *
+                              /
+                            <span class="en-text">
+                              CREATININE *
+                            </span></span>
+                          </td>
+                        
+                      
+                    
+                      
+                        
+                          <td width="50%">
+                            <span>CLÍNICO OCUPACIONAL *
+                              /
+                            <span class="en-text">
+                              CLINICAL EXAMINATION *
+                            </span></span>
+                          </td>
+                        </tr>
+                      
+                    
+                      
+                        <tr class="no-hide">
+                          <td width="50%">
+                            <span>ACUIDADE VISUAL *
+                              /
+                            <span class="en-text">
+                              VISUAL ACUITY *
+                            </span></span>
+                          </td>
+                        
+                      
+                    
+                      
+                        
+                          <td width="50%">
+                            <span>ELETROCARDIOGRAMA *
+                              /
+                            <span class="en-text">
+                              ELECTROCARDIOGRAM *
+                            </span></span>
+                          </td>
+                        </tr>
+                      
+                    
+                      
+                        <tr class="no-hide">
+                          <td width="50%">
+                            <span>ELETROENCEFALOGRAMA *
+                              /
+                            <span class="en-text">
+                              ELECTROENCEPHALOGRAM *
+                            </span></span>
+                          </td>
+                        
+                      
+                    
+                      
+                        
+                          <td width="50%">
+                            <span>LDL *
+                              /
+                            <span class="en-text">
+                              LDL *
+                            </span></span>
+                          </td>
+                        </tr>
+                      
+                    
+                      
+                        <tr class="no-hide">
+                          <td width="50%">
+                            <span>HDL *
+                              /
+                            <span class="en-text">
+                              HDL *
+                            </span></span>
+                          </td>
+                        
+                      
+                    
+                      
+                        
+                          <td width="50%">
+                            <span>TRIGLICERÍDEOS *
+                              /
+                            <span class="en-text">
+                              TRIGLYCERIDES *
+                            </span></span>
+                          </td>
+                        </tr>
+                      
+                    
+                      
+                        <tr class="no-hide">
+                          <td width="50%">
+                            <span>ÁCIDO ÚRICO *
+                              /
+                            <span class="en-text">
+                              URIC ACID *
+                            </span></span>
+                          </td>
+                        
+                      
+                    
+                      
+                        
+                          <td width="50%">
+                            <span>HEMOGRAMA COMPLETO COM PLAQUETAS *
+                              /
+                            <span class="en-text">
+                              COMPLETE BLOOD COUNT WITH PLATELETS *
+                            </span></span>
+                          </td>
+                        </tr>
+                      
+                    
+                      
+                        <tr class="no-hide">
+                          <td width="50%">
+                            <span>SUMÁRIO DE URINA (EAS) *
+                              /
+                            <span class="en-text">
+                              URINALYSIS (UA) *
+                            </span></span>
+                          </td>
+                        
+                      
+                    
+                      
+                        
+                          <td width="50%">
+                            <span>GLICEMIA DE JEJUM *
+                              /
+                            <span class="en-text">
+                              GLUCOSE *
+                            </span></span>
+                          </td>
+                        </tr>
+                      
+                    
+                      
+                        <tr class="no-hide">
+                          <td width="50%">
+                            <span>GGT (GAMA-GT) *
+                              /
+                            <span class="en-text">
+                              GGT (GAMMA-GT) *
+                            </span></span>
+                          </td>
+                        
+                      
+                    
+                    
+                      </tr><tr>
+                        <td>
+                          <p><b>4.2 Realizados em parceiro externo / <span class="en-tex">Performed at an external partner</span>:</b></p>
+                        </td>
+                      </tr>
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                    
+                    
+                      <tr>
+                        <td colspan="3">&nbsp;</td>
+                      </tr>
+                    
+                      <tr>
+                        <td colspan="3">&nbsp;</td>
+                      </tr>
+                    
+                      <tr>
+                        <td colspan="3">&nbsp;</td>
+                      </tr>
+                    
+                      <tr>
+                        <td colspan="3">&nbsp;</td>
+                      </tr>
+                    
+                      <tr>
+                        <td colspan="3">&nbsp;</td>
+                      </tr>
+                    
+                      <tr>
+                        <td colspan="3">&nbsp;</td>
+                      </tr>
+                    
+                      <tr>
+                        <td colspan="3">&nbsp;</td>
+                      </tr>
+                    
+                      <tr>
+                        <td colspan="3">&nbsp;</td>
+                      </tr>
+                    
+                    <tr><td></td><td style="float: right;">Obrigatório * / <span class="en-text">Mandatory *</span></td>
+                  </tr></tbody></table>
+                
+            </td>
+          </tr>
+        </tbody></table>
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <table class="border">
+          <tbody><tr>
+            <td>
+              <table class="inner-data" border="1">
+                <tbody><tr>
+                  <td>
+                    <h4>5. Observações importantes / <span class="en-text">Important notice</span>:</h4>
+                  </td>
+                </tr>
+                <tr>
+                  <td colspan="3" class="sm-line-height">
+                      1) Obrigatória a apresentação do CPF, juntamente com documento oficial com foto e/ou documento digital / <span class="en-text">The passport must be presented</span>.<br>
+                      2) Se necessária remarcação, favor solicitar novamente através do BR NET / <span class="en-text">If reschedule is required, please request again through BR NET</span>.<br>
+                      3) Pacientes que irão realizar exame de fezes e/ou urina devem apresentar o material para início do atendimento / <span class="en-text">Patients who will perform feces and / or urine tests should present the material to begin the care</span>.<br>
+                      4) Não é permitida a coleta de fezes e/ou urina em ambientes da BR MED / <span class="en-text">Feces and / or urine collection is not allowed in BR MED medical clinics</span>.<br>
+                  </td>
+                </tr>
+              </tbody></table>
+            </td>
+          </tr>
+        </tbody></table>
+      </td>
+    </tr>
+    
+      <tr>
+        <td>
+          <table class="border">
+            <tbody><tr>
+              <td>
+                <table class="inner-data" border="1">
+                  <tbody><tr>
+                    <td colspan="3" class="sm-line-height">
+                      <h4>6. Orientações de preparo para exame / <span class="en-text">Exam preparation guidelines</span>:</h4>
+                    </td>
+                  </tr>
+                  
+                    
+                      <tr> 
+                        <td style="padding: 3px 0;">
+                          <span>ÁCIDO ÚRICO / <span class="en-text">URIC ACID</span></span>
+                        </td> 
+                      </tr>
+                      <tr class="no-hide">
+                        <td colspan="3" class="sm-line-height">
+                            <span>Não requer preparo prévio
+ / <span class="en-text">No previous preparation
+</span></span>
+                        </td>
+                      </tr>
+                    
+                  
+                    
+                      <tr> 
+                        <td style="padding: 3px 0;">
+                          <span>ACUIDADE VISUAL / <span class="en-text">VISUAL ACUITY</span></span>
+                        </td> 
+                      </tr>
+                      <tr class="no-hide">
+                        <td colspan="3" class="sm-line-height">
+                            <span>Caso faça uso de óculos, é necessário que os leve para a realização do exame.
+ / <span class="en-text">If you wear glasses, it is necessary to bring them for the exam.</span></span>
+                        </td>
+                      </tr>
+                    
+                  
+                    
+                      <tr> 
+                        <td style="padding: 3px 0;">
+                          <span>AUDIOMETRIA TONAL / <span class="en-text">PURE TONE AUDIOMETRY</span></span>
+                        </td> 
+                      </tr>
+                      <tr class="no-hide">
+                        <td colspan="3" class="sm-line-height">
+                            <span>Não se expor a sons fortes e não usar aparelhos sonoros pelo menos 14 horas antes do exame
+ / <span class="en-text">Do not expose yourself to strong sounds and not use sound appliances at least 14 hours before the exam
+</span></span>
+                        </td>
+                      </tr>
+                    
+                  
+                    
+                  
+                    
+                      <tr> 
+                        <td style="padding: 3px 0;">
+                          <span>COLESTEROL TOTAL / <span class="en-text">TOTAL CHOLESTEROL</span></span>
+                        </td> 
+                      </tr>
+                      <tr class="no-hide">
+                        <td colspan="3" class="sm-line-height">
+                            <span>Manter dieta habitual nos 5 dias antes da coleta; Este exame não necessita de jejum.
+ / <span class="en-text">Keep a habitual diet within 5 days before collection; This exam does not need fasting.
+</span></span>
+                        </td>
+                      </tr>
+                    
+                  
+                    
+                      <tr> 
+                        <td style="padding: 3px 0;">
+                          <span>CREATININA / <span class="en-text">CREATININE</span></span>
+                        </td> 
+                      </tr>
+                      <tr class="no-hide">
+                        <td colspan="3" class="sm-line-height">
+                            <span>Este exame não necessita de jejum. Informar os medicamentos em uso.
+ / <span class="en-text">This exam does not need fasting. Inform the medicines in use.
+</span></span>
+                        </td>
+                      </tr>
+                    
+                  
+                    
+                      <tr> 
+                        <td style="padding: 3px 0;">
+                          <span>ELETROCARDIOGRAMA / <span class="en-text">ELECTROCARDIOGRAM</span></span>
+                        </td> 
+                      </tr>
+                      <tr class="no-hide">
+                        <td colspan="3" class="sm-line-height">
+                            <span>Não requer preparo prévio
+ / <span class="en-text">No previous preparation
+</span></span>
+                        </td>
+                      </tr>
+                    
+                  
+                    
+                      <tr> 
+                        <td style="padding: 3px 0;">
+                          <span>ELETROENCEFALOGRAMA / <span class="en-text">ELECTROENCEPHALOGRAM</span></span>
+                        </td> 
+                      </tr>
+                      <tr class="no-hide">
+                        <td colspan="3" class="sm-line-height">
+                            <span>É orientado a comparecer ao local do exame com o cabelo limpo e seco para permitir melhor fixação dos eletrodos.
+ / <span class="en-text">It is oriented to attend the exam site with clean and dry hair to allow better fixation of the electrodes.
+</span></span>
+                        </td>
+                      </tr>
+                    
+                  
+                    
+                      <tr> 
+                        <td style="padding: 3px 0;">
+                          <span>GGT (GAMA-GT) / <span class="en-text">GGT (GAMMA-GT)</span></span>
+                        </td> 
+                      </tr>
+                      <tr class="no-hide">
+                        <td colspan="3" class="sm-line-height">
+                            <span>Não requer preparo prévio
+ / <span class="en-text">No previous preparation
+</span></span>
+                        </td>
+                      </tr>
+                    
+                  
+                    
+                      <tr> 
+                        <td style="padding: 3px 0;">
+                          <span>GLICEMIA DE JEJUM / <span class="en-text">GLUCOSE</span></span>
+                        </td> 
+                      </tr>
+                      <tr class="no-hide">
+                        <td colspan="3" class="sm-line-height">
+                            <span>Jejum de 8 a 12 horas. Não realizar esforço físico 12 horas antes da coleta.
+ / <span class="en-text">Fasting 8 to 12 hours. Do not perform physical effort 12 hours before collection.
+</span></span>
+                        </td>
+                      </tr>
+                    
+                  
+                    
+                      <tr> 
+                        <td style="padding: 3px 0;">
+                          <span>HDL / <span class="en-text">HDL</span></span>
+                        </td> 
+                      </tr>
+                      <tr class="no-hide">
+                        <td colspan="3" class="sm-line-height">
+                            <span>Manter dieta habitual nos 5 dias antes da coleta;Este exame não necessita de jejum.
+ / <span class="en-text">Maintain a usual diet within 5 days before collection; this exam does not need fasting.
+</span></span>
+                        </td>
+                      </tr>
+                    
+                  
+                    
+                      <tr> 
+                        <td style="padding: 3px 0;">
+                          <span>HEMOGRAMA COMPLETO COM PLAQUETAS / <span class="en-text">COMPLETE BLOOD COUNT WITH PLATELETS</span></span>
+                        </td> 
+                      </tr>
+                      <tr class="no-hide">
+                        <td colspan="3" class="sm-line-height">
+                            <span>Não ingerir bebidas alcoólicas 72 horas antes do exame, evitar exercícios físicos antes do exame 
+ / <span class="en-text">Do not ingest alcoholic beverages 72 hours before examination, avoid exercise before examination
+</span></span>
+                        </td>
+                      </tr>
+                    
+                  
+                    
+                      <tr> 
+                        <td style="padding: 3px 0;">
+                          <span>LDL / <span class="en-text">LDL</span></span>
+                        </td> 
+                      </tr>
+                      <tr class="no-hide">
+                        <td colspan="3" class="sm-line-height">
+                            <span>Não requer preparo prévio
+ / <span class="en-text">No previous preparation
+</span></span>
+                        </td>
+                      </tr>
+                    
+                  
+                    
+                      <tr> 
+                        <td style="padding: 3px 0;">
+                          <span>SUMÁRIO DE URINA (EAS) / <span class="en-text">URINALYSIS (UA)</span></span>
+                        </td> 
+                      </tr>
+                      <tr class="no-hide">
+                        <td colspan="3" class="sm-line-height">
+                            <span>Realizar higienização da região genital com água
+ / <span class="en-text">Perform cleaning of the genital region with water
+</span></span>
+                        </td>
+                      </tr>
+                    
+                  
+                    
+                  
+                </tbody></table>
+              </td>
+            </tr>
+          </tbody></table>
+        </td>
+      </tr>
+      
+  </tbody></table>
+  <p class="print-bar print-disabled">
+    <a class="btn light" href="/paciente/1782502">
+      <span class="icon back"></span>Voltar
+    </a>
+    <a class="btn blue" href="#" onclick="print();">
+      <span class="icon print"></span>Imprimir
+    </a>
+  </p>
+
+            </div>
+        </div>
+    </div>
+    
+    <div id="footer" class="print-disabled">
+      <div class="contentwidth clearfix">
+          <p>Copyright Intensys/BR MED</p>
+        </div>
+    </div>
+</div>
+
+</div>
+<script src="https://brmed-production-brnet.s3.amazonaws.com/static/js/jquery-ui-1.8.15.min.js"></script>
+<script type="text/javascript">
+    
+    window.inbox_url = '/ajax_schedule_status';
+    
+
+    
+    window.inbox_pending_exam_price_url = '/ajax_pending_exam_price';
+    window.inbox_pending_exam_package_price_url = '/ajax_pending_exam_package_price';
+    window.get_financial_data_pending = '/get_financial_data_pending';
+    
+    $(document).ready(function(){
+        $(".hideError").click(function(){
+            $(".error").fadeOut("slow");
+        });
+
+        $('form').submit(function(){
+            $(':submit', this).click(function() {
+                return false;
+            });
+        });
+    });
+
+</script>
+
+<script src="https://brmed-production-brnet.s3.amazonaws.com/static/js/print.js"></script>
+<script src="https://brmed-production-brnet.s3.amazonaws.com/static/js/underscore-min.js"></script>
+<script src="https://brmed-production-brnet.s3.amazonaws.com/static/js/handlebars-1.0.0.beta.6.js"></script>
+<script src="https://brmed-production-brnet.s3.amazonaws.com/static/js/backbone-min.js"></script>
+
+<script src="https://brmed-production-brnet.s3.amazonaws.com/static/js/inbox.js"></script>
+
+
+<script src="https://brmed-production-brnet.s3.amazonaws.com/static/js/pending_exam_price.js"></script>
+<script src="https://brmed-production-brnet.s3.amazonaws.com/static/js/pending_exam_package_price.js"></script>
+<script src="https://brmed-production-brnet.s3.amazonaws.com/static/js/get_financial_data_pending.js"></script>
+
+<script src="https://brmed-production-brnet.s3.amazonaws.com/static/js/csrfajax.js"></script>
+<script src="https://brmed-production-brnet.s3.amazonaws.com/static/administrative/js/lib/i18n/messages.pt_br.js"></script>
+
+
+<script id="inbox_template" type="text/x-handlebar-template">
+<a href="#">{{ collection.length }} pendência(s)</a>
+{{#if collection.length }}
+<ul>
+    {{#collection}}
+    <li class="dropDownItem"><a href="{{this.schedule_exam_url}}">{{this.paciente_nome}} - {{ this.empresa_nome }} - {{this.data_criacao}}</a></li>
+    {{/collection}}
+</ul>
+{{/if}}
+</script>
+
+<script id="inbox_template_pending_exam_price" type="text/x-handlebar-template">
+<a href="{{ url }}">{{ count }} exame(s) sem preço</a>
+</script>
+
+<script id="inbox_template_pending_exam_package_price" type="text/x-handlebar-template">
+<a href="#">{{ pendingPackagePriceCollection.length }} exame(s) sem valor de repasse</a>
+{{#if pendingPackagePriceCollection.length }}
+<ul>
+    {{#pendingPackagePriceCollection}}
+    <li class="dropDownItem"><a href="{{this.url}}">{{this.description}}</a></li>
+    {{/pendingPackagePriceCollection}}
+</ul>
+{{/if}}
+</script>
+
+
+<script id="inbox_template_pending_financial_data" type="text/x-handlebar-template">
+ <a href="#">{{ pendingFinancialCollection.length }} grupos faltando dados financeiros</a>
+ {{#if pendingFinancialCollection.length }}
+ <ul>
+ {{#pendingFinancialCollection}}
+ <li class="dropDownItem"><a href="{{this.url}}">{{this.name}}</a></li>
+ {{/pendingFinancialCollection}}
+ </ul>
+ {{/if}}
+</script>
+
+<script type="text/javascript">
+$('.pendencia_trigger').live('click', function(event) {
+    $('.pendencias').toggle('fade');
+});
+</script>
+
+
+
+<script type="text/javascript">
+$(function () {
+if (navigator.userAgent.indexOf('Safari') != -1 &&
+    navigator.userAgent.indexOf('Chrome') == -1) {
+      $("table.exams").addClass("safari");
+    }
+});
+</script>
+
+
+
+</div></body></html>
