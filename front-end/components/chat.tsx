@@ -1,6 +1,5 @@
 "use client";
 
-import { SettingsPanelTrigger } from "@/components/settings-panel";
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -165,21 +164,17 @@ export default function Chat({
               </BreadcrumbList>
             </Breadcrumb>
             <div className="flex items-center gap-1 -my-2 -me-2">
-           
-
               <Button variant="ghost" className="px-2" onClick={() => {
                 localStorage.removeItem("chat_history");
                 setMessages([]);
               }}>
-                <RefreshCw  
+                <RefreshCw
                   className="text-current size-4"
                   size={16}
                   aria-hidden="true"
                 />
                 <span className="max-sm:sr-only">Limpar Histórico</span>
               </Button>
-
-              <SettingsPanelTrigger />
             </div>
           </div>
         </div>
