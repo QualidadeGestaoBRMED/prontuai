@@ -57,35 +57,40 @@ export function HistoricoDocumentos({ documentos }: HistoricoDocumentosProps) {
   }
 
   return (
-    <ScrollArea className="h-[500px] rounded-lg border">
-      <div className="p-4 space-y-3">
-        {documentos.map((doc) => {
+    <ScrollArea className="flex-1 max-h-[600px] rounded-lg border">
+      <div className="p-3 space-y-2">
+        {documentos.map((doc, index) => {
           const config = statusConfig[doc.status];
           const IconComponent = config.icon;
 
           return (
-            <HistoricoModal key={doc.id} documento={doc}>
+            <HistoricoModal key={`${doc.id}-${index}`} documento={doc}>
               <Card className="overflow-hidden cursor-pointer hover:bg-accent/50 transition-colors">
-                <CardContent className="p-4">
-                  <div className="flex items-start justify-between gap-4">
+                <CardContent className="p-3">
+                  <div className="flex items-start justify-between gap-2">
                     <div className="flex-1 min-w-0">
                       {/* Nome do documento */}
-                      <div className="flex items-center gap-2 mb-2">
-                        <FileTextIcon size={18} className="text-muted-foreground shrink-0" />
-                        <h4 className="font-medium truncate">{doc.nome}</h4>
+                      <div className="flex items-center gap-1.5 mb-2">
+                        <FileTextIcon size={16} className="text-muted-foreground shrink-0" />
+                        <h4 className="text-sm font-medium truncate">{doc.nome}</h4>
                       </div>
 
                       {/* Informações do documento */}
-                      <div className="space-y-1 text-sm text-muted-foreground">
-                        <div className="flex items-center gap-2">
-                          <span className="font-mono">{doc.cpf}</span>
+                      <div className="space-y-1 text-xs text-muted-foreground">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="font-mono text-xs">{doc.cpf}</span>
                           <span>•</span>
-                          <span>{new Date(doc.dataUpload).toLocaleString("pt-BR")}</span>
+                          <span className="text-xs">{new Date(doc.dataUpload).toLocaleString("pt-BR", {
+                            day: '2-digit',
+                            month: '2-digit',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          })}</span>
                         </div>
 
                         {/* Estatísticas */}
                         {doc.status === "sucesso" && (
-                          <div className="flex items-center gap-3 text-xs">
+                          <div className="flex items-center gap-2 text-[11px] flex-wrap">
                             <span>
                               Exames: {doc.examesEncontrados}/{doc.examesPrevistos}
                             </span>
@@ -100,26 +105,26 @@ export function HistoricoDocumentos({ documentos }: HistoricoDocumentosProps) {
                                     : "text-red-600"
                               )}
                             >
-                              Compatibilidade: {doc.compatibilidade}%
+                              Compat.: {doc.compatibilidade}%
                             </span>
                           </div>
                         )}
 
                         {/* Mensagem de erro */}
                         {doc.mensagem && (
-                          <p className="text-xs text-red-600 mt-2">{doc.mensagem}</p>
+                          <p className="text-[11px] text-red-600 mt-1 line-clamp-2">{doc.mensagem}</p>
                         )}
                       </div>
                     </div>
 
                     {/* Status Badge */}
-                    <Badge variant="outline" className={cn("shrink-0", config.className)}>
+                    <Badge variant="outline" className={cn("shrink-0 text-[11px] h-6", config.className)}>
                       <IconComponent
                         className={cn(
                           "mr-1",
                           doc.status === "processando" && "animate-spin"
                         )}
-                        size={14}
+                        size={12}
                       />
                       {config.label}
                     </Badge>

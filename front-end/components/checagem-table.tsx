@@ -219,12 +219,7 @@ export function CheckagemTable({
         <div className="w-36">
           <Filter column={table.getColumn("status")!} />
         </div>
-        <div className="w-36">
-          <Filter column={table.getColumn("examesFaltantes")!} />
-        </div>
-        <div className="w-36">
-          <Filter column={table.getColumn("examesExtras")!} />
-        </div>
+
       </div>
 
       {/* Tabela */}

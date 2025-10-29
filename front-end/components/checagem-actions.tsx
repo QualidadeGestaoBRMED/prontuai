@@ -61,7 +61,7 @@ export function CheckagemActions({
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Confirmar aprovação</AlertDialogTitle>
-            <AlertDialogDescription>
+            <AlertDialogDescription className="text-foreground">
               Tem certeza que deseja aprovar o documento do paciente{" "}
               <strong>{documento.paciente}</strong> (CPF: {documento.cpf})?
             </AlertDialogDescription>
@@ -93,13 +93,13 @@ export function CheckagemActions({
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Rejeitar documento</AlertDialogTitle>
-            <AlertDialogDescription>
+            <AlertDialogDescription className="text-foreground">
               Informe o motivo da rejeição do documento do paciente{" "}
               <strong>{documento.paciente}</strong> (CPF: {documento.cpf}).
             </AlertDialogDescription>
           </AlertDialogHeader>
           <div className="space-y-2 py-4">
-            <Label htmlFor="motivo">Motivo da rejeição</Label>
+            <Label htmlFor="motivo" className="text-foreground">Motivo da rejeição</Label>
             <Textarea
               id="motivo"
               placeholder="Ex: Documento ilegível, exames faltantes, etc."

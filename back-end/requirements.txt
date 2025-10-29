@@ -1,12 +1,31 @@
-flask>=2.2.0
-flask-cors==6.0.1
-faiss-gpu==1.7.2
+# PyTorch com suporte CUDA 12.4 (para RTX 3050 - acelera Docling OCR)
+--extra-index-url https://download.pytorch.org/whl/cu124
+torch==2.4.1
+torchvision==0.19.1  # Dependência indireta do Docling
+
+# FAISS CPU (usado em FAQ e validação de exames)
+faiss-cpu==1.8.0
+
+# Web Framework
+fastapi>=0.115.0
+uvicorn>=0.30.0
+pydantic>=2.0.0  # Validação de dados no FastAPI
+python-multipart>=0.0.6  # Upload de arquivos no FastAPI
+
+# AI/ML
 openai>=1.0.0
-numpy==1.24.4
+numpy==1.26.4
+
+# Data Processing
+pandas>=2.0.0  # Usado nos scripts de geração de índices FAISS
+
+# Utilities
 python-dotenv>=1.0.0
 playwright>=1.43.0
+docling==2.0.0  # OCR e conversão de documentos (versão fixada para estabilidade)
+tenacity>=8.2.0  # Retry logic para chamadas OpenAI
 
 # Dependências de Teste
 pytest>=7.0.0
 pytest-asyncio>=0.20.0
-httpx>=0.23.0
+httpx>=0.23.0  # Necessário para TestClient do FastAPI

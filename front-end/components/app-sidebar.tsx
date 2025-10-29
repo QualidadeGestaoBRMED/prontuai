@@ -69,7 +69,7 @@ const data = {
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   return (
-    <Sidebar {...props} className="dark !border-none">
+    <Sidebar {...props} className="dark !border-none" data-tour="sidebar-completa">
       <SidebarHeader>
         <div className="h-22 w-48 relative flex items-center justify-center ml-5" data-tour="sidebar">
           <Image
