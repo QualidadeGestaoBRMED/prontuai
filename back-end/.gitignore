@@ -1,1 +1,28 @@
+# Environment variables
 .env
+
+# Directories
+/auditoria_validacao/
+/ocr_resultados/
+/resultados/
+/.claude/
+/.pytest_cache/
+/__pycache__/
+/venv/
+/logs/
+/api/
+
+# Data files
+/data/exam_similarity_index.faiss
+/data/faq_index.faiss
+/data/faq_data.pkl
+/data/exam_similarity_data.pkl
+/data/vetores.pkl
+
+# Python cache
+*.pyc
+*~
+**/*cpython-*.pyc
+
+# Installer
+miniconda.sh

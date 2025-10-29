@@ -22,6 +22,7 @@ import {
   useFileUpload,
 } from "@/hooks/use-file-upload"
 import { Button } from "@/components/ui/button"
+import { Progress } from "@/components/ui/progress"
 import type { TabelaComparacaoItem } from "@/components/exames-comparativo-table";
 
 export type Message =
@@ -67,6 +68,8 @@ export default function Component({ onSystemMessage }: { onSystemMessage?: (msg:
   const maxSize = 100 * 1024 * 1024 // 10MB default
   const maxFiles = 10
   const [isImporting, setIsImporting] = useState(false)
+  const [progress, setProgress] = useState(0)
+  const [progressMessage, setProgressMessage] = useState("")
 
   const [
     { files, isDragging, errors },
@@ -86,18 +89,20 @@ export default function Component({ onSystemMessage }: { onSystemMessage?: (msg:
     maxSize,
   })
 
-  // Função para importar o arquivo para o backend
+  // Função para importar o arquivo para o backend com SSE
   const handleImport = async () => {
     if (files.length === 0 || isImporting) return;
-  
+
     setIsImporting(true);
+    setProgress(0);
+    setProgressMessage("Preparando envio...");
     onSystemMessage?.({ type: "text", content: "Recebi seu arquivo, aguarde um pouquinho enquanto analiso...", isUser: false });
-  
+
     try {
       const formData = new FormData();
       let fileToSend = files[0].file;
       const fileName = files[0].file.name;
-  
+
       if (!(fileToSend instanceof File)) {
         try {
           const fileMeta = files[0].file as {
@@ -111,59 +116,105 @@ export default function Component({ onSystemMessage }: { onSystemMessage?: (msg:
         } catch {
           console.error("❌ Erro ao obter arquivo remoto");
           onSystemMessage?.({ type: "text", content: "❌ Erro ao obter arquivo remoto.", isUser: false });
+          setIsImporting(false);
+          setProgressMessage("");
           return;
         }
       }
-  
+
       formData.append("arquivo", fileToSend, fileName);
-      // Assuming you have a way to get exames_obrigatorios,
-      // for now, let's send an empty array as a JSON string.
-      // If you have a list of required exams, replace [] with your actual list.
-      formData.append("exames_obrigatorios", JSON.stringify([])); 
-  
-      console.log(" Enviando arquivo para processamento completo...");
-  
-      const res = await fetch("http://localhost:8000/v1/processar-documento", {
+      formData.append("exames_obrigatorios", JSON.stringify([]));
+
+      console.log("📤 Enviando arquivo para processamento completo com SSE...");
+
+      const uploadRes = await fetch("http://localhost:8000/v1/processar-documento-stream", {
         method: "POST",
         body: formData,
       });
-  
-      const data = await res.json();
-  
-      if (!res.ok) {
-        console.error("❌ Erro do backend:", data.detail || data);
-        onSystemMessage?.({ type: "text", content: `❌ Erro no processamento: ${data.detail || JSON.stringify(data)}`, isUser: false });
+
+      if (!uploadRes.ok) {
+        const errorData = await uploadRes.json();
+        console.error("❌ Erro do backend:", errorData.detail || errorData);
+        onSystemMessage?.({ type: "text", content: `❌ Erro no processamento: ${errorData.detail || JSON.stringify(errorData)}`, isUser: false });
+        setIsImporting(false);
+        setProgressMessage("");
         return;
       }
-  
-      console.log("✅ Processamento completo finalizado:", data);
-      onSystemMessage?.({ type: "text", content: `Processamento concluído para CPF: ${data.cpf_processado || "Não encontrado"}`, isUser: false });
 
-      onSystemMessage?.({ type: "text", content: `Exames extraídos do documento (OCR): ${data.exames_ocr || "Nenhum"}`, isUser: false });
-      onSystemMessage?.({ type: "text", content: `Exames do BRNET: ${data.exames_brnet || "Nenhum"}`, isUser: false });
+      const reader = uploadRes.body?.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
 
-      if (data.tabela_comparacao && !data.erro) {
-        onSystemMessage?.({ type: "text", content: data.analise_comparacao, isUser: false });
-        onSystemMessage?.({ type: "tabela-exames", content: data.tabela_comparacao, isUser: false, skipTyping: true });
-
-        const faltantes = data.tabela_comparacao.filter((e: TabelaComparacaoItem) => e.status === "faltante");
-        if (faltantes.length > 0) {
-          const nomesFaltantes = faltantes.map((e: TabelaComparacaoItem) => e.exame).join(", ");
-          onSystemMessage?.({ type: "text", content: `Como há exames faltantes (${nomesFaltantes}), não posso autorizar o envio deste documento. Inclua os exames necessários e tente novamente.`, isUser: false });
-        } else {
-          onSystemMessage?.({ type: "text", content: data.decisao_final, isUser: false });
-        }
-      } else if (data.erro) {
-          onSystemMessage?.({ type: "text", content: `❌ Erro: ${data.erro}`, isUser: false });
-      } else {
-          onSystemMessage?.({ type: "text", content: "Não foi possível realizar a comparação de exames.", isUser: false });
+      if (!reader) {
+        throw new Error("Não foi possível ler a resposta do servidor");
       }
-  
+
+      // Ler eventos SSE
+      while (true) {
+        const { done, value } = await reader.read();
+
+        if (done) {
+          console.log("✅ Stream finalizado");
+          break;
+        }
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n\n");
+        buffer = lines.pop() || "";
+
+        for (const line of lines) {
+          if (line.startsWith("data: ")) {
+            const jsonData = line.slice(6);
+            try {
+              const event = JSON.parse(jsonData);
+              console.log("📨 Evento SSE recebido:", event);
+
+              setProgress(event.progress);
+              setProgressMessage(event.message);
+
+              if (event.progress === 100 && event.resultado) {
+                // Processar resultado final
+                const data = event.resultado;
+                console.log("✅ Processamento completo finalizado:", data);
+                onSystemMessage?.({ type: "text", content: `Processamento concluído para CPF: ${data.cpf_processado || "Não encontrado"}`, isUser: false });
+
+                onSystemMessage?.({ type: "text", content: `Exames extraídos do documento (OCR): ${data.exames_ocr || "Nenhum"}`, isUser: false });
+                onSystemMessage?.({ type: "text", content: `Exames do BRNET: ${data.exames_brnet || "Nenhum"}`, isUser: false });
+
+                if (data.tabela_comparacao && !data.erro) {
+                  onSystemMessage?.({ type: "text", content: data.analise_comparacao, isUser: false });
+                  onSystemMessage?.({ type: "tabela-exames", content: data.tabela_comparacao, isUser: false, skipTyping: true });
+
+                  const faltantes = data.tabela_comparacao.filter((e: TabelaComparacaoItem) => e.status === "faltante");
+                  if (faltantes.length > 0) {
+                    const nomesFaltantes = faltantes.map((e: TabelaComparacaoItem) => e.exame).join(", ");
+                    onSystemMessage?.({ type: "text", content: `Como há exames faltantes (${nomesFaltantes}), não posso autorizar o envio deste documento. Inclua os exames necessários e tente novamente.`, isUser: false });
+                  } else {
+                    onSystemMessage?.({ type: "text", content: data.decisao_final, isUser: false });
+                  }
+                } else if (data.erro) {
+                    onSystemMessage?.({ type: "text", content: `❌ Erro: ${data.erro}`, isUser: false });
+                } else {
+                    onSystemMessage?.({ type: "text", content: "Não foi possível realizar a comparação de exames.", isUser: false });
+                }
+              } else if (event.progress === -1) {
+                // Erro durante processamento
+                onSystemMessage?.({ type: "text", content: `❌ ${event.message}`, isUser: false });
+              }
+            } catch (parseError) {
+              console.error("❌ Erro ao parsear evento SSE:", parseError, jsonData);
+            }
+          }
+        }
+      }
+
     } catch (error) {
       console.error("❌ Erro geral no handleImport:", error);
       onSystemMessage?.({ type: "text", content: "❌ Ocorreu um erro inesperado durante o processamento do documento.", isUser: false });
     } finally {
       setIsImporting(false);
+      setProgress(0);
+      setProgressMessage("");
     }
   };
   
@@ -352,7 +403,17 @@ export default function Component({ onSystemMessage }: { onSystemMessage?: (msg:
                 </>
               )}
         </Button>
-             
+
+            </div>
+          )}
+
+          {/* Barra de progresso */}
+          {isImporting && progress > 0 && (
+            <div className="mt-4 space-y-2">
+              <Progress value={progress} className="w-full" />
+              <p className="text-sm text-muted-foreground text-center">
+                {progressMessage}
+              </p>
             </div>
           )}
         </div>

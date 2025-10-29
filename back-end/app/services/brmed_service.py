@@ -46,7 +46,7 @@ async def consultar_exames_brmed(cpf: str) -> Dict[str, Any]:
     """Executa automação Playwright para consultar exames obrigatórios na BRMED."""
     async with async_playwright() as p:
         browser = await p.chromium.launch(
-            headless=False,
+            headless=True,  # Modo headless para melhor performance
             args=["--disable-blink-features=AutomationControlled"]
         )
         ctx = await browser.new_context(
@@ -56,6 +56,8 @@ async def consultar_exames_brmed(cpf: str) -> Dict[str, Any]:
                 "Chrome/124.0.0.0 Safari/537.36"
             )
         )
+        # Configura timeout padrão para evitar travamentos
+        ctx.set_default_timeout(60000)  # 60 segundos
         page = await ctx.new_page()
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
         fn = f"resultados/guia_{cpf}_{ts}.json"
@@ -69,9 +71,9 @@ async def consultar_exames_brmed(cpf: str) -> Dict[str, Any]:
             await page.fill("input[name='username']", os.getenv("BRMED_USERNAME"))
             await page.fill("input[name='password']", os.getenv("BRMED_PASSWORD"))
             await page.click("button[type='submit']")
-            await page.wait_for_selector("text=Operações")
+            await page.wait_for_selector("text=Operações", timeout=30000)
             await page.click("text=Operações")
-            await page.wait_for_load_state("networkidle")
+            await page.wait_for_load_state("networkidle", timeout=30000)
             await page.reload()
             await page.wait_for_timeout(2000)
             await page.evaluate("document.querySelector('#radio_cpf').click()")
@@ -85,13 +87,13 @@ async def consultar_exames_brmed(cpf: str) -> Dict[str, Any]:
             await page.locator("input[type='submit'].button-bold")\
                 .scroll_into_view_if_needed()
             await page.click("input[type='submit'].button-bold", force=True)
-            await page.wait_for_load_state("networkidle")
+            await page.wait_for_load_state("networkidle", timeout=30000)
             logger.info("Consulta de CPF realizada.")
 
             await page.click("table.tabledata a[href*='/paciente/']")
-            await page.wait_for_selector("a.close")
+            await page.wait_for_selector("a.close", timeout=30000)
             await page.click("a.close")
-            await page.wait_for_selector("text=Guia de Encaminhamento")
+            await page.wait_for_selector("text=Guia de Encaminhamento", timeout=30000)
             logger.info("Clicando em 'Guia de Encaminhamento'...")
             async with ctx.expect_page() as new_p_info:
                 await page.click("text=Guia de Encaminhamento")

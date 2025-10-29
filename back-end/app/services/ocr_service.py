@@ -9,8 +9,11 @@ import re
 import json
 from openai import OpenAI
 from typing import Dict, Any, List, Optional
+import logging
 
 from app.core.config import settings
+
+logger = logging.getLogger(__name__)
 
 client = OpenAI(api_key=settings.OPENAI_API_KEY)
 
@@ -69,7 +72,21 @@ def extrair_cpf_ia(markdown: str) -> str:
 
 def processar_arquivo_docling(file) -> str:
     """Processa o arquivo com Docling e retorna o markdown extraído."""
-    converter = DocumentConverter()
+    from docling.datamodel.base_models import InputFormat
+    from docling.datamodel.pipeline_options import PdfPipelineOptions
+    from docling.document_converter import PdfFormatOption
+
+    # Configurações otimizadas para velocidade
+    pipeline_options = PdfPipelineOptions()
+    pipeline_options.do_ocr = True  # Habilita OCR
+    pipeline_options.do_table_structure = False  # Desabilita detecção de tabelas (mais rápido)
+    pipeline_options.table_structure_options.do_cell_matching = False
+
+    converter = DocumentConverter(
+        format_options={
+            InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options)
+        }
+    )
     resultado = converter.convert(file)
     markdown = resultado.document.export_to_markdown()
     return markdown
@@ -111,14 +128,18 @@ def extrair_cpf_regex(markdown: str) -> str:
 
 async def ocr_pipeline(file, salvar_markdown=True) -> Dict[str, Any]:
     """Pipeline completo: processa arquivo, extrai info, aplica fallbacks, salva markdown."""
+    logger.info(f"[OCR] Iniciando pipeline OCR para arquivo: {file.filename}")
+
     # Corrige o manuseio de UploadFile do FastAPI
     with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(file.filename)[-1]) as temp:
         content = await file.read()  # Lê o conteúdo do UploadFile de forma assíncrona
         temp.write(content)    # Escreve o conteúdo no arquivo temporário
         temp_path = temp.name
 
+    logger.info(f"[OCR] Iniciando conversão Docling para: {file.filename}")
     try:
         markdown = processar_arquivo_docling(temp_path)
+        logger.info(f"[OCR] Conversão Docling concluída. Markdown gerado: {len(markdown)} caracteres")
     finally:
         os.remove(temp_path) # Garante que o arquivo temporário seja removido
 
@@ -132,13 +153,18 @@ async def ocr_pipeline(file, salvar_markdown=True) -> Dict[str, Any]:
         caminho_md = f"ocr_resultados/ocr_{base_nome}_{timestamp}.md"
         with open(caminho_md, "w", encoding="utf-8") as f:
             f.write(markdown)
-            
+        logger.info(f"[OCR] Markdown salvo em: {caminho_md}")
+
     # Extrair CPF localmente
+    logger.info("[OCR] Extraindo CPF via regex...")
     cpf_extraido = extrair_cpf_regex(markdown)
+    logger.info(f"[OCR] CPF extraído: {cpf_extraido if cpf_extraido else 'Nenhum CPF encontrado'}")
 
     # Extrair exames via IA
+    logger.info("[OCR] Iniciando extração de exames via OpenAI GPT...")
     exames_info = extrair_exames_ia(markdown)
     exames_extraidos = exames_info.get("exames", [])
+    logger.info(f"[OCR] Exames extraídos: {len(exames_extraidos)} encontrados - {exames_extraidos}")
 
     info = {
         "cpf": cpf_extraido,
@@ -151,8 +177,11 @@ async def ocr_pipeline(file, salvar_markdown=True) -> Dict[str, Any]:
 
     if caminho_md:
         info["markdown_salvo_em"] = caminho_md
+
     # Libera memória da GPU após cada processamento
     torch.cuda.empty_cache()
+    logger.info(f"[OCR] Pipeline OCR concluído para: {file.filename}")
+
     return info
 
 PROMPT_EXTRAIR_TODOS_CPFS = """
