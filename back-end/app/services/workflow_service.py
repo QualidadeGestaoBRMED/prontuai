@@ -129,14 +129,30 @@ async def comparar_exames_openai(exames_ocr: list[str], exames_brnet: list[str])
 
 async def processar_documento_completo(
     arquivo: UploadFile,
-    exames_obrigatorios: list[str]
+    exames_obrigatorios: list[str],
+    progress_callback=None
 ) -> Dict[str, Any]:
     """
     Orquestra o processo completo de OCR, extração de CPF/exames, consulta BRMED (com fallback)
     e validação de exames.
+
+    Args:
+        arquivo: Arquivo para processar
+        exames_obrigatorios: Lista de exames obrigatórios
+        progress_callback: Callback opcional para enviar progresso (SSE)
     """
+    logger.info(f"[WORKFLOW] Iniciando processamento completo para: {arquivo.filename}")
+
+    # Helper para enviar progresso
+    async def send_progress(progress: int, step: str, message: str):
+        logger.info(f"[WORKFLOW-PROGRESS] {progress}% - {step}: {message}")
+        if progress_callback:
+            await progress_callback(progress, step, message)
+
     # 1. Processar documento com OCR e extrair informações iniciais
+    await send_progress(10, "ocr", "Processando documento com OCR...")
     ocr_resultado = await ocr_service.ocr_pipeline(arquivo)
+    await send_progress(30, "ocr", f"OCR concluído. {len(ocr_resultado.get('exames', []))} exames encontrados")
     cpf_inicial = ocr_resultado.get("cpf")
     exames_enviados = ocr_resultado.get("exames", [])
     markdown_content = ocr_resultado.get("markdown_content", "")
@@ -148,36 +164,46 @@ async def processar_documento_completo(
     cpf_final = None
     brmed_resultado = None
 
-    # Tentar com o CPF inicial (se houver)
+    # 2. Tentar com o CPF inicial (se houver)
     if cpf_inicial:
-        logger.info(f"Tentando consultar BRMED com CPF inicial: {cpf_inicial}")
+        await send_progress(40, "brmed", f"Consultando exames obrigatórios (CPF: {cpf_inicial[:3]}***)")
+        logger.info(f"[WORKFLOW] Tentando consultar BRMED com CPF inicial: {cpf_inicial}")
         brmed_resultado = await brmed_service.consultar_exames_brmed(cpf_inicial)
         if "erro" not in brmed_resultado:
             cpf_final = cpf_inicial
+            exames_brnet = brmed_resultado.get("exames", [])
+            await send_progress(60, "brmed", f"Exames obrigatórios obtidos: {len(exames_brnet)} exames")
         else:
-            logger.warning(f'Consulta BRMED falhou para CPF {cpf_inicial}: {brmed_resultado["erro"]}')
+            logger.warning(f'[WORKFLOW] Consulta BRMED falhou para CPF {cpf_inicial}: {brmed_resultado["erro"]}')
+            await send_progress(45, "brmed", "CPF inicial falhou, buscando CPFs alternativos...")
+    else:
+        await send_progress(40, "brmed", "CPF não encontrado, buscando alternativas...")
 
     exames_brnet = brmed_resultado.get("exames", []) if brmed_resultado else []
 
     # Se a consulta inicial falhou, tentar CPFs alternativos via IA
     if not cpf_final and markdown_content:
-        logger.info("CPF inicial falhou ou não encontrado. Buscando CPFs alternativos via IA...")
+        logger.info("[WORKFLOW] CPF inicial falhou ou não encontrado. Buscando CPFs alternativos via IA...")
         cpfs_alternativos = await ocr_service.extrair_todos_cpfs_ia(markdown_content, exclude_cpf=cpf_inicial)
-        
-        for alt_cpf in cpfs_alternativos:
+
+        for idx, alt_cpf in enumerate(cpfs_alternativos):
             if alt_cpf not in cpfs_tentados: # Evita tentar o mesmo CPF novamente
-                logger.info(f"Tentando consultar BRMED com CPF alternativo: {alt_cpf}")
+                await send_progress(45 + (idx * 5), "brmed", f"Tentando CPF alternativo {idx + 1}...")
+                logger.info(f"[WORKFLOW] Tentando consultar BRMED com CPF alternativo: {alt_cpf}")
                 brmed_resultado = await brmed_service.consultar_exames_brmed(alt_cpf)
                 if "erro" not in brmed_resultado:
                     cpf_final = alt_cpf
+                    exames_brnet = brmed_resultado.get("exames", [])
+                    await send_progress(60, "brmed", f"CPF válido encontrado! {len(exames_brnet)} exames obrigatórios")
                     break # Encontrou um CPF válido, sai do loop
                 else:
-                    logger.warning(f"Consulta BRMED falhou para CPF alternativo {alt_cpf}: {brmed_resultado['erro']}")
+                    logger.warning(f"[WORKFLOW] Consulta BRMED falhou para CPF alternativo {alt_cpf}: {brmed_resultado['erro']}")
                 cpfs_tentados.add(alt_cpf)
 
     # Se nenhum CPF funcionou, retornar erro ou resultado parcial
     if not cpf_final:
-        logger.error("Não foi possível encontrar um CPF válido para consulta BRMED.")
+        logger.error("[WORKFLOW] Não foi possível encontrar um CPF válido para consulta BRMED.")
+        await send_progress(-1, "erro", "Não foi possível extrair um CPF válido")
         return {
             "status": "falha",
             "mensagem": "Não foi possível extrair um CPF válido ou consultar exames obrigatórios.",
@@ -186,16 +212,16 @@ async def processar_documento_completo(
         }
 
     # 3. Validar exames
-    logger.info(f"[{datetime.now().strftime('%H:%M:%S.%f')}] Realizando validação para CPF: {cpf_final}")
+    await send_progress(70, "validacao", "Validando exames com IA...")
+    logger.info(f"[WORKFLOW] Realizando validação para CPF: {cpf_final}")
     resultado_validacao = await validacao_service.validar_exames(
         cpf=cpf_final,
         exames_obrigatorios=exames_obrigatorios,
         exames_enviados=exames_enviados,
         exames_brnet=exames_brnet
     )
-    logger.info(f"[{datetime.now().strftime('%H:%M:%S.%f')}] Validação concluída.")
-
-    
+    await send_progress(90, "validacao", "Validação concluída, preparando resultado...")
+    logger.info(f"[WORKFLOW] Validação concluída.")
 
     # Prepara o objeto de resposta final para o frontend
     resposta_final = {
@@ -210,8 +236,13 @@ async def processar_documento_completo(
 
     if resultado_validacao.get("erro"):
         resposta_final["erro"] = resultado_validacao["erro"]
+        await send_progress(-1, "erro", f"Erro na validação: {resultado_validacao['erro']}")
     elif not cpf_final:
         resposta_final["erro"] = "Não foi possível extrair um CPF válido ou consultar exames obrigatórios."
         resposta_final["decisao_final"] = "Erro no processamento."
+        await send_progress(-1, "erro", "Erro no processamento")
+
+    await send_progress(100, "concluido", "Processamento concluído com sucesso!")
+    logger.info(f"[WORKFLOW] Processamento completo finalizado para: {arquivo.filename}")
 
     return resposta_final

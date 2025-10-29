@@ -1,119 +1,222 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
-import {
-  Popover,
-  PopoverAnchor,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import { RiMapPinLine, RiUploadLine, RiCheckDoubleLine, RiLightbulbLine } from "@remixicon/react";
-
-interface TourStep {
-  title: string;
-  description: string;
-  icon: typeof RiMapPinLine;
-  anchorSelector: string;
-}
-
-const tourSteps: TourStep[] = [
-  {
-    icon: RiUploadLine,
-    title: "Submissão",
-    description:
-      "Faça upload de documentos médicos para análise automática via OCR e validação contra o sistema BRNET.",
-    anchorSelector: "[data-tour='submissao']",
-  },
-  {
-    icon: RiCheckDoubleLine,
-    title: "Checagem",
-    description:
-      "Revise documentos rejeitados e aprove ou rejeite manualmente com justificativas detalhadas.",
-    anchorSelector: "[data-tour='checagem']",
-  },
-  {
-    icon: RiLightbulbLine,
-    title: "Insights",
-    description:
-      "Consulte nossa base de conhecimento com perguntas sobre medicina ocupacional e normas reguladoras.",
-    anchorSelector: "[data-tour='insights']",
-  },
-  {
-    icon: RiMapPinLine,
-    title: "Navegação",
-    description:
-      "Use a barra lateral para navegar entre as funcionalidades. Clique no seu avatar para acessar configurações.",
-    anchorSelector: "[data-tour='sidebar']",
-  },
-];
+import { RiMapPinLine } from "@remixicon/react";
+import Shepherd from "shepherd.js";
+import "shepherd.js/dist/css/shepherd.css";
 
 export function TourGuiado() {
-  const [currentTip, setCurrentTip] = useState(0);
-  const [isOpen, setIsOpen] = useState(false);
+  const tourRef = useRef<Shepherd.Tour | null>(null);
 
-  const handleNavigation = () => {
-    if (currentTip === tourSteps.length - 1) {
-      setCurrentTip(0);
-      setIsOpen(false);
-    } else {
-      setCurrentTip(currentTip + 1);
-    }
+  useEffect(() => {
+    // Cleanup on unmount
+    return () => {
+      if (tourRef.current) {
+        tourRef.current.complete();
+        tourRef.current = null;
+      }
+    };
+  }, []);
+
+  const startTour = () => {
+    // Create new tour instance
+    const tour = new Shepherd.Tour({
+      useModalOverlay: true,
+      defaultStepOptions: {
+        cancelIcon: {
+          enabled: true,
+        },
+        classes: "shepherd-theme-custom",
+        scrollTo: { behavior: "smooth", block: "center" },
+        modalOverlayOpeningPadding: 8,
+        modalOverlayOpeningRadius: 8,
+      },
+    });
+
+    // Helper function to wait for element
+    const waitForElement = (selector: string, timeout = 5000): Promise<Element> => {
+      return new Promise((resolve, reject) => {
+        const element = document.querySelector(selector);
+        if (element) {
+          resolve(element);
+          return;
+        }
+
+        const observer = new MutationObserver(() => {
+          const element = document.querySelector(selector);
+          if (element) {
+            observer.disconnect();
+            resolve(element);
+          }
+        });
+
+        observer.observe(document.body, {
+          childList: true,
+          subtree: true,
+        });
+
+        setTimeout(() => {
+          observer.disconnect();
+          reject(new Error(`Element ${selector} not found after ${timeout}ms`));
+        }, timeout);
+      });
+    };
+
+    // Step 1: Sidebar completa
+    tour.addStep({
+      id: "sidebar-nav",
+      title: "Navegação",
+      text: "Use a barra lateral para navegar entre as funcionalidades do ProntuAI. Vamos conhecer cada seção!",
+      attachTo: {
+        element: "[data-tour='sidebar-completa']",
+        on: "right",
+      },
+      buttons: [
+        {
+          text: "Próximo",
+          action: tour.next,
+        },
+      ],
+    });
+
+    // Step 2: Submissão
+    tour.addStep({
+      id: "submissao",
+      title: "Submissão",
+      text: "Faça upload de documentos médicos para análise automática via OCR e validação contra o sistema BRNET.",
+      attachTo: {
+        element: "[data-tour='submissão']",
+        on: "right",
+      },
+      buttons: [
+        {
+          text: "Anterior",
+          action: tour.back,
+          classes: "shepherd-button-secondary",
+        },
+        {
+          text: "Próximo",
+          action: tour.next,
+        },
+      ],
+      when: {
+        show: async function() {
+          try {
+            await waitForElement("[data-tour='submissão']", 3000);
+          } catch (error) {
+            console.error("Elemento submissão não encontrado:", error);
+          }
+        },
+      },
+    });
+
+    // Step 3: Checagem
+    tour.addStep({
+      id: "checagem",
+      title: "Checagem",
+      text: "Revise documentos rejeitados e aprove ou rejeite manualmente com justificativas detalhadas.",
+      attachTo: {
+        element: "[data-tour='checagem']",
+        on: "right",
+      },
+      buttons: [
+        {
+          text: "Anterior",
+          action: tour.back,
+          classes: "shepherd-button-secondary",
+        },
+        {
+          text: "Próximo",
+          action: tour.next,
+        },
+      ],
+      when: {
+        show: async function() {
+          try {
+            await waitForElement("[data-tour='checagem']", 3000);
+          } catch (error) {
+            console.error("Elemento checagem não encontrado:", error);
+          }
+        },
+      },
+    });
+
+    // Step 4: Insights
+    tour.addStep({
+      id: "insights",
+      title: "Insights",
+      text: "Consulte nossa base de conhecimento com perguntas sobre medicina ocupacional e normas reguladoras.",
+      attachTo: {
+        element: "[data-tour='insights']",
+        on: "right",
+      },
+      buttons: [
+        {
+          text: "Anterior",
+          action: tour.back,
+          classes: "shepherd-button-secondary",
+        },
+        {
+          text: "Próximo",
+          action: tour.next,
+        },
+      ],
+      when: {
+        show: async function() {
+          try {
+            await waitForElement("[data-tour='insights']", 3000);
+          } catch (error) {
+            console.error("Elemento insights não encontrado:", error);
+          }
+        },
+      },
+    });
+
+    // Step 5: Central de Ajuda
+    tour.addStep({
+      id: "ajuda",
+      title: "Central de Ajuda",
+      text: "Acesse a central de ajuda com perguntas frequentes e informações de suporte. Use a busca para encontrar respostas rapidamente!",
+      attachTo: {
+        element: "[data-tour='ajuda']",
+        on: "right",
+      },
+      buttons: [
+        {
+          text: "Anterior",
+          action: tour.back,
+          classes: "shepherd-button-secondary",
+        },
+        {
+          text: "Concluir",
+          action: tour.complete,
+        },
+      ],
+      when: {
+        show: async function() {
+          try {
+            await waitForElement("[data-tour='ajuda']", 3000);
+          } catch (error) {
+            console.error("Elemento ajuda não encontrado:", error);
+          }
+        },
+      },
+    });
+
+    tourRef.current = tour;
+    tour.start();
   };
 
-  const CurrentIcon = tourSteps[currentTip].icon;
-
   return (
-    <Popover
-      open={isOpen}
-      onOpenChange={(open) => {
-        setIsOpen(open);
-        if (open) setCurrentTip(0);
-      }}
+    <Button
+      variant="outline"
+      size="sm"
+      className="w-full justify-start"
+      onClick={startTour}
     >
-      <PopoverTrigger asChild>
-        <Button variant="outline" size="sm" className="w-full justify-start">
-          <RiMapPinLine size={16} className="mr-2" />
-          Iniciar Tour
-        </Button>
-      </PopoverTrigger>
-
-      {/* O PopoverAnchor será definido pelos elementos com data-tour */}
-      <PopoverContent
-        className="max-w-[320px] py-4 shadow-lg"
-        side="right"
-        align="center"
-        showArrow={true}
-      >
-        <div className="space-y-4">
-          <div className="flex items-start gap-3">
-            <div className="flex size-10 shrink-0 items-center justify-center rounded-md bg-primary/10">
-              <CurrentIcon size={20} className="text-primary" />
-            </div>
-            <div className="space-y-1">
-              <p className="text-sm font-semibold">
-                {tourSteps[currentTip].title}
-              </p>
-              <p className="text-xs text-muted-foreground leading-relaxed">
-                {tourSteps[currentTip].description}
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center justify-between gap-2 pt-2 border-t">
-            <span className="text-xs text-muted-foreground">
-              {currentTip + 1}/{tourSteps.length}
-            </span>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-7 text-xs font-medium"
-              onClick={handleNavigation}
-            >
-              {currentTip === tourSteps.length - 1 ? "Concluir" : "Próximo"}
-            </Button>
-          </div>
-        </div>
-      </PopoverContent>
-    </Popover>
+      <RiMapPinLine size={16} className="mr-2" />
+      Iniciar Tour
+    </Button>
   );
 }
