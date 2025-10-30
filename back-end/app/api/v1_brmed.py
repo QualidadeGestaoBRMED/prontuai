@@ -80,11 +80,14 @@ async def processar_documento_stream_api(
             yield f"data: {json.dumps({'progress': 0, 'step': 'inicio', 'message': 'Documento recebido, iniciando processamento...'})}\n\n"
             await asyncio.sleep(0.1)
 
+            # Lista para coletar eventos de progresso
+            progress_events = []
+
             # Callback para receber updates do workflow
             async def progress_callback(progress: int, step: str, message: str):
                 event_data = json.dumps({'progress': progress, 'step': step, 'message': message})
                 logger.info(f"[PROGRESS] {progress}% - {step}: {message}")
-                return f"data: {event_data}\n\n"
+                progress_events.append(f"data: {event_data}\n\n")
 
             # Processar documento com callback
             resultado = await workflow_service.processar_documento_completo(
@@ -92,6 +95,11 @@ async def processar_documento_stream_api(
                 exames_obrigatorios_list,
                 progress_callback=progress_callback
             )
+
+            # Yield todos os eventos coletados
+            for event in progress_events:
+                yield event
+                await asyncio.sleep(0.01)
 
             # Enviar resultado final
             yield f"data: {json.dumps({'progress': 100, 'step': 'concluido', 'message': 'Processamento concluído!', 'resultado': resultado})}\n\n"
