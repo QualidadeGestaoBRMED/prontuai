@@ -19,7 +19,6 @@ import {
 import {
   ChevronDownIcon,
   ChevronUpIcon,
-  ExternalLinkIcon,
   SearchIcon,
 } from "lucide-react";
 
@@ -47,6 +46,7 @@ import { CheckagemActions } from "@/components/checagem-actions";
 import type { DocumentoChecagem, StatusDocumento } from "@/types/checagem";
 
 declare module "@tanstack/react-table" {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   interface ColumnMeta<TData extends RowData, TValue> {
     filterVariant?: "text" | "range" | "select";
   }
@@ -328,7 +328,7 @@ export function CheckagemTable({
   );
 }
 
-function Filter({ column }: { column: Column<any, unknown> }) {
+function Filter({ column }: { column: Column<DocumentoChecagem, unknown> }) {
   const id = useId();
   const columnFilterValue = column.getFilterValue();
   const { filterVariant } = column.columnDef.meta ?? {};
@@ -346,6 +346,7 @@ function Filter({ column }: { column: Column<any, unknown> }) {
     }, []);
 
     return Array.from(new Set(flattenedValues)).sort();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [column.getFacetedUniqueValues(), filterVariant]);
 
   if (filterVariant === "range") {

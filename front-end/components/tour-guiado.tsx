@@ -3,11 +3,17 @@
 import { useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { RiMapPinLine } from "@remixicon/react";
-import Shepherd from "shepherd.js";
+import ShepherdLib from "shepherd.js";
 import "shepherd.js/dist/css/shepherd.css";
 
+type ShepherdTour = {
+  complete(): void;
+  start(): void;
+  addStep(options: unknown): void;
+}
+
 export function TourGuiado() {
-  const tourRef = useRef<Shepherd.Tour | null>(null);
+  const tourRef = useRef<ShepherdTour | null>(null);
 
   useEffect(() => {
     // Cleanup on unmount
@@ -21,7 +27,7 @@ export function TourGuiado() {
 
   const startTour = () => {
     // Create new tour instance
-    const tour = new Shepherd.Tour({
+    const tour = new ShepherdLib.Tour({
       useModalOverlay: true,
       defaultStepOptions: {
         cancelIcon: {
@@ -80,13 +86,13 @@ export function TourGuiado() {
       ],
     });
 
-    // Step 2: Submissão
+    // Step 2: Enviar Exames
     tour.addStep({
-      id: "submissao",
-      title: "Submissão",
+      id: "enviar-exames",
+      title: "Enviar Exames",
       text: "Faça upload de documentos médicos para análise automática via OCR e validação contra o sistema BRNET.",
       attachTo: {
-        element: "[data-tour='submissão']",
+        element: "[data-tour='enviar exames']",
         on: "right",
       },
       buttons: [
@@ -103,9 +109,9 @@ export function TourGuiado() {
       when: {
         show: async function() {
           try {
-            await waitForElement("[data-tour='submissão']", 3000);
+            await waitForElement("[data-tour='enviar exames']", 3000);
           } catch (error) {
-            console.error("Elemento submissão não encontrado:", error);
+            console.error("Elemento enviar exames não encontrado:", error);
           }
         },
       },

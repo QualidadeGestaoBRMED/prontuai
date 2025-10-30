@@ -11,7 +11,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { FileTextIcon, CalendarIcon, UserIcon, CheckCircleIcon } from "lucide-react";
+import { FileTextIcon, CalendarIcon, UserIcon } from "lucide-react";
 import type { DocumentoHistorico } from "@/types/historico";
 
 interface HistoricoModalProps {

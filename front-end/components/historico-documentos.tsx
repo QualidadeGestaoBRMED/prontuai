@@ -16,7 +16,7 @@ const statusConfig: Record<
   StatusProcessamento,
   {
     label: string;
-    icon: React.ComponentType<{ className?: string }>;
+    icon: React.ComponentType<{ className?: string; size?: number }>;
     className: string;
   }
 > = {

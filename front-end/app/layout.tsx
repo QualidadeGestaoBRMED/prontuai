@@ -1,5 +1,6 @@
 import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
+import { NotificationProvider } from "@/hooks/use-notifications";
 
 export default function RootLayout({
   children,
@@ -9,8 +10,10 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className="font-sans antialiased">
-        {children}
-        <Toaster />
+        <NotificationProvider>
+          {children}
+          <Toaster />
+        </NotificationProvider>
       </body>
     </html>
   );

@@ -1,3 +1,5 @@
+'use client'
+
 import * as React from "react";
 import Image from "next/image";
 
@@ -17,11 +19,8 @@ import {
   RiUploadLine,
   RiCheckDoubleLine,
   RiLightbulbLine,
-  RiBookOpenLine,
-  RiSettings4Line,
-  RiQuestionLine,
+  RiHistoryLine,
 } from "@remixicon/react";
-import { Button } from "@/components/ui/button";
 import { CentroAjudaDialog } from "@/components/centro-ajuda-dialog";
 import { TourGuiado } from "@/components/tour-guiado";
 
@@ -47,10 +46,15 @@ const data = {
       url: "#",
       items: [
         {
-          title: "Submissão",
-          url: "/submissao",
+          title: "Enviar Exames",
+          url: "/enviar-docs",
           icon: RiUploadLine,
           isActive: false,
+        },
+        {
+          title: "Histórico",
+          url: "/historico",
+          icon: RiHistoryLine,
         },
         {
           title: "Checagem",
