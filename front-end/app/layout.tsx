@@ -1,11 +1,6 @@
-import { Inter } from "next/font/google";
-
 import "./globals.css";
-
-const fontSans = Inter({
-  subsets: ["latin"],
-  variable: "--font-sans",
-});
+import { Toaster } from "@/components/ui/sonner";
+import { NotificationProvider } from "@/hooks/use-notifications";
 
 export default function RootLayout({
   children,
@@ -14,8 +9,11 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={`${fontSans.variable} font-sans antialiased`}>
+      <body className="font-sans antialiased">
+        <NotificationProvider>
           {children}
+          <Toaster />
+        </NotificationProvider>
       </body>
     </html>
   );

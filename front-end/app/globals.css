@@ -158,3 +158,220 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Shepherd.js Custom Theme */
+.shepherd-modal-overlay-container {
+  opacity: 0.5 !important;
+  z-index: 9998 !important;
+}
+
+.shepherd-modal-overlay-container.shepherd-modal-is-visible {
+  opacity: 0.5 !important;
+}
+
+/* Aumentar o destaque do elemento alvo com glow effect */
+.shepherd-target-click-disabled.shepherd-enabled.shepherd-target,
+.shepherd-target-click-disabled.shepherd-enabled.shepherd-target * {
+  pointer-events: auto !important;
+}
+
+/* Efeito de glow/luz no elemento destacado */
+body.shepherd-active .shepherd-target {
+  position: relative !important;
+  z-index: 9999 !important;
+  box-shadow: 0 0 0 4px rgba(0, 120, 145, 0.4),
+              0 0 0 8px rgba(0, 120, 145, 0.2),
+              0 0 30px 12px rgba(0, 120, 145, 0.3) !important;
+  border-radius: 8px !important;
+  animation: shepherd-glow 2s ease-in-out infinite !important;
+}
+
+@keyframes shepherd-glow {
+  0%, 100% {
+    box-shadow: 0 0 0 4px rgba(0, 120, 145, 0.4),
+                0 0 0 8px rgba(0, 120, 145, 0.2),
+                0 0 30px 12px rgba(0, 120, 145, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 0 4px rgba(0, 120, 145, 0.6),
+                0 0 0 8px rgba(0, 120, 145, 0.3),
+                0 0 40px 16px rgba(0, 120, 145, 0.5);
+  }
+}
+
+/* Modal do tour - design sofisticado */
+.shepherd-element {
+  background: #FFFFFF !important;
+  border: 1px solid rgba(191, 195, 198, 0.3) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1),
+              0 8px 10px -6px rgb(0 0 0 / 0.1),
+              0 0 0 1px rgba(0, 120, 145, 0.1) !important;
+  max-width: 360px !important;
+  z-index: 9999 !important;
+  overflow: hidden !important;
+}
+
+.shepherd-text {
+  color: #193B4F !important;
+  padding: 1rem 1.25rem 1.25rem 1.25rem !important;
+  background: #FFFFFF !important;
+  font-size: 0.875rem !important;
+  line-height: 1.5 !important;
+}
+
+.shepherd-content {
+  background: #FFFFFF !important;
+  padding: 0 !important;
+}
+
+.shepherd-content-wrapper {
+  padding: 0 !important;
+  background: #FFFFFF !important;
+}
+
+.shepherd-header {
+  padding: 1.25rem 1.25rem 0.75rem 1.25rem !important;
+  background: linear-gradient(135deg, #193B4F 0%, #007891 100%) !important;
+  position: relative !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  min-height: 60px !important;
+}
+
+.shepherd-title {
+  color: #FFFFFF !important;
+  font-size: 1.125rem !important;
+  font-weight: 600 !important;
+  margin: 0 !important;
+  letter-spacing: -0.01em !important;
+}
+
+.shepherd-footer {
+  padding: 1rem 1.25rem !important;
+  border-top: 1px solid rgba(191, 195, 198, 0.2) !important;
+  display: flex !important;
+  justify-content: flex-end !important;
+  align-items: center !important;
+  gap: 0.75rem !important;
+  background: #FFFFFF !important;
+}
+
+.shepherd-button {
+  background: #193B4F !important;
+  color: #FFFFFF !important;
+  border: none !important;
+  border-radius: 6px !important;
+  padding: 0.5rem 1rem !important;
+  font-size: 0.8125rem !important;
+  font-weight: 500 !important;
+  cursor: pointer !important;
+  transition: all 0.2s ease !important;
+  box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05) !important;
+}
+
+.shepherd-button:hover {
+  background: #007891 !important;
+  transform: translateY(-1px) !important;
+  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1) !important;
+}
+
+.shepherd-button:active {
+  transform: translateY(0) !important;
+}
+
+.shepherd-button-secondary {
+  background: transparent !important;
+  color: #193B4F !important;
+  border: 1px solid #BFC3C6 !important;
+}
+
+.shepherd-button-secondary:hover {
+  background: rgba(0, 120, 145, 0.05) !important;
+  border-color: #007891 !important;
+  color: #007891 !important;
+}
+
+.shepherd-cancel-icon {
+  color: #FFFFFF !important;
+  font-size: 1.5rem !important;
+  font-weight: 400 !important;
+  cursor: pointer !important;
+  opacity: 0.8 !important;
+  transition: all 0.2s ease !important;
+  position: absolute !important;
+  right: 1rem !important;
+  top: 50% !important;
+  transform: translateY(-50%) !important;
+  width: 28px !important;
+  height: 28px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  border-radius: 6px !important;
+  background: rgba(255, 255, 255, 0.1) !important;
+}
+
+.shepherd-cancel-icon:hover {
+  opacity: 1 !important;
+  background: rgba(255, 255, 255, 0.2) !important;
+  transform: translateY(-50%) scale(1.1) !important;
+}
+
+.shepherd-arrow {
+  display: none !important;
+}
+
+/* Garantir fundo branco em todos os elementos do Shepherd */
+.shepherd-element > div {
+  background: #FFFFFF !important;
+}
+
+/* Estilo específico para o modal overlay */
+.shepherd-modal-overlay-container {
+  background-color: rgba(0, 0, 0, 0.5) !important;
+}
+
+/* Target específico do elemento destacado */
+.shepherd-target {
+  z-index: 9999 !important;
+}
+
+/* Adicionar borda branca ao redor do elemento destacado */
+body.shepherd-active .shepherd-target::before {
+  content: '' !important;
+  position: absolute !important;
+  inset: -3px !important;
+  border: 2px solid rgba(255, 255, 255, 0.9) !important;
+  border-radius: 8px !important;
+  pointer-events: none !important;
+  z-index: 10000 !important;
+}
+
+/* Adicionar ícone de progresso no footer */
+.shepherd-footer::before {
+  content: '';
+  flex: 1;
+}
+
+/* Melhorar o espaçamento entre o título e o X */
+.shepherd-has-title .shepherd-content .shepherd-header {
+  padding-right: 3rem !important;
+}
+
+/* Transição suave ao trocar de step */
+.shepherd-element {
+  animation: shepherd-fade-in 0.3s ease-out !important;
+}
+
+@keyframes shepherd-fade-in {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
