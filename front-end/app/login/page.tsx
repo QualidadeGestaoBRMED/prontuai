@@ -1,12 +1,26 @@
 "use client";
 
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { signIn } from "next-auth/react";
 import Image from "next/image";
 import { RiGoogleFill } from "@remixicon/react";
 import Link from "next/link";
+import { Loader2 } from "lucide-react";
 
 export default function LoginPage() {
+  const [isLoading, setIsLoading] = useState(false);
+
+  const handleSignIn = async () => {
+    setIsLoading(true);
+    try {
+      await signIn("google", { callbackUrl: "/enviar-docs" });
+    } catch (error) {
+      console.error("Login error:", error);
+      setIsLoading(false);
+    }
+  };
+
   return (
     <div className="container relative grid h-screen flex-col items-center justify-center lg:max-w-none lg:grid-cols-2 lg:px-0 bg-[#F3F3F3]">
       <div className="relative hidden h-full flex-col bg-muted p-10 text-white dark:border-r lg:flex">
@@ -53,7 +67,8 @@ export default function LoginPage() {
             </p>
           </div>
           <Button
-            onClick={() => signIn("google", { callbackUrl: "/chat" })}
+            onClick={handleSignIn}
+            disabled={isLoading}
             className="
               w-full max-w-xs mx-auto
               px-4 py-2
@@ -63,10 +78,20 @@ export default function LoginPage() {
               focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500
               mt-4
               sm:w-full
+              disabled:opacity-50 disabled:cursor-not-allowed
             "
           >
-            <RiGoogleFill className="w-4 h-4 mr-2" />
-            Entrar com o Google
+            {isLoading ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                Autenticando...
+              </>
+            ) : (
+              <>
+                <RiGoogleFill className="w-4 h-4 mr-2" />
+                Entrar com o Google
+              </>
+            )}
           </Button>
           <p className="px-8 text-center text-sm text-muted-foreground">
             Ao clicar em continuar, você concorda com nossos{" "}
