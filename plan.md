@@ -1,9 +1,48 @@
 # Plano: Refatoração da tela `/enviar-docs` com Persistência e Central de Notificações
 
-**Status**: 🚧 Em Desenvolvimento - Sprints 1 e 2 Concluídos
+**Status**: 🚧 Em Desenvolvimento - Sprints 1, 2 e Correções Críticas Concluídos
 **Início**: 2025-10-29
-**Última Atualização**: 2025-10-30
+**Última Atualização**: 2025-10-30 (23h)
 **Estimativa**: 4 dias (~32 horas)
+
+## 🔥 Correções Críticas Implementadas (2025-10-30)
+
+### ✅ 1. Modal TypeError Fix
+**Problema**: `result.result.ocr_result.exames_extraidos.map is not a function`
+- Backend retorna exames como string `"HEMOGRAMA, ERITROGRAMA..."` mas código esperava array
+- Modal crashava ao clicar "Ver Detalhes"
+
+**Solução**: Função helper `getExamesArray()` em `document-details-modal.tsx` (linhas 36-44)
+- Detecta automaticamente se valor é string ou array
+- Converte strings separadas por vírgula em arrays
+- Funciona transparentemente com ambos os formatos
+
+**Arquivos Modificados**:
+- `/front-end/components/document-details-modal.tsx`
+
+**Build Status**: ✅ Passou
+
+---
+
+### ✅ 2. SSE Real-Time Streaming Fix
+**Problema**: Eventos SSE chegavam todos de uma vez no final (buffer de 386 bytes com 4 eventos) em vez de progressivamente
+- Backend acumulava eventos em lista e só enviava após conclusão
+- Frontend recebia 30%, 40%, 60%, 70% simultaneamente aos ~24s
+
+**Solução**: Refatoração para `asyncio.Queue` + background task em `v1_brmed.py` (linhas 76-141)
+- **Queue**: Eventos colocados imediatamente quando gerados
+- **Background Task**: Processamento paralelo via `asyncio.create_task()`
+- **Consumer Loop**: Consome fila em tempo real com timeout de 0.5s
+- Logs detalhados: `[SSE]` para rastreamento
+
+**Arquivos Modificados**:
+- `/back-end/app/api/v1_brmed.py`
+
+**Syntax Check**: ✅ Compilação Python bem-sucedida
+
+**Impacto**: Progresso agora aparece em tempo real durante os ~24s de processamento
+
+---
 
 ---
 

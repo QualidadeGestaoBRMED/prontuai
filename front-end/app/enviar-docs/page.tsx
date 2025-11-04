@@ -34,7 +34,6 @@ export default function Page() {
   const [detailsModalOpen, setDetailsModalOpen] = useState(false)
   const { unreadCount, activeProcess, setNotificationCenterOpen, processResults, progressBarMinimized, showProgressBar } = useNotifications()
 
-  // Don't auto-navigate to results - let user control the state
 
   const handleProcessFiles = (files: FileWithPreview[]) => {
     setFilesToProcess(files)
