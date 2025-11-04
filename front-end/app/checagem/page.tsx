@@ -15,6 +15,9 @@ import { useNotifications } from "@/hooks/use-notifications";
 import { NotificationBell } from "@/components/notification-bell";
 import { NotificationCenter } from "@/components/notification-center";
 import { useSession } from "next-auth/react";
+import { ProcessResult } from "@/types/process";
+import { generateResultPDF } from "@/lib/pdf-generator";
+import { DocumentDetailsModalChecagem } from "@/components/document-details-modal-checagem";
 
 // Mock data - fallback se não houver dados do localStorage
 const mockDocumentos: DocumentoChecagem[] = [
@@ -117,6 +120,7 @@ const mockDocumentos: DocumentoChecagem[] = [
 
 export default function Page() {
   const [documentos, setDocumentos] = useState<DocumentoChecagem[]>([]);
+  const [selectedResult, setSelectedResult] = useState<ProcessResult | null>(null);
   const { processResults, updateProcessResultStatus, addNotification, unreadCount, activeProcess, setNotificationCenterOpen } = useNotifications();
   const sessionData = useSession();
   const session = sessionData?.data || null;
@@ -145,6 +149,7 @@ export default function Page() {
         examesExtras: result.examesExtras,
         // Preserve original AI decision for badge display
         decisaoIA: result.reviewedBy ? undefined : (result.status as 'approved' | 'rejected' | 'pending_review') === 'pending_review' ? 'rejected' : result.status as 'approved' | 'rejected',
+        submittedBy: result.submittedBy,
       }));
 
     // If no pending docs from processResults, use mock data
@@ -152,12 +157,12 @@ export default function Page() {
   }, [processResults]);
 
   const handleAprovar = (id: string) => {
-    const doc = documentos.find((d) => d.id === id);
+    const result = processResults.find((r) => r.id === id);
 
     // Update in notification context
     updateProcessResultStatus(id, 'approved', session?.user?.email || 'revisor@grupobrmed.com.br');
 
-    // Update local state
+    // Update local state (documentos array)
     setDocumentos((docs) =>
       docs.map((doc) =>
         doc.id === id
@@ -171,18 +176,18 @@ export default function Page() {
     );
 
     // Create notification for submitter
-    if (doc) {
+    if (result) {
       const reviewerEmail = session?.user?.email || 'revisor@grupobrmed.com.br'
       const reviewerName = session?.user?.name || 'um revisor'
 
       addNotification({
         type: 'review_approved',
         title: 'Documento Aprovado',
-        message: `Seu documento do paciente ${doc.paciente} foi aprovado por ${reviewerName}.`,
+        message: `Seu documento do paciente ${result.patientName} foi aprovado por ${reviewerName}.`,
         read: false,
         metadata: {
           documentId: id,
-          cpf: doc.cpf,
+          cpf: result.cpf,
           reviewerEmail,
         },
         variant: 'success',
@@ -190,12 +195,12 @@ export default function Page() {
     }
 
     toast.success("Documento aprovado", {
-      description: `Documento do paciente ${doc?.paciente} foi aprovado com sucesso.`,
+      description: `Documento do paciente ${result?.patientName} foi aprovado com sucesso.`,
     });
   };
 
   const handleRejeitar = (id: string, motivo: string) => {
-    const doc = documentos.find((d) => d.id === id);
+    const result = processResults.find((r) => r.id === id);
 
     // Update in notification context
     updateProcessResultStatus(id, 'rejected', session?.user?.email || 'revisor@grupobrmed.com.br', motivo);
@@ -215,17 +220,17 @@ export default function Page() {
     );
 
     // Create notification for submitter
-    if (doc) {
+    if (result) {
       const reviewerEmail = session?.user?.email || 'revisor@grupobrmed.com.br'
 
       addNotification({
         type: 'review_rejected',
         title: 'Documento Rejeitado',
-        message: `Seu documento do paciente ${doc.paciente} foi rejeitado: ${motivo}`,
+        message: `Seu documento do paciente ${result.patientName} foi rejeitado: ${motivo}`,
         read: false,
         metadata: {
           documentId: id,
-          cpf: doc.cpf,
+          cpf: result.cpf,
           reviewerEmail,
         },
         variant: 'error',
@@ -233,8 +238,15 @@ export default function Page() {
     }
 
     toast.error("Documento rejeitado", {
-      description: `Documento do paciente ${doc?.paciente} foi rejeitado.`,
+      description: `Documento do paciente ${result?.patientName} foi rejeitado.`,
     });
+  };
+
+  const handleViewDetails = (id: string) => {
+    const result = processResults.find((r) => r.id === id);
+    if (result) {
+      setSelectedResult(result);
+    }
   };
 
   return (
@@ -313,12 +325,23 @@ export default function Page() {
                 documentos={documentos}
                 onAprovar={handleAprovar}
                 onRejeitar={handleRejeitar}
+                onViewDetails={handleViewDetails}
               />
             </div>
           </div>
         </div>
       </SidebarInset>
       <NotificationCenter />
+      <DocumentDetailsModalChecagem
+        open={!!selectedResult}
+        onOpenChange={(open) => !open && setSelectedResult(null)}
+        result={selectedResult}
+        onAprovar={handleAprovar}
+        onRejeitar={handleRejeitar}
+        onDownloadPDF={selectedResult ? () => {
+          generateResultPDF(selectedResult)
+        } : undefined}
+      />
     </SidebarProvider>
   );
 }

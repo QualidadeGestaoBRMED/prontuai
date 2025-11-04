@@ -12,6 +12,7 @@ export type DocumentoChecagem = {
   examesExtras: number;
   documentoUrl?: string;
   decisaoIA?: 'approved' | 'rejected'; // Indica se IA aprovou ou rejeitou (antes de revisão humana)
+  submittedBy?: string; // Email do usuário que enviou
 };
 
 export type AcaoChecagem = "aprovar" | "rejeitar";

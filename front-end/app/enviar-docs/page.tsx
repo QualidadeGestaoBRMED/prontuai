@@ -160,6 +160,57 @@ export default function Page() {
                     </Button>
                   </div>
 
+                  {/* Estatísticas compactas */}
+                  <div className="grid grid-cols-3 gap-4">
+                    <div className="bg-gradient-to-br from-green-50 to-green-100 border border-green-200 rounded-lg p-4 shadow-sm">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <div className="text-xs font-medium text-green-700 uppercase tracking-wide">Aprovados</div>
+                          <div className="text-3xl font-bold text-green-600 mt-1">
+                            {processResults.filter((r) => r.status === "approved" && r.reviewedBy).length}
+                          </div>
+                        </div>
+                        <div className="size-12 rounded-full bg-green-200 flex items-center justify-center">
+                          <svg className="size-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="bg-gradient-to-br from-amber-50 to-amber-100 border border-amber-200 rounded-lg p-4 shadow-sm">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <div className="text-xs font-medium text-amber-700 uppercase tracking-wide">Aguardando Revisão</div>
+                          <div className="text-3xl font-bold text-amber-600 mt-1">
+                            {processResults.filter((r) => (r.status === "approved" || r.status === "pending_review") && !r.reviewedBy).length}
+                          </div>
+                        </div>
+                        <div className="size-12 rounded-full bg-amber-200 flex items-center justify-center">
+                          <svg className="size-6 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="bg-gradient-to-br from-red-50 to-red-100 border border-red-200 rounded-lg p-4 shadow-sm">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <div className="text-xs font-medium text-red-700 uppercase tracking-wide">Rejeitados</div>
+                          <div className="text-3xl font-bold text-red-600 mt-1">
+                            {processResults.filter((r) => r.status === "rejected" && r.reviewedBy).length}
+                          </div>
+                        </div>
+                        <div className="size-12 rounded-full bg-red-200 flex items-center justify-center">
+                          <svg className="size-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
                   <ResultsTable
                     results={processResults}
                     onViewDetails={(result) => {
@@ -168,18 +219,6 @@ export default function Page() {
                     }}
                     onDownloadPDF={(result) => {
                       generateResultPDF(result)
-                    }}
-                    onDownloadJSON={(result) => {
-                      const dataStr = JSON.stringify(result, null, 2)
-                      const dataBlob = new Blob([dataStr], { type: "application/json" })
-                      const url = URL.createObjectURL(dataBlob)
-                      const link = document.createElement("a")
-                      link.href = url
-                      link.download = `resultado-${result.cpf}-${Date.now()}.json`
-                      document.body.appendChild(link)
-                      link.click()
-                      document.body.removeChild(link)
-                      URL.revokeObjectURL(url)
                     }}
                   />
                 </div>
@@ -200,18 +239,6 @@ export default function Page() {
         result={selectedResult}
         onDownloadPDF={selectedResult ? () => {
           generateResultPDF(selectedResult)
-        } : undefined}
-        onDownloadJSON={selectedResult ? () => {
-          const dataStr = JSON.stringify(selectedResult, null, 2)
-          const dataBlob = new Blob([dataStr], { type: "application/json" })
-          const url = URL.createObjectURL(dataBlob)
-          const link = document.createElement("a")
-          link.href = url
-          link.download = `resultado-${selectedResult.cpf}-${Date.now()}.json`
-          document.body.appendChild(link)
-          link.click()
-          document.body.removeChild(link)
-          URL.revokeObjectURL(url)
         } : undefined}
       />
     </SidebarProvider>
