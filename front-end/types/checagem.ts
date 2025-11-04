@@ -11,6 +11,7 @@ export type DocumentoChecagem = {
   examesFaltantes: number;
   examesExtras: number;
   documentoUrl?: string;
+  decisaoIA?: 'approved' | 'rejected'; // Indica se IA aprovou ou rejeitou (antes de revisão humana)
 };
 
 export type AcaoChecagem = "aprovar" | "rejeitar";

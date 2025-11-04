@@ -297,7 +297,7 @@ export function NotificationCenter() {
         </SheetHeader>
 
         {/* Actions */}
-        <div className="flex gap-2 mt-4 mb-2">
+        <div className="flex gap-2 mt-4 mb-2 px-4">
           {unreadCount > 0 && (
             <Button
               variant="outline"
@@ -324,7 +324,7 @@ export function NotificationCenter() {
 
         <Separator className="my-4" />
 
-        <ScrollArea className="h-[calc(100vh-180px)] pr-1">
+        <ScrollArea className="h-[calc(100vh-180px)] px-4">
           <div className="space-y-4 pr-3">
             {/* Active Process */}
             {activeProcess && (
