@@ -74,39 +74,69 @@ async def processar_documento_stream_api(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Exames obrigatórios devem ser um array JSON válido.")
 
     async def event_generator():
-        """Gerador de eventos SSE."""
+        """Gerador de eventos SSE com streaming em tempo real."""
+        event_queue = asyncio.Queue()
+        processing_done = asyncio.Event()
+
         try:
             # Enviar evento inicial
             yield f"data: {json.dumps({'progress': 0, 'step': 'inicio', 'message': 'Documento recebido, iniciando processamento...'})}\n\n"
-            await asyncio.sleep(0.1)
+            logger.info("[SSE] Enviado evento inicial (0%)")
 
-            # Lista para coletar eventos de progresso
-            progress_events = []
-
-            # Callback para receber updates do workflow
+            # Callback para receber updates do workflow e colocar na fila IMEDIATAMENTE
             async def progress_callback(progress: int, step: str, message: str):
-                event_data = json.dumps({'progress': progress, 'step': step, 'message': message})
+                event_data = {'progress': progress, 'step': step, 'message': message}
                 logger.info(f"[PROGRESS] {progress}% - {step}: {message}")
-                progress_events.append(f"data: {event_data}\n\n")
+                await event_queue.put(event_data)
+                logger.info(f"[SSE] Evento {progress}% colocado na fila")
 
-            # Processar documento com callback
-            resultado = await workflow_service.processar_documento_completo(
-                arquivo,
-                exames_obrigatorios_list,
-                progress_callback=progress_callback
-            )
+            # Task para processar documento em background
+            async def process_document():
+                try:
+                    resultado = await workflow_service.processar_documento_completo(
+                        arquivo,
+                        exames_obrigatorios_list,
+                        progress_callback=progress_callback
+                    )
+                    # Colocar resultado final na fila
+                    await event_queue.put({
+                        'progress': 100,
+                        'step': 'concluido',
+                        'message': 'Processamento concluído!',
+                        'resultado': resultado
+                    })
+                    logger.info("[SSE] Evento final (100%) colocado na fila")
+                except Exception as e:
+                    logger.exception(f"[SSE] Erro no processamento: {e}")
+                    await event_queue.put({
+                        'progress': -1,
+                        'step': 'erro',
+                        'message': f'Erro: {str(e)}'
+                    })
+                finally:
+                    processing_done.set()
 
-            # Yield todos os eventos coletados
-            for event in progress_events:
-                yield event
-                await asyncio.sleep(0.01)
+            # Iniciar processamento em background
+            process_task = asyncio.create_task(process_document())
 
-            # Enviar resultado final
-            yield f"data: {json.dumps({'progress': 100, 'step': 'concluido', 'message': 'Processamento concluído!', 'resultado': resultado})}\n\n"
+            # Consumir eventos da fila em TEMPO REAL
+            while not processing_done.is_set() or not event_queue.empty():
+                try:
+                    # Espera até 0.5s por um evento
+                    event = await asyncio.wait_for(event_queue.get(), timeout=0.5)
+                    event_json = json.dumps(event)
+                    logger.info(f"[SSE] Enviando evento: {event.get('progress')}%")
+                    yield f"data: {event_json}\n\n"
+                except asyncio.TimeoutError:
+                    # Timeout normal, continua esperando
+                    continue
+
+            # Garantir que a task terminou
+            await process_task
             logger.info(f"[REQUEST-STREAM] Processamento concluído para: {arquivo.filename}")
 
         except Exception as e:
-            logger.exception(f"Erro no processamento stream: {e}")
+            logger.exception(f"[SSE] Erro crítico no event_generator: {e}")
             error_data = json.dumps({'progress': -1, 'step': 'erro', 'message': f'Erro: {str(e)}'})
             yield f"data: {error_data}\n\n"
 

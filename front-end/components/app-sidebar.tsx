@@ -24,7 +24,6 @@ import {
 import { CentroAjudaDialog } from "@/components/centro-ajuda-dialog";
 import { TourGuiado } from "@/components/tour-guiado";
 
-// This is sample data.
 const data = {
   teams: [
     {
