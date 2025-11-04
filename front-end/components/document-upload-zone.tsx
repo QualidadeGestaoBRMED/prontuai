@@ -63,7 +63,7 @@ interface DocumentUploadZoneProps {
 
 export function DocumentUploadZone({
   onProcessFiles,
-  maxSize = 100 * 1024 * 1024, // 100MB default
+  maxSize = 5 * 1024 * 1024,
   maxFiles = 10,
 }: DocumentUploadZoneProps) {
   const [
@@ -92,7 +92,6 @@ export function DocumentUploadZone({
 
   return (
     <div className="flex flex-col gap-4 max-w-4xl mx-auto">
-      {/* Drop area */}
       <div
         role="button"
         onClick={openFileDialog}
@@ -101,7 +100,7 @@ export function DocumentUploadZone({
         onDragOver={handleDragOver}
         onDrop={handleDrop}
         data-dragging={isDragging || undefined}
-        className="flex min-h-64 flex-col items-center justify-center rounded-xl border-2 border-dashed border-input p-8 transition-colors hover:bg-accent/50
+        className="flex min-h-64 flex-col items-center justify-center rounded-xl border-2 border-dashed border-[#193B4F] p-8 transition-colors hover:bg-accent/10
 has-disabled:pointer-events-none has-disabled:opacity-50 has-[input:focus]:border-ring has-[input:focus]:ring-[3px] has-[input:focus]:ring-ring/50
 data-[dragging=true]:bg-accent/50 data-[dragging=true]:border-primary cursor-pointer"
       >

@@ -33,31 +33,52 @@ export function DocumentDetailsModal({
 }: DocumentDetailsModalProps) {
   if (!result) return null
 
-  const getStatusBadge = (status: ProcessResult["status"]) => {
-    switch (status) {
-      case "approved":
-        return (
-          <Badge variant="default" className="bg-green-500 hover:bg-green-600">
-            ✓ Aprovado
-          </Badge>
-        )
-      case "rejected":
-        return <Badge variant="destructive">✗ Rejeitado</Badge>
-      case "pending_review":
-        return (
-          <Badge
-            variant="secondary"
-            className="bg-amber-100 text-amber-700 hover:bg-amber-200"
-          >
-            ⚠ Pendente de Revisão
-          </Badge>
-        )
+  const getStatusBadge = (result: ProcessResult) => {
+    const { status, reviewedBy } = result
+
+    // Approved by human (final approval)
+    if (status === "approved" && reviewedBy) {
+      return (
+        <Badge variant="default" className="bg-green-500 hover:bg-green-600">
+          Aprovado por Revisor
+        </Badge>
+      )
     }
+
+    // Approved by AI, awaiting human validation
+    if (status === "approved" && !reviewedBy) {
+      return (
+        <Badge variant="secondary" className="bg-amber-100 text-amber-700 hover:bg-amber-200">
+          Aprovado pela IA - Aguardando Validação Humana
+        </Badge>
+      )
+    }
+
+    // Rejected by AI, awaiting human review
+    if (status === "pending_review") {
+      return (
+        <Badge variant="secondary" className="bg-orange-100 text-orange-700 hover:bg-orange-200">
+          Rejeitado pela IA - Aguardando Revisão Humana
+        </Badge>
+      )
+    }
+
+    // Rejected by human (final rejection)
+    if (status === "rejected" && reviewedBy) {
+      return (
+        <Badge variant="destructive">
+          Documentos Incompletos - Reenviar
+        </Badge>
+      )
+    }
+
+    // Fallback
+    return <Badge variant="secondary">{status}</Badge>
   }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[90vh]">
+      <DialogContent className="max-w-7xl max-h-[90vh] p-4">
         <DialogHeader>
           <div className="flex items-start justify-between">
             <div className="space-y-1">
@@ -66,11 +87,11 @@ export function DocumentDetailsModal({
               </DialogTitle>
               <DialogDescription>{result.filename}</DialogDescription>
             </div>
-            {getStatusBadge(result.status)}
+            {getStatusBadge(result)}
           </div>
         </DialogHeader>
 
-        <ScrollArea className="max-h-[calc(90vh-12rem)] pr-4">
+        <ScrollArea className="max-h-[calc(90vh-12rem)] pr-2">
           <div className="space-y-6">
             {/* Basic Information */}
             <div className="grid grid-cols-2 gap-4">
