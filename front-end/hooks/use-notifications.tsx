@@ -106,14 +106,38 @@ function convertDatesToObjects(obj: any): any {
   return obj
 }
 
-// Cleanup old notifications
+// Cleanup old notifications and remove duplicates
 function cleanupOldNotifications(notifications: Notification[]): Notification[] {
   const cutoffDate = new Date()
   cutoffDate.setDate(cutoffDate.getDate() - MAX_NOTIFICATION_AGE_DAYS)
 
-  return notifications
-    .filter(n => new Date(n.timestamp) > cutoffDate)
-    .slice(-MAX_NOTIFICATIONS)
+  // Filter old notifications
+  const filtered = notifications.filter(n => new Date(n.timestamp) > cutoffDate)
+
+  // Remove duplicates (same type, message, and metadata within 1 minute)
+  const deduped: Notification[] = []
+  for (const notif of filtered) {
+    const isDuplicate = deduped.some(existing => {
+      const timeDiff = Math.abs(new Date(notif.timestamp).getTime() - new Date(existing.timestamp).getTime())
+      const withinOneMinute = timeDiff < 60000 // 1 minute
+
+      const sameTypeAndMessage = existing.type === notif.type && existing.message === notif.message
+
+      const sameMetadata =
+        (existing.metadata?.processId && existing.metadata?.processId === notif.metadata?.processId) ||
+        (existing.metadata?.batchId && existing.metadata?.batchId === notif.metadata?.batchId) ||
+        (existing.metadata?.documentId && existing.metadata?.documentId === notif.metadata?.documentId)
+
+      return sameTypeAndMessage && withinOneMinute && sameMetadata
+    })
+
+    if (!isDuplicate) {
+      deduped.push(notif)
+    }
+  }
+
+  // Keep only the latest MAX_NOTIFICATIONS
+  return deduped.slice(-MAX_NOTIFICATIONS)
 }
 
 // Provider component
@@ -185,7 +209,34 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       id: `notif-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       timestamp: new Date(),
     }
-    setNotifications(prev => cleanupOldNotifications([...prev, notification]))
+
+    setNotifications(prev => {
+      // Check for duplicate notifications with multiple criteria
+      const fiveSecondsAgo = new Date(Date.now() - 5000)
+      const isDuplicate = prev.some(existing => {
+        // Same type and message
+        const sameTypeAndMessage = existing.type === notification.type && existing.message === notification.message
+
+        // Recent timestamp (within 5 seconds)
+        const isRecent = existing.timestamp > fiveSecondsAgo
+
+        // Same metadata (processId, batchId, or documentId)
+        const sameMetadata =
+          (existing.metadata?.processId && existing.metadata?.processId === notification.metadata?.processId) ||
+          (existing.metadata?.batchId && existing.metadata?.batchId === notification.metadata?.batchId) ||
+          (existing.metadata?.documentId && existing.metadata?.documentId === notification.metadata?.documentId)
+
+        return sameTypeAndMessage && (isRecent || sameMetadata)
+      })
+
+      if (isDuplicate) {
+        console.log('Duplicate notification prevented:', notification.type, notification.message)
+        return prev
+      }
+
+      return cleanupOldNotifications([...prev, notification])
+    })
+
     return notification.id
   }, [])
 

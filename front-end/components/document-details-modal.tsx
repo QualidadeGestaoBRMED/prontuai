@@ -21,7 +21,6 @@ interface DocumentDetailsModalProps {
   onOpenChange: (open: boolean) => void
   result: ProcessResult | null
   onDownloadPDF?: () => void
-  onDownloadJSON?: () => void
 }
 
 export function DocumentDetailsModal({
@@ -29,7 +28,6 @@ export function DocumentDetailsModal({
   onOpenChange,
   result,
   onDownloadPDF,
-  onDownloadJSON,
 }: DocumentDetailsModalProps) {
   if (!result) return null
 
@@ -79,14 +77,14 @@ export function DocumentDetailsModal({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-7xl max-h-[90vh] p-4">
-        <DialogHeader>
-          <div className="flex items-start justify-between">
-            <div className="space-y-1">
-              <DialogTitle className="text-2xl">
-                Detalhes do Documento
-              </DialogTitle>
-              <DialogDescription>{result.filename}</DialogDescription>
-            </div>
+        <DialogHeader className="pr-8">
+          <div className="space-y-1">
+            <DialogTitle className="text-2xl">
+              Detalhes do Documento
+            </DialogTitle>
+            <DialogDescription>{result.filename}</DialogDescription>
+          </div>
+          <div className="absolute top-4 right-12">
             {getStatusBadge(result)}
           </div>
         </DialogHeader>
@@ -304,21 +302,13 @@ export function DocumentDetailsModal({
 
         {/* Footer Actions */}
         <div className="flex items-center justify-between pt-4 border-t">
-          <div className="flex gap-2">
-            {onDownloadPDF && (
-              <Button variant="outline" size="sm" onClick={onDownloadPDF}>
-                <Download className="size-4 mr-2" />
-                Download PDF
-              </Button>
-            )}
-            {onDownloadJSON && (
-              <Button variant="outline" size="sm" onClick={onDownloadJSON}>
-                <Download className="size-4 mr-2" />
-                Download JSON
-              </Button>
-            )}
-          </div>
-          <Button variant="ghost" onClick={() => onOpenChange(false)}>
+          {onDownloadPDF && (
+            <Button variant="outline" size="sm" onClick={onDownloadPDF}>
+              <Download className="size-4 mr-2" />
+              Download PDF
+            </Button>
+          )}
+          <Button variant="ghost" onClick={() => onOpenChange(false)} className="ml-auto">
             Fechar
           </Button>
         </div>
