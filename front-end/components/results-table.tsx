@@ -21,21 +21,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
 import { ProcessResult } from "@/types/process"
-import { Download, Eye, MoreHorizontal, Search, FileDown } from "lucide-react"
+import { Download, Eye, Search, FileDown } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 interface ResultsTableProps {
   results: ProcessResult[]
   onViewDetails?: (result: ProcessResult) => void
   onDownloadPDF?: (result: ProcessResult) => void
-  onDownloadJSON?: (result: ProcessResult) => void
   className?: string
 }
 
@@ -74,7 +67,6 @@ export function ResultsTable({
   results,
   onViewDetails,
   onDownloadPDF,
-  onDownloadJSON,
   className,
 }: ResultsTableProps) {
   const [searchCPF, setSearchCPF] = useState("")
@@ -237,7 +229,11 @@ export function ResultsTable({
               </TableRow>
             ) : (
               paginatedResults.map((result, index) => (
-                <TableRow key={`${result.id}-${result.batchId}-${index}`}>
+                <TableRow
+                  key={`${result.id}-${result.batchId}-${index}`}
+                  className="cursor-pointer hover:bg-muted/50 transition-colors"
+                  onClick={() => onViewDetails?.(result)}
+                >
                   <TableCell className="font-mono text-sm">
                     {formatCPF(result.cpf)}
                   </TableCell>
@@ -274,29 +270,27 @@ export function ResultsTable({
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => onViewDetails?.(result)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onViewDetails?.(result);
+                        }}
                         className="gap-2"
                       >
                         <Eye className="size-4" />
                         Ver
                       </Button>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" className="size-8">
-                            <MoreHorizontal className="size-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => onDownloadPDF?.(result)}>
-                            <Download className="size-4 mr-2" />
-                            Download PDF
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => onDownloadJSON?.(result)}>
-                            <Download className="size-4 mr-2" />
-                            Download JSON
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onDownloadPDF?.(result);
+                        }}
+                        className="gap-2"
+                      >
+                        <Download className="size-4" />
+                        PDF
+                      </Button>
                     </div>
                   </TableCell>
                 </TableRow>

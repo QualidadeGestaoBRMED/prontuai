@@ -26,7 +26,6 @@ import {
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -44,7 +43,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { DocumentDetailsModalChecagem } from "@/components/document-details-modal-checagem";
 import type { DocumentoChecagem, StatusDocumento } from "@/types/checagem";
 
 declare module "@tanstack/react-table" {
@@ -56,14 +54,14 @@ declare module "@tanstack/react-table" {
 
 type CheckagemTableProps = {
   documentos: DocumentoChecagem[];
-  onAprovar: (id: string) => void;
-  onRejeitar: (id: string, motivo: string) => void;
+  onAprovar?: (id: string) => void;
+  onRejeitar?: (id: string, motivo: string) => void;
+  onViewDetails?: (id: string) => void;
 };
 
 export function CheckagemTable({
   documentos,
-  onAprovar,
-  onRejeitar,
+  onViewDetails,
 }: CheckagemTableProps) {
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [sorting, setSorting] = useState<SortingState>([
@@ -72,31 +70,14 @@ export function CheckagemTable({
       desc: true,
     },
   ]);
-  const [selectedDocument, setSelectedDocument] = useState<DocumentoChecagem | null>(null);
-  const [isModalOpen, setIsModalOpen] = useState(false);
 
   const columns = useMemo<ColumnDef<DocumentoChecagem>[]>(
     () => [
       {
-        id: "select",
-        header: ({ table }) => (
-          <Checkbox
-            checked={
-              table.getIsAllPageRowsSelected() ||
-              (table.getIsSomePageRowsSelected() && "indeterminate")
-            }
-            onCheckedChange={(value) =>
-              table.toggleAllPageRowsSelected(!!value)
-            }
-            aria-label="Selecionar todos"
-          />
-        ),
+        header: "CPF",
+        accessorKey: "cpf",
         cell: ({ row }) => (
-          <Checkbox
-            checked={row.getIsSelected()}
-            onCheckedChange={(value) => row.toggleSelected(!!value)}
-            aria-label="Selecionar linha"
-          />
+          <div className="font-mono text-sm">{row.getValue("cpf")}</div>
         ),
       },
       {
@@ -107,18 +88,17 @@ export function CheckagemTable({
         ),
       },
       {
-        header: "CPF",
-        accessorKey: "cpf",
-        cell: ({ row }) => (
-          <div className="font-mono text-sm">{row.getValue("cpf")}</div>
-        ),
-      },
-      {
-        header: "Data Upload",
+        header: "Data",
         accessorKey: "dataUpload",
         cell: ({ row }) => (
           <div className="text-sm">
-            {new Date(row.getValue("dataUpload")).toLocaleDateString("pt-BR")}
+            {new Date(row.getValue("dataUpload")).toLocaleDateString("pt-BR", {
+              year: 'numeric',
+              month: '2-digit',
+              day: '2-digit',
+              hour: '2-digit',
+              minute: '2-digit'
+            })}
           </div>
         ),
       },
@@ -167,13 +147,14 @@ export function CheckagemTable({
         cell: ({ row }) => {
           const faltantes = row.getValue("examesFaltantes") as number;
           return (
-            <div
-              className={cn(
-                "text-center font-medium",
-                faltantes > 0 ? "text-red-600" : "text-green-600"
+            <div className="text-center">
+              {faltantes > 0 ? (
+                <Badge variant="outline" className="text-red-600 border-red-300">
+                  {faltantes}
+                </Badge>
+              ) : (
+                <span className="text-muted-foreground">-</span>
               )}
-            >
-              {faltantes}
             </div>
           );
         },
@@ -184,12 +165,32 @@ export function CheckagemTable({
       {
         header: "Extras",
         accessorKey: "examesExtras",
-        cell: ({ row }) => (
-          <div className="text-center">{row.getValue("examesExtras")}</div>
-        ),
+        cell: ({ row }) => {
+          const extras = row.getValue("examesExtras") as number;
+          return (
+            <div className="text-center">
+              {extras > 0 ? (
+                <Badge variant="outline" className="text-blue-600 border-blue-300">
+                  {extras}
+                </Badge>
+              ) : (
+                <span className="text-muted-foreground">-</span>
+              )}
+            </div>
+          );
+        },
         meta: {
           filterVariant: "range",
         },
+      },
+      {
+        header: "Enviado por",
+        accessorKey: "submittedBy",
+        cell: ({ row }) => (
+          <div className="text-sm text-muted-foreground truncate max-w-[200px]">
+            {row.original.submittedBy || "-"}
+          </div>
+        ),
       },
       {
         header: "Ações",
@@ -199,21 +200,21 @@ export function CheckagemTable({
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => {
-                setSelectedDocument(row.original);
-                setIsModalOpen(true);
+              onClick={(e) => {
+                e.stopPropagation();
+                onViewDetails?.(row.original.id);
               }}
               className="gap-2"
             >
               <EyeIcon className="size-4" />
-              Ver Detalhes
+              Ver
             </Button>
           );
         },
         enableSorting: false,
       },
     ],
-    []
+    [onViewDetails]
   );
 
   const table = useReactTable({
@@ -235,21 +236,19 @@ export function CheckagemTable({
   });
 
   return (
-    <>
-      <div className="space-y-6">
-        {/* Filtros */}
-        <div className="flex flex-wrap gap-3">
-          <div className="w-52">
-            <Filter column={table.getColumn("paciente")!} />
-          </div>
-          <div className="w-40">
-            <Filter column={table.getColumn("cpf")!} />
-          </div>
-          <div className="w-36">
-            <Filter column={table.getColumn("status")!} />
-          </div>
-
+    <div className="space-y-6">
+      {/* Filtros */}
+      <div className="flex flex-wrap gap-3">
+        <div className="w-52">
+          <Filter column={table.getColumn("paciente")!} />
         </div>
+        <div className="w-40">
+          <Filter column={table.getColumn("cpf")!} />
+        </div>
+        <div className="w-36">
+          <Filter column={table.getColumn("status")!} />
+        </div>
+      </div>
 
       {/* Tabela */}
       <div className="rounded-lg border">
@@ -329,6 +328,8 @@ export function CheckagemTable({
                 <TableRow
                   key={row.id}
                   data-state={row.getIsSelected() && "selected"}
+                  className="cursor-pointer hover:bg-muted/50 transition-colors"
+                  onClick={() => onViewDetails?.(row.original.id)}
                 >
                   {row.getVisibleCells().map((cell) => (
                     <TableCell key={cell.id}>
@@ -354,15 +355,6 @@ export function CheckagemTable({
         </Table>
       </div>
     </div>
-
-    <DocumentDetailsModalChecagem
-      open={isModalOpen}
-      onOpenChange={setIsModalOpen}
-      documento={selectedDocument}
-      onAprovar={onAprovar}
-      onRejeitar={onRejeitar}
-    />
-    </>
   );
 }
 

@@ -2,7 +2,7 @@
 
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
-import { CheckIcon, XIcon } from "lucide-react"
+import { CheckIcon, XIcon, Download } from "lucide-react"
 import { useState } from "react"
 import {
   Dialog,
@@ -27,91 +27,104 @@ import { Separator } from "@/components/ui/separator"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
-import type { DocumentoChecagem } from "@/types/checagem"
+import { ProcessResult } from "@/types/process"
 
 interface DocumentDetailsModalChecagemProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  documento: DocumentoChecagem | null
+  result: ProcessResult | null
   onAprovar: (id: string) => void
   onRejeitar: (id: string, motivo: string) => void
+  onDownloadPDF?: () => void
 }
 
 export function DocumentDetailsModalChecagem({
   open,
   onOpenChange,
-  documento,
+  result,
   onAprovar,
   onRejeitar,
+  onDownloadPDF,
 }: DocumentDetailsModalChecagemProps) {
   const [motivo, setMotivo] = useState("")
   const [showRejectDialog, setShowRejectDialog] = useState(false)
   const [showApproveDialog, setShowApproveDialog] = useState(false)
 
-  if (!documento) return null
+  if (!result) return null
 
-  const getStatusBadge = (doc: DocumentoChecagem) => {
-    const decisaoIA = doc.decisaoIA
+  const getStatusBadge = (result: ProcessResult) => {
+    const { status, reviewedBy } = result
 
-    // Show badge indicating AI decision
-    if (decisaoIA === 'approved') {
+    // Approved by human (final approval)
+    if (status === "approved" && reviewedBy) {
       return (
-        <Badge variant="outline" className="bg-green-100 text-green-700 border-green-300">
-          Aprovado pela IA
-        </Badge>
-      )
-    } else if (decisaoIA === 'rejected') {
-      return (
-        <Badge variant="outline" className="bg-orange-100 text-orange-700 border-orange-300">
-          Rejeitado pela IA
+        <Badge variant="default" className="bg-green-500 hover:bg-green-600">
+          Aprovado por Revisor
         </Badge>
       )
     }
 
-    // Fallback for already reviewed documents
-    const styles = {
-      pendente: "bg-yellow-400/20 text-yellow-700 border-yellow-400/50",
-      aprovado: "bg-green-400/20 text-green-700 border-green-400/50",
-      rejeitado: "bg-red-400/20 text-red-700 border-red-400/50",
-    }[doc.status]
+    // Approved by AI, awaiting human validation
+    if (status === "approved" && !reviewedBy) {
+      return (
+        <Badge variant="secondary" className="bg-amber-100 text-amber-700 hover:bg-amber-200">
+          Aprovado pela IA - Aguardando Validação Humana
+        </Badge>
+      )
+    }
 
-    return (
-      <Badge variant="outline" className={`capitalize ${styles}`}>
-        {doc.status}
-      </Badge>
-    )
+    // Rejected by AI, awaiting human review
+    if (status === "pending_review") {
+      return (
+        <Badge variant="secondary" className="bg-orange-100 text-orange-700 hover:bg-orange-200">
+          Rejeitado pela IA - Aguardando Revisão Humana
+        </Badge>
+      )
+    }
+
+    // Rejected by human (final rejection)
+    if (status === "rejected" && reviewedBy) {
+      return (
+        <Badge variant="destructive">
+          Documentos Incompletos - Reenviar
+        </Badge>
+      )
+    }
+
+    // Fallback
+    return <Badge variant="secondary">{status}</Badge>
   }
 
   const handleAprovar = () => {
-    onAprovar(documento.id)
+    onAprovar(result.id)
     setShowApproveDialog(false)
     onOpenChange(false)
   }
 
   const handleRejeitar = () => {
     if (motivo.trim()) {
-      onRejeitar(documento.id, motivo)
+      onRejeitar(result.id, motivo)
       setMotivo("")
       setShowRejectDialog(false)
       onOpenChange(false)
     }
   }
 
-  const isPending = documento.status === "pendente"
+  const isPending = !result.reviewedBy
 
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="max-w-7xl max-h-[90vh] p-4">
-          <DialogHeader>
-            <div className="flex items-start justify-between">
-              <div className="space-y-1">
-                <DialogTitle className="text-2xl">
-                  Detalhes do Documento
-                </DialogTitle>
-                <DialogDescription>CPF: {documento.cpf}</DialogDescription>
-              </div>
-              {getStatusBadge(documento)}
+          <DialogHeader className="pr-8">
+            <div className="space-y-1">
+              <DialogTitle className="text-2xl">
+                Detalhes do Documento
+              </DialogTitle>
+              <DialogDescription>{result.filename}</DialogDescription>
+            </div>
+            <div className="absolute top-4 right-12">
+              {getStatusBadge(result)}
             </div>
           </DialogHeader>
 
@@ -121,30 +134,45 @@ export function DocumentDetailsModalChecagem({
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <p className="text-sm text-muted-foreground">CPF</p>
-                  <p className="font-medium font-mono">{documento.cpf}</p>
+                  <p className="font-medium font-mono">{result.cpf}</p>
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Paciente</p>
-                  <p className="font-medium">{documento.paciente}</p>
+                  <p className="font-medium">{result.patientName}</p>
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Data de Upload</p>
                   <p className="text-sm">
-                    {format(new Date(documento.dataUpload), "dd/MM/yyyy 'às' HH:mm", {
+                    {format(result.uploadedAt, "dd/MM/yyyy 'às' HH:mm", {
                       locale: ptBR,
                     })}
                   </p>
                 </div>
-                {documento.dataProcessamento && (
+                <div>
+                  <p className="text-sm text-muted-foreground">
+                    Data de Processamento
+                  </p>
+                  <p className="text-sm">
+                    {format(result.processedAt, "dd/MM/yyyy 'às' HH:mm", {
+                      locale: ptBR,
+                    })}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Enviado por</p>
+                  <p className="text-sm">{result.submittedBy}</p>
+                </div>
+                {result.reviewedBy && (
                   <div>
-                    <p className="text-sm text-muted-foreground">
-                      Data de Processamento
-                    </p>
-                    <p className="text-sm">
-                      {format(new Date(documento.dataProcessamento), "dd/MM/yyyy 'às' HH:mm", {
-                        locale: ptBR,
-                      })}
-                    </p>
+                    <p className="text-sm text-muted-foreground">Revisado por</p>
+                    <p className="text-sm">{result.reviewedBy}</p>
+                    {result.reviewedAt && (
+                      <p className="text-xs text-muted-foreground">
+                        {format(result.reviewedAt, "dd/MM/yyyy 'às' HH:mm", {
+                          locale: ptBR,
+                        })}
+                      </p>
+                    )}
                   </div>
                 )}
               </div>
@@ -152,58 +180,174 @@ export function DocumentDetailsModalChecagem({
               <Separator />
 
               {/* Summary Counters */}
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-3 gap-4">
+                <div className="text-center p-4 border rounded-lg bg-muted/30">
+                  <p className="text-2xl font-bold">
+                    {result.result.ocr_result?.exames_extraidos.length || 0}
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    Exames no Documento
+                  </p>
+                </div>
+                <div className="text-center p-4 border rounded-lg bg-muted/30">
+                  <p className="text-2xl font-bold">
+                    {result.result.brmed_result?.exames_obrigatorios.length || 0}
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    Exames Obrigatórios
+                  </p>
+                </div>
                 <div className="text-center p-4 border rounded-lg bg-muted/30">
                   <p className="text-2xl font-bold text-red-600">
-                    {documento.examesFaltantes}
+                    {result.examesFaltantes}
                   </p>
                   <p className="text-sm text-muted-foreground">
                     Exames Faltantes
                   </p>
                 </div>
-                <div className="text-center p-4 border rounded-lg bg-muted/30">
-                  <p className="text-2xl font-bold text-blue-600">
-                    {documento.examesExtras}
-                  </p>
-                  <p className="text-sm text-muted-foreground">
-                    Exames Extras
-                  </p>
-                </div>
               </div>
 
-              {/* Rejection Reason (if exists) */}
-              {documento.motivoRejeicao && (
+              {/* Rejection Reason (if rejected) */}
+              {result.status === "rejected" && result.rejectionReason && (
                 <div className="p-4 border border-red-200 rounded-lg bg-red-50">
                   <h4 className="font-semibold text-red-900 mb-2">
                     Motivo da Rejeição
                   </h4>
-                  <p className="text-sm text-red-700">{documento.motivoRejeicao}</p>
+                  <p className="text-sm text-red-700">{result.rejectionReason}</p>
                 </div>
               )}
 
-              {/* AI Decision Information */}
-              {documento.decisaoIA && (
+              {/* Analysis */}
+              {result.result.validation_result?.analysis && (
                 <>
                   <Separator />
-                  <div className="p-4 border rounded-lg bg-muted/30">
-                    <h4 className="font-semibold mb-2">Decisão da Inteligência Artificial</h4>
-                    <p className="text-sm text-muted-foreground">
-                      {documento.decisaoIA === 'approved'
-                        ? 'Este documento foi aprovado pela IA. Por favor, revise os detalhes e confirme a aprovação ou rejeite se encontrar inconsistências.'
-                        : 'Este documento foi rejeitado pela IA devido a exames faltantes. Por favor, revise os detalhes e tome a decisão final.'}
+                  <div>
+                    <h4 className="font-semibold mb-3">Análise de Validação</h4>
+                    <p className="text-sm text-muted-foreground leading-relaxed">
+                      {result.result.validation_result?.analysis}
                     </p>
                   </div>
                 </>
               )}
+
+              <Separator />
+
+              {/* Detailed Comparison Table */}
+              <div>
+                <h4 className="font-semibold mb-3">Comparação Detalhada</h4>
+
+                {/* Exames Extraídos (OCR) */}
+                <div className="mb-4">
+                  <h5 className="text-sm font-medium text-muted-foreground mb-2">
+                    Exames Encontrados no Documento ({result.result.ocr_result?.exames_extraidos.length || 0})
+                  </h5>
+                  <div className="space-y-2">
+                    {(!result.result.ocr_result?.exames_extraidos || result.result.ocr_result.exames_extraidos.length === 0) ? (
+                      <p className="text-sm text-muted-foreground italic">
+                        Nenhum exame extraído
+                      </p>
+                    ) : (
+                      <div className="grid grid-cols-2 gap-2">
+                        {result.result.ocr_result.exames_extraidos.map(
+                          (exame, i) => (
+                            <div
+                              key={i}
+                              className="text-sm p-2 rounded border bg-blue-50 border-blue-200"
+                            >
+                              {exame}
+                            </div>
+                          )
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Exames Obrigatórios (BRMED) */}
+                <div className="mb-4">
+                  <h5 className="text-sm font-medium text-muted-foreground mb-2">
+                    Exames Obrigatórios (BRMED) ({result.result.brmed_result?.exames_obrigatorios.length || 0})
+                  </h5>
+                  <div className="space-y-2">
+                    {(!result.result.brmed_result?.exames_obrigatorios || result.result.brmed_result.exames_obrigatorios.length === 0) ? (
+                      <p className="text-sm text-muted-foreground italic">
+                        Nenhum exame obrigatório
+                      </p>
+                    ) : (
+                      <div className="grid grid-cols-2 gap-2">
+                        {result.result.brmed_result.exames_obrigatorios.map(
+                          (exame, i) => (
+                            <div
+                              key={i}
+                              className="text-sm p-2 rounded border bg-purple-50 border-purple-200"
+                            >
+                              {exame}
+                            </div>
+                          )
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Exames Faltantes */}
+                {(result.result.validation_result?.exames_faltantes?.length || 0) > 0 && (
+                  <div className="mb-4">
+                    <h5 className="text-sm font-medium text-red-600 mb-2">
+                      Exames Faltantes ({result.result.validation_result?.exames_faltantes?.length || 0})
+                    </h5>
+                    <div className="space-y-2">
+                      <div className="grid grid-cols-2 gap-2">
+                        {result.result.validation_result?.exames_faltantes?.map(
+                          (exame, i) => (
+                            <div
+                              key={i}
+                              className="text-sm p-2 rounded border bg-red-50 border-red-200 text-red-900"
+                            >
+                              {exame}
+                            </div>
+                          )
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Exames Extras */}
+                {(result.result.validation_result?.exames_extras?.length || 0) > 0 && (
+                  <div>
+                    <h5 className="text-sm font-medium text-blue-600 mb-2">
+                      Exames Extras no Documento ({result.result.validation_result?.exames_extras?.length || 0})
+                    </h5>
+                    <div className="space-y-2">
+                      <div className="grid grid-cols-2 gap-2">
+                        {result.result.validation_result?.exames_extras?.map(
+                          (exame, i) => (
+                            <div
+                              key={i}
+                              className="text-sm p-2 rounded border bg-blue-50 border-blue-200 text-blue-900"
+                            >
+                              {exame}
+                            </div>
+                          )
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           </ScrollArea>
 
           {/* Footer Actions */}
           <div className="flex items-center justify-between pt-4 border-t">
-            <div className="text-sm text-muted-foreground">
-              {isPending ? 'Aguardando sua revisão' : 'Documento já foi revisado'}
-            </div>
-            <div className="flex gap-2">
+            {onDownloadPDF && (
+              <Button variant="outline" size="sm" onClick={onDownloadPDF}>
+                <Download className="size-4 mr-2" />
+                Download PDF
+              </Button>
+            )}
+            <div className="flex gap-2 ml-auto">
               {isPending && (
                 <>
                   <Button
@@ -238,7 +382,7 @@ export function DocumentDetailsModalChecagem({
             <AlertDialogTitle>Confirmar aprovação</AlertDialogTitle>
             <AlertDialogDescription className="text-foreground">
               Tem certeza que deseja aprovar o documento do paciente{" "}
-              <strong>{documento.paciente}</strong> (CPF: {documento.cpf})?
+              <strong>{result.patientName}</strong> (CPF: {result.cpf})?
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -260,7 +404,7 @@ export function DocumentDetailsModalChecagem({
             <AlertDialogTitle>Rejeitar documento</AlertDialogTitle>
             <AlertDialogDescription className="text-foreground">
               Informe o motivo da rejeição do documento do paciente{" "}
-              <strong>{documento.paciente}</strong> (CPF: {documento.cpf}).
+              <strong>{result.patientName}</strong> (CPF: {result.cpf}).
             </AlertDialogDescription>
           </AlertDialogHeader>
           <div className="space-y-2 py-4">

@@ -81,18 +81,6 @@ function HistoricoContent() {
                   // TODO: Implement PDF download
                   console.log("Download PDF:", result)
                 }}
-                onDownloadJSON={(result) => {
-                  const dataStr = JSON.stringify(result, null, 2)
-                  const dataBlob = new Blob([dataStr], { type: "application/json" })
-                  const url = URL.createObjectURL(dataBlob)
-                  const link = document.createElement("a")
-                  link.href = url
-                  link.download = `resultado-${result.cpf}-${Date.now()}.json`
-                  document.body.appendChild(link)
-                  link.click()
-                  document.body.removeChild(link)
-                  URL.revokeObjectURL(url)
-                }}
               />
             </div>
           </div>
@@ -107,18 +95,6 @@ function HistoricoContent() {
         onDownloadPDF={selectedResult ? () => {
           // TODO: Implement PDF download
           console.log("Download PDF:", selectedResult)
-        } : undefined}
-        onDownloadJSON={selectedResult ? () => {
-          const dataStr = JSON.stringify(selectedResult, null, 2)
-          const dataBlob = new Blob([dataStr], { type: "application/json" })
-          const url = URL.createObjectURL(dataBlob)
-          const link = document.createElement("a")
-          link.href = url
-          link.download = `resultado-${selectedResult.cpf}-${Date.now()}.json`
-          document.body.appendChild(link)
-          link.click()
-          document.body.removeChild(link)
-          URL.revokeObjectURL(url)
         } : undefined}
       />
     </SidebarProvider>
