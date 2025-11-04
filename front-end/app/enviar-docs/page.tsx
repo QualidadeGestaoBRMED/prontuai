@@ -23,6 +23,7 @@ import { ProcessProgressBar } from "@/components/process-progress-bar"
 import { ResultsTable } from "@/components/results-table"
 import { DocumentDetailsModal } from "@/components/document-details-modal"
 import { ProcessResult } from "@/types/process"
+import { generateResultPDF } from "@/lib/pdf-generator"
 
 type PageState = "upload" | "processing" | "completed"
 
@@ -69,7 +70,7 @@ export default function Page() {
         <header className="flex h-16 shrink-0 items-center gap-2 px-4 md:px-6 lg:px-8 bg-sidebar text-sidebar-foreground relative before:absolute before:inset-y-3 before:-left-px before:w-px before:bg-gradient-to-b before:from-white/5 before:via-white/15 before:to-white/5 before:z-50">
           <SidebarTrigger className="-ms-2 text-sidebar-foreground hover:text-sidebar-foreground/70" />
           <div className="flex items-center gap-2">
-            <h1 className="text-lg font-semibold">Enviar Documentos</h1>
+            <h1 className="text-lg font-semibold">Enviar documentos</h1>
           </div>
           <div className="flex items-center gap-2 ml-auto">
             <NotificationBell
@@ -82,7 +83,6 @@ export default function Page() {
         </header>
 
         <div className="flex h-[calc(100svh-4rem)] bg-[hsl(240_5%_92.16%)] md:rounded-s-3xl md:group-peer-data-[state=collapsed]/sidebar-inset:rounded-s-none transition-all ease-in-out duration-300">
-          {/* Main Content Area */}
           <div className="flex-1 overflow-auto">
             <div
               className={cn(
@@ -163,18 +163,13 @@ export default function Page() {
                   <ResultsTable
                     results={processResults}
                     onViewDetails={(result) => {
-                      console.log('[DEBUG] Opening modal for result:', result)
-                      console.log('[DEBUG] Result exists?', !!result)
                       setSelectedResult(result)
                       setDetailsModalOpen(true)
-                      console.log('[DEBUG] Modal state set to open')
                     }}
                     onDownloadPDF={(result) => {
-                      // TODO: Implement PDF download
-                      console.log("Download PDF:", result)
+                      generateResultPDF(result)
                     }}
                     onDownloadJSON={(result) => {
-                      // Download JSON
                       const dataStr = JSON.stringify(result, null, 2)
                       const dataBlob = new Blob([dataStr], { type: "application/json" })
                       const url = URL.createObjectURL(dataBlob)
@@ -204,8 +199,7 @@ export default function Page() {
         onOpenChange={setDetailsModalOpen}
         result={selectedResult}
         onDownloadPDF={selectedResult ? () => {
-          // TODO: Implement PDF download
-          console.log("Download PDF:", selectedResult)
+          generateResultPDF(selectedResult)
         } : undefined}
         onDownloadJSON={selectedResult ? () => {
           const dataStr = JSON.stringify(selectedResult, null, 2)

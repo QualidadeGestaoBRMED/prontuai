@@ -20,10 +20,12 @@ import {
   ChevronDownIcon,
   ChevronUpIcon,
   SearchIcon,
+  EyeIcon,
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -42,7 +44,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { CheckagemActions } from "@/components/checagem-actions";
+import { DocumentDetailsModalChecagem } from "@/components/document-details-modal-checagem";
 import type { DocumentoChecagem, StatusDocumento } from "@/types/checagem";
 
 declare module "@tanstack/react-table" {
@@ -70,6 +72,8 @@ export function CheckagemTable({
       desc: true,
     },
   ]);
+  const [selectedDocument, setSelectedDocument] = useState<DocumentoChecagem | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   const columns = useMemo<ColumnDef<DocumentoChecagem>[]>(
     () => [
@@ -123,6 +127,24 @@ export function CheckagemTable({
         accessorKey: "status",
         cell: ({ row }) => {
           const status = row.getValue("status") as StatusDocumento;
+          const decisaoIA = row.original.decisaoIA;
+
+          // Show badge indicating AI decision
+          if (decisaoIA === 'approved') {
+            return (
+              <Badge variant="outline" className="bg-green-100 text-green-700 border-green-300">
+                Aprovado pela IA
+              </Badge>
+            );
+          } else if (decisaoIA === 'rejected') {
+            return (
+              <Badge variant="outline" className="bg-orange-100 text-orange-700 border-orange-300">
+                Rejeitado pela IA
+              </Badge>
+            );
+          }
+
+          // Fallback for already reviewed documents
           const styles = {
             pendente: "bg-yellow-400/20 text-yellow-700 border-yellow-400/50",
             aprovado: "bg-green-400/20 text-green-700 border-green-400/50",
@@ -173,19 +195,25 @@ export function CheckagemTable({
         header: "Ações",
         id: "actions",
         cell: ({ row }) => {
-          if (row.original.status !== "pendente") return null;
           return (
-            <CheckagemActions
-              documento={row.original}
-              onAprovar={onAprovar}
-              onRejeitar={onRejeitar}
-            />
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setSelectedDocument(row.original);
+                setIsModalOpen(true);
+              }}
+              className="gap-2"
+            >
+              <EyeIcon className="size-4" />
+              Ver Detalhes
+            </Button>
           );
         },
         enableSorting: false,
       },
     ],
-    [onAprovar, onRejeitar]
+    []
   );
 
   const table = useReactTable({
@@ -207,20 +235,21 @@ export function CheckagemTable({
   });
 
   return (
-    <div className="space-y-6">
-      {/* Filtros */}
-      <div className="flex flex-wrap gap-3">
-        <div className="w-52">
-          <Filter column={table.getColumn("paciente")!} />
-        </div>
-        <div className="w-40">
-          <Filter column={table.getColumn("cpf")!} />
-        </div>
-        <div className="w-36">
-          <Filter column={table.getColumn("status")!} />
-        </div>
+    <>
+      <div className="space-y-6">
+        {/* Filtros */}
+        <div className="flex flex-wrap gap-3">
+          <div className="w-52">
+            <Filter column={table.getColumn("paciente")!} />
+          </div>
+          <div className="w-40">
+            <Filter column={table.getColumn("cpf")!} />
+          </div>
+          <div className="w-36">
+            <Filter column={table.getColumn("status")!} />
+          </div>
 
-      </div>
+        </div>
 
       {/* Tabela */}
       <div className="rounded-lg border">
@@ -325,6 +354,15 @@ export function CheckagemTable({
         </Table>
       </div>
     </div>
+
+    <DocumentDetailsModalChecagem
+      open={isModalOpen}
+      onOpenChange={setIsModalOpen}
+      documento={selectedDocument}
+      onAprovar={onAprovar}
+      onRejeitar={onRejeitar}
+    />
+    </>
   );
 }
 

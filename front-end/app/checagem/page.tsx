@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { AppSidebar } from "@/components/app-sidebar";
 import {
   SidebarInset,
@@ -11,8 +11,12 @@ import UserDropdown from "@/components/user-dropdown";
 import { CheckagemTable } from "@/components/checagem-table";
 import type { DocumentoChecagem } from "@/types/checagem";
 import { toast } from "sonner";
+import { useNotifications } from "@/hooks/use-notifications";
+import { NotificationBell } from "@/components/notification-bell";
+import { NotificationCenter } from "@/components/notification-center";
+import { useSession } from "next-auth/react";
 
-// Mock data - Em produção, viria do backend
+// Mock data - fallback se não houver dados do localStorage
 const mockDocumentos: DocumentoChecagem[] = [
   {
     id: "1",
@@ -112,10 +116,48 @@ const mockDocumentos: DocumentoChecagem[] = [
 ];
 
 export default function Page() {
-  const [documentos, setDocumentos] =
-    useState<DocumentoChecagem[]>(mockDocumentos);
+  const [documentos, setDocumentos] = useState<DocumentoChecagem[]>([]);
+  const { processResults, updateProcessResultStatus, addNotification, unreadCount, activeProcess, setNotificationCenterOpen } = useNotifications();
+  const sessionData = useSession();
+  const session = sessionData?.data || null;
+
+  // Load documents from processResults that need review
+  useEffect(() => {
+    // Convert ProcessResult to DocumentoChecagem format
+    // Include: approved by AI (needs human validation), pending_review (rejected by AI), and rejected by AI but not yet reviewed by human
+    const pendingDocs: DocumentoChecagem[] = processResults
+      .filter(result =>
+        result.status === 'approved' ||
+        result.status === 'pending_review' ||
+        (result.status === 'rejected' && !result.reviewedBy)
+      )
+      .map(result => ({
+        id: result.id,
+        cpf: result.cpf,
+        paciente: result.patientName,
+        dataUpload: new Date(result.uploadedAt).toISOString(),
+        status: result.status === 'pending_review' ? 'pendente' as const :
+                result.status === 'rejected' ? 'rejeitado' as const :
+                'aprovado' as const,
+        dataProcessamento: result.reviewedAt ? new Date(result.reviewedAt).toISOString() : undefined,
+        motivoRejeicao: result.rejectionReason,
+        examesFaltantes: result.examesFaltantes,
+        examesExtras: result.examesExtras,
+        // Preserve original AI decision for badge display
+        decisaoIA: result.reviewedBy ? undefined : (result.status as 'approved' | 'rejected' | 'pending_review') === 'pending_review' ? 'rejected' : result.status as 'approved' | 'rejected',
+      }));
+
+    // If no pending docs from processResults, use mock data
+    setDocumentos(pendingDocs.length > 0 ? pendingDocs : mockDocumentos);
+  }, [processResults]);
 
   const handleAprovar = (id: string) => {
+    const doc = documentos.find((d) => d.id === id);
+
+    // Update in notification context
+    updateProcessResultStatus(id, 'approved', session?.user?.email || 'revisor@grupobrmed.com.br');
+
+    // Update local state
     setDocumentos((docs) =>
       docs.map((doc) =>
         doc.id === id
@@ -128,13 +170,37 @@ export default function Page() {
       )
     );
 
-    const doc = documentos.find((d) => d.id === id);
+    // Create notification for submitter
+    if (doc) {
+      const reviewerEmail = session?.user?.email || 'revisor@grupobrmed.com.br'
+      const reviewerName = session?.user?.name || 'um revisor'
+
+      addNotification({
+        type: 'review_approved',
+        title: 'Documento Aprovado',
+        message: `Seu documento do paciente ${doc.paciente} foi aprovado por ${reviewerName}.`,
+        read: false,
+        metadata: {
+          documentId: id,
+          cpf: doc.cpf,
+          reviewerEmail,
+        },
+        variant: 'success',
+      });
+    }
+
     toast.success("Documento aprovado", {
       description: `Documento do paciente ${doc?.paciente} foi aprovado com sucesso.`,
     });
   };
 
   const handleRejeitar = (id: string, motivo: string) => {
+    const doc = documentos.find((d) => d.id === id);
+
+    // Update in notification context
+    updateProcessResultStatus(id, 'rejected', session?.user?.email || 'revisor@grupobrmed.com.br', motivo);
+
+    // Update local state
     setDocumentos((docs) =>
       docs.map((doc) =>
         doc.id === id
@@ -148,7 +214,24 @@ export default function Page() {
       )
     );
 
-    const doc = documentos.find((d) => d.id === id);
+    // Create notification for submitter
+    if (doc) {
+      const reviewerEmail = session?.user?.email || 'revisor@grupobrmed.com.br'
+
+      addNotification({
+        type: 'review_rejected',
+        title: 'Documento Rejeitado',
+        message: `Seu documento do paciente ${doc.paciente} foi rejeitado: ${motivo}`,
+        read: false,
+        metadata: {
+          documentId: id,
+          cpf: doc.cpf,
+          reviewerEmail,
+        },
+        variant: 'error',
+      });
+    }
+
     toast.error("Documento rejeitado", {
       description: `Documento do paciente ${doc?.paciente} foi rejeitado.`,
     });
@@ -162,6 +245,11 @@ export default function Page() {
           <SidebarTrigger className="-ms-2 text-sidebar-foreground hover:text-sidebar-foreground/70" />
           <h1 className="text-lg font-semibold">Checagem de Documentos</h1>
           <div className="flex items-center gap-2 ml-auto">
+            <NotificationBell
+              unreadCount={unreadCount}
+              hasActiveProcess={!!activeProcess}
+              onClick={() => setNotificationCenterOpen(true)}
+            />
             <UserDropdown />
           </div>
         </header>
@@ -230,6 +318,7 @@ export default function Page() {
           </div>
         </div>
       </SidebarInset>
+      <NotificationCenter />
     </SidebarProvider>
   );
 }

@@ -35,6 +35,7 @@ interface NotificationContextType {
   processResults: ProcessResult[]
   addProcessResult: (result: ProcessResult) => void
   getResultsByBatchId: (batchId: string) => ProcessResult[]
+  updateProcessResultStatus: (id: string, status: 'approved' | 'rejected' | 'pending_review', reviewerEmail: string, rejectionReason?: string) => void
 
   // UI State
   notificationCenterOpen: boolean
@@ -356,6 +357,27 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     return processResults.filter(r => r.batchId === batchId)
   }, [processResults])
 
+  const updateProcessResultStatus = useCallback((
+    id: string,
+    status: 'approved' | 'rejected' | 'pending_review',
+    reviewerEmail: string,
+    rejectionReason?: string
+  ) => {
+    setProcessResults(prev =>
+      prev.map(result =>
+        result.id === id
+          ? {
+              ...result,
+              status,
+              reviewedBy: reviewerEmail,
+              reviewedAt: new Date(),
+              rejectionReason: rejectionReason || result.rejectionReason,
+            }
+          : result
+      )
+    )
+  }, [])
+
   // Progress bar functions
   const minimizeProgressBar = useCallback(() => {
     setProgressBarState(prev => ({ ...prev, minimized: true }))
@@ -395,6 +417,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     processResults,
     addProcessResult,
     getResultsByBatchId,
+    updateProcessResultStatus,
     notificationCenterOpen,
     setNotificationCenterOpen,
     progressBarMinimized,

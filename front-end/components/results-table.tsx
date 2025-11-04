@@ -108,27 +108,51 @@ export function ResultsTable({
   }
 
   // Status badge variants
-  const getStatusBadge = (status: ProcessResult["status"]) => {
-    switch (status) {
-      case "approved":
-        return (
-          <Badge variant="default" className="bg-green-500 hover:bg-green-600">
-            ✓ Aprovado
-          </Badge>
-        )
-      case "rejected":
-        return (
-          <Badge variant="destructive">
-            ✗ Rejeitado
-          </Badge>
-        )
-      case "pending_review":
-        return (
-          <Badge variant="secondary" className="bg-amber-100 text-amber-700 hover:bg-amber-200">
-            ⚠ Pendente
-          </Badge>
-        )
+  const getStatusBadge = (result: ProcessResult) => {
+    const { status, reviewedBy } = result
+
+    // Approved by human (final approval)
+    if (status === "approved" && reviewedBy) {
+      return (
+        <Badge variant="default" className="bg-green-500 hover:bg-green-600">
+          Aprovado
+        </Badge>
+      )
     }
+
+    // Approved by AI, awaiting human validation
+    if (status === "approved" && !reviewedBy) {
+      return (
+        <Badge variant="secondary" className="bg-amber-100 text-amber-700 hover:bg-amber-200">
+          Aguardando Revisão
+        </Badge>
+      )
+    }
+
+    // Rejected by AI, awaiting human review
+    if (status === "pending_review") {
+      return (
+        <Badge variant="secondary" className="bg-orange-100 text-orange-700 hover:bg-orange-200">
+          Aguardando Revisão
+        </Badge>
+      )
+    }
+
+    // Rejected by human (final rejection)
+    if (status === "rejected" && reviewedBy) {
+      return (
+        <Badge variant="destructive">
+          Documentos Incompletos
+        </Badge>
+      )
+    }
+
+    // Fallback
+    return (
+      <Badge variant="secondary">
+        {status}
+      </Badge>
+    )
   }
 
   // Empty state
@@ -223,7 +247,7 @@ export function ResultsTable({
                       locale: ptBR,
                     })}
                   </TableCell>
-                  <TableCell>{getStatusBadge(result.status)}</TableCell>
+                  <TableCell>{getStatusBadge(result)}</TableCell>
                   <TableCell className="text-center">
                     {result.examesFaltantes > 0 ? (
                       <Badge variant="outline" className="text-red-600 border-red-300">
