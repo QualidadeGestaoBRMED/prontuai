@@ -163,27 +163,6 @@ export function CheckagemTable({
         },
       },
       {
-        header: "Extras",
-        accessorKey: "examesExtras",
-        cell: ({ row }) => {
-          const extras = row.getValue("examesExtras") as number;
-          return (
-            <div className="text-center">
-              {extras > 0 ? (
-                <Badge variant="outline" className="text-blue-600 border-blue-300">
-                  {extras}
-                </Badge>
-              ) : (
-                <span className="text-muted-foreground">-</span>
-              )}
-            </div>
-          );
-        },
-        meta: {
-          filterVariant: "range",
-        },
-      },
-      {
         header: "Enviado por",
         accessorKey: "submittedBy",
         cell: ({ row }) => (

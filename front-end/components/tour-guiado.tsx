@@ -117,7 +117,38 @@ export function TourGuiado() {
       },
     });
 
-    // Step 3: Checagem
+    // Step 3: Pendentes
+    tour.addStep({
+      id: "pendentes",
+      title: "Pendentes",
+      text: "Visualize e gerencie todos os documentos processados. Acompanhe o status e os resultados das análises.",
+      attachTo: {
+        element: "[data-tour='pendentes']",
+        on: "right",
+      },
+      buttons: [
+        {
+          text: "Anterior",
+          action: tour.back,
+          classes: "shepherd-button-secondary",
+        },
+        {
+          text: "Próximo",
+          action: tour.next,
+        },
+      ],
+      when: {
+        show: async function() {
+          try {
+            await waitForElement("[data-tour='pendentes']", 3000);
+          } catch (error) {
+            console.error("Elemento pendentes não encontrado:", error);
+          }
+        },
+      },
+    });
+
+    // Step 4: Checagem
     tour.addStep({
       id: "checagem",
       title: "Checagem",
@@ -143,37 +174,6 @@ export function TourGuiado() {
             await waitForElement("[data-tour='checagem']", 3000);
           } catch (error) {
             console.error("Elemento checagem não encontrado:", error);
-          }
-        },
-      },
-    });
-
-    // Step 4: Insights
-    tour.addStep({
-      id: "insights",
-      title: "Insights",
-      text: "Consulte nossa base de conhecimento com perguntas sobre medicina ocupacional e normas reguladoras.",
-      attachTo: {
-        element: "[data-tour='insights']",
-        on: "right",
-      },
-      buttons: [
-        {
-          text: "Anterior",
-          action: tour.back,
-          classes: "shepherd-button-secondary",
-        },
-        {
-          text: "Próximo",
-          action: tour.next,
-        },
-      ],
-      when: {
-        show: async function() {
-          try {
-            await waitForElement("[data-tour='insights']", 3000);
-          } catch (error) {
-            console.error("Elemento insights não encontrado:", error);
           }
         },
       },

@@ -7,5 +7,5 @@ export default withAuth({
 });
 
 export const config = {
-  matcher: ["/enviar-docs", "/checagem", "/insights", "/historico"],
+  matcher: ["/enviar-docs", "/checagem", "/insights", "/historico", "/pendentes"],
 };
