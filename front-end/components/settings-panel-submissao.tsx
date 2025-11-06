@@ -9,7 +9,7 @@ import { Message } from "@/components/file-uploader";
 import FileUploadDropArea from "@/components/file-uploader";
 import { Button } from "@/components/ui/button";
 import { HistoricoDocumentos } from "@/components/historico-documentos";
-import type { DocumentoHistorico } from "@/types/historico";
+import type { DocumentoPendente } from "@/types/pendentes";
 
 type SettingsPanelContext = {
   openMobile: boolean;
@@ -63,7 +63,7 @@ const SettingsPanelContent = ({
   historico = []
 }: {
   onSystemMessage?: (msg: Message) => void;
-  historico?: DocumentoHistorico[];
+  historico?: DocumentoPendente[];
 }) => {
   return (
     <>
@@ -107,7 +107,7 @@ const SettingsPanel = ({
   historico
 }: {
   onSystemMessage?: (msg: Message) => void;
-  historico?: DocumentoHistorico[];
+  historico?: DocumentoPendente[];
 }) => {
   const { isMobile, openMobile, setOpenMobile } = useSettingsPanel();
 

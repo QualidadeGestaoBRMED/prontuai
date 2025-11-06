@@ -34,14 +34,13 @@ interface ResultsTableProps {
 
 // Helper to export CSV
 const exportToCSV = (results: ProcessResult[]) => {
-  const headers = ["CPF", "Paciente", "Data Upload", "Status", "Exames Faltantes", "Exames Extras", "Enviado Por"]
+  const headers = ["CPF", "Paciente", "Data Upload", "Status", "Exames Faltantes", "Enviado Por"]
   const rows = results.map((r) => [
     r.cpf,
     r.patientName,
     format(r.uploadedAt, "dd/MM/yyyy HH:mm", { locale: ptBR }),
     r.status === "approved" ? "Aprovado" : r.status === "rejected" ? "Rejeitado" : "Pendente",
     r.examesFaltantes.toString(),
-    r.examesExtras.toString(),
     r.submittedBy,
   ])
 
@@ -215,7 +214,6 @@ export function ResultsTable({
               <TableHead>Data</TableHead>
               <TableHead>Status</TableHead>
               <TableHead className="text-center">Faltantes</TableHead>
-              <TableHead className="text-center">Extras</TableHead>
               <TableHead>Enviado por</TableHead>
               <TableHead className="text-right">Ações</TableHead>
             </TableRow>
@@ -223,7 +221,7 @@ export function ResultsTable({
           <TableBody>
             {paginatedResults.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                   Nenhum resultado encontrado com os filtros selecionados.
                 </TableCell>
               </TableRow>
@@ -248,15 +246,6 @@ export function ResultsTable({
                     {result.examesFaltantes > 0 ? (
                       <Badge variant="outline" className="text-red-600 border-red-300">
                         {result.examesFaltantes}
-                      </Badge>
-                    ) : (
-                      <span className="text-muted-foreground">-</span>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-center">
-                    {result.examesExtras > 0 ? (
-                      <Badge variant="outline" className="text-blue-600 border-blue-300">
-                        {result.examesExtras}
                       </Badge>
                     ) : (
                       <span className="text-muted-foreground">-</span>

@@ -6,10 +6,10 @@ import { Card, CardContent } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import { HistoricoModal } from "@/components/historico-modal";
-import type { DocumentoHistorico, StatusProcessamento } from "@/types/historico";
+import type { DocumentoPendente, StatusProcessamento } from "@/types/pendentes";
 
 type HistoricoDocumentosProps = {
-  documentos: DocumentoHistorico[];
+  documentos: DocumentoPendente[];
 };
 
 const statusConfig: Record<
