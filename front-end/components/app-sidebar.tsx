@@ -18,7 +18,6 @@ import {
 import {
   RiUploadLine,
   RiCheckDoubleLine,
-  RiLightbulbLine,
   RiHistoryLine,
 } from "@remixicon/react";
 import { CentroAjudaDialog } from "@/components/centro-ajuda-dialog";
@@ -52,19 +51,14 @@ const data = {
           isActive: false,
         },
         {
-          title: "Histórico",
-          url: "/historico",
+          title: "Pendentes",
+          url: "/pendentes",
           icon: RiHistoryLine,
         },
         {
           title: "Checagem",
           url: "/checagem",
           icon: RiCheckDoubleLine,
-        },
-        {
-          title: "Insights",
-          url: "/insights",
-          icon: RiLightbulbLine,
         },
       ],
     },
