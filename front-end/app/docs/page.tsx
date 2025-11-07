@@ -1441,7 +1441,7 @@ export default function DocsPage() {
         {/* Footer */}
         <footer className="text-center text-sm text-muted-foreground pt-12 border-t">
           <p>ProntuAI - Sistema de Validação de Documentos Médicos</p>
-          <p className="mt-1">BR MED | Última atualização: Janeiro 2025 • Versão 1.0</p>
+          <p className="mt-1">BR MED | Última atualização: Novembro 2025 • Versão 1.0</p>
         </footer>
       </div>
     </div>
