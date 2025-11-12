@@ -40,6 +40,7 @@ export interface ProcessResult {
   processedAt: Date
   status: ResultStatus
   rejectionReason?: string
+  approvalReason?: string  // Justificativa para aprovação manual (quando IA rejeitou)
   examesFaltantes: number
   examesExtras: number
   result: DocumentProcessingResult  // From backend

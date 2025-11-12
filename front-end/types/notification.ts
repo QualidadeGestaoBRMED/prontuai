@@ -27,6 +27,7 @@ export interface Notification {
     reviewerEmail?: string
     documentCount?: number
     status?: string
+    approvalReason?: string
   }
   variant?: NotificationVariant
 }
