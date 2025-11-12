@@ -14,7 +14,7 @@ export default function LoginPage() {
   const handleSignIn = async () => {
     setIsLoading(true);
     try {
-      await signIn("google", { callbackUrl: "/enviar-docs" });
+      await signIn("google", { callbackUrl: "/anexar-prontuario" });
     } catch (error) {
       console.error("Login error:", error);
       setIsLoading(false);

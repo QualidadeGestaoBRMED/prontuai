@@ -69,7 +69,7 @@ function PendentesContent() {
               </div>
 
               <ResultsTable
-                results={processResults}
+                results={processResults.filter(result => result.status !== 'approved')}
                 onViewDetails={(result) => {
                   console.log('[DEBUG] Opening modal for result:', result)
                   console.log('[DEBUG] Result exists?', !!result)

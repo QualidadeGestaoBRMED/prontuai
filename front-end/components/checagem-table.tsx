@@ -54,7 +54,7 @@ declare module "@tanstack/react-table" {
 
 type CheckagemTableProps = {
   documentos: DocumentoChecagem[];
-  onAprovar?: (id: string) => void;
+  onAprovar?: (id: string, approvalReason: string) => void;
   onRejeitar?: (id: string, motivo: string) => void;
   onViewDetails?: (id: string) => void;
 };

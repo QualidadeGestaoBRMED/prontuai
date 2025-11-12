@@ -205,10 +205,24 @@ async def processar_documento_completo(
         logger.error("[WORKFLOW] Não foi possível encontrar um CPF válido para consulta BRMED.")
         await send_progress(-1, "erro", "Não foi possível extrair um CPF válido")
         return {
-            "status": "falha",
+            "status": "error",
+            "cpf": "Não encontrado",
+            "cpf_processado": "Não encontrado",
             "mensagem": "Não foi possível extrair um CPF válido ou consultar exames obrigatórios.",
-            "exames_enviados": exames_enviados,
-            "ocr_info": ocr_resultado
+            "decisao_final": "Erro no processamento",
+            "erro": "Não foi possível extrair um CPF válido ou consultar exames obrigatórios.",
+            "ocr_result": {
+                "text": markdown_content,
+                "exames_extraidos": exames_enviados
+            },
+            "brmed_result": {
+                "exames_obrigatorios": []
+            },
+            "validation_result": {
+                "exames_faltantes": [],
+                "exames_extras": [],
+                "analysis": "Não foi possível validar os exames devido à falta de CPF"
+            }
         }
 
     # 3. Validar exames
@@ -226,20 +240,37 @@ async def processar_documento_completo(
     # Prepara o objeto de resposta final para o frontend
     resposta_final = {
         "cpf_processado": cpf_final if cpf_final else "Não encontrado",
+        "cpf": cpf_final if cpf_final else "Não encontrado",  # Alias para compatibilidade
         "exames_ocr": f"{', '.join(exames_enviados) if exames_enviados else 'Nenhum exame encontrado.'}",
         "exames_brnet": f"{', '.join(exames_brnet) if exames_brnet else 'Nenhum exame encontrado.'}",
         "analise_comparacao": "Análise de comparação de exames:",
         "tabela_comparacao": resultado_validacao["exames_comparativo"],
         "decisao_final": resultado_validacao["mensagem"],
-        "erro": None # Inicialmente sem erro
+        "erro": None,  # Inicialmente sem erro
+        # Estrutura completa para compatibilidade com front-end (DocumentProcessingResult)
+        "ocr_result": {
+            "text": markdown_content,
+            "exames_extraidos": exames_enviados
+        },
+        "brmed_result": {
+            "exames_obrigatorios": exames_obrigatorios
+        },
+        "validation_result": {
+            "exames_faltantes": [e["exame"] for e in resultado_validacao["exames_comparativo"] if e["status"] == "faltante"],
+            "exames_extras": [e["exame"] for e in resultado_validacao["exames_comparativo"] if e["status"] == "extra_no_ocr"],
+            "analysis": resultado_validacao["mensagem"]
+        },
+        "status": "success"  # Será ajustado abaixo se houver erro
     }
 
     if resultado_validacao.get("erro"):
         resposta_final["erro"] = resultado_validacao["erro"]
+        resposta_final["status"] = "error"
         await send_progress(-1, "erro", f"Erro na validação: {resultado_validacao['erro']}")
     elif not cpf_final:
         resposta_final["erro"] = "Não foi possível extrair um CPF válido ou consultar exames obrigatórios."
         resposta_final["decisao_final"] = "Erro no processamento."
+        resposta_final["status"] = "error"
         await send_progress(-1, "erro", "Erro no processamento")
 
     await send_progress(100, "concluido", "Processamento concluído com sucesso!")

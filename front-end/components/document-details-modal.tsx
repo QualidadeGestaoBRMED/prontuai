@@ -144,7 +144,7 @@ export function DocumentDetailsModal({
             <div className="grid grid-cols-3 gap-4">
               <div className="text-center p-4 border rounded-lg bg-muted/30">
                 <p className="text-2xl font-bold">
-                  {result.result.ocr_result?.exames_extraidos.length || 0}
+                  {Array.isArray(result.result.ocr_result?.exames_extraidos) ? result.result.ocr_result.exames_extraidos.length : 0}
                 </p>
                 <p className="text-sm text-muted-foreground">
                   Exames no Documento
@@ -152,7 +152,7 @@ export function DocumentDetailsModal({
               </div>
               <div className="text-center p-4 border rounded-lg bg-muted/30">
                 <p className="text-2xl font-bold">
-                  {result.result.brmed_result?.exames_obrigatorios.length || 0}
+                  {Array.isArray(result.result.brmed_result?.exames_obrigatorios) ? result.result.brmed_result.exames_obrigatorios.length : 0}
                 </p>
                 <p className="text-sm text-muted-foreground">
                   Exames Obrigatórios
@@ -200,16 +200,19 @@ export function DocumentDetailsModal({
               {/* Exames Extraídos (OCR) */}
               <div className="mb-4">
                 <h5 className="text-sm font-medium text-muted-foreground mb-2">
-                  Exames Encontrados no Documento ({result.result.ocr_result?.exames_extraidos.length || 0})
+                  Exames Encontrados no Documento ({Array.isArray(result.result.ocr_result?.exames_extraidos) ? result.result.ocr_result.exames_extraidos.length : 0})
                 </h5>
                 <div className="space-y-2">
-                  {(!result.result.ocr_result?.exames_extraidos || result.result.ocr_result.exames_extraidos.length === 0) ? (
+                  {(!result.result.ocr_result?.exames_extraidos || !Array.isArray(result.result.ocr_result.exames_extraidos) || result.result.ocr_result.exames_extraidos.length === 0) ? (
                     <p className="text-sm text-muted-foreground italic">
                       Nenhum exame extraído
                     </p>
                   ) : (
                     <div className="grid grid-cols-2 gap-2">
-                      {result.result.ocr_result.exames_extraidos.map(
+                      {(Array.isArray(result.result.ocr_result.exames_extraidos)
+                        ? result.result.ocr_result.exames_extraidos
+                        : []
+                      ).map(
                         (exame, i) => (
                           <div
                             key={i}
@@ -227,16 +230,19 @@ export function DocumentDetailsModal({
               {/* Exames Obrigatórios (BRMED) */}
               <div className="mb-4">
                 <h5 className="text-sm font-medium text-muted-foreground mb-2">
-                  Exames Obrigatórios (BRMED) ({result.result.brmed_result?.exames_obrigatorios.length || 0})
+                  Exames Obrigatórios (BRMED) ({Array.isArray(result.result.brmed_result?.exames_obrigatorios) ? result.result.brmed_result.exames_obrigatorios.length : 0})
                 </h5>
                 <div className="space-y-2">
-                  {(!result.result.brmed_result?.exames_obrigatorios || result.result.brmed_result.exames_obrigatorios.length === 0) ? (
+                  {(!result.result.brmed_result?.exames_obrigatorios || !Array.isArray(result.result.brmed_result.exames_obrigatorios) || result.result.brmed_result.exames_obrigatorios.length === 0) ? (
                     <p className="text-sm text-muted-foreground italic">
                       Nenhum exame obrigatório
                     </p>
                   ) : (
                     <div className="grid grid-cols-2 gap-2">
-                      {result.result.brmed_result.exames_obrigatorios.map(
+                      {(Array.isArray(result.result.brmed_result.exames_obrigatorios)
+                        ? result.result.brmed_result.exames_obrigatorios
+                        : []
+                      ).map(
                         (exame, i) => (
                           <div
                             key={i}

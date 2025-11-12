@@ -88,8 +88,8 @@ export function generateResultPDF(result: ProcessResult): void {
   addText("Resumo de Exames", 14, true)
   addSpace(3)
 
-  const examCount = result.result.ocr_result?.exames_extraidos.length || 0
-  const requiredCount = result.result.brmed_result?.exames_obrigatorios.length || 0
+  const examCount = Array.isArray(result.result.ocr_result?.exames_extraidos) ? result.result.ocr_result.exames_extraidos.length : 0
+  const requiredCount = Array.isArray(result.result.brmed_result?.exames_obrigatorios) ? result.result.brmed_result.exames_obrigatorios.length : 0
 
   addText(`Exames Encontrados no Documento: ${examCount}`, 10)
   addText(`Exames Obrigatórios (BRMED): ${requiredCount}`, 10)
@@ -125,7 +125,7 @@ export function generateResultPDF(result: ProcessResult): void {
   // Exames Extraídos
   addText("Exames Encontrados no Documento:", 12, true)
   addSpace(2)
-  if (result.result.ocr_result?.exames_extraidos && result.result.ocr_result.exames_extraidos.length > 0) {
+  if (Array.isArray(result.result.ocr_result?.exames_extraidos) && result.result.ocr_result.exames_extraidos.length > 0) {
     result.result.ocr_result.exames_extraidos.forEach((exame, index) => {
       addText(`${index + 1}. ${exame}`, 9)
     })
@@ -137,7 +137,7 @@ export function generateResultPDF(result: ProcessResult): void {
   // Exames Obrigatórios
   addText("Exames Obrigatórios (BRMED):", 12, true)
   addSpace(2)
-  if (result.result.brmed_result?.exames_obrigatorios && result.result.brmed_result.exames_obrigatorios.length > 0) {
+  if (Array.isArray(result.result.brmed_result?.exames_obrigatorios) && result.result.brmed_result.exames_obrigatorios.length > 0) {
     result.result.brmed_result.exames_obrigatorios.forEach((exame, index) => {
       addText(`${index + 1}. ${exame}`, 9)
     })
