@@ -17,4 +17,13 @@ class Settings:
     K_VIZINHOS_FAQ = int(os.getenv("K_VIZINHOS_FAQ", 2))
     MAX_DISTANCIA_FAQ = float(os.getenv("MAX_DISTANCIA_FAQ", 1.0))
 
+    # AWS Textract Configuration
+    AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID")
+    AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
+    AWS_REGION = os.getenv("AWS_REGION", "us-east-1")
+    AWS_S3_BUCKET = os.getenv("AWS_S3_BUCKET")
+
+    # Feature Toggle: OCR Engine Selection
+    USE_TEXTRACT = os.getenv("USE_TEXTRACT", "false").lower() == "true"
+
 settings = Settings() 

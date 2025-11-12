@@ -8,6 +8,7 @@ export type DocumentoChecagem = {
   dataProcessamento?: string;
   status: StatusDocumento;
   motivoRejeicao?: string;
+  approvalReason?: string; // Justificativa para aprovação manual (quando IA rejeitou)
   examesFaltantes: number;
   examesExtras: number;
   documentoUrl?: string;

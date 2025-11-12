@@ -156,11 +156,11 @@ export default function Page() {
     setDocumentos(pendingDocs.length > 0 ? pendingDocs : mockDocumentos);
   }, [processResults]);
 
-  const handleAprovar = (id: string) => {
+  const handleAprovar = (id: string, approvalReason: string) => {
     const result = processResults.find((r) => r.id === id);
 
     // Update in notification context
-    updateProcessResultStatus(id, 'approved', session?.user?.email || 'revisor@grupobrmed.com.br');
+    updateProcessResultStatus(id, 'approved', session?.user?.email || 'revisor@grupobrmed.com.br', undefined, approvalReason);
 
     // Update local state (documentos array)
     setDocumentos((docs) =>
@@ -170,6 +170,7 @@ export default function Page() {
               ...doc,
               status: "aprovado",
               dataProcessamento: new Date().toISOString(),
+              approvalReason,
             }
           : doc
       )
@@ -183,12 +184,13 @@ export default function Page() {
       addNotification({
         type: 'review_approved',
         title: 'Documento Aprovado',
-        message: `Seu documento do paciente ${result.patientName} foi aprovado por ${reviewerName}.`,
+        message: `Seu documento do paciente ${result.patientName} foi aprovado por ${reviewerName}. Justificativa: ${approvalReason}`,
         read: false,
         metadata: {
           documentId: id,
           cpf: result.cpf,
           reviewerEmail,
+          approvalReason,
         },
         variant: 'success',
       });

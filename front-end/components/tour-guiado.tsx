@@ -86,13 +86,13 @@ export function TourGuiado() {
       ],
     });
 
-    // Step 2: Enviar Exames
+    // Step 2: Anexar Prontuário
     tour.addStep({
-      id: "enviar-exames",
-      title: "Enviar Exames",
-      text: "Faça upload de documentos médicos para análise automática via OCR e validação contra o sistema BRNET.",
+      id: "anexar-prontuario",
+      title: "Anexar Prontuário",
+      text: "Faça upload de prontuários médicos para análise automática via OCR e validação contra o sistema BRNET.",
       attachTo: {
-        element: "[data-tour='enviar exames']",
+        element: "[data-tour='anexar prontuário']",
         on: "right",
       },
       buttons: [
@@ -109,9 +109,9 @@ export function TourGuiado() {
       when: {
         show: async function() {
           try {
-            await waitForElement("[data-tour='enviar exames']", 3000);
+            await waitForElement("[data-tour='anexar prontuário']", 3000);
           } catch (error) {
-            console.error("Elemento enviar exames não encontrado:", error);
+            console.error("Elemento anexar prontuário não encontrado:", error);
           }
         },
       },

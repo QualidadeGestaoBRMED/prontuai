@@ -45,8 +45,8 @@ const data = {
       url: "#",
       items: [
         {
-          title: "Enviar Exames",
-          url: "/enviar-docs",
+          title: "Anexar Prontuário",
+          url: "/anexar-prontuario",
           icon: RiUploadLine,
           isActive: false,
         },

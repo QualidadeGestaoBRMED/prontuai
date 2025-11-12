@@ -25,6 +25,10 @@ playwright>=1.43.0
 docling==2.0.0  # OCR e conversão de documentos (versão fixada para estabilidade)
 tenacity>=8.2.0  # Retry logic para chamadas OpenAI
 
+# AWS SDK (para migração do OCR para Textract)
+boto3>=1.34.0  # AWS Textract para processamento de documentos
+PyPDF2>=3.0.0  # Reparo e normalização de PDFs para compatibilidade com Textract
+
 # Dependências de Teste
 pytest>=7.0.0
 pytest-asyncio>=0.20.0

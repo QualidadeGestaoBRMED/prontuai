@@ -17,7 +17,7 @@ export function generateMockNotifications(): Notification[] {
     timestamp: new Date(now.getTime() - 2 * 60 * 1000),
     read: false,
     variant: 'warning',
-    actionUrl: '/enviar-docs',
+    actionUrl: '/anexar-prontuario',
     actionLabel: 'Ver Resultados',
     metadata: {
       processId: 'process-123',
@@ -51,7 +51,7 @@ export function generateMockNotifications(): Notification[] {
     timestamp: new Date(now.getTime() - 60 * 60 * 1000),
     read: false,
     variant: 'success',
-    actionUrl: '/enviar-docs',
+    actionUrl: '/anexar-prontuario',
     actionLabel: 'Ver Detalhes',
     metadata: {
       documentId: 'doc-456',
@@ -84,7 +84,7 @@ export function generateMockNotifications(): Notification[] {
     timestamp: new Date(now.getTime() - 3 * 60 * 60 * 1000),
     read: true,
     variant: 'error',
-    actionUrl: '/enviar-docs',
+    actionUrl: '/anexar-prontuario',
     actionLabel: 'Ver Detalhes',
     metadata: {
       documentId: 'doc-455',
@@ -105,7 +105,7 @@ export function generateMockNotifications(): Notification[] {
     timestamp: yesterday,
     read: true,
     variant: 'success',
-    actionUrl: '/enviar-docs',
+    actionUrl: '/anexar-prontuario',
     actionLabel: 'Ver Resultados',
     metadata: {
       processId: 'process-121',
@@ -317,7 +317,7 @@ export function simulateIncomingNotification(
       message: '3 documentos processados com sucesso',
       read: false,
       variant: 'success',
-      actionUrl: '/enviar-docs',
+      actionUrl: '/anexar-prontuario',
       actionLabel: 'Ver Resultados',
       metadata: {
         processId: `process-${Date.now()}`,

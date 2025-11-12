@@ -33,7 +33,7 @@ interface DocumentDetailsModalChecagemProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   result: ProcessResult | null
-  onAprovar: (id: string) => void
+  onAprovar: (id: string, approvalReason: string) => void
   onRejeitar: (id: string, motivo: string) => void
   onDownloadPDF?: () => void
 }
@@ -47,6 +47,7 @@ export function DocumentDetailsModalChecagem({
   onDownloadPDF,
 }: DocumentDetailsModalChecagemProps) {
   const [motivo, setMotivo] = useState("")
+  const [approvalReason, setApprovalReason] = useState("")
   const [showRejectDialog, setShowRejectDialog] = useState(false)
   const [showApproveDialog, setShowApproveDialog] = useState(false)
 
@@ -96,9 +97,12 @@ export function DocumentDetailsModalChecagem({
   }
 
   const handleAprovar = () => {
-    onAprovar(result.id)
-    setShowApproveDialog(false)
-    onOpenChange(false)
+    if (approvalReason.trim()) {
+      onAprovar(result.id, approvalReason)
+      setApprovalReason("")
+      setShowApproveDialog(false)
+      onOpenChange(false)
+    }
   }
 
   const handleRejeitar = () => {
@@ -183,7 +187,7 @@ export function DocumentDetailsModalChecagem({
               <div className="grid grid-cols-3 gap-4">
                 <div className="text-center p-4 border rounded-lg bg-muted/30">
                   <p className="text-2xl font-bold">
-                    {result.result.ocr_result?.exames_extraidos.length || 0}
+                    {Array.isArray(result.result.ocr_result?.exames_extraidos) ? result.result.ocr_result.exames_extraidos.length : 0}
                   </p>
                   <p className="text-sm text-muted-foreground">
                     Exames no Documento
@@ -191,7 +195,7 @@ export function DocumentDetailsModalChecagem({
                 </div>
                 <div className="text-center p-4 border rounded-lg bg-muted/30">
                   <p className="text-2xl font-bold">
-                    {result.result.brmed_result?.exames_obrigatorios.length || 0}
+                    {Array.isArray(result.result.brmed_result?.exames_obrigatorios) ? result.result.brmed_result.exames_obrigatorios.length : 0}
                   </p>
                   <p className="text-sm text-muted-foreground">
                     Exames Obrigatórios
@@ -239,16 +243,19 @@ export function DocumentDetailsModalChecagem({
                 {/* Exames Extraídos (OCR) */}
                 <div className="mb-4">
                   <h5 className="text-sm font-medium text-muted-foreground mb-2">
-                    Exames Encontrados no Documento ({result.result.ocr_result?.exames_extraidos.length || 0})
+                    Exames Encontrados no Documento ({Array.isArray(result.result.ocr_result?.exames_extraidos) ? result.result.ocr_result.exames_extraidos.length : 0})
                   </h5>
                   <div className="space-y-2">
-                    {(!result.result.ocr_result?.exames_extraidos || result.result.ocr_result.exames_extraidos.length === 0) ? (
+                    {(!result.result.ocr_result?.exames_extraidos || !Array.isArray(result.result.ocr_result.exames_extraidos) || result.result.ocr_result.exames_extraidos.length === 0) ? (
                       <p className="text-sm text-muted-foreground italic">
                         Nenhum exame extraído
                       </p>
                     ) : (
                       <div className="grid grid-cols-2 gap-2">
-                        {result.result.ocr_result.exames_extraidos.map(
+                        {(Array.isArray(result.result.ocr_result.exames_extraidos)
+                          ? result.result.ocr_result.exames_extraidos
+                          : []
+                        ).map(
                           (exame, i) => (
                             <div
                               key={i}
@@ -266,16 +273,19 @@ export function DocumentDetailsModalChecagem({
                 {/* Exames Obrigatórios (BRMED) */}
                 <div className="mb-4">
                   <h5 className="text-sm font-medium text-muted-foreground mb-2">
-                    Exames Obrigatórios (BRMED) ({result.result.brmed_result?.exames_obrigatorios.length || 0})
+                    Exames Obrigatórios (BRMED) ({Array.isArray(result.result.brmed_result?.exames_obrigatorios) ? result.result.brmed_result.exames_obrigatorios.length : 0})
                   </h5>
                   <div className="space-y-2">
-                    {(!result.result.brmed_result?.exames_obrigatorios || result.result.brmed_result.exames_obrigatorios.length === 0) ? (
+                    {(!result.result.brmed_result?.exames_obrigatorios || !Array.isArray(result.result.brmed_result.exames_obrigatorios) || result.result.brmed_result.exames_obrigatorios.length === 0) ? (
                       <p className="text-sm text-muted-foreground italic">
                         Nenhum exame obrigatório
                       </p>
                     ) : (
                       <div className="grid grid-cols-2 gap-2">
-                        {result.result.brmed_result.exames_obrigatorios.map(
+                        {(Array.isArray(result.result.brmed_result.exames_obrigatorios)
+                          ? result.result.brmed_result.exames_obrigatorios
+                          : []
+                        ).map(
                           (exame, i) => (
                             <div
                               key={i}
@@ -381,14 +391,27 @@ export function DocumentDetailsModalChecagem({
           <AlertDialogHeader>
             <AlertDialogTitle>Confirmar aprovação</AlertDialogTitle>
             <AlertDialogDescription className="text-foreground">
-              Tem certeza que deseja aprovar o documento do paciente{" "}
-              <strong>{result.patientName}</strong> (CPF: {result.cpf})?
+              Informe a justificativa para aprovar o documento do paciente{" "}
+              <strong>{result.patientName}</strong> (CPF: {result.cpf}).
             </AlertDialogDescription>
           </AlertDialogHeader>
+          <div className="space-y-2 py-4">
+            <Label htmlFor="approvalReason" className="text-foreground">Justificativa da aprovação</Label>
+            <Textarea
+              id="approvalReason"
+              placeholder="Ex: Exames equivalentes foram aceitos, documentação complementar validada, etc."
+              value={approvalReason}
+              onChange={(e) => setApprovalReason(e.target.value)}
+              rows={4}
+            />
+          </div>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogCancel onClick={() => setApprovalReason("")}>
+              Cancelar
+            </AlertDialogCancel>
             <AlertDialogAction
               onClick={handleAprovar}
+              disabled={!approvalReason.trim()}
               className="bg-green-600 hover:bg-green-700"
             >
               Aprovar

@@ -20,7 +20,7 @@ import type { DocumentoChecagem } from "@/types/checagem";
 
 type CheckagemActionsProps = {
   documento: DocumentoChecagem;
-  onAprovar: (id: string) => void;
+  onAprovar: (id: string, approvalReason: string) => void;
   onRejeitar: (id: string, motivo: string) => void;
 };
 
@@ -30,6 +30,7 @@ export function CheckagemActions({
   onRejeitar,
 }: CheckagemActionsProps) {
   const [motivo, setMotivo] = useState("");
+  const [approvalReason, setApprovalReason] = useState("");
 
   return (
     <div className="flex gap-2">
@@ -62,14 +63,30 @@ export function CheckagemActions({
           <AlertDialogHeader>
             <AlertDialogTitle>Confirmar aprovação</AlertDialogTitle>
             <AlertDialogDescription className="text-foreground">
-              Tem certeza que deseja aprovar o documento do paciente{" "}
-              <strong>{documento.paciente}</strong> (CPF: {documento.cpf})?
+              Informe a justificativa para aprovar o documento do paciente{" "}
+              <strong>{documento.paciente}</strong> (CPF: {documento.cpf}).
             </AlertDialogDescription>
           </AlertDialogHeader>
+          <div className="space-y-2 py-4">
+            <Label htmlFor="approvalReason" className="text-foreground">Justificativa da aprovação</Label>
+            <Textarea
+              id="approvalReason"
+              placeholder="Ex: Exames equivalentes foram aceitos, documentação complementar validada, etc."
+              value={approvalReason}
+              onChange={(e) => setApprovalReason(e.target.value)}
+              rows={4}
+            />
+          </div>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogCancel onClick={() => setApprovalReason("")}>
+              Cancelar
+            </AlertDialogCancel>
             <AlertDialogAction
-              onClick={() => onAprovar(documento.id)}
+              onClick={() => {
+                onAprovar(documento.id, approvalReason);
+                setApprovalReason("");
+              }}
+              disabled={!approvalReason.trim()}
               className="bg-green-600 hover:bg-green-700"
             >
               Aprovar

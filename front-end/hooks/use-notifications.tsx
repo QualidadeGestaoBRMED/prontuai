@@ -35,7 +35,7 @@ interface NotificationContextType {
   processResults: ProcessResult[]
   addProcessResult: (result: ProcessResult) => void
   getResultsByBatchId: (batchId: string) => ProcessResult[]
-  updateProcessResultStatus: (id: string, status: 'approved' | 'rejected' | 'pending_review', reviewerEmail: string, rejectionReason?: string) => void
+  updateProcessResultStatus: (id: string, status: 'approved' | 'rejected' | 'pending_review', reviewerEmail: string, rejectionReason?: string, approvalReason?: string) => void
 
   // UI State
   notificationCenterOpen: boolean
@@ -412,7 +412,8 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     id: string,
     status: 'approved' | 'rejected' | 'pending_review',
     reviewerEmail: string,
-    rejectionReason?: string
+    rejectionReason?: string,
+    approvalReason?: string
   ) => {
     setProcessResults(prev =>
       prev.map(result =>
@@ -423,6 +424,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
               reviewedBy: reviewerEmail,
               reviewedAt: new Date(),
               rejectionReason: rejectionReason || result.rejectionReason,
+              approvalReason: approvalReason || result.approvalReason,
             }
           : result
       )
