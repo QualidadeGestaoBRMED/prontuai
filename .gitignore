@@ -1,2 +1,54 @@
 CLAUDE.md
 node_modules
+# Environment variables
+.env
+
+# Directories
+/auditoria_validacao/
+/ocr_resultados/
+/resultados/
+/.pytest_cache/
+/__pycache__/
+/venv/
+/logs/
+/api/
+
+# AI Code Assistants
+/.claude/
+.claude/
+CLAUDE.md
+**/CLAUDE.md
+/.cursor/
+.cursor/
+/.aider/
+.aider/
+/.copilot/
+.copilot/
+/.windsurf/
+.windsurf/
+.ai/
+.vscode/
+.idea/
+*.code-workspace
+
+# Planning and notes files
+proximos.txt
+**/proximos.txt
+plan.md
+**/plan.md
+*MIGRACAO*.md
+*CHECKLIST*.md
+notas.txt
+todo.txt
+rascunho.txt
+notes.md
+scratch.md
+
+
+# Python cache
+*.pyc
+*~
+**/*cpython-*.pyc
+
+# Installer
+miniconda.sh
