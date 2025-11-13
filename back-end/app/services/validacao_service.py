@@ -19,7 +19,7 @@ EXAM_SIMILARITY_DATA_PATH = os.path.join(settings.BASE_DIR, "data", "exam_simila
 @retry(wait=wait_exponential(min=1, max=10), stop=stop_after_attempt(3))
 async def gerar_embedding(texto: str) -> np.ndarray:
     """Gera embedding para um texto usando a API da OpenAI."""
-    resp = None # Initialize resp to None
+    resp = None
     try:
         resp = await client.embeddings.create(
             input=[texto],
@@ -28,7 +28,7 @@ async def gerar_embedding(texto: str) -> np.ndarray:
         return np.array(resp.data[0].embedding, dtype="float32").reshape(1, -1)
     except AttributeError as ae:
         logger.error(f"AttributeError ao processar embedding para '{texto[:50]}...': {ae}. Resposta completa: {resp}")
-        raise # Re-raise to allow retry
+        raise 
     except Exception as e:
         logger.error(f"Erro inesperado ao gerar embedding para o texto: '{texto[:50]}...': {e}")
         raise
