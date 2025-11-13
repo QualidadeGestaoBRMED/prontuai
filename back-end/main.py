@@ -6,7 +6,7 @@ from app.core.config import settings
 
 setup_logging(settings.LOG_FILE)
 
-app = FastAPI(title="API BRMED - Exames e Validação")
+app = FastAPI(title="API BR MED - Exames e Validação")
 
 origins = [
     "http://localhost",
@@ -21,4 +21,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(api_router) 
+app.include_router(api_router)
+
+@app.get("/health")
+async def health_check():
+    """Health check endpoint para Render e monitoramento"""
+    return {"status": "healthy", "service": "prontuai-backend"} 
