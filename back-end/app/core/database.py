@@ -98,6 +98,10 @@ class UserDatabase:
                 users.append(User(**user_data))
         return sorted(users, key=lambda u: u.created_at or "", reverse=True)
 
+    def get_all_users(self) -> List[User]:
+        """Retorna todos os usuários (alias para list_users)"""
+        return self.list_users(include_inactive=True)
+
     def create_user(self, email: str, name: str, role: UserRole) -> User:
         """Cria um novo usuário"""
         db = self._read_db()
