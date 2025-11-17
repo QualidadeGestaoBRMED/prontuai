@@ -1,9 +1,14 @@
 # Dockerfile para deploy em produção (EC2, Render, etc)
 FROM python:3.11-slim
 
+# Argumentos de build para controlar source do código
+ARG USE_GIT_CLONE=false
+ARG GIT_REPO=https://github.com/QualidadeGestaoBRMED/prontuai.git
+ARG GIT_BRANCH=v1
+
 WORKDIR /app
 
-# Instalar dependências do sistema para Playwright, Docling e Nginx
+# Instalar dependências do sistema para Playwright, Nginx e Git
 RUN apt-get update && apt-get install -y \
     wget \
     curl \
@@ -29,10 +34,27 @@ RUN apt-get update && apt-get install -y \
     libxrandr2 \
     xdg-utils \
     nginx \
+    git \
     && rm -rf /var/lib/apt/lists/*
 
-# Copiar requirements e instalar dependências Python
-COPY requirements.txt .
+# Copiar ou clonar código baseado no build argument
+RUN if [ "$USE_GIT_CLONE" = "true" ]; then \
+        echo "🔄 Clonando código do GitHub (branch: $GIT_BRANCH)..." && \
+        git clone --depth 1 --branch $GIT_BRANCH $GIT_REPO /tmp/repo && \
+        cp -r /tmp/repo/back-end/* /app/ && \
+        rm -rf /tmp/repo && \
+        echo "✅ Código clonado com sucesso!"; \
+    else \
+        echo "📦 Usando código do contexto local..."; \
+    fi
+
+# Se não usou git clone, copiar do contexto local
+COPY requirements.txt* ./
+RUN if [ "$USE_GIT_CLONE" = "false" ]; then \
+        echo "📁 Copiando código local..."; \
+    fi
+
+# Instalar dependências Python
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt && \
     pip install --no-cache-dir gunicorn
@@ -41,8 +63,11 @@ RUN pip install --no-cache-dir --upgrade pip && \
 RUN playwright install chromium && \
     playwright install-deps chromium
 
-# Copiar código da aplicação
-COPY . .
+# Copiar código local se não usou git clone (depois das deps para aproveitar cache)
+RUN if [ "$USE_GIT_CLONE" = "false" ]; then \
+        echo "Copiando restante dos arquivos..."; \
+    fi
+COPY --chown=root:root . .
 
 # Criar diretórios necessários
 RUN mkdir -p logs resultados ocr_resultados auditoria_validacao
