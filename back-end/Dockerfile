@@ -3,7 +3,7 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Instalar dependências do sistema para Playwright e Docling
+# Instalar dependências do sistema para Playwright, Docling e Nginx
 RUN apt-get update && apt-get install -y \
     wget \
     curl \
@@ -28,6 +28,7 @@ RUN apt-get update && apt-get install -y \
     libxkbcommon0 \
     libxrandr2 \
     xdg-utils \
+    nginx \
     && rm -rf /var/lib/apt/lists/*
 
 # Copiar requirements e instalar dependências Python
@@ -46,18 +47,18 @@ COPY . .
 # Criar diretórios necessários
 RUN mkdir -p logs resultados ocr_resultados auditoria_validacao
 
-# Expor porta
-EXPOSE 8000
+# Copiar configuração do nginx
+COPY nginx.conf /etc/nginx/nginx.conf
 
-# Health check
+# Tornar o script de entrypoint executável
+RUN chmod +x /app/entrypoint.sh
+
+# Expor portas (80 para nginx, 8000 para FastAPI interno)
+EXPOSE 80
+
+# Health check via nginx
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-    CMD curl -f http://localhost:8000/health || exit 1
+    CMD curl -f http://localhost/health || exit 1
 
-# Comando de inicialização (workers ajustável via env var)
-CMD gunicorn main:app \
-    --workers ${WORKERS:-4} \
-    --worker-class uvicorn.workers.UvicornWorker \
-    --bind 0.0.0.0:8000 \
-    --timeout 120 \
-    --access-logfile - \
-    --error-logfile -
+# Comando de inicialização usando entrypoint
+ENTRYPOINT ["/app/entrypoint.sh"]
