@@ -1,0 +1,66 @@
+"use client";
+
+import { useSession } from "next-auth/react";
+
+export type UserRole = "ADMIN" | "CHECKER" | "SENDER";
+
+export interface PermissionsHook {
+  user: any;
+  role?: UserRole;
+  isAdmin: boolean;
+  isChecker: boolean;
+  isSender: boolean;
+  canManageUsers: boolean;
+  canValidateExams: boolean;
+  canSendDocuments: boolean;
+  isLoading: boolean;
+  isAuthenticated: boolean;
+}
+
+/**
+ * Hook para verificar permissões do usuário baseado em seu role.
+ *
+ * @example
+ * ```tsx
+ * const { canManageUsers, canValidateExams } = usePermissions();
+ *
+ * return (
+ *   <>
+ *     {canManageUsers && <AdminPanel />}
+ *     {canValidateExams && <ValidationPanel />}
+ *   </>
+ * );
+ * ```
+ */
+export function usePermissions(): PermissionsHook {
+  const { data: session, status } = useSession();
+
+  const user = session?.user;
+  const role = user?.role;
+
+  const isLoading = status === "loading";
+  const isAuthenticated = status === "authenticated";
+
+  // Verificações de role
+  const isAdmin = role === "ADMIN";
+  const isChecker = role === "CHECKER" || role === "ADMIN";
+  const isSender = role === "SENDER" || role === "ADMIN";
+
+  // Permissões específicas
+  const canManageUsers = isAdmin;
+  const canValidateExams = role === "CHECKER" || role === "ADMIN";
+  const canSendDocuments = role === "SENDER" || role === "ADMIN";
+
+  return {
+    user,
+    role,
+    isAdmin,
+    isChecker,
+    isSender,
+    canManageUsers,
+    canValidateExams,
+    canSendDocuments,
+    isLoading,
+    isAuthenticated,
+  };
+}

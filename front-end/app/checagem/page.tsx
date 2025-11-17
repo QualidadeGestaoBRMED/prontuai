@@ -18,6 +18,7 @@ import { useSession } from "next-auth/react";
 import { ProcessResult } from "@/types/process";
 import { generateResultPDF } from "@/lib/pdf-generator";
 import { DocumentDetailsModalChecagem } from "@/components/document-details-modal-checagem";
+import { RequireRole } from "@/components/require-role";
 
 // Mock data - fallback se não houver dados do localStorage
 const mockDocumentos: DocumentoChecagem[] = [
@@ -252,7 +253,8 @@ export default function Page() {
   };
 
   return (
-    <SidebarProvider>
+    <RequireRole allowedRoles={["ADMIN", "CHECKER"]}>
+      <SidebarProvider>
       <AppSidebar />
       <SidebarInset className="bg-sidebar group/sidebar-inset">
         <header className="flex h-16 shrink-0 items-center gap-2 px-4 md:px-6 lg:px-8 bg-sidebar text-sidebar-foreground relative before:absolute before:inset-y-3 before:-left-px before:w-px before:bg-gradient-to-b before:from-white/5 before:via-white/15 before:to-white/5 before:z-50">
@@ -344,6 +346,7 @@ export default function Page() {
           generateResultPDF(selectedResult)
         } : undefined}
       />
-    </SidebarProvider>
+      </SidebarProvider>
+    </RequireRole>
   );
 }

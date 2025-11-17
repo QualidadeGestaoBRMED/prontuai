@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import Image from "next/image";
+import { usePermissions } from "@/hooks/usePermissions";
 
 import {
   Sidebar,
@@ -19,6 +20,7 @@ import {
   RiUploadLine,
   RiCheckDoubleLine,
   RiHistoryLine,
+  RiUserSettingsLine,
 } from "@remixicon/react";
 import { CentroAjudaDialog } from "@/components/centro-ajuda-dialog";
 import { TourGuiado } from "@/components/tour-guiado";
@@ -66,6 +68,8 @@ const data = {
 };
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+  const { isAdmin } = usePermissions();
+
   return (
     <Sidebar {...props} className="dark !border-none" data-tour="sidebar-completa">
       <SidebarHeader>
@@ -112,6 +116,34 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
+
+        {/* Admin Section - Apenas para administradores */}
+        {isAdmin && (
+          <SidebarGroup>
+            <SidebarGroupLabel className="uppercase text-sidebar-foreground/50">
+              Administração
+            </SidebarGroupLabel>
+            <SidebarGroupContent className="px-2">
+              <SidebarMenu>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    asChild
+                    className="group/menu-button font-medium gap-3 h-9 rounded-md data-[active=true]:hover:bg-transparent data-[active=true]:bg-gradient-to-b data-[active=true]:from-sidebar-primary data-[active=true]:to-sidebar-primary/70 data-[active=true]:shadow-[0_1px_2px_0_rgb(0_0_0/.05),inset_0_1px_0_0_rgb(255_255_255/.12)] [&>svg]:size-auto"
+                  >
+                    <a href="/admin/users">
+                      <RiUserSettingsLine
+                        className="text-sidebar-foreground/50 group-data-[active=true]/menu-button:text-sidebar-foreground"
+                        size={22}
+                        aria-hidden="true"
+                      />
+                      <span>Gerenciar Usuários</span>
+                    </a>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
       </SidebarContent>
       <SidebarFooter className="p-4">
         <div className="space-y-2">
