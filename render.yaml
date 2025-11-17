@@ -19,13 +19,15 @@ services:
       - key: BRMED_PASSWORD
         sync: false
       - key: USE_TEXTRACT
-        value: true
+        sync: false
       - key: AWS_ACCESS_KEY_ID
         sync: false
       - key: AWS_SECRET_ACCESS_KEY
         sync: false
       - key: AWS_REGION
-        value: us-east-1
+        sync: false
+      - key: AWS_S3_BUCKET
+        sync: false
       - key: JWT_SECRET_KEY
         sync: false
       - key: JWT_ALGORITHM
