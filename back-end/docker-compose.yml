@@ -8,15 +8,21 @@ services:
     container_name: prontuai-backend
     restart: unless-stopped
     ports:
-      - "8000:8000"
+      - "80:80"
     environment:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - BRMED_USERNAME=${BRMED_USERNAME}
       - BRMED_PASSWORD=${BRMED_PASSWORD}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_REGION=${AWS_REGION:-us-east-1}
+      - AWS_S3_BUCKET=${AWS_S3_BUCKET}
+      - USE_TEXTRACT=${USE_TEXTRACT:-false}
       - MODELO_GPT=${MODELO_GPT:-gpt-4o-mini}
       - MODELO_EMBEDDING=${MODELO_EMBEDDING:-text-embedding-3-large}
       - K_VIZINHOS_FAQ=${K_VIZINHOS_FAQ:-2}
       - MAX_DISTANCIA_FAQ=${MAX_DISTANCIA_FAQ:-1.0}
+      - WORKERS=${WORKERS:-4}
       - PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
     volumes:
       # Persistir logs e resultados
@@ -27,7 +33,7 @@ services:
       # Dados FAISS (apenas leitura)
       - ./data:/app/data:ro
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
       interval: 30s
       timeout: 10s
       retries: 3
