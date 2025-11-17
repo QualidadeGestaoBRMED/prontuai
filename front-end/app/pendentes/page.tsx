@@ -17,6 +17,7 @@ import { ResultsTable } from "@/components/results-table"
 import { DocumentDetailsModal } from "@/components/document-details-modal"
 import { ProcessResult } from "@/types/process"
 import { History } from "lucide-react"
+import { RequireRole } from "@/components/require-role"
 
 function PendentesContent() {
   const searchParams = useSearchParams()
@@ -103,8 +104,10 @@ function PendentesContent() {
 
 export default function PendentesPage() {
   return (
-    <Suspense fallback={<div>Carregando...</div>}>
-      <PendentesContent />
-    </Suspense>
+    <RequireRole allowedRoles={["ADMIN", "SENDER"]}>
+      <Suspense fallback={<div>Carregando...</div>}>
+        <PendentesContent />
+      </Suspense>
+    </RequireRole>
   )
 }

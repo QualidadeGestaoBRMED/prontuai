@@ -26,4 +26,9 @@ class Settings:
     # Feature Toggle: OCR Engine Selection
     USE_TEXTRACT = os.getenv("USE_TEXTRACT", "false").lower() == "true"
 
+    # JWT Authentication
+    JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "dev-secret-key-change-in-production-please")
+    JWT_ALGORITHM = "HS256"
+    JWT_EXPIRATION_HOURS = int(os.getenv("JWT_EXPIRATION_HOURS", 24))
+
 settings = Settings() 

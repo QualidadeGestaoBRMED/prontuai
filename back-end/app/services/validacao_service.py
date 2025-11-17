@@ -12,7 +12,6 @@ from app.core.clients import client
 
 logger = logging.getLogger(__name__)
 
-# Caminhos para o índice de similaridade de exames
 EXAM_SIMILARITY_INDEX_PATH = os.path.join(settings.BASE_DIR, "data", "exam_similarity_index.faiss")
 EXAM_SIMILARITY_DATA_PATH = os.path.join(settings.BASE_DIR, "data", "exam_similarity_data.pkl")
 
@@ -33,7 +32,6 @@ async def gerar_embedding(texto: str) -> np.ndarray:
         logger.error(f"Erro inesperado ao gerar embedding para o texto: '{texto[:50]}...': {e}")
         raise
 
-# Carrega o índice de similaridade de exames
 try:
     exam_similarity_index = faiss.read_index(EXAM_SIMILARITY_INDEX_PATH)
     with open(EXAM_SIMILARITY_DATA_PATH, "rb") as f:
@@ -50,7 +48,6 @@ async def comparar_exames_com_rag(exames_ocr: list[str], exames_brnet: list[str]
     """
     contexto_rag = ""
     if exam_similarity_index and exam_similarity_data:
-        # 1. Recuperação (Retrieval): Busca sinônimos para todos os exames obrigatórios.
         contexto_list = []
         todos_exames_para_embedding = list(set(exames_brnet))
         
