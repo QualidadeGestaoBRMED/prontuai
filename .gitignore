@@ -1,7 +1,7 @@
 CLAUDE.md
 node_modules
 .env
-
+.md
 /auditoria_validacao/
 /ocr_resultados/
 /resultados/
