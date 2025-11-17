@@ -1,9 +1,7 @@
 CLAUDE.md
 node_modules
-# Environment variables
 .env
 
-# Directories
 /auditoria_validacao/
 /ocr_resultados/
 /resultados/
@@ -13,7 +11,6 @@ node_modules
 /logs/
 /api/
 
-# AI Code Assistants
 /.claude/
 .claude/
 CLAUDE.md
@@ -31,7 +28,6 @@ CLAUDE.md
 .idea/
 *.code-workspace
 
-# Planning and notes files
 proximos.txt
 **/proximos.txt
 plan.md
@@ -43,12 +39,9 @@ todo.txt
 rascunho.txt
 notes.md
 scratch.md
-
-
-# Python cache
+RESUMO_PROJETO.md
 *.pyc
 *~
 **/*cpython-*.pyc
 
-# Installer
 miniconda.sh

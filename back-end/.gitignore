@@ -1,7 +1,5 @@
-# Environment variables
 .env
 
-# Directories
 /auditoria_validacao/
 /ocr_resultados/
 /resultados/
@@ -11,7 +9,6 @@
 /logs/
 /api/
 
-# AI Code Assistants
 /.claude/
 .claude/
 CLAUDE.md
@@ -29,7 +26,6 @@ CLAUDE.md
 .idea/
 *.code-workspace
 
-# Planning and notes files
 proximos.txt
 **/proximos.txt
 plan.md
@@ -43,10 +39,8 @@ notes.md
 scratch.md
 
 
-# Python cache
 *.pyc
 *~
 **/*cpython-*.pyc
 
-# Installer
 miniconda.sh
