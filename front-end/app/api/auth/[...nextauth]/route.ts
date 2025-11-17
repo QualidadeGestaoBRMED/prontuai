@@ -1,8 +1,24 @@
 import NextAuth, { AuthOptions } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
-import type { Profile } from "next-auth";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
+interface BackendAuthData {
+  access_token: string;
+  user: {
+    id: string;
+    email: string;
+    name: string;
+    role: "ADMIN" | "CHECKER" | "SENDER";
+    is_active: boolean;
+  };
+}
+
+interface ExtendedProfile {
+  email?: string;
+  name?: string;
+  backendData?: BackendAuthData;
+}
 
 const authOptions: AuthOptions = {
   providers: [
@@ -40,10 +56,10 @@ const authOptions: AuthOptions = {
           return false;
         }
 
-        const data = await response.json();
+        const data = await response.json() as BackendAuthData;
 
         // Armazenar dados no profile para passar aos callbacks jwt/session
-        (profile as any).backendData = data;
+        (profile as ExtendedProfile).backendData = data;
 
         return true;
 
@@ -53,10 +69,11 @@ const authOptions: AuthOptions = {
       }
     },
 
-    async jwt({ token, user, account, profile }) {
+    async jwt({ token, profile }) {
       // Primeiro login: adicionar dados do back-end ao token
-      if (profile && (profile as any).backendData) {
-        const backendData = (profile as any).backendData;
+      const extendedProfile = profile as ExtendedProfile;
+      if (extendedProfile?.backendData) {
+        const backendData = extendedProfile.backendData;
         token.accessToken = backendData.access_token;
         token.user = backendData.user;
       }
@@ -66,10 +83,10 @@ const authOptions: AuthOptions = {
     async session({ session, token }) {
       // Adicionar dados do token à session (acessível no client)
       if (token.accessToken) {
-        (session as any).accessToken = token.accessToken;
+        session.accessToken = token.accessToken as string;
       }
       if (token.user) {
-        session.user = token.user as any;
+        session.user = token.user as BackendAuthData['user'];
       }
       return session;
     }
