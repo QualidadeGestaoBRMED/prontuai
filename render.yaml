@@ -34,3 +34,5 @@ services:
         value: HS256
       - key: ACCESS_TOKEN_EXPIRE_HOURS
         value: 24
+      - key: DATABASE_URL
+        sync: false
