@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import { AppSidebar } from "@/components/app-sidebar";
 import {
@@ -69,7 +69,7 @@ export default function UsersAdminPage() {
   const [formName, setFormName] = useState("");
   const [formRole, setFormRole] = useState<UserRole>("CHECKER");
 
-  const fetchUsers = async () => {
+  const fetchUsers = useCallback(async () => {
     if (!session?.accessToken) return;
 
     try {
@@ -89,11 +89,11 @@ export default function UsersAdminPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [session?.accessToken]);
 
   useEffect(() => {
     fetchUsers();
-  }, [session]);
+  }, [fetchUsers]);
 
   const handleCreateUser = async () => {
     if (!session?.accessToken || !formEmail || !formName) {
