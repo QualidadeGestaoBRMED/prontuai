@@ -30,6 +30,11 @@ python-jose[cryptography]>=3.3.0  # JWT tokens para autenticação
 passlib[bcrypt]>=1.7.4  # Hashing de senhas (futuro)
 email-validator>=2.0.0  # Validação de email no Pydantic
 
+# Database
+sqlalchemy>=2.0.0  # ORM para PostgreSQL
+psycopg2-binary>=2.9.0  # PostgreSQL driver
+asyncpg>=0.29.0  # Async PostgreSQL driver (futuro)
+
 # AWS SDK (para migração do OCR para Textract)
 boto3>=1.34.0  # AWS Textract para processamento de documentos
 PyPDF2>=3.0.0  # Reparo e normalização de PDFs para compatibilidade com Textract
