@@ -1,0 +1,54 @@
+name: Deploy to EC2
+
+# Trigger: quando houver push na branch v1
+on:
+  push:
+    branches:
+      - v1
+  workflow_dispatch: # Permite executar manualmente pelo GitHub UI
+
+jobs:
+  deploy:
+    name: Deploy para EC2
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 📥 Checkout do código
+        uses: actions/checkout@v4
+        with:
+          ref: v1
+
+      - name: 🔐 Configurar SSH
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.EC2_SSH_KEY }}
+
+      - name: 🚀 Deploy via SSH
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_USER: ${{ secrets.EC2_USER }}
+        run: |
+          ssh -o StrictHostKeyChecking=no $EC2_USER@$EC2_HOST << 'EOF'
+            cd ~/prontuai/back-end
+            ./deploy.sh
+          EOF
+
+      - name: ✅ Verificar saúde da aplicação
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+        run: |
+          echo "Aguardando aplicação iniciar..."
+          sleep 10
+
+          # Tenta 5 vezes com intervalo de 10s
+          for i in {1..5}; do
+            if curl -f http://$EC2_HOST/health; then
+              echo "✅ Aplicação está saudável!"
+              exit 0
+            fi
+            echo "Tentativa $i/5 falhou, aguardando 10s..."
+            sleep 10
+          done
+
+          echo "❌ Falha no health check após 5 tentativas"
+          exit 1
