@@ -1,5 +1,23 @@
 # Deploy na AWS EC2
 
+## ⚡ Build Otimizado para Textract
+
+Se você usa `USE_TEXTRACT=true` no `.env`, pode usar o Dockerfile otimizado que **NÃO instala PyTorch/Docling**, economizando ~3.5GB de espaço:
+
+```bash
+# Build com requirements mínimo (sem PyTorch)
+docker build -f Dockerfile.textract -t prontuai-backend .
+
+# Ou com docker-compose usando o Dockerfile alternativo
+docker-compose -f docker-compose.textract.yml up -d --build
+```
+
+**Comparação de tamanho:**
+- Dockerfile padrão (com Docling): ~5GB
+- Dockerfile.textract (apenas Textract): ~1.5GB
+
+---
+
 ## Opção 1: Usando Docker Compose (RECOMENDADO)
 
 Esta é a forma mais simples, pois todas as variáveis de ambiente são carregadas automaticamente do `.env`:

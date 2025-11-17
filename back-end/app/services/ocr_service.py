@@ -1,10 +1,5 @@
 import os
-# Set environment variable for PyTorch memory management
-os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
-
 import tempfile
-from docling.document_converter import DocumentConverter
-import torch
 import re
 import json
 from openai import OpenAI
@@ -18,6 +13,18 @@ import time
 import boto3
 from botocore.exceptions import ClientError
 from PyPDF2 import PdfReader, PdfWriter
+
+# Importações condicionais do Docling/PyTorch (apenas se USE_TEXTRACT=false)
+try:
+    # Set environment variable for PyTorch memory management
+    os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
+    from docling.document_converter import DocumentConverter
+    import torch
+    DOCLING_AVAILABLE = True
+except ImportError:
+    DOCLING_AVAILABLE = False
+    DocumentConverter = None
+    torch = None
 
 from app.core.config import settings
 
@@ -102,6 +109,13 @@ def extrair_cpf_ia(markdown: str) -> str:
 
 def processar_arquivo_docling(file) -> str:
     """Processa o arquivo com Docling e retorna o markdown extraído."""
+    if not DOCLING_AVAILABLE:
+        raise ImportError(
+            "Docling não está instalado. "
+            "Para usar Docling OCR, instale: pip install docling torch torchvision. "
+            "Ou configure USE_TEXTRACT=true no .env para usar AWS Textract."
+        )
+
     from docling.datamodel.base_models import InputFormat
     from docling.datamodel.pipeline_options import PdfPipelineOptions
     from docling.document_converter import PdfFormatOption
@@ -503,7 +517,7 @@ async def ocr_pipeline(file, salvar_markdown=True) -> Dict[str, Any]:
         info["markdown_salvo_em"] = caminho_md
 
     # Libera memória da GPU após cada processamento (apenas para Docling)
-    if not usar_textract and torch.cuda.is_available():
+    if not usar_textract and torch is not None and torch.cuda.is_available():
         torch.cuda.empty_cache()
         logger.info(f"[OCR] Memória GPU liberada (Docling)")
 

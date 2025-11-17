@@ -1,7 +1,8 @@
-# PyTorch com suporte CUDA 12.4 (para RTX 3050 - acelera Docling OCR)
---extra-index-url https://download.pytorch.org/whl/cu124
-torch==2.4.1
-torchvision==0.19.1  # Dependência indireta do Docling
+# PyTorch (APENAS NECESSÁRIO SE USE_TEXTRACT=false)
+# Comentado para economizar espaço no build Docker quando usa Textract
+# --extra-index-url https://download.pytorch.org/whl/cu124
+# torch==2.4.1
+# torchvision==0.19.1  # Dependência indireta do Docling
 
 # FAISS CPU (usado em FAQ e validação de exames)
 faiss-cpu==1.8.0
@@ -23,7 +24,7 @@ pandas>=2.0.0  # Usado nos scripts de geração de índices FAISS
 # Utilities
 python-dotenv>=1.0.0
 playwright>=1.43.0
-docling==2.0.0  # OCR e conversão de documentos (versão fixada para estabilidade)
+# docling==2.0.0  # OCR - APENAS NECESSÁRIO SE USE_TEXTRACT=false (comentado para economizar espaço)
 tenacity>=8.2.0  # Retry logic para chamadas OpenAI
 
 # AWS SDK (para migração do OCR para Textract)
