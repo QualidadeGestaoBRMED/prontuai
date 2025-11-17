@@ -126,9 +126,10 @@ export default function UsersAdminPage() {
       setFormName("");
       setFormRole("CHECKER");
       fetchUsers();
-    } catch (error: any) {
+    } catch (error) {
       console.error("Erro:", error);
-      toast.error(error.message || "Erro ao criar usuário");
+      const errorMessage = error instanceof Error ? error.message : "Erro ao criar usuário";
+      toast.error(errorMessage);
     }
   };
 
