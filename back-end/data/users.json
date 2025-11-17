@@ -17,6 +17,15 @@
       "is_active": true,
       "created_at": "2025-11-17T14:10:00.509924",
       "updated_at": "2025-11-17T14:10:00.509924"
+    },
+    "72a26269-9fea-4308-817b-337b45145e36": {
+      "id": "72a26269-9fea-4308-817b-337b45145e36",
+      "email": "breno.rios@grupobrmed.com.br",
+      "name": "Brenin",
+      "role": "SENDER",
+      "is_active": true,
+      "created_at": "2025-11-17T14:16:08.246383",
+      "updated_at": "2025-11-17T14:16:08.246383"
     }
   }
 }
