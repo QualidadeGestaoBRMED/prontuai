@@ -1,10 +1,14 @@
 version: '3.8'
 
+# Docker Compose otimizado para usar APENAS Textract (sem Docling/PyTorch)
+# Use este arquivo se USE_TEXTRACT=true no .env
+# Build: docker-compose -f docker-compose.textract.yml up -d --build
+
 services:
   prontuai-backend:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.textract
     container_name: prontuai-backend
     restart: unless-stopped
     ports:
@@ -17,7 +21,7 @@ services:
       - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
       - AWS_REGION=${AWS_REGION:-us-east-1}
       - AWS_S3_BUCKET=${AWS_S3_BUCKET}
-      - USE_TEXTRACT=${USE_TEXTRACT:-false}
+      - USE_TEXTRACT=${USE_TEXTRACT:-true}
       - MODELO_GPT=${MODELO_GPT:-gpt-4o-mini}
       - MODELO_EMBEDDING=${MODELO_EMBEDDING:-text-embedding-3-large}
       - K_VIZINHOS_FAQ=${K_VIZINHOS_FAQ:-2}
