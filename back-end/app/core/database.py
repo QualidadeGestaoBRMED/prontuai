@@ -1,16 +1,27 @@
 """
-Sistema de armazenamento simples para usuários.
-Usa JSON file como banco de dados (pode ser migrado para PostgreSQL/MongoDB depois).
+Sistema de armazenamento de usuários com suporte a múltiplos backends.
+Suporta JSON file (desenvolvimento) e PostgreSQL (produção).
 """
 import json
 import os
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Protocol
 from datetime import datetime
 import uuid
-from app.models.user import User, UserInDB, UserRole
+from app.models.user import User, UserInDB, UserRole, UserUpdate
 import logging
 
 logger = logging.getLogger(__name__)
+
+
+class UserDatabaseProtocol(Protocol):
+    """Protocol defining the interface for user database implementations."""
+
+    def get_user_by_email(self, email: str) -> Optional[User]: ...
+    def get_user_by_id(self, user_id: str) -> Optional[User]: ...
+    def get_all_users(self) -> List[User]: ...
+    def create_user(self, email: str, name: str, role: UserRole = UserRole.CHECKER) -> User: ...
+    def update_user(self, user_id: str, update: UserUpdate) -> User: ...
+    def delete_user(self, user_id: str) -> bool: ...
 
 # Caminho do arquivo de banco de dados
 DB_PATH = os.path.join(os.path.dirname(__file__), "../../data/users.json")
@@ -32,8 +43,8 @@ class UserDatabase:
                 "users": {
                     str(uuid.uuid4()): {
                         "id": str(uuid.uuid4()),
-                        "email": "admin@grupobrmed.com.br",
-                        "name": "Administrador",
+                        "email": "gabriel.rodrigues@grupobrmed.com.br",
+                        "name": "Gabriel Rodrigues",
                         "role": UserRole.ADMIN.value,
                         "is_active": True,
                         "created_at": datetime.now().isoformat(),
@@ -114,9 +125,7 @@ class UserDatabase:
         logger.info(f"Usuário criado: {email} com role {role.value}")
         return User(**user_data)
 
-    def update_user(self, user_id: str, name: Optional[str] = None,
-                   role: Optional[UserRole] = None,
-                   is_active: Optional[bool] = None) -> User:
+    def update_user(self, user_id: str, update: UserUpdate) -> User:
         """Atualiza um usuário existente"""
         db = self._read_db()
 
@@ -125,12 +134,12 @@ class UserDatabase:
 
         user_data = db["users"][user_id]
 
-        if name is not None:
-            user_data["name"] = name
-        if role is not None:
-            user_data["role"] = role.value
-        if is_active is not None:
-            user_data["is_active"] = is_active
+        if update.name is not None:
+            user_data["name"] = update.name
+        if update.role is not None:
+            user_data["role"] = update.role.value
+        if update.is_active is not None:
+            user_data["is_active"] = update.is_active
 
         user_data["updated_at"] = datetime.now().isoformat()
 
@@ -142,8 +151,28 @@ class UserDatabase:
 
     def delete_user(self, user_id: str) -> bool:
         """Deleta um usuário (soft delete - apenas marca como inativo)"""
-        return self.update_user(user_id, is_active=False) is not None
+        update = UserUpdate(is_active=False)
+        return self.update_user(user_id, update) is not None
+
+
+def get_user_database() -> UserDatabaseProtocol:
+    """
+    Factory function to get the appropriate database implementation.
+
+    Uses DATABASE_URL environment variable to decide:
+    - If DATABASE_URL is set: PostgreSQL
+    - Otherwise: JSON file (development)
+    """
+    database_url = os.getenv("DATABASE_URL")
+
+    if database_url:
+        logger.info("Using PostgreSQL database")
+        from app.core.database_postgres import PostgresUserDatabase
+        return PostgresUserDatabase(database_url)
+    else:
+        logger.info("Using JSON file database (development mode)")
+        return UserDatabase()
 
 
 # Instância global
-user_db = UserDatabase()
+user_db = get_user_database()
