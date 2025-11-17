@@ -3,6 +3,7 @@
 import { useSession } from "next-auth/react";
 import { redirect } from "next/navigation";
 import { ReactNode } from "react";
+import Link from "next/link";
 import { UserRole } from "@/hooks/usePermissions";
 
 interface RequireRoleProps {
@@ -98,12 +99,12 @@ export function RequireRole({
             </p>
           </div>
           <div className="mt-6">
-            <a
+            <Link
               href="/"
               className="inline-block px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
             >
               Voltar para Início
-            </a>
+            </Link>
           </div>
         </div>
       </div>
