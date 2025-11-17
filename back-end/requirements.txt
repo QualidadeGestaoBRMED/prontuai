@@ -28,6 +28,7 @@ playwright>=1.43.0
 tenacity>=8.2.0  # Retry logic para chamadas OpenAI
 python-jose[cryptography]>=3.3.0  # JWT tokens para autenticação
 passlib[bcrypt]>=1.7.4  # Hashing de senhas (futuro)
+email-validator>=2.0.0  # Validação de email no Pydantic
 
 # AWS SDK (para migração do OCR para Textract)
 boto3>=1.34.0  # AWS Textract para processamento de documentos
