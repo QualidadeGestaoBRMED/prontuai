@@ -6,6 +6,7 @@ import { ChatMessage } from "@/components/chat-message"
 import { useRef, useEffect, useState } from "react"
 import { Bot, Square, RefreshCw, MessageSquare } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { API_ENDPOINTS } from "@/lib/config"
 
 export interface Message {
   content: string
@@ -64,7 +65,7 @@ export function ChatSidebar({ initialMessage, className }: ChatSidebarProps) {
         content: msg.content,
       }))
 
-      const response = await fetch("http://localhost:8000/v1/faq", {
+      const response = await fetch(API_ENDPOINTS.FAQ, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

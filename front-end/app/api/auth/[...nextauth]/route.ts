@@ -1,7 +1,6 @@
 import NextAuth, { AuthOptions } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+import { API_ENDPOINTS } from "@/lib/config";
 
 interface BackendAuthData {
   access_token: string;
@@ -40,7 +39,7 @@ const authOptions: AuthOptions = {
 
       // Chamar back-end para obter JWT e dados do usuário
       try {
-        const response = await fetch(`${API_URL}/v1/auth/google`, {
+        const response = await fetch(API_ENDPOINTS.AUTH_GOOGLE, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({

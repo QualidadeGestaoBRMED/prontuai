@@ -22,6 +22,7 @@ import { Bot, Square, RefreshCw  } from "lucide-react";
 import { cn } from "@/lib/utils";
 import ExamesComparativoTable, { TabelaComparacaoItem } from "@/components/exames-comparativo-table";
 import { Message } from "@/components/file-uploader";
+import { API_ENDPOINTS } from "@/lib/config";
 
 export default function Chat({
   messages,
@@ -64,7 +65,7 @@ export default function Chat({
         content: msg.content,
       }));
 
-      const response = await fetch("http://localhost:8000/v1/faq", { 
+      const response = await fetch(API_ENDPOINTS.FAQ, { 
 
         method: "POST",
         headers: {
