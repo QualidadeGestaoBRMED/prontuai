@@ -9,6 +9,7 @@ import { FileIcon, AlertCircleIcon, CheckCircle2Icon } from "lucide-react"
 import { formatBytes } from "@/hooks/use-file-upload"
 import { useNotifications } from "@/hooks/use-notifications"
 import { ProcessStep } from "@/types/process"
+import { API_ENDPOINTS } from "@/lib/config"
 
 export interface DocumentProcessingResult {
   cpf_processado: string
@@ -101,7 +102,7 @@ export function DocumentBatchProcessor({
         formData.append("exames_obrigatorios", JSON.stringify([]))
 
         const response = await fetch(
-          "http://localhost:8000/v1/processar-documento-stream",
+          API_ENDPOINTS.PROCESS_DOCUMENT_STREAM,
           {
             method: "POST",
             body: formData,

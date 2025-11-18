@@ -24,6 +24,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
 import type { TabelaComparacaoItem } from "@/components/exames-comparativo-table";
+import { API_ENDPOINTS } from "@/lib/config";
 
 export type Message =
   | { content: string; isUser: boolean; type?: "text"; skipTyping?: boolean }
@@ -127,7 +128,7 @@ export default function Component({ onSystemMessage }: { onSystemMessage?: (msg:
 
       console.log("📤 Enviando arquivo para processamento completo com SSE...");
 
-      const uploadRes = await fetch("http://localhost:8000/v1/processar-documento-stream", {
+      const uploadRes = await fetch(API_ENDPOINTS.PROCESS_DOCUMENT_STREAM, {
         method: "POST",
         body: formData,
       });
