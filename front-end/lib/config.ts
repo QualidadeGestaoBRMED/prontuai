@@ -17,6 +17,14 @@ export const API_ENDPOINTS = {
   // FAQ/Chat
   FAQ: `${API_URL}/v1/faq`,
 
-  // Documents
+  // Documents (Legacy - pode dar timeout)
   PROCESS_DOCUMENT_STREAM: `${API_URL}/v1/processar-documento-stream`,
+
+  // Documents (Async - recomendado)
+  PROCESS_DOCUMENT_ASYNC: `${API_URL}/v1/processar-documento-async`,
+
+  // Jobs
+  JOB_STATUS: (jobId: string) => `${API_URL}/v1/jobs/${jobId}`,
+  JOBS_LIST: `${API_URL}/v1/jobs`,
+  CANCEL_JOB: (jobId: string) => `${API_URL}/v1/jobs/${jobId}`,
 } as const;

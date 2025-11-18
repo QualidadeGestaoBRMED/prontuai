@@ -10,6 +10,8 @@ import { formatBytes } from "@/hooks/use-file-upload"
 import { useNotifications } from "@/hooks/use-notifications"
 import { ProcessStep } from "@/types/process"
 import { API_ENDPOINTS } from "@/lib/config"
+import { useAsyncJob } from "@/hooks/use-async-job"
+import { Job } from "@/types/job"
 
 export interface DocumentProcessingResult {
   cpf_processado: string
@@ -41,17 +43,24 @@ interface DocumentBatchProcessorProps {
   files: FileWithPreview[]
   onComplete?: (results: DocumentProcessingResult[]) => void
   onError?: (error: string) => void
+  /**
+   * Usa API assíncrona com polling (recomendado para evitar timeouts)
+   * @default true
+   */
+  useAsync?: boolean
 }
 
 export function DocumentBatchProcessor({
   files,
   onComplete,
   onError,
+  useAsync = true, // Padrão: usar API assíncrona
 }: DocumentBatchProcessorProps) {
   const [documents, setDocuments] = useState<DocumentProcessingState[]>([])
   const [isProcessing, setIsProcessing] = useState(false)
   const [processId, setProcessId] = useState<string | null>(null)
   const { startProcess, updateProcess, completeProcess, failProcess } = useNotifications()
+  const { startJob, pollJob } = useAsyncJob()
 
   useEffect(() => {
     // Initialize document states only once
@@ -88,7 +97,11 @@ export function DocumentBatchProcessor({
 
       // Start processing all documents in parallel
       initialDocs.forEach((doc) => {
-        processDocument(doc.id, doc.file)
+        if (useAsync) {
+          processDocumentAsync(doc.id, doc.file)
+        } else {
+          processDocument(doc.id, doc.file)
+        }
       })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -221,6 +234,104 @@ export function DocumentBatchProcessor({
       }
     },
     [onError]
+  )
+
+  /**
+   * Processa documento usando API assíncrona com polling
+   */
+  const processDocumentAsync = useCallback(
+    async (docId: string, file: File) => {
+      try {
+        console.log(`[FRONTEND-ASYNC] Iniciando processamento para: ${file.name}`)
+
+        // Inicia o job
+        const jobId = await startJob(file, [])
+        console.log(`[FRONTEND-ASYNC] Job iniciado: ${jobId}`)
+
+        // Faz polling do job com callbacks de progresso
+        await pollJob(jobId, {
+          interval: 2000, // 2 segundos
+          timeout: 300000, // 5 minutos
+          onProgress: (job: Job) => {
+            console.log(`[FRONTEND-ASYNC] Progresso: ${job.progress}% - ${job.message}`)
+
+            setDocuments((prev) =>
+              prev.map((doc) => {
+                if (doc.id !== docId) return doc
+
+                const updatedDoc = { ...doc }
+                updatedDoc.progress = job.progress
+
+                // Map step to stage
+                const stepToStage: Record<string, ProcessingStage> = {
+                  pending: "upload",
+                  upload: "upload",
+                  ocr: "ocr",
+                  brmed: "brnet",
+                  validacao: "validation",
+                  concluido: "completed",
+                  erro: "upload", // fallback
+                }
+
+                updatedDoc.stage = stepToStage[job.current_step] || "upload"
+                updatedDoc.statusMessage = job.message
+
+                return updatedDoc
+              })
+            )
+          },
+          onComplete: (result: DocumentProcessingResult) => {
+            console.log(`[FRONTEND-ASYNC] Processamento concluído para: ${file.name}`)
+
+            setDocuments((prev) =>
+              prev.map((doc) =>
+                doc.id === docId
+                  ? {
+                      ...doc,
+                      stage: "completed",
+                      progress: 100,
+                      statusMessage: "Processamento concluído!",
+                      result,
+                    }
+                  : doc
+              )
+            )
+          },
+          onError: (error: string) => {
+            console.error(`[FRONTEND-ASYNC] Erro no processamento: ${error}`)
+
+            setDocuments((prev) =>
+              prev.map((doc) =>
+                doc.id === docId
+                  ? {
+                      ...doc,
+                      error: `Erro: ${error}`,
+                    }
+                  : doc
+              )
+            )
+            onError?.(`Erro ao processar ${file.name}: ${error}`)
+          },
+        })
+      } catch (error) {
+        console.error(`[FRONTEND-ASYNC] Erro ao iniciar job:`, error)
+
+        setDocuments((prev) =>
+          prev.map((doc) =>
+            doc.id === docId
+              ? {
+                  ...doc,
+                  error: `Erro: ${error instanceof Error ? error.message : "Erro desconhecido"}`,
+                }
+              : doc
+          )
+        )
+        onError?.(
+          `Erro ao processar ${file.name}: ${error instanceof Error ? error.message : "Erro desconhecido"}`
+        )
+      }
+    },
+    [startJob, pollJob, onError]
   )
 
   // Update notification process when documents change
