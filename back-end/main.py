@@ -11,6 +11,7 @@ app = FastAPI(title="API BR MED - Exames e Validação")
 origins = [
     "http://localhost",
     "http://localhost:3000",
+    "https://prontuai.grupobrmed.com.br",
 ]
 
 app.add_middleware(
