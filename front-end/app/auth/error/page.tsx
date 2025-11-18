@@ -110,7 +110,7 @@ function ErrorContent() {
                 </Button>
               </Link>
 
-              <a href="mailto:projetos@grupobrmed.com.br">
+              <a href="mailto:projetos@grupobrmed.com.br" onClick={() => setIsLoadingSupport(true)}>
                 <Button
                   variant="outline"
                   className="
@@ -123,9 +123,14 @@ function ErrorContent() {
                     transition-all
                     duration-300
                   "
+                  disabled={isLoadingSupport}
                 >
-                  <Mail className="w-4 h-4 mr-2" />
-                  Contatar Suporte
+                  {isLoadingSupport ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <Mail className="w-4 h-4 mr-2" />
+                  )}
+                  {isLoadingSupport ? "Abrindo email..." : "Contatar Suporte"}
                 </Button>
               </a>
             </div>
