@@ -29,6 +29,7 @@ import {
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { API_URL, API_ENDPOINTS } from "@/lib/config";
 
 type UserRole = "ADMIN" | "CHECKER" | "SENDER";
 
@@ -41,8 +42,6 @@ interface User {
   created_at: string;
   updated_at: string;
 }
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 const roleLabels: Record<UserRole, string> = {
   ADMIN: "Administrador",
@@ -73,7 +72,7 @@ export default function UsersAdminPage() {
     if (!session?.accessToken) return;
 
     try {
-      const response = await fetch(`${API_URL}/v1/users`, {
+      const response = await fetch(API_ENDPOINTS.USERS, {
         headers: {
           Authorization: `Bearer ${session.accessToken}`,
         },
@@ -102,7 +101,7 @@ export default function UsersAdminPage() {
     }
 
     try {
-      const response = await fetch(`${API_URL}/v1/users`, {
+      const response = await fetch(API_ENDPOINTS.USERS, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${session.accessToken}`,
@@ -137,7 +136,7 @@ export default function UsersAdminPage() {
     if (!session?.accessToken || !selectedUser) return;
 
     try {
-      const response = await fetch(`${API_URL}/v1/users/${selectedUser.id}`, {
+      const response = await fetch(API_ENDPOINTS.USER_BY_ID(selectedUser.id), {
         method: "PATCH",
         headers: {
           Authorization: `Bearer ${session.accessToken}`,
@@ -166,7 +165,7 @@ export default function UsersAdminPage() {
     if (!session?.accessToken) return;
 
     try {
-      const response = await fetch(`${API_URL}/v1/users/${user.id}`, {
+      const response = await fetch(API_ENDPOINTS.USER_BY_ID(user.id), {
         method: "PATCH",
         headers: {
           Authorization: `Bearer ${session.accessToken}`,
