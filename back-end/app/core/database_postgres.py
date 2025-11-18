@@ -119,6 +119,18 @@ class PostgresUserDatabase:
         finally:
             session.close()
 
+    def list_users(self, include_inactive: bool = False) -> List[User]:
+        """List users with optional filtering."""
+        session = self._get_session()
+        try:
+            query = session.query(UserModel)
+            if not include_inactive:
+                query = query.filter(UserModel.is_active == True)
+            models = query.all()
+            return [self._model_to_user(m) for m in models]
+        finally:
+            session.close()
+
     def create_user(self, email: str, name: str, role: UserRole = UserRole.CHECKER) -> User:
         """Create a new user."""
         session = self._get_session()
@@ -152,7 +164,13 @@ class PostgresUserDatabase:
         finally:
             session.close()
 
-    def update_user(self, user_id: str, update: UserUpdate) -> User:
+    def update_user(
+        self,
+        user_id: str,
+        name: Optional[str] = None,
+        role: Optional[UserRole] = None,
+        is_active: Optional[bool] = None
+    ) -> User:
         """Update user."""
         session = self._get_session()
         try:
@@ -161,12 +179,12 @@ class PostgresUserDatabase:
                 raise ValueError(f"User {user_id} not found")
 
             # Update fields
-            if update.name is not None:
-                user_model.name = update.name
-            if update.role is not None:
-                user_model.role = update.role
-            if update.is_active is not None:
-                user_model.is_active = update.is_active
+            if name is not None:
+                user_model.name = name
+            if role is not None:
+                user_model.role = role
+            if is_active is not None:
+                user_model.is_active = is_active
 
             user_model.updated_at = datetime.utcnow()
 
@@ -178,14 +196,15 @@ class PostgresUserDatabase:
             session.close()
 
     def delete_user(self, user_id: str) -> bool:
-        """Delete user."""
+        """Soft delete user (mark as inactive)."""
         session = self._get_session()
         try:
             user_model = session.query(UserModel).filter(UserModel.id == user_id).first()
             if not user_model:
-                return False
+                raise ValueError(f"User {user_id} not found")
 
-            session.delete(user_model)
+            user_model.is_active = False
+            user_model.updated_at = datetime.utcnow()
             session.commit()
             return True
         finally:
