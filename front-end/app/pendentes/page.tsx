@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, Suspense } from "react"
 import { useSearchParams } from "next/navigation"
 import { AppSidebar } from "@/components/app-sidebar"
 import {
@@ -19,7 +19,7 @@ import { ProcessResult } from "@/types/process"
 import { History } from "lucide-react"
 import { RequireRole } from "@/components/require-role"
 
-export default function PendentesPage() {
+function PendentesContent() {
   const searchParams = useSearchParams()
   const [selectedResult, setSelectedResult] = useState<ProcessResult | null>(null)
   const [detailsModalOpen, setDetailsModalOpen] = useState(false)
@@ -38,7 +38,7 @@ export default function PendentesPage() {
   }, [searchParams, processResults])
 
   return (
-    <RequireRole allowedRoles={["ADMIN", "SENDER"]}>
+    <>
       <SidebarProvider>
         {activeProcess && (
           <ProcessProgressBar process={activeProcess} />
@@ -100,6 +100,16 @@ export default function PendentesPage() {
           } : undefined}
         />
       </SidebarProvider>
+    </>
+  )
+}
+
+export default function PendentesPage() {
+  return (
+    <RequireRole allowedRoles={["ADMIN", "SENDER"]}>
+      <Suspense fallback={null}>
+        <PendentesContent />
+      </Suspense>
     </RequireRole>
   )
 }
