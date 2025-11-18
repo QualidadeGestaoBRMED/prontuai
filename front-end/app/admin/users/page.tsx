@@ -29,7 +29,7 @@ import {
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { API_URL, API_ENDPOINTS } from "@/lib/config";
+import { API_ENDPOINTS } from "@/lib/config";
 
 type UserRole = "ADMIN" | "CHECKER" | "SENDER";
 
