@@ -33,6 +33,7 @@ exec gunicorn main:app \
     --timeout 300 \
     --graceful-timeout 300 \
     --keep-alive 5 \
+    --worker-tmp-dir /dev/shm \
     --access-logfile - \
     --error-logfile - \
     --log-level info

@@ -40,6 +40,7 @@ function ErrorContent() {
   return (
     <div className="min-h-screen bg-sidebar flex items-center justify-center p-4">
       <div className="max-w-4xl w-full">
+        
         <div className="text-center mb-8 mt-6">
           <Image
             src="/logo.png"
