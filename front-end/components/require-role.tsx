@@ -43,16 +43,10 @@ export function RequireRole({
 }: RequireRoleProps) {
   const { data: session, status } = useSession();
 
-  // Loading state
+  // Loading state - render children immediately for better UX
+  // NextAuth will handle redirect if needed
   if (status === "loading") {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="flex flex-col items-center gap-4">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-          <p className="text-gray-600">Carregando...</p>
-        </div>
-      </div>
-    );
+    return <>{children}</>;
   }
 
   // Not authenticated
