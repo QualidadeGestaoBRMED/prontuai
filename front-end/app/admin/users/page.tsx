@@ -217,7 +217,10 @@ export default function UsersAdminPage() {
                   Gerencie permissões e acesso dos usuários
                 </p>
               </div>
-              <Button onClick={() => setCreateModalOpen(true)}>
+              <Button
+                onClick={() => setCreateModalOpen(true)}
+                className="hover:scale-105 transition-transform"
+              >
                 + Novo Usuário
               </Button>
             </div>
@@ -277,7 +280,7 @@ export default function UsersAdminPage() {
                   ) : (
                     users.map((user) => (
                       <tr key={user.id}>
-                        <td className="px-6 py-4 whitespace-nowrap">
+                        <td className="px-6 py-4 whitespace-nowrap text-sm">
                           {user.name}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
