@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, Suspense } from "react"
+import { useState, useEffect } from "react"
 import { useSearchParams } from "next/navigation"
 import { AppSidebar } from "@/components/app-sidebar"
 import {
@@ -19,7 +19,7 @@ import { ProcessResult } from "@/types/process"
 import { History } from "lucide-react"
 import { RequireRole } from "@/components/require-role"
 
-function PendentesContent() {
+export default function PendentesPage() {
   const searchParams = useSearchParams()
   const [selectedResult, setSelectedResult] = useState<ProcessResult | null>(null)
   const [detailsModalOpen, setDetailsModalOpen] = useState(false)
@@ -38,76 +38,68 @@ function PendentesContent() {
   }, [searchParams, processResults])
 
   return (
-    <SidebarProvider>
-      {activeProcess && (
-        <ProcessProgressBar process={activeProcess} />
-      )}
-      <AppSidebar />
-      <SidebarInset className="bg-sidebar group/sidebar-inset">
-        <header className="flex h-16 shrink-0 items-center gap-2 px-4 md:px-6 lg:px-8 bg-sidebar text-sidebar-foreground relative before:absolute before:inset-y-3 before:-left-px before:w-px before:bg-gradient-to-b before:from-white/5 before:via-white/15 before:to-white/5 before:z-50">
-          <SidebarTrigger className="-ms-2 text-sidebar-foreground hover:text-sidebar-foreground/70" />
-          <div className="flex items-center gap-2">
-            <History className="size-5" />
-            <h1 className="text-lg font-semibold">Documentos Pendentes</h1>
-          </div>
-          <div className="flex items-center gap-2 ml-auto">
-            <NotificationBell
-              unreadCount={unreadCount}
-              hasActiveProcess={!!activeProcess}
-              onClick={() => setNotificationCenterOpen(true)}
-            />
-            <UserDropdown />
-          </div>
-        </header>
-
-        <div className="flex-1 overflow-auto bg-[hsl(240_5%_92.16%)] md:rounded-s-3xl md:group-peer-data-[state=collapsed]/sidebar-inset:rounded-s-none transition-all ease-in-out duration-300">
-          <div className="p-6 md:p-8 lg:p-12">
-            <div className="space-y-4">
-              <div>
-                <p className="text-sm text-muted-foreground">
-                  Visualize e gerencie todos os documentos processados
-                </p>
-              </div>
-
-              <ResultsTable
-                results={processResults.filter(result => result.status !== 'approved')}
-                onViewDetails={(result) => {
-                  console.log('[DEBUG] Opening modal for result:', result)
-                  console.log('[DEBUG] Result exists?', !!result)
-                  setSelectedResult(result)
-                  setDetailsModalOpen(true)
-                  console.log('[DEBUG] Modal state set to open')
-                }}
-                onDownloadPDF={(result) => {
-                  // TODO: Implement PDF download
-                  console.log("Download PDF:", result)
-                }}
+    <RequireRole allowedRoles={["ADMIN", "SENDER"]}>
+      <SidebarProvider>
+        {activeProcess && (
+          <ProcessProgressBar process={activeProcess} />
+        )}
+        <AppSidebar />
+        <SidebarInset className="bg-sidebar group/sidebar-inset">
+          <header className="flex h-16 shrink-0 items-center gap-2 px-4 md:px-6 lg:px-8 bg-sidebar text-sidebar-foreground relative before:absolute before:inset-y-3 before:-left-px before:w-px before:bg-gradient-to-b before:from-white/5 before:via-white/15 before:to-white/5 before:z-50">
+            <SidebarTrigger className="-ms-2 text-sidebar-foreground hover:text-sidebar-foreground/70" />
+            <div className="flex items-center gap-2">
+              <History className="size-5" />
+              <h1 className="text-lg font-semibold">Documentos Pendentes</h1>
+            </div>
+            <div className="flex items-center gap-2 ml-auto">
+              <NotificationBell
+                unreadCount={unreadCount}
+                hasActiveProcess={!!activeProcess}
+                onClick={() => setNotificationCenterOpen(true)}
               />
+              <UserDropdown />
+            </div>
+          </header>
+
+          <div className="flex-1 overflow-auto bg-[hsl(240_5%_92.16%)] md:rounded-s-3xl md:group-peer-data-[state=collapsed]/sidebar-inset:rounded-s-none transition-all ease-in-out duration-300">
+            <div className="p-6 md:p-8 lg:p-12">
+              <div className="space-y-4">
+                <div>
+                  <p className="text-sm text-muted-foreground">
+                    Visualize e gerencie todos os documentos processados
+                  </p>
+                </div>
+
+                <ResultsTable
+                  results={processResults.filter(result => result.status !== 'approved')}
+                  onViewDetails={(result) => {
+                    console.log('[DEBUG] Opening modal for result:', result)
+                    console.log('[DEBUG] Result exists?', !!result)
+                    setSelectedResult(result)
+                    setDetailsModalOpen(true)
+                    console.log('[DEBUG] Modal state set to open')
+                  }}
+                  onDownloadPDF={(result) => {
+                    // TODO: Implement PDF download
+                    console.log("Download PDF:", result)
+                  }}
+                />
+              </div>
             </div>
           </div>
-        </div>
-      </SidebarInset>
+        </SidebarInset>
 
-      <NotificationCenter />
-      <DocumentDetailsModal
-        open={detailsModalOpen}
-        onOpenChange={setDetailsModalOpen}
-        result={selectedResult}
-        onDownloadPDF={selectedResult ? () => {
-          // TODO: Implement PDF download
-          console.log("Download PDF:", selectedResult)
-        } : undefined}
-      />
-    </SidebarProvider>
-  )
-}
-
-export default function PendentesPage() {
-  return (
-    <RequireRole allowedRoles={["ADMIN", "SENDER"]}>
-      <Suspense fallback={<div>Carregando...</div>}>
-        <PendentesContent />
-      </Suspense>
+        <NotificationCenter />
+        <DocumentDetailsModal
+          open={detailsModalOpen}
+          onOpenChange={setDetailsModalOpen}
+          result={selectedResult}
+          onDownloadPDF={selectedResult ? () => {
+            // TODO: Implement PDF download
+            console.log("Download PDF:", selectedResult)
+          } : undefined}
+        />
+      </SidebarProvider>
     </RequireRole>
   )
 }
