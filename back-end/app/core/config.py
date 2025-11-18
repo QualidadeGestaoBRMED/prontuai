@@ -31,4 +31,11 @@ class Settings:
     JWT_ALGORITHM = "HS256"
     JWT_EXPIRATION_HOURS = int(os.getenv("JWT_EXPIRATION_HOURS", 24))
 
+    # CORS Configuration
+    # Aceita múltiplas origens separadas por vírgula na variável de ambiente
+    ALLOWED_ORIGINS = os.getenv(
+        "ALLOWED_ORIGINS",
+        "http://localhost,http://localhost:3000,https://prontuai.grupobrmed.com.br"
+    ).split(",")
+
 settings = Settings() 

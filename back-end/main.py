@@ -8,15 +8,11 @@ setup_logging(settings.LOG_FILE)
 
 app = FastAPI(title="API BR MED - Exames e Validação")
 
-origins = [
-    "http://localhost",
-    "http://localhost:3000",
-    "https://prontuai.grupobrmed.com.br",
-]
-
+# Configuração de CORS usando variáveis de ambiente
+# Permite configurar origens dinamicamente para diferentes ambientes (dev, staging, prod)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=settings.ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

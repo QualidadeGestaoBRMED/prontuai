@@ -45,7 +45,22 @@ class PostgresUserDatabase:
         if self.database_url.startswith("postgresql://"):
             self.database_url = self.database_url.replace("postgresql://", "postgresql+psycopg2://", 1)
 
-        self.engine = create_engine(self.database_url, echo=False)
+        # Configuração do pool de conexões para evitar erros SSL intermitentes
+        self.engine = create_engine(
+            self.database_url,
+            echo=False,
+            pool_pre_ping=True,  # Verifica se a conexão está viva antes de usar
+            pool_recycle=3600,   # Recicla conexões a cada hora (evita conexões stale)
+            pool_size=5,         # Tamanho base do pool
+            max_overflow=10,     # Conexões extras permitidas sob carga
+            connect_args={
+                "connect_timeout": 10,  # Timeout de conexão em segundos
+                "keepalives": 1,        # Habilita TCP keepalive
+                "keepalives_idle": 30,  # Tempo antes de enviar keepalive
+                "keepalives_interval": 10,  # Intervalo entre keepalives
+                "keepalives_count": 5   # Número de keepalives antes de desistir
+            }
+        )
         self.SessionLocal = sessionmaker(bind=self.engine)
 
         # Create tables if they don't exist
