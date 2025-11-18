@@ -20,8 +20,3 @@ export const API_ENDPOINTS = {
   // Documents
   PROCESS_DOCUMENT_STREAM: `${API_URL}/v1/processar-documento-stream`,
 } as const;
-
-export default {
-  API_URL,
-  API_ENDPOINTS,
-};
