@@ -35,21 +35,41 @@ async def create_user(
 ):
     """
     Cria um novo usuário (apenas ADMIN).
-    """
-    # Validar domínio do email
-    if not user_create.email.endswith("@grupobrmed.com.br"):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Apenas emails @grupobrmed.com.br são permitidos"
-        )
 
+    - Para role SENDER: se clinic_id não fornecido, cria clínica automaticamente usando o email do usuário
+    - Para role CHECKER/ADMIN: clinic_id deve ser NULL
+    """
     try:
+        clinic_id = user_create.clinic_id
+
+        # Se for SENDER e não tem clinic_id, criar clínica automaticamente
+        if user_create.role == UserRole.SENDER and not clinic_id:
+            # Verificar se já existe clínica com este email
+            existing_clinic = user_db.get_clinic_by_email(user_create.email)
+
+            if existing_clinic:
+                clinic_id = existing_clinic.id
+                logger.info(f"Usando clínica existente {clinic_id} para usuário {user_create.email}")
+            else:
+                # Criar nova clínica
+                clinic = user_db.create_clinic(
+                    email=user_create.email,
+                    name=user_create.name  # Usar nome do usuário como nome da clínica
+                )
+                clinic_id = clinic.id
+                logger.info(f"Clínica {clinic_id} criada automaticamente para {user_create.email}")
+
+        # CHECKER e ADMIN não devem ter clinic_id
+        if user_create.role in [UserRole.CHECKER, UserRole.ADMIN]:
+            clinic_id = None
+
         user = user_db.create_user(
             email=user_create.email,
             name=user_create.name,
-            role=user_create.role
+            role=user_create.role,
+            clinic_id=clinic_id
         )
-        logger.info(f"Admin {admin.email} criou usuário {user.email} com role {user.role.value}")
+        logger.info(f"Admin {admin.email} criou usuário {user.email} com role {user.role.value} (clinic_id: {clinic_id})")
         return user
 
     except ValueError as e:
@@ -91,13 +111,15 @@ async def update_user(
     - **name**: Nome do usuário
     - **role**: Role (ADMIN, CHECKER, SENDER)
     - **is_active**: Status ativo/inativo
+    - **clinic_id**: Clínica associada (apenas para SENDER)
     """
     try:
         user = user_db.update_user(
             user_id=user_id,
             name=user_update.name,
             role=user_update.role,
-            is_active=user_update.is_active
+            is_active=user_update.is_active,
+            clinic_id=user_update.clinic_id
         )
         logger.info(f"Admin {admin.email} atualizou usuário {user.email}")
         return user

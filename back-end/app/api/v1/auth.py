@@ -33,13 +33,6 @@ async def google_auth(auth_request: GoogleAuthRequest):
     Autentica usuário via Google OAuth.
     Se usuário não existir, retorna erro (admin deve criar primeiro).
     """
-    # Validar domínio do email
-    if not auth_request.email.endswith("@grupobrmed.com.br"):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Apenas emails @grupobrmed.com.br são permitidos"
-        )
-
     # Buscar usuário no banco
     user = user_db.get_user_by_email(auth_request.email)
 
@@ -55,16 +48,19 @@ async def google_auth(auth_request: GoogleAuthRequest):
             detail="Usuário inativo. Contate o administrador."
         )
 
-    # Criar token JWT
-    access_token = create_access_token(
-        data={
-            "sub": user.email,
-            "role": user.role.value,
-            "name": user.name
-        }
-    )
+    # Criar token JWT com clinic_id (se usuário for SENDER)
+    token_data = {
+        "sub": user.email,
+        "role": user.role.value,
+        "name": user.name
+    }
 
-    logger.info(f"Usuário autenticado: {user.email} (role: {user.role.value})")
+    if user.clinic_id:
+        token_data["clinic_id"] = user.clinic_id
+
+    access_token = create_access_token(data=token_data)
+
+    logger.info(f"Usuário autenticado: {user.email} (role: {user.role.value}, clinic_id: {user.clinic_id})")
 
     return TokenResponse(
         access_token=access_token,

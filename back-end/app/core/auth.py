@@ -41,6 +41,7 @@ def decode_token(token: str) -> TokenData:
         email: str = payload.get("sub")
         role: str = payload.get("role")
         name: str = payload.get("name")
+        clinic_id: Optional[str] = payload.get("clinic_id")
 
         if email is None or role is None:
             raise HTTPException(
@@ -49,7 +50,7 @@ def decode_token(token: str) -> TokenData:
                 headers={"WWW-Authenticate": "Bearer"},
             )
 
-        return TokenData(email=email, role=UserRole(role), name=name)
+        return TokenData(email=email, role=UserRole(role), name=name, clinic_id=clinic_id)
 
     except JWTError as e:
         logger.error(f"Erro ao decodificar token: {e}")

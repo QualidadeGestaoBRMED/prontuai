@@ -1,7 +1,10 @@
-from fastapi import APIRouter, HTTPException, status, UploadFile, File, Body, BackgroundTasks
+from fastapi import APIRouter, HTTPException, status, UploadFile, File, Body, BackgroundTasks, Depends
 from fastapi.responses import StreamingResponse
 from app.services import workflow_service, brmed_service
 from app.core.job_manager import job_manager
+from app.core.auth import require_sender, get_current_user
+from app.models.user import User, UserRole
+from app.core.database import user_db
 import logging
 import json
 import asyncio
@@ -14,7 +17,8 @@ logger = logging.getLogger(__name__)
 @router.post("/processar-documento", summary="Processar documento completo com OCR, BRMED e Validação")
 async def processar_documento_completo_api(
     arquivo: UploadFile = File(...),
-    exames_obrigatorios: str = Body(..., embed=True) # Recebe como string JSON
+    exames_obrigatorios: str = Body(..., embed=True), # Recebe como string JSON
+    current_user: User = Depends(require_sender) # Requer autenticação SENDER
 ):
     if not arquivo:
         logger.warning("Arquivo não enviado na requisição de processamento completo.")
@@ -42,6 +46,33 @@ async def processar_documento_completo_api(
     try:
         resultado = await workflow_service.processar_documento_completo(arquivo, exames_obrigatorios_list)
         logger.info(f"[REQUEST] Processamento concluído com sucesso para: {arquivo.filename}")
+
+        # Salvar documento no banco de dados
+        if current_user.clinic_id:
+            try:
+                # Extrair informações do resultado
+                cpf = resultado.get('ocr', {}).get('cpf_extraido', None)
+                exams_found = resultado.get('ocr', {}).get('exames_encontrados', [])
+                ocr_markdown = resultado.get('ocr', {}).get('resultado_markdown', '')
+                validation_status = 'validated' if resultado.get('validacao', {}).get('todos_presentes', False) else 'pending'
+
+                # Criar documento no banco
+                document = user_db.create_document(
+                    clinic_id=current_user.clinic_id,
+                    uploaded_by_user_id=current_user.id,
+                    filename=arquivo.filename,
+                    cpf=cpf,
+                    exams_found=exams_found,
+                    validation_status=validation_status,
+                    ocr_markdown=ocr_markdown
+                )
+
+                logger.info(f"[DB] Documento salvo com ID: {document.id}")
+                resultado['document_id'] = document.id
+            except Exception as db_error:
+                logger.error(f"[DB] Erro ao salvar documento: {db_error}")
+                # Não interromper o fluxo se falhar ao salvar no banco
+
         return resultado
     except Exception as e:
         logger.exception(f"Erro inesperado no processamento completo do documento: {e}")
