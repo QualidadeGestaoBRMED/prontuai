@@ -67,6 +67,31 @@ export default function UsersAdminPage() {
   const [formEmail, setFormEmail] = useState("");
   const [formName, setFormName] = useState("");
   const [formRole, setFormRole] = useState<UserRole>("CHECKER");
+  const [emailError, setEmailError] = useState("");
+
+  const validateEmail = (email: string) => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!email) {
+      setEmailError("");
+      return false;
+    }
+    if (!emailRegex.test(email)) {
+      setEmailError("Email inválido. Use o formato: exemplo@dominio.com");
+      return false;
+    }
+    setEmailError("");
+    return true;
+  };
+
+  const handleEmailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setFormEmail(value);
+    if (value) {
+      validateEmail(value);
+    } else {
+      setEmailError("");
+    }
+  };
 
   const fetchUsers = useCallback(async () => {
     if (!session?.accessToken) return;
@@ -100,6 +125,13 @@ export default function UsersAdminPage() {
       return;
     }
 
+    // Validar formato de email
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(formEmail)) {
+      toast.error("Email inválido. Use o formato: exemplo@dominio.com");
+      return;
+    }
+
     try {
       const response = await fetch(API_ENDPOINTS.USERS, {
         method: "POST",
@@ -124,6 +156,7 @@ export default function UsersAdminPage() {
       setFormEmail("");
       setFormName("");
       setFormRole("CHECKER");
+      setEmailError("");
       fetchUsers();
     } catch (error) {
       console.error("Erro:", error);
@@ -350,10 +383,14 @@ export default function UsersAdminPage() {
                 <Input
                   id="email"
                   type="email"
-                  placeholder="usuario@grupobrmed.com.br"
+                  placeholder="usuario@example.com"
                   value={formEmail}
-                  onChange={(e) => setFormEmail(e.target.value)}
+                  onChange={handleEmailChange}
+                  className={emailError ? "border-red-500" : ""}
                 />
+                {emailError && (
+                  <p className="text-xs text-red-500 mt-1">{emailError}</p>
+                )}
               </div>
 
               <div>
@@ -403,10 +440,18 @@ export default function UsersAdminPage() {
             </div>
 
             <DialogFooter>
-              <Button variant="outline" onClick={() => setCreateModalOpen(false)}>
+              <Button variant="outline" onClick={() => {
+                setCreateModalOpen(false);
+                setEmailError("");
+              }}>
                 Cancelar
               </Button>
-              <Button onClick={handleCreateUser}>Criar Usuário</Button>
+              <Button
+                onClick={handleCreateUser}
+                disabled={!!emailError || !formEmail || !formName}
+              >
+                Criar Usuário
+              </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
