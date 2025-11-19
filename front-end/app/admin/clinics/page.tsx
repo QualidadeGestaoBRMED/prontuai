@@ -92,7 +92,23 @@ export default function ClinicsAdminPage() {
 
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.detail || "Erro ao criar clínica");
+        console.error("Erro do servidor:", error);
+
+        // Tentar extrair mensagem de erro detalhada
+        let errorMessage = "Erro ao criar clínica";
+
+        if (error.detail) {
+          if (typeof error.detail === 'string') {
+            errorMessage = error.detail;
+          } else if (Array.isArray(error.detail)) {
+            // Erros de validação do Pydantic
+            errorMessage = error.detail.map((e: any) =>
+              `${e.loc?.join('.')} - ${e.msg}`
+            ).join(', ');
+          }
+        }
+
+        throw new Error(errorMessage);
       }
 
       toast.success("Clínica criada com sucesso!");
@@ -101,7 +117,7 @@ export default function ClinicsAdminPage() {
       setFormName("");
       fetchClinics();
     } catch (error) {
-      console.error("Erro:", error);
+      console.error("Erro completo:", error);
       const errorMessage = error instanceof Error ? error.message : "Erro ao criar clínica";
       toast.error(errorMessage);
     }
