@@ -20,6 +20,18 @@ app.add_middleware(
 
 app.include_router(api_router)
 
+@app.get("/")
+async def root():
+    """Root endpoint - API information"""
+    return {
+        "service": "ProntuAI Backend API",
+        "version": "2.0.0",
+        "status": "online",
+        "docs": "/docs",
+        "health": "/health",
+        "api_prefix": "/v1"
+    }
+
 @app.get("/health")
 async def health_check():
     """Health check endpoint para Render e monitoramento"""
