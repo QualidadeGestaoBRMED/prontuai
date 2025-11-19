@@ -44,6 +44,31 @@ export default function ClinicsAdminPage() {
   // Form states
   const [formEmail, setFormEmail] = useState("");
   const [formName, setFormName] = useState("");
+  const [emailError, setEmailError] = useState("");
+
+  const validateEmail = (email: string) => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!email) {
+      setEmailError("");
+      return false;
+    }
+    if (!emailRegex.test(email)) {
+      setEmailError("Email inválido. Use o formato: exemplo@dominio.com");
+      return false;
+    }
+    setEmailError("");
+    return true;
+  };
+
+  const handleEmailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setFormEmail(value);
+    if (value) {
+      validateEmail(value);
+    } else {
+      setEmailError("");
+    }
+  };
 
   const fetchClinics = useCallback(async () => {
     if (!session?.accessToken) return;
@@ -77,6 +102,13 @@ export default function ClinicsAdminPage() {
       return;
     }
 
+    // Validar formato de email
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(formEmail)) {
+      toast.error("Email inválido. Use o formato: exemplo@dominio.com");
+      return;
+    }
+
     try {
       const response = await fetch(API_ENDPOINTS.CLINICS, {
         method: "POST",
@@ -102,8 +134,8 @@ export default function ClinicsAdminPage() {
             errorMessage = error.detail;
           } else if (Array.isArray(error.detail)) {
             // Erros de validação do Pydantic
-            errorMessage = error.detail.map((e: any) =>
-              `${e.loc?.join('.')} - ${e.msg}`
+            errorMessage = error.detail.map((e: { loc?: string[]; msg: string }) =>
+              `${e.loc?.join('.') || 'campo'} - ${e.msg}`
             ).join(', ');
           }
         }
@@ -115,6 +147,7 @@ export default function ClinicsAdminPage() {
       setCreateModalOpen(false);
       setFormEmail("");
       setFormName("");
+      setEmailError("");
       fetchClinics();
     } catch (error) {
       console.error("Erro completo:", error);
@@ -331,11 +364,16 @@ export default function ClinicsAdminPage() {
                   type="email"
                   placeholder="clinica@example.com"
                   value={formEmail}
-                  onChange={(e) => setFormEmail(e.target.value)}
+                  onChange={handleEmailChange}
+                  className={emailError ? "border-red-500" : ""}
                 />
-                <p className="text-xs text-gray-500 mt-1">
-                  Este email será usado para login da clínica
-                </p>
+                {emailError ? (
+                  <p className="text-xs text-red-500 mt-1">{emailError}</p>
+                ) : (
+                  <p className="text-xs text-gray-500 mt-1">
+                    Este email será usado para login da clínica
+                  </p>
+                )}
               </div>
 
               <div>
@@ -350,10 +388,18 @@ export default function ClinicsAdminPage() {
             </div>
 
             <DialogFooter>
-              <Button variant="outline" onClick={() => setCreateModalOpen(false)}>
+              <Button variant="outline" onClick={() => {
+                setCreateModalOpen(false);
+                setEmailError("");
+              }}>
                 Cancelar
               </Button>
-              <Button onClick={handleCreateClinic}>Criar Clínica</Button>
+              <Button
+                onClick={handleCreateClinic}
+                disabled={!!emailError || !formEmail || !formName}
+              >
+                Criar Clínica
+              </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
