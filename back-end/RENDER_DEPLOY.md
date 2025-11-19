@@ -1,10 +1,16 @@
 # Deploy no Render - Guia Completo
 
-## 🚨 **IMPORTANTE: Migração do Banco de Dados**
+## 🎉 **AUTO-MIGRAÇÃO ATIVADA!**
 
-Antes de fazer o deploy da nova versão com sistema multi-tenant, é necessário executar as migrações do banco de dados.
+A migração do banco de dados agora é **AUTOMÁTICA**! Quando você fizer o deploy, o sistema vai:
+1. Detectar se a migração é necessária
+2. Executar a migração SQL automaticamente
+3. Migrar os dados existentes
+4. Iniciar normalmente
 
-## 📋 **Passos para Deploy**
+Você **NÃO PRECISA** fazer nada manualmente! 🚀
+
+## 📋 **Passos para Deploy (Simplificado)**
 
 ### 1. **Configurar Variáveis de Ambiente no Render**
 
