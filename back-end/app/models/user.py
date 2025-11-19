@@ -18,6 +18,7 @@ class User(BaseModel):
     name: str
     role: UserRole = UserRole.CHECKER
     is_active: bool = True
+    clinic_id: Optional[str] = None  # Foreign key para Clinic (NULL para CHECKER/ADMIN)
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
@@ -37,6 +38,7 @@ class UserCreate(BaseModel):
     email: EmailStr
     name: str
     role: UserRole = UserRole.CHECKER
+    clinic_id: Optional[str] = None  # Obrigatório para SENDER, NULL para CHECKER/ADMIN
 
     class Config:
         json_schema_extra = {
@@ -53,6 +55,7 @@ class UserUpdate(BaseModel):
     name: Optional[str] = None
     role: Optional[UserRole] = None
     is_active: Optional[bool] = None
+    clinic_id: Optional[str] = None
 
     class Config:
         json_schema_extra = {
@@ -73,3 +76,4 @@ class TokenData(BaseModel):
     email: EmailStr
     role: UserRole
     name: str
+    clinic_id: Optional[str] = None  # NULL para CHECKER/ADMIN

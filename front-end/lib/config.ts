@@ -14,6 +14,10 @@ export const API_ENDPOINTS = {
   USERS: `${API_URL}/v1/users`,
   USER_BY_ID: (id: string) => `${API_URL}/v1/users/${id}`,
 
+  // Clinics
+  CLINICS: `${API_URL}/v1/clinics`,
+  CLINIC_BY_ID: (id: string) => `${API_URL}/v1/clinics/${id}`,
+
   // FAQ/Chat
   FAQ: `${API_URL}/v1/faq`,
 
