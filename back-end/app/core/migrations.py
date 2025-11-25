@@ -8,44 +8,71 @@ from typing import Optional
 logger = logging.getLogger(__name__)
 
 
-def check_if_migration_needed() -> bool:
+def check_if_migration_needed() -> tuple[bool, list[str]]:
     """
-    Verifica se a migração é necessária checando se a coluna clinic_id existe.
-    """
-    try:
-        from app.core.database_postgres import PostgresUserDatabase
+    Verifica quais migrações são necessárias checando colunas específicas.
 
+    Returns:
+        (needs_migration, migrations_to_run): tupla indicando se precisa migrar
+        e lista de arquivos de migração a executar
+    """
+    import psycopg2
+
+    try:
         database_url = os.getenv("DATABASE_URL")
         if not database_url:
             logger.info("DATABASE_URL não configurado - pulando verificação de migração")
-            return False
+            return False, []
 
-        # Tentar consultar com clinic_id - se falhar, precisa migrar
-        db = PostgresUserDatabase(database_url)
+        # Conectar ao banco para verificar colunas
+        conn = psycopg2.connect(database_url)
+        cursor = conn.cursor()
 
-        # Se chegou até aqui sem erro, a migração já foi executada
-        logger.info("✓ Banco de dados já migrado (clinic_id existe)")
-        return False
+        migrations_needed = []
+
+        # Verificar migration 001: clinic_id em users
+        cursor.execute("""
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_name='users' AND column_name='clinic_id'
+        """)
+        if not cursor.fetchone():
+            logger.warning("⚠️  Migration 001 necessária: coluna clinic_id não existe")
+            migrations_needed.append("001_add_multi_tenant.sql")
+
+        # Verificar migration 002: cnpj em clinics
+        cursor.execute("""
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_name='clinics' AND column_name='cnpj'
+        """)
+        if not cursor.fetchone():
+            logger.warning("⚠️  Migration 002 necessária: coluna cnpj não existe")
+            migrations_needed.append("002_update_clinic_fields.sql")
+
+        cursor.close()
+        conn.close()
+
+        if not migrations_needed:
+            logger.info("✓ Banco de dados já migrado (todas as colunas existem)")
+            return False, []
+
+        return True, migrations_needed
 
     except Exception as e:
-        error_msg = str(e).lower()
-
-        # Se o erro for "column clinic_id does not exist", precisa migrar
-        if "clinic_id" in error_msg and ("does not exist" in error_msg or "não existe" in error_msg):
-            logger.warning("⚠️  Migração necessária: coluna clinic_id não existe")
-            return True
-
-        # Outros erros - não tentar migrar
         logger.error(f"Erro ao verificar migração: {e}")
-        return False
+        return False, []
 
 
-def run_migration() -> bool:
+def run_migration(migration_files: list[str]) -> bool:
     """
-    Executa a migração SQL se necessário.
+    Executa as migrações SQL necessárias em sequência.
+
+    Args:
+        migration_files: Lista de arquivos de migração a executar
 
     Returns:
-        True se migração executada com sucesso, False caso contrário
+        True se todas as migrações executadas com sucesso, False caso contrário
     """
     import psycopg2
 
@@ -54,37 +81,46 @@ def run_migration() -> bool:
         logger.error("DATABASE_URL não configurado")
         return False
 
-    logger.info("🔄 Executando migração do banco de dados...")
+    if not migration_files:
+        logger.info("Nenhuma migração para executar")
+        return True
+
+    logger.info(f"🔄 Executando {len(migration_files)} migração(ões)...")
 
     try:
-        # Ler arquivo de migração
-        migration_file = os.path.join(
-            os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
-            "migrations",
-            "001_add_multi_tenant.sql"
-        )
-
-        if not os.path.exists(migration_file):
-            logger.error(f"Arquivo de migração não encontrado: {migration_file}")
-            return False
-
-        with open(migration_file, "r") as f:
-            sql_script = f.read()
-
-        # Conectar e executar
+        # Conectar ao banco
         conn = psycopg2.connect(database_url)
         conn.autocommit = False
         cursor = conn.cursor()
 
-        logger.info("Executando SQL de migração...")
-        cursor.execute(sql_script)
-        conn.commit()
+        # Executar cada migration em sequência
+        for migration_file in migration_files:
+            migration_path = os.path.join(
+                os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
+                "migrations",
+                migration_file
+            )
 
-        logger.info("✅ Migração executada com sucesso!")
+            if not os.path.exists(migration_path):
+                logger.error(f"Arquivo de migração não encontrado: {migration_path}")
+                conn.rollback()
+                conn.close()
+                return False
+
+            logger.info(f"📜 Executando: {migration_file}")
+
+            with open(migration_path, "r") as f:
+                sql_script = f.read()
+
+            cursor.execute(sql_script)
+            conn.commit()
+
+            logger.info(f"✅ {migration_file} executada com sucesso!")
 
         cursor.close()
         conn.close()
 
+        logger.info("✅ Todas as migrações executadas com sucesso!")
         return True
 
     except Exception as e:
@@ -116,17 +152,15 @@ def run_data_migration() -> bool:
         logger.info("🔄 Migrando dados existentes...")
 
         # 1. Criar clínica padrão
-        default_clinic_email = "legado@grupobrmed.com.br"
         default_clinic_name = "Grupo BRMED - Legado"
 
-        existing_clinic = user_db.get_clinic_by_email(default_clinic_email)
+        existing_clinic = user_db.get_clinic_by_name(default_clinic_name)
 
         if existing_clinic:
             logger.info(f"✓ Clínica padrão já existe: {existing_clinic.id}")
             default_clinic_id = existing_clinic.id
         else:
             default_clinic = user_db.create_clinic(
-                email=default_clinic_email,
                 name=default_clinic_name
             )
             default_clinic_id = default_clinic.id
@@ -168,21 +202,24 @@ def auto_migrate():
     logger.info("=" * 60)
 
     # 1. Verificar se migração é necessária
-    if not check_if_migration_needed():
+    needs_migration, migration_files = check_if_migration_needed()
+
+    if not needs_migration:
         logger.info("Nenhuma migração necessária - banco já atualizado")
         return
 
-    # 2. Executar migração SQL
-    logger.info("Migração necessária detectada!")
+    # 2. Executar migrações SQL
+    logger.info(f"Migração necessária detectada! {len(migration_files)} arquivo(s) a executar")
 
-    if not run_migration():
+    if not run_migration(migration_files):
         logger.error("Falha ao executar migração SQL - aplicação pode não funcionar corretamente")
         return
 
-    # 3. Migrar dados existentes
-    if not run_data_migration():
-        logger.warning("Falha ao migrar dados existentes - verifique manualmente")
-        return
+    # 3. Migrar dados existentes (somente se migration 001 foi executada)
+    if "001_add_multi_tenant.sql" in migration_files:
+        if not run_data_migration():
+            logger.warning("Falha ao migrar dados existentes - verifique manualmente")
+            return
 
     logger.info("=" * 60)
     logger.info("✅ AUTO-MIGRAÇÃO CONCLUÍDA COM SUCESSO")

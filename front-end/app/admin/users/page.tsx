@@ -43,6 +43,14 @@ interface User {
   updated_at: string;
 }
 
+interface Clinic {
+  id: string;
+  name: string;
+  cnpj?: string;
+  phone?: string;
+  is_active: boolean;
+}
+
 const roleLabels: Record<UserRole, string> = {
   ADMIN: "Administrador",
   CHECKER: "Checador",
@@ -63,10 +71,20 @@ export default function UsersAdminPage() {
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
 
+  // Clinics states
+  const [clinics, setClinics] = useState<Clinic[]>([]);
+  const [loadingClinics, setLoadingClinics] = useState(false);
+
+  // Deactivate confirmation modal
+  const [deactivateModalOpen, setDeactivateModalOpen] = useState(false);
+  const [userToDeactivate, setUserToDeactivate] = useState<User | null>(null);
+  const [deactivating, setDeactivating] = useState(false);
+
   // Form states
   const [formEmail, setFormEmail] = useState("");
   const [formName, setFormName] = useState("");
   const [formRole, setFormRole] = useState<UserRole>("CHECKER");
+  const [formClinicId, setFormClinicId] = useState("");
   const [emailError, setEmailError] = useState("");
 
   const validateEmail = (email: string) => {
@@ -115,13 +133,48 @@ export default function UsersAdminPage() {
     }
   }, [session?.accessToken]);
 
+  const fetchClinics = useCallback(async () => {
+    if (!session?.accessToken) return;
+
+    setLoadingClinics(true);
+    try {
+      const response = await fetch(API_ENDPOINTS.CLINICS, {
+        headers: {
+          Authorization: `Bearer ${session.accessToken}`,
+        },
+      });
+
+      if (!response.ok) throw new Error("Erro ao carregar clínicas");
+
+      const data = await response.json();
+      setClinics(data);
+    } catch (error) {
+      console.error("Erro:", error);
+      toast.error("Erro ao carregar clínicas");
+    } finally {
+      setLoadingClinics(false);
+    }
+  }, [session?.accessToken]);
+
   useEffect(() => {
     fetchUsers();
   }, [fetchUsers]);
 
+  useEffect(() => {
+    if (createModalOpen) {
+      fetchClinics();
+    }
+  }, [createModalOpen, fetchClinics]);
+
   const handleCreateUser = async () => {
     if (!session?.accessToken || !formEmail || !formName) {
       toast.error("Preencha todos os campos");
+      return;
+    }
+
+    // Validar clínica para SENDER
+    if (formRole === "SENDER" && !formClinicId) {
+      toast.error("Selecione uma clínica para usuários SENDER");
       return;
     }
 
@@ -133,17 +186,24 @@ export default function UsersAdminPage() {
     }
 
     try {
+      const body: any = {
+        email: formEmail,
+        name: formName,
+        role: formRole,
+      };
+
+      // Adicionar clinic_id apenas para SENDER
+      if (formRole === "SENDER") {
+        body.clinic_id = formClinicId;
+      }
+
       const response = await fetch(API_ENDPOINTS.USERS, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${session.accessToken}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          email: formEmail,
-          name: formName,
-          role: formRole,
-        }),
+        body: JSON.stringify(body),
       });
 
       if (!response.ok) {
@@ -156,6 +216,7 @@ export default function UsersAdminPage() {
       setFormEmail("");
       setFormName("");
       setFormRole("CHECKER");
+      setFormClinicId("");
       setEmailError("");
       fetchUsers();
     } catch (error) {
@@ -195,6 +256,14 @@ export default function UsersAdminPage() {
   };
 
   const handleToggleActive = async (user: User) => {
+    // Se estiver desativando, mostrar modal de confirmação
+    if (user.is_active) {
+      setUserToDeactivate(user);
+      setDeactivateModalOpen(true);
+      return;
+    }
+
+    // Se estiver ativando, executar diretamente
     if (!session?.accessToken) return;
 
     try {
@@ -205,19 +274,47 @@ export default function UsersAdminPage() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          is_active: !user.is_active,
+          is_active: true,
         }),
       });
 
       if (!response.ok) throw new Error("Erro ao atualizar status");
 
-      toast.success(
-        `Usuário ${user.is_active ? "desativado" : "ativado"} com sucesso!`
-      );
+      toast.success("Usuário ativado com sucesso!");
       fetchUsers();
     } catch (error) {
       console.error("Erro:", error);
       toast.error("Erro ao atualizar status");
+    }
+  };
+
+  const confirmDeactivate = async () => {
+    if (!session?.accessToken || !userToDeactivate) return;
+
+    setDeactivating(true);
+    try {
+      const response = await fetch(API_ENDPOINTS.USER_BY_ID(userToDeactivate.id), {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${session.accessToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          is_active: false,
+        }),
+      });
+
+      if (!response.ok) throw new Error("Erro ao desativar usuário");
+
+      toast.success("Usuário desativado com sucesso!");
+      setDeactivateModalOpen(false);
+      setUserToDeactivate(null);
+      fetchUsers();
+    } catch (error) {
+      console.error("Erro:", error);
+      toast.error("Erro ao desativar usuário");
+    } finally {
+      setDeactivating(false);
     }
   };
 
@@ -437,18 +534,62 @@ export default function UsersAdminPage() {
                   </SelectContent>
                 </Select>
               </div>
+
+              {formRole === "SENDER" && (
+                <div>
+                  <Label htmlFor="clinic">Clínica *</Label>
+                  <Select
+                    value={formClinicId}
+                    onValueChange={setFormClinicId}
+                    disabled={loadingClinics}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder={loadingClinics ? "Carregando..." : "Selecione uma clínica"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {clinics.length === 0 ? (
+                        <div className="px-2 py-3 text-sm text-gray-500 text-center">
+                          Nenhuma clínica disponível
+                        </div>
+                      ) : (
+                        clinics.map((clinic) => (
+                          <SelectItem key={clinic.id} value={clinic.id}>
+                            <div>
+                              <div className="font-medium">{clinic.name}</div>
+                              {clinic.cnpj && (
+                                <div className="text-xs text-gray-500">
+                                  CNPJ: {clinic.cnpj}
+                                </div>
+                              )}
+                            </div>
+                          </SelectItem>
+                        ))
+                      )}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Usuários SENDER devem estar vinculados a uma clínica
+                  </p>
+                </div>
+              )}
             </div>
 
             <DialogFooter>
               <Button variant="outline" onClick={() => {
                 setCreateModalOpen(false);
                 setEmailError("");
+                setFormClinicId("");
               }}>
                 Cancelar
               </Button>
               <Button
                 onClick={handleCreateUser}
-                disabled={!!emailError || !formEmail || !formName}
+                disabled={
+                  !!emailError ||
+                  !formEmail ||
+                  !formName ||
+                  (formRole === "SENDER" && !formClinicId)
+                }
               >
                 Criar Usuário
               </Button>
@@ -501,6 +642,60 @@ export default function UsersAdminPage() {
                 Cancelar
               </Button>
               <Button onClick={handleUpdateUser}>Salvar</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Deactivate Confirmation Modal */}
+        <Dialog open={deactivateModalOpen} onOpenChange={setDeactivateModalOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Confirmar Desativação</DialogTitle>
+              <DialogDescription>
+                Tem certeza que deseja desativar este usuário?
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="py-4">
+              <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4">
+                <div className="flex items-start">
+                  <div className="flex-shrink-0">
+                    <svg className="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                  <div className="ml-3">
+                    <h3 className="text-sm font-medium text-yellow-800">
+                      Atenção
+                    </h3>
+                    <div className="mt-2 text-sm text-yellow-700">
+                      <p>
+                        O usuário <span className="font-semibold">{userToDeactivate?.name}</span> ({userToDeactivate?.email}) será desativado e não poderá mais acessar o sistema.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setDeactivateModalOpen(false);
+                  setUserToDeactivate(null);
+                }}
+                disabled={deactivating}
+              >
+                Cancelar
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={confirmDeactivate}
+                disabled={deactivating}
+              >
+                {deactivating ? "Desativando..." : "Desativar Usuário"}
+              </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
