@@ -45,6 +45,7 @@ export default function ClinicsAdminPage() {
   const [formEmail, setFormEmail] = useState("");
   const [formName, setFormName] = useState("");
   const [emailError, setEmailError] = useState("");
+  const [creating, setCreating] = useState(false);
 
   const validateEmail = (email: string) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -109,6 +110,7 @@ export default function ClinicsAdminPage() {
       return;
     }
 
+    setCreating(true);
     try {
       const response = await fetch(API_ENDPOINTS.CLINICS, {
         method: "POST",
@@ -153,6 +155,8 @@ export default function ClinicsAdminPage() {
       console.error("Erro completo:", error);
       const errorMessage = error instanceof Error ? error.message : "Erro ao criar clínica";
       toast.error(errorMessage);
+    } finally {
+      setCreating(false);
     }
   };
 
@@ -388,17 +392,21 @@ export default function ClinicsAdminPage() {
             </div>
 
             <DialogFooter>
-              <Button variant="outline" onClick={() => {
-                setCreateModalOpen(false);
-                setEmailError("");
-              }}>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setCreateModalOpen(false);
+                  setEmailError("");
+                }}
+                disabled={creating}
+              >
                 Cancelar
               </Button>
               <Button
                 onClick={handleCreateClinic}
-                disabled={!!emailError || !formEmail || !formName}
+                disabled={creating || !!emailError || !formEmail || !formName}
               >
-                Criar Clínica
+                {creating ? "Criando..." : "Criar Clínica"}
               </Button>
             </DialogFooter>
           </DialogContent>

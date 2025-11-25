@@ -86,6 +86,7 @@ export default function UsersAdminPage() {
   const [formRole, setFormRole] = useState<UserRole>("CHECKER");
   const [formClinicId, setFormClinicId] = useState("");
   const [emailError, setEmailError] = useState("");
+  const [creating, setCreating] = useState(false);
 
   const validateEmail = (email: string) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -185,6 +186,7 @@ export default function UsersAdminPage() {
       return;
     }
 
+    setCreating(true);
     try {
       const body: {
         email: string;
@@ -228,6 +230,8 @@ export default function UsersAdminPage() {
       console.error("Erro:", error);
       const errorMessage = error instanceof Error ? error.message : "Erro ao criar usuário";
       toast.error(errorMessage);
+    } finally {
+      setCreating(false);
     }
   };
 
@@ -580,23 +584,28 @@ export default function UsersAdminPage() {
             </div>
 
             <DialogFooter>
-              <Button variant="outline" onClick={() => {
-                setCreateModalOpen(false);
-                setEmailError("");
-                setFormClinicId("");
-              }}>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setCreateModalOpen(false);
+                  setEmailError("");
+                  setFormClinicId("");
+                }}
+                disabled={creating}
+              >
                 Cancelar
               </Button>
               <Button
                 onClick={handleCreateUser}
                 disabled={
+                  creating ||
                   !!emailError ||
                   !formEmail ||
                   !formName ||
                   (formRole === "SENDER" && !formClinicId)
                 }
               >
-                Criar Usuário
+                {creating ? "Criando..." : "Criar Usuário"}
               </Button>
             </DialogFooter>
           </DialogContent>
