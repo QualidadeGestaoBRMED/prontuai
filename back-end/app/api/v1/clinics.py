@@ -31,21 +31,19 @@ async def test_auth(current_user: User = Depends(require_admin)):
 
 @router.post("/test-create")
 async def test_create(
-    email: str,
     name: str,
     current_user: User = Depends(require_admin)
 ):
     """Endpoint de teste simplificado para criar clínica"""
     try:
-        logger.info(f"[TEST] Recebido: email={email}, name={name}")
+        logger.info(f"[TEST] Recebido: name={name}")
         logger.info(f"[TEST] User: {current_user.email} ({current_user.role})")
         logger.info(f"[TEST] user_db type: {type(user_db).__name__}")
-        logger.info(f"[TEST] Has get_clinic_by_email: {hasattr(user_db, 'get_clinic_by_email')}")
 
         if not hasattr(user_db, 'create_clinic'):
             return {"error": "user_db não tem método create_clinic"}
 
-        clinic = user_db.create_clinic(email=email, name=name)
+        clinic = user_db.create_clinic(name=name)
         return {"success": True, "clinic_id": clinic.id}
 
     except Exception as e:
@@ -113,34 +111,31 @@ async def create_clinic(
     """
     Cria uma nova clínica credenciada.
     Apenas administradores.
+
+    A clínica é identificada por ID (UUID). Usuários SENDER são associados a ela posteriormente.
     """
     try:
-        logger.info(f"[CLINICS] Tentativa de criação: email={clinic_data.email}, name={clinic_data.name}")
+        logger.info(f"[CLINICS] Tentativa de criação: name={clinic_data.name}, cnpj={clinic_data.cnpj}")
         logger.info(f"[CLINICS] Admin autenticado: {current_user.email}")
 
         # Verificar se user_db tem os métodos necessários
-        if not hasattr(user_db, 'get_clinic_by_email'):
-            logger.error("[CLINICS] user_db não tem método get_clinic_by_email - usando JSON database?")
+        if not hasattr(user_db, 'create_clinic'):
+            logger.error("[CLINICS] user_db não tem método create_clinic - usando JSON database?")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Banco de dados não configurado corretamente. DATABASE_URL deve estar configurado."
             )
 
-        # Verificar se já existe clínica com este email
-        existing = user_db.get_clinic_by_email(clinic_data.email)
-        if existing:
-            logger.warning(f"[CLINICS] Clínica com email {clinic_data.email} já existe")
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Já existe uma clínica com o email {clinic_data.email}"
-            )
-
         clinic = user_db.create_clinic(
-            email=clinic_data.email,
-            name=clinic_data.name
+            name=clinic_data.name,
+            cnpj=clinic_data.cnpj,
+            phone=clinic_data.phone,
+            address=clinic_data.address,
+            city=clinic_data.city,
+            state=clinic_data.state
         )
 
-        logger.info(f"[CLINICS] Admin {current_user.email} criou clínica {clinic.id} ({clinic.email})")
+        logger.info(f"[CLINICS] Admin {current_user.email} criou clínica {clinic.id} ({clinic.name})")
         return clinic
 
     except HTTPException:
@@ -175,6 +170,11 @@ async def update_clinic(
         clinic = user_db.update_clinic(
             clinic_id=clinic_id,
             name=clinic_data.name,
+            cnpj=clinic_data.cnpj,
+            phone=clinic_data.phone,
+            address=clinic_data.address,
+            city=clinic_data.city,
+            state=clinic_data.state,
             is_active=clinic_data.is_active
         )
 
