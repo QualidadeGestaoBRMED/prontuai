@@ -28,7 +28,7 @@ async def run_migration_endpoint(
         logger.info(f"[ADMIN] {current_user.email} iniciou migração manual")
 
         # Verificar se é necessário
-        needs_migration = check_if_migration_needed()
+        needs_migration, migration_files = check_if_migration_needed()
 
         if not needs_migration:
             return {
@@ -37,18 +37,20 @@ async def run_migration_endpoint(
                 "migrations_executed": False
             }
 
-        # Executar migração SQL
-        sql_success = run_migration()
+        # Executar migrações SQL
+        sql_success = run_migration(migration_files)
         if not sql_success:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Falha ao executar migração SQL"
             )
 
-        # Executar migração de dados
-        data_success = run_data_migration()
-        if not data_success:
-            logger.warning("Migração SQL executada, mas falha na migração de dados")
+        # Executar migração de dados (somente se migration 001 foi executada)
+        data_success = True
+        if "001_add_multi_tenant.sql" in migration_files:
+            data_success = run_data_migration()
+            if not data_success:
+                logger.warning("Migração SQL executada, mas falha na migração de dados")
 
         logger.info(f"[ADMIN] Migração manual concluída com sucesso")
 
@@ -56,6 +58,7 @@ async def run_migration_endpoint(
             "status": "success",
             "message": "Migração executada com sucesso!",
             "migrations_executed": True,
+            "migration_files": migration_files,
             "sql_migration": sql_success,
             "data_migration": data_success
         }
@@ -84,7 +87,7 @@ async def get_system_status(
         from app.core.database import user_db
 
         # Verificar se migração é necessária
-        needs_migration = check_if_migration_needed()
+        needs_migration, migration_files = check_if_migration_needed()
 
         # Contar usuários e clínicas
         try:
@@ -106,7 +109,8 @@ async def get_system_status(
             "status": "online",
             "database": {
                 "migrations_needed": needs_migration,
-                "migrations_status": "up-to-date" if not needs_migration else "pending"
+                "migrations_status": "up-to-date" if not needs_migration else "pending",
+                "pending_migrations": migration_files if needs_migration else []
             },
             "statistics": {
                 "users": users_count,
