@@ -186,7 +186,12 @@ export default function UsersAdminPage() {
     }
 
     try {
-      const body: any = {
+      const body: {
+        email: string;
+        name: string;
+        role: UserRole;
+        clinic_id?: string;
+      } = {
         email: formEmail,
         name: formName,
         role: formRole,
