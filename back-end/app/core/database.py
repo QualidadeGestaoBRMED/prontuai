@@ -8,6 +8,7 @@ from typing import Dict, List, Optional, Protocol
 from datetime import datetime
 import uuid
 from app.models.user import User, UserInDB, UserRole, UserUpdate
+from app.models.clinic import Clinic, ClinicCreate, ClinicUpdate
 import logging
 
 logger = logging.getLogger(__name__)
@@ -50,7 +51,8 @@ class UserDatabase:
                         "created_at": datetime.now().isoformat(),
                         "updated_at": datetime.now().isoformat()
                     }
-                }
+                },
+                "clinics": {}
             }
             self._write_db(initial_data)
             logger.info("Banco de dados de usuários criado com admin padrão")
@@ -59,10 +61,14 @@ class UserDatabase:
         """Lê o banco de dados"""
         try:
             with open(DB_PATH, 'r', encoding='utf-8') as f:
-                return json.load(f)
+                data = json.load(f)
+                # Garantir que "clinics" existe
+                if "clinics" not in data:
+                    data["clinics"] = {}
+                return data
         except Exception as e:
             logger.error(f"Erro ao ler banco de dados: {e}")
-            return {"users": {}}
+            return {"users": {}, "clinics": {}}
 
     def _write_db(self, data: Dict):
         """Escreve no banco de dados"""
@@ -157,6 +163,109 @@ class UserDatabase:
         """Deleta um usuário (soft delete - apenas marca como inativo)"""
         update = UserUpdate(is_active=False)
         return self.update_user(user_id, update) is not None
+
+    # =============== CLINIC METHODS ===============
+
+    def get_clinic_by_id(self, clinic_id: str) -> Optional[Clinic]:
+        """Busca clínica por ID"""
+        db = self._read_db()
+        clinic_data = db.get("clinics", {}).get(clinic_id)
+        if clinic_data:
+            return Clinic(**clinic_data)
+        return None
+
+    def get_clinic_by_name(self, name: str) -> Optional[Clinic]:
+        """Busca clínica por nome"""
+        db = self._read_db()
+        for clinic_data in db.get("clinics", {}).values():
+            if clinic_data.get("name") == name:
+                return Clinic(**clinic_data)
+        return None
+
+    def get_all_clinics(self, include_inactive: bool = False) -> List[Clinic]:
+        """Lista todas as clínicas"""
+        db = self._read_db()
+        clinics = []
+        for clinic_data in db.get("clinics", {}).values():
+            if include_inactive or clinic_data.get("is_active", True):
+                clinics.append(Clinic(**clinic_data))
+        return sorted(clinics, key=lambda c: c.created_at or "", reverse=True)
+
+    def create_clinic(
+        self,
+        name: str,
+        cnpj: Optional[str] = None,
+        phone: Optional[str] = None,
+        address: Optional[str] = None,
+        city: Optional[str] = None,
+        state: Optional[str] = None
+    ) -> Clinic:
+        """Cria uma nova clínica"""
+        db = self._read_db()
+
+        clinic_id = str(uuid.uuid4())
+        now = datetime.now().isoformat()
+
+        clinic_data = {
+            "id": clinic_id,
+            "name": name,
+            "cnpj": cnpj,
+            "phone": phone,
+            "address": address,
+            "city": city,
+            "state": state,
+            "is_active": True,
+            "created_at": now,
+            "updated_at": now
+        }
+
+        db["clinics"][clinic_id] = clinic_data
+        self._write_db(db)
+
+        logger.info(f"Clínica criada: {name} ({clinic_id})")
+        return Clinic(**clinic_data)
+
+    def update_clinic(
+        self,
+        clinic_id: str,
+        name: Optional[str] = None,
+        cnpj: Optional[str] = None,
+        phone: Optional[str] = None,
+        address: Optional[str] = None,
+        city: Optional[str] = None,
+        state: Optional[str] = None,
+        is_active: Optional[bool] = None
+    ) -> Clinic:
+        """Atualiza uma clínica existente"""
+        db = self._read_db()
+
+        if clinic_id not in db.get("clinics", {}):
+            raise ValueError(f"Clínica com ID {clinic_id} não encontrada")
+
+        clinic_data = db["clinics"][clinic_id]
+
+        if name is not None:
+            clinic_data["name"] = name
+        if cnpj is not None:
+            clinic_data["cnpj"] = cnpj
+        if phone is not None:
+            clinic_data["phone"] = phone
+        if address is not None:
+            clinic_data["address"] = address
+        if city is not None:
+            clinic_data["city"] = city
+        if state is not None:
+            clinic_data["state"] = state
+        if is_active is not None:
+            clinic_data["is_active"] = is_active
+
+        clinic_data["updated_at"] = datetime.now().isoformat()
+
+        db["clinics"][clinic_id] = clinic_data
+        self._write_db(db)
+
+        logger.info(f"Clínica atualizada: {clinic_data['name']}")
+        return Clinic(**clinic_data)
 
 
 def get_user_database() -> UserDatabaseProtocol:

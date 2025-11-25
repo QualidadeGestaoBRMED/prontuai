@@ -36,28 +36,23 @@ async def create_user(
     """
     Cria um novo usuário (apenas ADMIN).
 
-    - Para role SENDER: se clinic_id não fornecido, cria clínica automaticamente usando o email do usuário
+    - Para role SENDER: clinic_id é OBRIGATÓRIO (deve escolher de uma clínica existente)
     - Para role CHECKER/ADMIN: clinic_id deve ser NULL
     """
     try:
         clinic_id = user_create.clinic_id
 
-        # Se for SENDER e não tem clinic_id, criar clínica automaticamente
-        if user_create.role == UserRole.SENDER and not clinic_id:
-            # Verificar se já existe clínica com este email
-            existing_clinic = user_db.get_clinic_by_email(user_create.email)
+        # Validar clinic_id para SENDER
+        if user_create.role == UserRole.SENDER:
+            if not clinic_id:
+                raise ValueError("clinic_id é obrigatório para usuários SENDER. Crie uma clínica primeiro.")
 
-            if existing_clinic:
-                clinic_id = existing_clinic.id
-                logger.info(f"Usando clínica existente {clinic_id} para usuário {user_create.email}")
-            else:
-                # Criar nova clínica
-                clinic = user_db.create_clinic(
-                    email=user_create.email,
-                    name=user_create.name  # Usar nome do usuário como nome da clínica
-                )
-                clinic_id = clinic.id
-                logger.info(f"Clínica {clinic_id} criada automaticamente para {user_create.email}")
+            # Verificar se clínica existe
+            clinic = user_db.get_clinic_by_id(clinic_id)
+            if not clinic:
+                raise ValueError(f"Clínica com ID {clinic_id} não encontrada")
+
+            logger.info(f"Criando usuário SENDER {user_create.email} para clínica {clinic.name} ({clinic_id})")
 
         # CHECKER e ADMIN não devem ter clinic_id
         if user_create.role in [UserRole.CHECKER, UserRole.ADMIN]:
