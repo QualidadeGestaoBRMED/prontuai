@@ -19,8 +19,12 @@ class ClinicModel(Base):
     __tablename__ = "clinics"
 
     id = Column(String, primary_key=True)
-    email = Column(String, unique=True, nullable=False, index=True)
     name = Column(String, nullable=False)
+    cnpj = Column(String, nullable=True)
+    phone = Column(String, nullable=True)
+    address = Column(String, nullable=True)
+    city = Column(String, nullable=True)
+    state = Column(String, nullable=True)
     is_active = Column(Boolean, nullable=False, default=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -264,8 +268,12 @@ class PostgresUserDatabase:
         """Convert SQLAlchemy model to Pydantic Clinic."""
         return Clinic(
             id=model.id,
-            email=model.email,
             name=model.name,
+            cnpj=model.cnpj,
+            phone=model.phone,
+            address=model.address,
+            city=model.city,
+            state=model.state,
             is_active=model.is_active,
             created_at=model.created_at.isoformat(),
             updated_at=model.updated_at.isoformat()
@@ -280,11 +288,11 @@ class PostgresUserDatabase:
         finally:
             session.close()
 
-    def get_clinic_by_email(self, email: str) -> Optional[Clinic]:
-        """Get clinic by email."""
+    def get_clinic_by_name(self, name: str) -> Optional[Clinic]:
+        """Get clinic by name."""
         session = self._get_session()
         try:
-            model = session.query(ClinicModel).filter(ClinicModel.email == email).first()
+            model = session.query(ClinicModel).filter(ClinicModel.name == name).first()
             return self._model_to_clinic(model) if model else None
         finally:
             session.close()
@@ -301,21 +309,28 @@ class PostgresUserDatabase:
         finally:
             session.close()
 
-    def create_clinic(self, email: str, name: str) -> Clinic:
+    def create_clinic(
+        self,
+        name: str,
+        cnpj: Optional[str] = None,
+        phone: Optional[str] = None,
+        address: Optional[str] = None,
+        city: Optional[str] = None,
+        state: Optional[str] = None
+    ) -> Clinic:
         """Create a new clinic."""
         session = self._get_session()
         try:
-            # Check if clinic already exists
-            existing = session.query(ClinicModel).filter(ClinicModel.email == email).first()
-            if existing:
-                raise ValueError(f"Clinic with email {email} already exists")
-
             # Create new clinic
             import uuid
             clinic_model = ClinicModel(
                 id=str(uuid.uuid4()),
-                email=email,
                 name=name,
+                cnpj=cnpj,
+                phone=phone,
+                address=address,
+                city=city,
+                state=state,
                 is_active=True,
                 created_at=datetime.utcnow(),
                 updated_at=datetime.utcnow()
@@ -333,6 +348,11 @@ class PostgresUserDatabase:
         self,
         clinic_id: str,
         name: Optional[str] = None,
+        cnpj: Optional[str] = None,
+        phone: Optional[str] = None,
+        address: Optional[str] = None,
+        city: Optional[str] = None,
+        state: Optional[str] = None,
         is_active: Optional[bool] = None
     ) -> Clinic:
         """Update clinic."""
@@ -345,6 +365,16 @@ class PostgresUserDatabase:
             # Update fields
             if name is not None:
                 clinic_model.name = name
+            if cnpj is not None:
+                clinic_model.cnpj = cnpj
+            if phone is not None:
+                clinic_model.phone = phone
+            if address is not None:
+                clinic_model.address = address
+            if city is not None:
+                clinic_model.city = city
+            if state is not None:
+                clinic_model.state = state
             if is_active is not None:
                 clinic_model.is_active = is_active
 
