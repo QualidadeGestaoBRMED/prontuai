@@ -1,5 +1,5 @@
 """
-PostgreSQL implementation of user database.
+Implementação PostgreSQL do banco de dados de usuários.
 Migração futura do JSON file-based database.
 """
 import os
@@ -15,7 +15,7 @@ from app.models.document import Document, DocumentCreate, DocumentUpdate
 Base = declarative_base()
 
 class ClinicModel(Base):
-    """SQLAlchemy model for Clinic table."""
+    """Modelo SQLAlchemy para tabela Clinic."""
     __tablename__ = "clinics"
 
     id = Column(String, primary_key=True)
@@ -31,7 +31,7 @@ class ClinicModel(Base):
 
 
 class UserModel(Base):
-    """SQLAlchemy model for User table."""
+    """Modelo SQLAlchemy para tabela User."""
     __tablename__ = "users"
 
     id = Column(String, primary_key=True)
@@ -45,7 +45,7 @@ class UserModel(Base):
 
 
 class DocumentModel(Base):
-    """SQLAlchemy model for Document table."""
+    """Modelo SQLAlchemy para tabela Document."""
     __tablename__ = "documents"
 
     id = Column(String, primary_key=True)
@@ -62,22 +62,22 @@ class DocumentModel(Base):
 
 
 class PostgresUserDatabase:
-    """PostgreSQL-based user database implementation."""
+    """Implementação do banco de dados de usuários baseado em PostgreSQL."""
 
     def __init__(self, database_url: Optional[str] = None):
         """
-        Initialize PostgreSQL connection.
+        Inicializa conexão PostgreSQL.
 
         Args:
-            database_url: PostgreSQL connection string
-                         Format: postgresql://user:password@host:port/dbname
+            database_url: String de conexão PostgreSQL
+                         Formato: postgresql://user:password@host:port/dbname
         """
         self.database_url = database_url or os.getenv("DATABASE_URL")
 
         if not self.database_url:
             raise ValueError("DATABASE_URL not set")
 
-        # Neon uses postgresql:// but SQLAlchemy 2.0 requires postgresql+psycopg2://
+        # Neon usa postgresql:// mas SQLAlchemy 2.0 requer postgresql+psycopg2://
         if self.database_url.startswith("postgresql://"):
             self.database_url = self.database_url.replace("postgresql://", "postgresql+psycopg2://", 1)
 
@@ -99,23 +99,23 @@ class PostgresUserDatabase:
         )
         self.SessionLocal = sessionmaker(bind=self.engine)
 
-        # Create tables if they don't exist
+        # Cria tabelas se não existirem
         Base.metadata.create_all(self.engine)
 
-        # Create default admin if database is empty
+        # Cria admin padrão se banco estiver vazio
         self._ensure_default_admin()
 
     def _get_session(self) -> Session:
-        """Get a new database session."""
+        """Obtém uma nova sessão do banco de dados."""
         return self.SessionLocal()
 
     def _ensure_default_admin(self):
-        """Create default admin user if database is empty."""
+        """Cria usuário admin padrão se banco estiver vazio."""
         session = self._get_session()
         try:
             count = session.query(UserModel).count()
             if count == 0:
-                # Create default admin
+                # Cria admin padrão
                 admin = UserModel(
                     id="admin-default",
                     email="gabriel.rodrigues@grupobrmed.com.br",
@@ -132,7 +132,7 @@ class PostgresUserDatabase:
             session.close()
 
     def _model_to_user(self, model: UserModel) -> User:
-        """Convert SQLAlchemy model to Pydantic User."""
+        """Converte modelo SQLAlchemy para Pydantic User."""
         return User(
             id=model.id,
             email=model.email,
@@ -145,7 +145,7 @@ class PostgresUserDatabase:
         )
 
     def get_user_by_email(self, email: str) -> Optional[User]:
-        """Get user by email."""
+        """Busca usuário por email."""
         session = self._get_session()
         try:
             model = session.query(UserModel).filter(UserModel.email == email).first()
@@ -154,7 +154,7 @@ class PostgresUserDatabase:
             session.close()
 
     def get_user_by_id(self, user_id: str) -> Optional[User]:
-        """Get user by ID."""
+        """Busca usuário por ID."""
         session = self._get_session()
         try:
             model = session.query(UserModel).filter(UserModel.id == user_id).first()
@@ -163,7 +163,7 @@ class PostgresUserDatabase:
             session.close()
 
     def get_all_users(self) -> List[User]:
-        """Get all users."""
+        """Obtém todos os usuários."""
         session = self._get_session()
         try:
             models = session.query(UserModel).all()
@@ -172,7 +172,7 @@ class PostgresUserDatabase:
             session.close()
 
     def list_users(self, include_inactive: bool = False) -> List[User]:
-        """List users with optional filtering."""
+        """Lista usuários com filtragem opcional."""
         session = self._get_session()
         try:
             query = session.query(UserModel)
@@ -184,15 +184,15 @@ class PostgresUserDatabase:
             session.close()
 
     def create_user(self, email: str, name: str, role: UserRole = UserRole.CHECKER, clinic_id: Optional[str] = None) -> User:
-        """Create a new user."""
+        """Cria um novo usuário."""
         session = self._get_session()
         try:
-            # Check if user already exists
+            # Verifica se usuário já existe
             existing = session.query(UserModel).filter(UserModel.email == email).first()
             if existing:
                 raise ValueError(f"User with email {email} already exists")
 
-            # Create new user
+            # Cria novo usuário
             import uuid
             user_model = UserModel(
                 id=str(uuid.uuid4()),
@@ -221,14 +221,14 @@ class PostgresUserDatabase:
         is_active: Optional[bool] = None,
         clinic_id: Optional[str] = None
     ) -> User:
-        """Update user."""
+        """Atualiza usuário."""
         session = self._get_session()
         try:
             user_model = session.query(UserModel).filter(UserModel.id == user_id).first()
             if not user_model:
                 raise ValueError(f"User {user_id} not found")
 
-            # Update fields
+            # Atualiza campos
             if name is not None:
                 user_model.name = name
             if role is not None:
@@ -248,7 +248,7 @@ class PostgresUserDatabase:
             session.close()
 
     def delete_user(self, user_id: str) -> bool:
-        """Soft delete user (mark as inactive)."""
+        """Exclusão suave do usuário (marca como inativo)."""
         session = self._get_session()
         try:
             user_model = session.query(UserModel).filter(UserModel.id == user_id).first()
@@ -262,10 +262,10 @@ class PostgresUserDatabase:
         finally:
             session.close()
 
-    # =============== CLINIC METHODS ===============
+    # =============== MÉTODOS DE CLÍNICA ===============
 
     def _model_to_clinic(self, model: ClinicModel) -> Clinic:
-        """Convert SQLAlchemy model to Pydantic Clinic."""
+        """Converte modelo SQLAlchemy para Pydantic Clinic."""
         return Clinic(
             id=model.id,
             name=model.name,
@@ -280,7 +280,7 @@ class PostgresUserDatabase:
         )
 
     def get_clinic_by_id(self, clinic_id: str) -> Optional[Clinic]:
-        """Get clinic by ID."""
+        """Busca clínica por ID."""
         session = self._get_session()
         try:
             model = session.query(ClinicModel).filter(ClinicModel.id == clinic_id).first()
@@ -289,7 +289,7 @@ class PostgresUserDatabase:
             session.close()
 
     def get_clinic_by_name(self, name: str) -> Optional[Clinic]:
-        """Get clinic by name."""
+        """Busca clínica por nome."""
         session = self._get_session()
         try:
             model = session.query(ClinicModel).filter(ClinicModel.name == name).first()
@@ -298,7 +298,7 @@ class PostgresUserDatabase:
             session.close()
 
     def get_all_clinics(self, include_inactive: bool = False) -> List[Clinic]:
-        """Get all clinics."""
+        """Obtém todas as clínicas."""
         session = self._get_session()
         try:
             query = session.query(ClinicModel)
@@ -318,10 +318,10 @@ class PostgresUserDatabase:
         city: Optional[str] = None,
         state: Optional[str] = None
     ) -> Clinic:
-        """Create a new clinic."""
+        """Cria uma nova clínica."""
         session = self._get_session()
         try:
-            # Create new clinic
+            # Cria nova clínica
             import uuid
             clinic_model = ClinicModel(
                 id=str(uuid.uuid4()),
@@ -355,14 +355,14 @@ class PostgresUserDatabase:
         state: Optional[str] = None,
         is_active: Optional[bool] = None
     ) -> Clinic:
-        """Update clinic."""
+        """Atualiza clínica."""
         session = self._get_session()
         try:
             clinic_model = session.query(ClinicModel).filter(ClinicModel.id == clinic_id).first()
             if not clinic_model:
                 raise ValueError(f"Clinic {clinic_id} not found")
 
-            # Update fields
+            # Atualiza campos
             if name is not None:
                 clinic_model.name = name
             if cnpj is not None:
@@ -387,10 +387,10 @@ class PostgresUserDatabase:
         finally:
             session.close()
 
-    # =============== DOCUMENT METHODS ===============
+    # =============== MÉTODOS DE DOCUMENTO ===============
 
     def _model_to_document(self, model: DocumentModel) -> Document:
-        """Convert SQLAlchemy model to Pydantic Document."""
+        """Converte modelo SQLAlchemy para Pydantic Document."""
         return Document(
             id=model.id,
             clinic_id=model.clinic_id,
@@ -406,7 +406,7 @@ class PostgresUserDatabase:
         )
 
     def get_document_by_id(self, document_id: str) -> Optional[Document]:
-        """Get document by ID."""
+        """Busca documento por ID."""
         session = self._get_session()
         try:
             model = session.query(DocumentModel).filter(DocumentModel.id == document_id).first()
@@ -415,7 +415,7 @@ class PostgresUserDatabase:
             session.close()
 
     def get_documents_by_clinic(self, clinic_id: str) -> List[Document]:
-        """Get all documents for a specific clinic."""
+        """Obtém todos os documentos de uma clínica específica."""
         session = self._get_session()
         try:
             models = session.query(DocumentModel).filter(DocumentModel.clinic_id == clinic_id).all()
@@ -424,7 +424,7 @@ class PostgresUserDatabase:
             session.close()
 
     def get_all_documents(self) -> List[Document]:
-        """Get all documents (for CHECKER/ADMIN)."""
+        """Obtém todos os documentos (para CHECKER/ADMIN)."""
         session = self._get_session()
         try:
             models = session.query(DocumentModel).all()
@@ -442,7 +442,7 @@ class PostgresUserDatabase:
         validation_status: str = "pending",
         ocr_markdown: Optional[str] = None
     ) -> Document:
-        """Create a new document."""
+        """Cria um novo documento."""
         session = self._get_session()
         try:
             import uuid
@@ -475,14 +475,14 @@ class PostgresUserDatabase:
         exams_found: Optional[List[str]] = None,
         ocr_markdown: Optional[str] = None
     ) -> Document:
-        """Update document."""
+        """Atualiza documento."""
         session = self._get_session()
         try:
             doc_model = session.query(DocumentModel).filter(DocumentModel.id == document_id).first()
             if not doc_model:
                 raise ValueError(f"Document {document_id} not found")
 
-            # Update fields
+            # Atualiza campos
             if validation_status is not None:
                 doc_model.validation_status = validation_status
             if exams_found is not None:

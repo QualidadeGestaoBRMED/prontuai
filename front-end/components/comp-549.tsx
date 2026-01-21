@@ -19,7 +19,7 @@ import {
 } from "@/hooks/use-file-upload"
 import { Button } from "@/components/ui/button"
 
-// Create some dummy initial files
+// Cria alguns arquivos iniciais de exemplo
 const initialFiles = [
   {
     name: "document.pdf",

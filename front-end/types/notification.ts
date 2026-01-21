@@ -1,4 +1,4 @@
-// Types for the notification system
+// Tipos para o sistema de notificações
 
 export type NotificationType =
   | 'process_started'
@@ -32,10 +32,10 @@ export interface Notification {
   variant?: NotificationVariant
 }
 
-// Helper type for creating new notifications (without auto-generated fields)
+// Tipo auxiliar para criar novas notificações (sem campos auto-gerados)
 export type CreateNotificationInput = Omit<Notification, 'id' | 'timestamp'>
 
-// Preferences for notification center UI
+// Preferências para UI do centro de notificações
 export interface NotificationPreferences {
   lastOpenedAt: Date | null
   autoMarkAsReadOnClick: boolean

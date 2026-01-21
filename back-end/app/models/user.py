@@ -18,7 +18,7 @@ class User(BaseModel):
     name: str
     role: UserRole = UserRole.CHECKER
     is_active: bool = True
-    clinic_id: Optional[str] = None  # Foreign key para Clinic (NULL para CHECKER/ADMIN)
+    clinic_id: Optional[str] = None  # Chave estrangeira para Clinic (NULL para CHECKER/ADMIN)
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 

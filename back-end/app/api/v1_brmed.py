@@ -24,12 +24,12 @@ async def processar_documento_completo_api(
         logger.warning("Arquivo não enviado na requisição de processamento completo.")
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Arquivo não enviado.")
 
-    # Log de entrada da requisição
+# Log de entrada da requisição
     file_size = "desconhecido"
     try:
         content = await arquivo.read()
         file_size = f"{len(content) / 1024 / 1024:.2f}MB"
-        await arquivo.seek(0)  # Rewind para o workflow poder ler
+        await arquivo.seek(0)  # Volta ao início para o workflow poder ler
     except:
         pass
 
@@ -117,7 +117,7 @@ async def processar_documento_stream_api(
             # Lista para coletar eventos de progresso
             progress_events = []
 
-            # Callback para receber updates do workflow
+            # Callback para receber atualizações do workflow
             async def progress_callback(progress: int, step: str, message: str):
                 event_data = json.dumps({'progress': progress, 'step': step, 'message': message})
                 logger.info(f"[PROGRESS] {progress}% - {step}: {message}")

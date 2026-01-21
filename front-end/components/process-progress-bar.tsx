@@ -41,7 +41,7 @@ export function ProcessProgressBar({
   const isCompleted = process.status === "completed"
   const hasError = process.status === "error"
 
-  // Update elapsed time every second
+  // Atualiza tempo decorrido a cada segundo
   useEffect(() => {
     const updateElapsed = () => {
       setElapsed(formatDistanceToNow(new Date(process.startedAt), {
@@ -55,7 +55,7 @@ export function ProcessProgressBar({
     return () => clearInterval(interval)
   }, [process.startedAt])
 
-  // Auto-hide after 5s when completed
+  // Auto-oculta após 5s quando completado
   useEffect(() => {
     if (isCompleted && !progressBarMinimized) {
       const timeout = setTimeout(() => {

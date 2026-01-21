@@ -32,7 +32,7 @@ interface ResultsTableProps {
   className?: string
 }
 
-// Helper to export CSV
+// Função auxiliar para exportar CSV
 const exportToCSV = (results: ProcessResult[]) => {
   const headers = ["CPF", "Paciente", "Data Upload", "Status", "Exames Faltantes", "Enviado Por"]
   const rows = results.map((r) => [
@@ -73,7 +73,7 @@ export function ResultsTable({
   const [currentPage, setCurrentPage] = useState(1)
   const resultsPerPage = 10
 
-  // Filter results
+  // Filtra resultados
   const filteredResults = results.filter((result) => {
     const matchesCPF = searchCPF
       ? result.cpf.replace(/\D/g, "").includes(searchCPF.replace(/\D/g, ""))
@@ -83,13 +83,13 @@ export function ResultsTable({
     return matchesCPF && matchesStatus
   })
 
-  // Pagination
+  // Paginação
   const totalPages = Math.ceil(filteredResults.length / resultsPerPage)
   const startIndex = (currentPage - 1) * resultsPerPage
   const endIndex = startIndex + resultsPerPage
   const paginatedResults = filteredResults.slice(startIndex, endIndex)
 
-  // Format CPF for display
+  // Formata CPF para exibição
   const formatCPF = (cpf: string) => {
     const cleaned = cpf.replace(/\D/g, "")
     if (cleaned.length === 11) {
@@ -98,11 +98,11 @@ export function ResultsTable({
     return cpf
   }
 
-  // Status badge variants
+  // Variantes do badge de status
   const getStatusBadge = (result: ProcessResult) => {
     const { status, reviewedBy } = result
 
-    // Approved by human (final approval)
+    // Aprovado por humano (aprovação final)
     if (status === "approved" && reviewedBy) {
       return (
         <Badge variant="default" className="bg-green-500 hover:bg-green-600">
@@ -111,7 +111,7 @@ export function ResultsTable({
       )
     }
 
-    // Approved by AI, awaiting human validation
+    // Aprovado pela IA, aguardando validação humana
     if (status === "approved" && !reviewedBy) {
       return (
         <Badge variant="secondary" className="bg-amber-100 text-amber-700 hover:bg-amber-200">
@@ -120,7 +120,7 @@ export function ResultsTable({
       )
     }
 
-    // Rejected by AI, awaiting human review
+    // Rejeitado pela IA, aguardando revisão humana
     if (status === "pending_review") {
       return (
         <Badge variant="secondary" className="bg-orange-100 text-orange-700 hover:bg-orange-200">
@@ -129,7 +129,7 @@ export function ResultsTable({
       )
     }
 
-    // Rejected by human (final rejection)
+    // Rejeitado por humano (rejeição final)
     if (status === "rejected" && reviewedBy) {
       return (
         <Badge variant="destructive">
@@ -138,7 +138,7 @@ export function ResultsTable({
       )
     }
 
-    // Fallback
+    // Fallback padrão
     return (
       <Badge variant="secondary">
         {status}
@@ -146,7 +146,7 @@ export function ResultsTable({
     )
   }
 
-  // Empty state
+  // Estado vazio
   if (results.length === 0) {
     return (
       <div className={cn("text-center py-12 border rounded-lg", className)}>
@@ -170,7 +170,7 @@ export function ResultsTable({
             value={searchCPF}
             onChange={(e) => {
               setSearchCPF(e.target.value)
-              setCurrentPage(1) // Reset to first page on search
+              setCurrentPage(1) // Volta para primeira página ao buscar
             }}
             className="pl-9"
           />
@@ -179,7 +179,7 @@ export function ResultsTable({
           value={statusFilter}
           onValueChange={(value: StatusFilter) => {
             setStatusFilter(value)
-            setCurrentPage(1) // Reset to first page on filter change
+            setCurrentPage(1) // Volta para primeira página ao mudar filtro
           }}
         >
           <SelectTrigger className="w-full sm:w-[200px]">
@@ -307,7 +307,7 @@ export function ResultsTable({
             </Button>
             <div className="flex items-center gap-1">
               {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                // Show pages around current page
+                // Mostra páginas ao redor da página atual
                 let pageNum: number
                 if (totalPages <= 5) {
                   pageNum = i + 1

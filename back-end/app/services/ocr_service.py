@@ -9,14 +9,14 @@ import uuid
 from datetime import datetime
 import time
 
-# AWS Textract imports (para migração do OCR)
+# Importações do AWS Textract (para migração do OCR)
 import boto3
 from botocore.exceptions import ClientError
 from PyPDF2 import PdfReader, PdfWriter
 
 # Importações condicionais do Docling/PyTorch (apenas se USE_TEXTRACT=false)
 try:
-    # Set environment variable for PyTorch memory management
+    # Define variável de ambiente para gerenciamento de memória do PyTorch
     os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
     from docling.document_converter import DocumentConverter
     import torch
@@ -148,8 +148,8 @@ def textract_to_markdown(textract_response: dict) -> str:
         str: Texto em formato markdown compatível com o pipeline atual
 
     Estratégia de conversão:
-    - Blocks tipo LINE são convertidos em linhas de texto
-    - Texto curto em maiúsculas (≤ 4 palavras) vira header markdown (##)
+    - Blocos do tipo LINE são convertidos em linhas de texto
+    - Texto curto em maiúsculas (≤ 4 palavras) se torna cabeçalho markdown (##)
     - Preserva padrões UF/CPF para detecção via regex
     """
     lines = []
@@ -161,7 +161,7 @@ def textract_to_markdown(textract_response: dict) -> str:
             if not text:
                 continue
 
-            # Detectar possíveis headers de exames:
+            # Detectar possíveis cabeçalhos de exames:
             # - Texto curto (até 4 palavras)
             # - Maioria em maiúsculas (pelo menos 50% dos caracteres alfabéticos)
             words = text.split()
@@ -169,7 +169,7 @@ def textract_to_markdown(textract_response: dict) -> str:
                 alpha_chars = [c for c in text if c.isalpha()]
                 upper_chars = [c for c in text if c.isupper()]
 
-                # Se pelo menos 50% das letras são maiúsculas, considerar como header
+                # Se pelo menos 50% das letras são maiúsculas, considerar como cabeçalho
                 if alpha_chars and len(upper_chars) / len(alpha_chars) >= 0.5:
                     lines.append(f"\n## {text}\n")
                     continue
@@ -222,14 +222,19 @@ def reparar_pdf_para_textract(file_path: str) -> str:
         return file_path
 
 
-def aguardar_job_textract(job_id: str, max_attempts: int = 60, sleep_seconds: int = 2) -> str:
+def aguardar_job_textract(
+    job_id: str,
+    max_attempts: int = 180,
+    max_wait_seconds: int = 30
+) -> str:
     """
     Aguarda a conclusão de um job do Textract (StartDocumentTextDetection).
+    Usa polling adaptativo: começa com 1s e aumenta gradualmente até 5s.
 
     Args:
         job_id: ID do job retornado por start_document_text_detection
-        max_attempts: Número máximo de tentativas (padrão: 60 = 2 minutos)
-        sleep_seconds: Segundos entre cada verificação
+        max_attempts: Número máximo de tentativas (padrão: 180)
+        max_wait_seconds: Tempo máximo total de espera (padrão: 30s)
 
     Returns:
         str: Status final do job ('SUCCEEDED', 'FAILED', etc)
@@ -240,7 +245,17 @@ def aguardar_job_textract(job_id: str, max_attempts: int = 60, sleep_seconds: in
     """
     logger.info(f"[OCR] Aguardando conclusão do job Textract: {job_id}")
 
+    if textract_client is None:
+        raise RuntimeError("Cliente Textract não foi inicializado")
+
+    start_time = time.monotonic()
     for attempt in range(1, max_attempts + 1):
+        elapsed = time.monotonic() - start_time
+        if elapsed >= max_wait_seconds:
+            raise TimeoutError(
+                f"Job Textract não completou após {max_wait_seconds} segundos"
+            )
+
         try:
             response = textract_client.get_document_text_detection(JobId=job_id)
             status = response['JobStatus']
@@ -255,16 +270,28 @@ def aguardar_job_textract(job_id: str, max_attempts: int = 60, sleep_seconds: in
                 logger.error(f"[OCR] Job falhou: {status_message}")
                 raise RuntimeError(f"Textract job falhou: {status_message}")
             elif status in ['IN_PROGRESS', 'PENDING']:
-                time.sleep(sleep_seconds)
+                # Polling adaptativo: 1s nas primeiras 10 tentativas, depois aumenta até 5s
+                if attempt <= 10:
+                    sleep_time = 1
+                elif attempt <= 30:
+                    sleep_time = 2
+                else:
+                    sleep_time = 5
+
+                logger.debug(f"[OCR] Job ainda em progresso, aguardando {sleep_time}s...")
+                time.sleep(sleep_time)
             else:
-                logger.warning(f"[OCR] Status desconhecido: {status}")
-                time.sleep(sleep_seconds)
+                logger.warning(f"[OCR] Status desconhecido: {status}, aguardando 2s...")
+                time.sleep(2)
 
         except ClientError as e:
             logger.error(f"[OCR] Erro ao verificar status do job: {e}")
             raise
+        except Exception as e:
+            logger.error(f"[OCR] Erro inesperado ao verificar status: {e}")
+            raise
 
-    raise TimeoutError(f"Job Textract não completou após {max_attempts * sleep_seconds} segundos")
+    raise TimeoutError(f"Job Textract não completou após {max_attempts} tentativas")
 
 
 def coletar_resultados_textract(job_id: str) -> List[dict]:
@@ -312,10 +339,80 @@ def coletar_resultados_textract(job_id: str) -> List[dict]:
     return all_blocks
 
 
+def processar_arquivo_textract_sincrono(file_path: str) -> str:
+    """
+    Processa documento via AWS Textract usando API síncrona (DetectDocumentText).
+    Muito mais rápido (15-30s) mas limitado a arquivos de até 5MB.
+
+    Args:
+        file_path: Caminho absoluto do arquivo no disco
+
+    Returns:
+        str: Conteúdo em formato markdown
+
+    Raises:
+        ClientError: Erro na chamada da API Textract
+        Exception: Outros erros inesperados
+    """
+    logger.info(f"[OCR] Processando com AWS Textract (Síncrono): {file_path}")
+
+    try:
+        # Reparar PDF para melhorar compatibilidade com Textract
+        pdf_reparado = reparar_pdf_para_textract(file_path)
+        arquivo_temporario_reparo = pdf_reparado != file_path
+
+        # Ler o arquivo em bytes
+        with open(pdf_reparado, 'rb') as document:
+            document_bytes = document.read()
+
+        file_size = len(document_bytes)
+        tamanho_mb = file_size / (1024 * 1024)
+        logger.info(f"[OCR] Tamanho do arquivo: {tamanho_mb:.2f} MB")
+
+        # Validar tamanho (limite de 5MB para API síncrona)
+        if file_size > 5 * 1024 * 1024:
+            raise ValueError(
+                f"Arquivo muito grande para API síncrona ({tamanho_mb:.2f} MB). Use API assíncrona."
+            )
+
+        # Chamar API síncrona do Textract
+        logger.info(f"[OCR] Chamando detect_document_text (síncrono)...")
+        response = textract_client.detect_document_text(
+            Document={'Bytes': document_bytes}
+        )
+
+        logger.info(f"[OCR] Resposta recebida. Total de blocos: {len(response.get('Blocks', []))}")
+
+        # Converter para markdown
+        markdown = textract_to_markdown(response)
+        logger.info(f"[OCR] Conversão concluída. Markdown gerado: {len(markdown)} caracteres")
+
+        return markdown
+
+    except ClientError as e:
+        error_code = e.response['Error']['Code']
+        error_message = e.response['Error']['Message']
+        logger.error(f"[OCR] Erro AWS [{error_code}]: {error_message}")
+        raise
+    except FileNotFoundError as e:
+        logger.error(f"[OCR] Arquivo não encontrado: {file_path}")
+        raise
+    except Exception as e:
+        logger.error(f"[OCR] Erro inesperado ao processar com Textract síncrono: {e}")
+        raise
+    finally:
+        if 'arquivo_temporario_reparo' in locals() and arquivo_temporario_reparo:
+            if os.path.exists(pdf_reparado):
+                try:
+                    os.remove(pdf_reparado)
+                except Exception as e:
+                    logger.warning(f"[OCR] Nao foi possivel remover arquivo temporario: {e}")
+
+
 def processar_arquivo_textract(file_path: str) -> str:
     """
     Processa documento via AWS Textract usando API assíncrona (StartDocumentTextDetection).
-    Fluxo: Upload S3 → Start Job → Aguardar → Coletar Resultados → Limpeza S3
+    Fluxo: Repara PDF → Upload S3 → Start Job → Aguardar → Coletar Resultados → Limpeza S3
 
     Args:
         file_path: Caminho absoluto do arquivo no disco
@@ -342,7 +439,7 @@ def processar_arquivo_textract(file_path: str) -> str:
     bucket_name = settings.AWS_S3_BUCKET
 
     try:
-        # 1. Upload do PDF para S3
+        # 1. Upload do PDF reparado para S3
         logger.info(f"[OCR] Fazendo upload para S3: s3://{bucket_name}/{s3_key}")
 
         with open(pdf_reparado, 'rb') as file_data:
@@ -404,7 +501,7 @@ def processar_arquivo_textract(file_path: str) -> str:
         except Exception as e:
             logger.warning(f"[OCR] Erro ao remover arquivo do S3: {e}")
 
-        # Limpar arquivo temporário do reparo, se foi criado
+        # 7. Limpeza: remover arquivo temporário reparado
         if arquivo_temporario_reparo and os.path.exists(pdf_reparado):
             try:
                 os.remove(pdf_reparado)
@@ -470,16 +567,36 @@ async def ocr_pipeline(file, salvar_markdown=True) -> Dict[str, Any]:
         temp_path = temp.name
 
     logger.info(f"[OCR] Iniciando conversão com {motor_ocr} para: {file.filename}")
+
     try:
         # Feature Toggle: escolher motor de OCR
         if usar_textract:
-            markdown = processar_arquivo_textract(temp_path)
+            file_size = os.path.getsize(temp_path)
+            try:
+                if file_size <= 5 * 1024 * 1024:
+                    markdown = processar_arquivo_textract_sincrono(temp_path)
+                else:
+                    markdown = processar_arquivo_textract(temp_path)
+            except ClientError as e:
+                error_code = e.response.get('Error', {}).get('Code')
+                if error_code == 'UnsupportedDocumentException':
+                    logger.warning(
+                        "[OCR] Documento nao suportado no modo sincrono, usando assincrono"
+                    )
+                    markdown = processar_arquivo_textract(temp_path)
+                else:
+                    raise
+            except ValueError as e:
+                logger.warning(f"[OCR] {e} Fallback para modo assincrono.")
+                markdown = processar_arquivo_textract(temp_path)
         else:
             markdown = processar_arquivo_docling(temp_path)
 
         logger.info(f"[OCR] Conversão concluída. Markdown gerado: {len(markdown)} caracteres")
     finally:
-        os.remove(temp_path) # Garante que o arquivo temporário seja removido
+        # Remover arquivo temporário original
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
 
     # Salvar markdown
     caminho_md = None

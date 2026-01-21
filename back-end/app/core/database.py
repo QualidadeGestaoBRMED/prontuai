@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 
 class UserDatabaseProtocol(Protocol):
-    """Protocol defining the interface for user database implementations."""
+    """Protocolo definindo a interface para implementações de banco de dados de usuários."""
 
     def get_user_by_email(self, email: str) -> Optional[User]: ...
     def get_user_by_id(self, user_id: str) -> Optional[User]: ...
@@ -160,7 +160,7 @@ class UserDatabase:
         return User(**user_data)
 
     def delete_user(self, user_id: str) -> bool:
-        """Deleta um usuário (soft delete - apenas marca como inativo)"""
+        """Deleta um usuário (exclusão suave - apenas marca como inativo)"""
         update = UserUpdate(is_active=False)
         return self.update_user(user_id, update) is not None
 
@@ -270,20 +270,20 @@ class UserDatabase:
 
 def get_user_database() -> UserDatabaseProtocol:
     """
-    Factory function to get the appropriate database implementation.
+    Função factory para obter a implementação apropriada do banco de dados.
 
-    Uses DATABASE_URL environment variable to decide:
-    - If DATABASE_URL is set: PostgreSQL
-    - Otherwise: JSON file (development)
+    Usa a variável de ambiente DATABASE_URL para decidir:
+    - Se DATABASE_URL está definida: PostgreSQL
+    - Caso contrário: Arquivo JSON (desenvolvimento)
     """
     database_url = os.getenv("DATABASE_URL")
 
     if database_url:
-        logger.info("Using PostgreSQL database")
+        logger.info("Usando banco de dados PostgreSQL")
         from app.core.database_postgres import PostgresUserDatabase
         return PostgresUserDatabase(database_url)
     else:
-        logger.info("Using JSON file database (development mode)")
+        logger.info("Usando banco de dados em arquivo JSON (modo desenvolvimento)")
         return UserDatabase()
 
 
