@@ -13,7 +13,7 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
 )
 
-# ─── Variáveis de ambiente ────────────────────────────────────────────────────
+# Variáveis de ambiente
 OPENAI_API_KEY     = os.getenv("OPENAI_API_KEY")
 EMBED_MODEL        = os.getenv("MODELO_EMBEDDING", "text-embedding-3-large")
 CHAT_MODEL         = os.getenv("MODELO_GPT", "gpt-3.5-turbo")
@@ -32,10 +32,10 @@ if OPENAI_API_KEY is None:
     logger.error("Você deve definir a variável de ambiente OPENAI_API_KEY.")
     raise SystemExit(1)
 
-# ─── Cliente OpenAI ───────────────────────────────────────────────────────────
+# Cliente OpenAI
 client = OpenAI(api_key=OPENAI_API_KEY)
 
-# ─── Carrega System Prompt ────────────────────────────────────────────────────
+# Carrega System Prompt
 try:
     with open(SYSTEM_PROMPT_PATH, "r", encoding="utf-8") as f:
         SYSTEM_PROMPT = f.read().strip()
@@ -44,7 +44,7 @@ except FileNotFoundError:
     SYSTEM_PROMPT = "Você é um assistente prestativo."
     logger.warning(f"Arquivo '{SYSTEM_PROMPT_PATH}' não encontrado. Usando prompt padrão.")
 
-# ─── Carrega índice FAISS e metadados ─────────────────────────────────────────
+# Carrega índice FAISS e metadados
 try:
     index = faiss.read_index(INDEX_PATH)
     with open(DATA_PATH, "rb") as f:
@@ -55,7 +55,7 @@ except Exception as e:
     logger.exception(f"Erro ao inicializar FAQ service: {e}")
     raise
 
-# ─── Função de geração de embedding com retry ───────────────────────────────────
+# Função de geração de embedding com retry
 @retry(wait=wait_exponential(min=1, max=10), stop=stop_after_attempt(3))
 def gerar_embedding(texto: str) -> np.ndarray:
     """
@@ -69,7 +69,7 @@ def gerar_embedding(texto: str) -> np.ndarray:
     # CORREÇÃO FINAL: A normalização foi removida pois o índice é L2.
     return vec.reshape(1, -1)
 
-# ─── Monta o prompt do chat com RAG ────────────────────────────────────────────
+# Monta o prompt do chat com RAG
 def montar_mensagens(pergunta: str, blocos_contexto: list, historico: list) -> list:
     """
     Retorna lista de mensagens para o chat completions, incluindo system, contexto,
@@ -89,7 +89,7 @@ def montar_mensagens(pergunta: str, blocos_contexto: list, historico: list) -> l
     msgs.append({"role": "user", "content": pergunta})
     return msgs
 
-# ─── Pipeline principal de busca e resposta ───────────────────────────────────
+# Pipeline principal de busca e resposta
 def buscar_e_responder(pergunta: str, historico: list = None) -> dict:
     """
     Pipeline de busca e resposta com lógica corrigida para L2.
@@ -152,7 +152,7 @@ def buscar_e_responder(pergunta: str, historico: list = None) -> dict:
         "resposta_gerada": conteudo
     }
 
-# ─── Exemplo de uso ───────────────────────────────────────────────────────────
+# Exemplo de uso
 if __name__ == "__main__":
     if not OPENAI_API_KEY:
         print("Erro: A variável de ambiente OPENAI_API_KEY não está definida.")

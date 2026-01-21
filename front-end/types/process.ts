@@ -1,11 +1,11 @@
-// Types for document processing and results
+// Tipos para processamento de documentos e resultados
 
 export type ProcessStatus = 'processing' | 'completed' | 'error'
 export type ProcessStep = 'upload' | 'ocr' | 'brmed' | 'validation' | 'completed'
 export type DocumentStatus = 'pending' | 'processing' | 'completed' | 'error'
 export type ResultStatus = 'approved' | 'rejected' | 'pending_review'
 
-// Individual document within a batch
+// Documento individual dentro de um lote
 export interface ProcessDocument {
   filename: string
   status: DocumentStatus
@@ -13,7 +13,7 @@ export interface ProcessDocument {
   error?: string
 }
 
-// Active process notification (shows in progress bar and notification center)
+// Notificação de processo ativo (mostra na barra de progresso e centro de notificações)
 export interface ProcessNotification {
   id: string
   batchId: string
@@ -29,7 +29,7 @@ export interface ProcessNotification {
   error?: string
 }
 
-// Result of a completed process
+// Resultado de um processo concluído
 export interface ProcessResult {
   id: string
   batchId: string  // Agrupa documentos do mesmo upload
@@ -43,13 +43,13 @@ export interface ProcessResult {
   approvalReason?: string  // Justificativa para aprovação manual (quando IA rejeitou)
   examesFaltantes: number
   examesExtras: number
-  result: DocumentProcessingResult  // From backend
+  result: DocumentProcessingResult  // Do backend
   submittedBy: string  // Email do usuário (vem do NextAuth)
   reviewedBy?: string
   reviewedAt?: Date
 }
 
-// Backend response structure (from existing API)
+// Estrutura de resposta do backend (da API existente)
 export interface DocumentProcessingResult {
   cpf: string
   patient_name?: string
@@ -71,11 +71,11 @@ export interface DocumentProcessingResult {
   error?: string
 }
 
-// State for progress bar UI
+// Estado para UI da barra de progresso
 export interface ProgressBarState {
   minimized: boolean
   processId: string | null
 }
 
-// Helper type for creating new process
+// Tipo auxiliar para criar novo processo
 export type CreateProcessInput = Pick<ProcessNotification, 'batchId' | 'filename' | 'documentCount'>

@@ -33,7 +33,7 @@ import { Progress } from '@/components/ui/progress'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 
-// Get icon for notification type
+// Obtém ícone para o tipo de notificação
 function getNotificationIcon(notification: Notification) {
   switch (notification.type) {
     case 'process_completed':
@@ -253,13 +253,13 @@ export function NotificationCenter() {
     activeProcess,
   } = useNotifications()
 
-  // Auto-refresh when open (every 5 seconds)
+  // Atualiza automaticamente quando aberto (a cada 5 segundos)
   useEffect(() => {
     if (!notificationCenterOpen) return
 
     const interval = setInterval(() => {
-      // Force re-render to update relative timestamps
-      // In a real app, this might also fetch new notifications from server
+      // Força re-renderização para atualizar timestamps relativos
+      // Em uma aplicação real, isso também buscaria novas notificações do servidor
     }, 5000)
 
     return () => clearInterval(interval)

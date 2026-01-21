@@ -126,10 +126,10 @@ export default function Page() {
   const sessionData = useSession();
   const session = sessionData?.data || null;
 
-  // Load documents from processResults that need review
+  // Carrega documentos de processResults que precisam de revisão
   useEffect(() => {
-    // Convert ProcessResult to DocumentoChecagem format
-    // Include: approved by AI (needs human validation), pending_review (rejected by AI), and rejected by AI but not yet reviewed by human
+    // Converte ProcessResult para formato DocumentoChecagem
+    // Inclui: aprovados pela IA (precisam de validação humana), pending_review (rejeitados pela IA), e rejeitados pela IA mas ainda não revisados por humano
     const pendingDocs: DocumentoChecagem[] = processResults
       .filter(result =>
         result.status === 'approved' ||
@@ -148,22 +148,22 @@ export default function Page() {
         motivoRejeicao: result.rejectionReason,
         examesFaltantes: result.examesFaltantes,
         examesExtras: result.examesExtras,
-        // Preserve original AI decision for badge display
+        // Preserva decisão original da IA para exibição do badge
         decisaoIA: result.reviewedBy ? undefined : (result.status as 'approved' | 'rejected' | 'pending_review') === 'pending_review' ? 'rejected' : result.status as 'approved' | 'rejected',
         submittedBy: result.submittedBy,
       }));
 
-    // If no pending docs from processResults, use mock data
+    // Se não houver documentos pendentes do processResults, usa dados mock
     setDocumentos(pendingDocs.length > 0 ? pendingDocs : mockDocumentos);
   }, [processResults]);
 
   const handleAprovar = (id: string, approvalReason: string) => {
     const result = processResults.find((r) => r.id === id);
 
-    // Update in notification context
+    // Atualiza no contexto de notificações
     updateProcessResultStatus(id, 'approved', session?.user?.email || 'revisor@grupobrmed.com.br', undefined, approvalReason);
 
-    // Update local state (documentos array)
+    // Atualiza estado local (array documentos)
     setDocumentos((docs) =>
       docs.map((doc) =>
         doc.id === id
@@ -177,7 +177,7 @@ export default function Page() {
       )
     );
 
-    // Create notification for submitter
+    // Cria notificação para o remetente
     if (result) {
       const reviewerEmail = session?.user?.email || 'revisor@grupobrmed.com.br'
       const reviewerName = session?.user?.name || 'um revisor'
@@ -205,10 +205,10 @@ export default function Page() {
   const handleRejeitar = (id: string, motivo: string) => {
     const result = processResults.find((r) => r.id === id);
 
-    // Update in notification context
+    // Atualiza no contexto de notificações
     updateProcessResultStatus(id, 'rejected', session?.user?.email || 'revisor@grupobrmed.com.br', motivo);
 
-    // Update local state
+    // Atualiza estado local
     setDocumentos((docs) =>
       docs.map((doc) =>
         doc.id === id
@@ -222,7 +222,7 @@ export default function Page() {
       )
     );
 
-    // Create notification for submitter
+    // Cria notificação para o remetente
     if (result) {
       const reviewerEmail = session?.user?.email || 'revisor@grupobrmed.com.br'
 

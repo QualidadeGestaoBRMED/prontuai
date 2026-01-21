@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 
 # Função para extrair nome e exames do conteúdo da página
 def extract_nome_e_exames(conteudo: str) -> Dict[str, Any]:
-    logger.info(f"Conteúdo recebido para extração: {conteudo[:500]}...") # Loga os primeiros 500 caracteres
+    logger.info(f"Conteúdo recebido para extração: {conteudo[:500]}...") # Registra os primeiros 500 caracteres
     # Extrai o nome (até o fim da linha)
     nome_match = re.search(r"Nome / Name:\s*(.*?)(?:Identidade / ID Number:|\n)", conteudo)
     logger.info(f"Nome match object: {nome_match}")
@@ -31,10 +31,13 @@ def extract_nome_e_exames(conteudo: str) -> Dict[str, Any]:
         if not linha_limpa or linha_limpa.lower().startswith("4. exames") or linha_limpa.lower().startswith("obrigatório") or "não requer preparo prévio" in linha_limpa.lower() or "jejum" in linha_limpa.lower() or "horas antes do exame" in linha_limpa.lower() or "evitar" in linha_limpa.lower() or "não ingerir" in linha_limpa.lower() or "manter dieta" in linha_limpa.lower() or "informar os medicamentos" in linha_limpa.lower() or "caso faça uso de óculos" in linha_limpa.lower() or "não se expor a sons fortes" in linha_limpa.lower() or "voltar imprimir" in linha_limpa.lower() or "copyright" in linha_limpa.lower():
             continue
         # Regex para capturar o nome do exame em português antes do '/' ou do final da linha
-        # Prioriza o texto antes do primeiro '/' para pegar o nome em português
-        match = re.match(r"^([A-ZÀ-Úa-zà-úÇçÊêÍíÓóÕõÂâÊêÔôÃãÕõÇç\s]+?)(?:\s*/.*)?$", linha_limpa)
+        # Prioriza o texto antes do primeiro '/' para capturar o nome em português
+        # Permite asteriscos (*) que indicam obrigatoriedade
+        match = re.match(r"^([A-ZÀ-Úa-zà-úÇçÊêÍíÓóÕõÂâÊêÔôÃãÕõÇç\s\*]+?)(?:\s*/.*)?$", linha_limpa)
         if match:
             exame = match.group(1).strip()
+            # Remover asterisco no final (indica obrigatoriedade)
+            exame = exame.rstrip('*').strip()
             if exame and exame not in exames:
                 exames.append(exame)
     logger.info(f"Exames extraídos: {exames}")
@@ -46,7 +49,7 @@ async def consultar_exames_brmed(cpf: str) -> Dict[str, Any]:
     """Executa automação Playwright para consultar exames obrigatórios na BRMED."""
     async with async_playwright() as p:
         browser = await p.chromium.launch(
-            headless=True,  # Modo headless para melhor performance
+            headless=True,  # Modo sem interface gráfica para melhor desempenho
             args=["--disable-blink-features=AutomationControlled"]
         )
         ctx = await browser.new_context(
@@ -56,7 +59,7 @@ async def consultar_exames_brmed(cpf: str) -> Dict[str, Any]:
                 "Chrome/124.0.0.0 Safari/537.36"
             )
         )
-        # Configura timeout padrão para evitar travamentos
+        # Configura tempo limite padrão para evitar travamentos
         ctx.set_default_timeout(60000)  # 60 segundos
         page = await ctx.new_page()
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -65,7 +68,7 @@ async def consultar_exames_brmed(cpf: str) -> Dict[str, Any]:
 
         try:
             logger.info("Iniciando automação Playwright...")
-            # --- login ---
+            # --- autenticação ---
             logger.info("Navegando para a página de login...")
             await page.goto("https://operacoes.grupobrmed.com.br/")
             await page.fill("input[name='username']", os.getenv("BRMED_USERNAME"))
@@ -78,17 +81,45 @@ async def consultar_exames_brmed(cpf: str) -> Dict[str, Any]:
             await page.wait_for_timeout(2000)
             await page.evaluate("document.querySelector('#radio_cpf').click()")
             await page.wait_for_timeout(1000)
-            logger.info("Login e seleção de CPF concluídos.")
+            logger.info("Autenticação e seleção de CPF concluídos.")
 
             # --- consulta pelo CPF ---
-            logger.info(f"Consultando CPF: {cpf}")
+            # Formatar CPF: 01792655398 -> 017.926.553-98
+            cpf_limpo = cpf.replace(".", "").replace("-", "").replace("/", "")
+            cpf_formatado = f"{cpf_limpo[:3]}.{cpf_limpo[3:6]}.{cpf_limpo[6:9]}-{cpf_limpo[9:11]}"
+
+            logger.info(f"Consultando CPF: {cpf} (formatado: {cpf_formatado})")
+
+            # Limpar o campo antes de digitar
             await page.click("input[type='text']")
-            await page.type("input[type='text']", cpf, delay=50)
+            await page.fill("input[type='text']", "")  # Limpar campo
+            await page.type("input[type='text']", cpf_formatado, delay=50)
+
             await page.locator("input[type='submit'].button-bold")\
                 .scroll_into_view_if_needed()
             await page.click("input[type='submit'].button-bold", force=True)
             await page.wait_for_load_state("networkidle", timeout=30000)
             logger.info("Consulta de CPF realizada.")
+
+            # Debug: verificar se a tabela com resultados existe
+            table_exists = await page.locator("table.tabledata").count()
+            logger.info(f"Tabelas com classe 'tabledata' encontradas: {table_exists}")
+
+            if table_exists > 0:
+                # Debug: contar links de paciente na tabela
+                patient_links = await page.locator("table.tabledata a[href*='/paciente/']").count()
+                logger.info(f"Links de paciente encontrados: {patient_links}")
+
+                if patient_links == 0:
+                    # Capturar HTML da tabela para debug
+                    table_html = await page.locator("table.tabledata").inner_html()
+                    logger.warning(f"Nenhum link de paciente encontrado. HTML da tabela: {table_html[:500]}")
+                    raise RuntimeError(f"CPF {cpf} consultado mas nenhum paciente encontrado na tabela. Possível CPF inválido ou sem cadastro.")
+            else:
+                # Capturar conteúdo da página para debug
+                page_content = await page.content()
+                logger.warning(f"Tabela de resultados não encontrada. Possível mensagem de erro. Conteúdo: {page_content[:1000]}")
+                raise RuntimeError(f"CPF {cpf}: tabela de resultados não encontrada. Verifique se o CPF existe no sistema.")
 
             await page.click("table.tabledata a[href*='/paciente/']")
             await page.wait_for_selector("a.close", timeout=30000)
@@ -106,7 +137,7 @@ async def consultar_exames_brmed(cpf: str) -> Dict[str, Any]:
             logger.info("Nova página da guia carregada e aguardando.")
 
             conteudo = await new_page.evaluate("() => document.body.innerText")
-            
+
             # Salvar o conteúdo bruto para depuração
             os.makedirs("resultados", exist_ok=True)
             with open(debug_fn, "w", encoding="utf-8") as f:

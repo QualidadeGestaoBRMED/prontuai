@@ -143,7 +143,7 @@ async def processar_documento_completo(
     """
     logger.info(f"[WORKFLOW] Iniciando processamento completo para: {arquivo.filename}")
 
-    # Helper para enviar progresso
+    # Função auxiliar para enviar progresso
     async def send_progress(progress: int, step: str, message: str):
         logger.info(f"[WORKFLOW-PROGRESS] {progress}% - {step}: {message}")
         if progress_callback:
@@ -240,10 +240,10 @@ async def processar_documento_completo(
     # Prepara o objeto de resposta final para o frontend
     resposta_final = {
         "cpf_processado": cpf_final if cpf_final else "Não encontrado",
-        "cpf": cpf_final if cpf_final else "Não encontrado",  # Alias para compatibilidade
-        "exames_ocr": f"{', '.join(exames_enviados) if exames_enviados else 'Nenhum exame encontrado.'}",
-        "exames_brnet": f"{', '.join(exames_brnet) if exames_brnet else 'Nenhum exame encontrado.'}",
-        "analise_comparacao": "Análise de comparação de exames:",
+        "cpf": cpf_final if cpf_final else "Não encontrado",  # Apelido para compatibilidade
+        "exames_ocr": exames_enviados if exames_enviados else [],
+        "exames_brnet": exames_brnet if exames_brnet else [],
+        "analise_comparacao": resultado_validacao.get("analise_ia", "Análise de comparação de exames:"),
         "tabela_comparacao": resultado_validacao["exames_comparativo"],
         "decisao_final": resultado_validacao["mensagem"],
         "erro": None,  # Inicialmente sem erro

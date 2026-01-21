@@ -71,16 +71,16 @@ export default function UsersAdminPage() {
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
 
-  // Clinics states
+  // Estados das clínicas
   const [clinics, setClinics] = useState<Clinic[]>([]);
   const [loadingClinics, setLoadingClinics] = useState(false);
 
-  // Deactivate confirmation modal
+  // Modal de confirmação de desativação
   const [deactivateModalOpen, setDeactivateModalOpen] = useState(false);
   const [userToDeactivate, setUserToDeactivate] = useState<User | null>(null);
   const [deactivating, setDeactivating] = useState(false);
 
-  // Form states
+  // Estados do formulário
   const [formEmail, setFormEmail] = useState("");
   const [formName, setFormName] = useState("");
   const [formRole, setFormRole] = useState<UserRole>("CHECKER");

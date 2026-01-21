@@ -38,7 +38,7 @@ app.include_router(api_router)
 
 @app.get("/")
 async def root():
-    """Root endpoint - API information"""
+    """Endpoint raiz - Informações da API"""
     return {
         "service": "ProntuAI Backend API",
         "version": "2.0.0",
@@ -50,5 +50,5 @@ async def root():
 
 @app.get("/health")
 async def health_check():
-    """Health check endpoint para Render e monitoramento"""
+    """Endpoint de verificação de saúde para Render e monitoramento"""
     return {"status": "healthy", "service": "prontuai-backend"} 

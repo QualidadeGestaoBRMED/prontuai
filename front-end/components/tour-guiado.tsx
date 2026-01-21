@@ -16,7 +16,7 @@ export function TourGuiado() {
   const tourRef = useRef<ShepherdTour | null>(null);
 
   useEffect(() => {
-    // Cleanup on unmount
+    // Limpa na desmontagem
     return () => {
       if (tourRef.current) {
         tourRef.current.complete();
@@ -26,7 +26,7 @@ export function TourGuiado() {
   }, []);
 
   const startTour = () => {
-    // Create new tour instance
+    // Cria nova instância do tour
     const tour = new ShepherdLib.Tour({
       useModalOverlay: true,
       defaultStepOptions: {
@@ -40,7 +40,7 @@ export function TourGuiado() {
       },
     });
 
-    // Helper function to wait for element
+    // Função auxiliar para aguardar elemento
     const waitForElement = (selector: string, timeout = 5000): Promise<Element> => {
       return new Promise((resolve, reject) => {
         const element = document.querySelector(selector);

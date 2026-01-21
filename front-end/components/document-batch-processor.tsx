@@ -63,7 +63,7 @@ export function DocumentBatchProcessor({
   const { startJob, pollJob } = useAsyncJob()
 
   useEffect(() => {
-    // Initialize document states only once
+    // Inicializa estados dos documentos apenas uma vez
     if (documents.length > 0) return
 
     const initialDocs: DocumentProcessingState[] = files
@@ -81,7 +81,7 @@ export function DocumentBatchProcessor({
     setDocuments(initialDocs)
     setIsProcessing(true)
 
-    // Start notification process - only if not already started
+    // Inicia processo de notificação - apenas se ainda não foi iniciado
     if (!processId) {
       const batchId = `batch-${Date.now()}`
       const filename = initialDocs.length === 1
@@ -95,7 +95,7 @@ export function DocumentBatchProcessor({
       })
       setProcessId(newProcessId)
 
-      // Start processing all documents in parallel
+      // Inicia processamento de todos os documentos em paralelo
       initialDocs.forEach((doc) => {
         if (useAsync) {
           processDocumentAsync(doc.id, doc.file)
@@ -162,10 +162,10 @@ export function DocumentBatchProcessor({
 
                 const event = JSON.parse(jsonStr)
 
-                // Log ALL SSE events for debugging
+                // Registra TODOS os eventos SSE para depuração
                 console.log('[FRONTEND] SSE Event received:', event)
 
-                // Log progress updates for debugging
+                // Registra atualizações de progresso para depuração
                 if (event.progress !== undefined) {
                   console.log(`[FRONTEND] Progress update: ${event.progress}% - ${event.message || ''}`)
                 }
@@ -179,7 +179,7 @@ export function DocumentBatchProcessor({
                     if (event.progress !== undefined) {
                       updatedDoc.progress = event.progress
 
-                      // Map progress to stages
+                      // Mapeia progresso para estágios
                       if (event.progress === 0) {
                         updatedDoc.stage = "upload"
                       } else if (event.progress > 0 && event.progress < 30) {
@@ -192,7 +192,7 @@ export function DocumentBatchProcessor({
                         updatedDoc.stage = "completed"
                       }
 
-                      // Handle error
+                      // Trata erro
                       if (event.progress === -1) {
                         const errorMessage = event.message || "Erro no processamento"
                         updatedDoc.error = errorMessage
@@ -262,7 +262,7 @@ export function DocumentBatchProcessor({
                 const updatedDoc = { ...doc }
                 updatedDoc.progress = job.progress
 
-                // Map step to stage
+                // Mapeia etapa para estágio
                 const stepToStage: Record<string, ProcessingStage> = {
                   pending: "upload",
                   upload: "upload",
@@ -334,16 +334,16 @@ export function DocumentBatchProcessor({
     [startJob, pollJob, onError]
   )
 
-  // Update notification process when documents change
+  // Atualiza processo de notificação quando documentos mudam
   useEffect(() => {
     if (!processId || documents.length === 0) return
 
-    // Calculate average progress
+    // Calcula progresso médio
     const avgProgress = Math.round(
       documents.reduce((sum, d) => sum + d.progress, 0) / documents.length
     )
 
-    // Determine current step based on average progress
+    // Determina etapa atual baseado no progresso médio
     let currentStep: ProcessStep = "upload"
     if (avgProgress === 0) {
       currentStep = "upload"
@@ -357,11 +357,11 @@ export function DocumentBatchProcessor({
       currentStep = "completed"
     }
 
-    // Get status message from most recent document being processed
+    // Obtém mensagem de status do documento mais recente sendo processado
     const processingDoc = documents.find(d => d.progress > 0 && d.progress < 100)
     const statusMessage = processingDoc?.statusMessage || "Processando..."
 
-    // Update process
+    // Atualiza processo
     updateProcess(processId, {
       progress: avgProgress,
       currentStep,
@@ -376,7 +376,7 @@ export function DocumentBatchProcessor({
       })),
     })
 
-    // Handle errors
+    // Trata erros
     const errorDoc = documents.find(d => d.error)
     if (errorDoc && errorDoc.error) {
       failProcess(processId, errorDoc.error)
@@ -384,7 +384,7 @@ export function DocumentBatchProcessor({
   }, [documents, processId, updateProcess, failProcess])
 
   useEffect(() => {
-    // Check if all documents are processed
+    // Verifica se todos os documentos foram processados
     const allCompleted = documents.every(
       (doc) => doc.stage === "completed" || doc.error
     )
@@ -394,7 +394,7 @@ export function DocumentBatchProcessor({
         .filter((doc) => doc.result)
         .map((doc) => doc.result!)
 
-      // Complete notification process
+      // Completa processo de notificação
       const processResults = documents.map((doc) => ({
         id: doc.id,
         batchId: processId,
@@ -512,11 +512,11 @@ export function DocumentBatchProcessor({
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">Exames OCR:</span>
-                    <span className="font-medium">{doc.result.exames_ocr.length}</span>
+                    <span className="font-medium">{doc.result.exames_ocr?.length ?? 0}</span>
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">Exames BRNET:</span>
-                    <span className="font-medium">{doc.result.exames_brnet.length}</span>
+                    <span className="font-medium">{doc.result.exames_brnet?.length ?? 0}</span>
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">Decisão:</span>
