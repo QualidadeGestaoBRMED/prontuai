@@ -6,8 +6,8 @@ from datetime import datetime
 class Document(BaseModel):
     """Modelo de documento processado no sistema"""
     id: Optional[str] = None
-    clinic_id: str  # Foreign key para Clinic
-    uploaded_by_user_id: str  # Foreign key para User
+    clinic_id: str  # Chave estrangeira para Clinic
+    uploaded_by_user_id: str  # Chave estrangeira para User
     filename: str
     cpf: Optional[str] = None  # CPF extraído do documento
     uploaded_at: Optional[datetime] = None

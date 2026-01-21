@@ -41,7 +41,7 @@ export default function ClinicsAdminPage() {
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [selectedClinic, setSelectedClinic] = useState<Clinic | null>(null);
 
-  // Form states
+  // Estados do formulário
   const [formEmail, setFormEmail] = useState("");
   const [formName, setFormName] = useState("");
   const [emailError, setEmailError] = useState("");

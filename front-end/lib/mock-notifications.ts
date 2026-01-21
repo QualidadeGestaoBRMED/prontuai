@@ -1,14 +1,14 @@
-// Mock data generators for notifications and processes
+// Geradores de dados mock para notificações e processos
 
 import { Notification } from '@/types/notification'
 import { ProcessNotification, ProcessResult } from '@/types/process'
 
-// Generate mock notifications
+// Gera notificações mock
 export function generateMockNotifications(): Notification[] {
   const now = new Date()
   const notifications: Notification[] = []
 
-  // Recent notification - Process completed (2 min ago)
+  // Notificação recente - Processo concluído (2 min atrás)
   notifications.push({
     id: 'notif-1',
     type: 'process_completed',
@@ -26,7 +26,7 @@ export function generateMockNotifications(): Notification[] {
     },
   })
 
-  // Process started (10 min ago)
+  // Processo iniciado (10 min atrás)
   notifications.push({
     id: 'notif-2',
     type: 'process_started',
@@ -42,7 +42,7 @@ export function generateMockNotifications(): Notification[] {
     },
   })
 
-  // Review approved (1 hour ago)
+  // Revisão aprovada (1 hora atrás)
   notifications.push({
     id: 'notif-3',
     type: 'review_approved',
@@ -60,7 +60,7 @@ export function generateMockNotifications(): Notification[] {
     },
   })
 
-  // Process error (2 hours ago)
+  // Erro de processo (2 horas atrás)
   notifications.push({
     id: 'notif-4',
     type: 'process_error',
@@ -75,7 +75,7 @@ export function generateMockNotifications(): Notification[] {
     },
   })
 
-  // Review rejected (3 hours ago)
+  // Revisão rejeitada (3 horas atrás)
   notifications.push({
     id: 'notif-5',
     type: 'review_rejected',
@@ -93,7 +93,7 @@ export function generateMockNotifications(): Notification[] {
     },
   })
 
-  // Process completed - all approved (Yesterday)
+  // Processo concluído - todos aprovados (Ontem)
   const yesterday = new Date(now)
   yesterday.setDate(yesterday.getDate() - 1)
   yesterday.setHours(14, 30, 0, 0)
@@ -114,7 +114,7 @@ export function generateMockNotifications(): Notification[] {
     },
   })
 
-  // System message (2 days ago)
+  // Mensagem do sistema (2 dias atrás)
   const twoDaysAgo = new Date(now)
   twoDaysAgo.setDate(twoDaysAgo.getDate() - 2)
   twoDaysAgo.setHours(10, 0, 0, 0)
@@ -131,7 +131,7 @@ export function generateMockNotifications(): Notification[] {
   return notifications
 }
 
-// Generate mock active process
+// Gera processo ativo mock
 export function generateMockActiveProcess(): ProcessNotification {
   return {
     id: 'process-active-mock',
@@ -158,12 +158,12 @@ export function generateMockActiveProcess(): ProcessNotification {
   }
 }
 
-// Generate mock process results
+// Gera resultados de processo mock
 export function generateMockProcessResults(): ProcessResult[] {
   const now = new Date()
   const results: ProcessResult[] = []
 
-  // Approved documents
+  // Documentos aprovados
   results.push({
     id: 'result-1',
     batchId: 'batch-001',
@@ -196,7 +196,7 @@ export function generateMockProcessResults(): ProcessResult[] {
     submittedBy: 'usuario@grupobrmed.com.br',
   })
 
-  // Rejected document
+  // Documento rejeitado
   results.push({
     id: 'result-2',
     batchId: 'batch-001',
@@ -230,7 +230,7 @@ export function generateMockProcessResults(): ProcessResult[] {
     submittedBy: 'usuario@grupobrmed.com.br',
   })
 
-  // Pending review
+  // Revisão pendente
   results.push({
     id: 'result-3',
     batchId: 'batch-001',
@@ -263,7 +263,7 @@ export function generateMockProcessResults(): ProcessResult[] {
     submittedBy: 'usuario@grupobrmed.com.br',
   })
 
-  // More approved documents from yesterday
+  // Mais documentos aprovados de ontem
   const yesterday = new Date(now)
   yesterday.setDate(yesterday.getDate() - 1)
   yesterday.setHours(14, 0, 0, 0)
@@ -305,7 +305,7 @@ export function generateMockProcessResults(): ProcessResult[] {
   return results
 }
 
-// Simulate receiving a new notification after delay
+// Simula receber uma nova notificação após delay
 export function simulateIncomingNotification(
   addNotification: (notification: Omit<Notification, 'id' | 'timestamp'>) => void,
   delay: number = 5000

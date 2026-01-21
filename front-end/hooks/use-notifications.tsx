@@ -13,9 +13,9 @@ import {
   CreateProcessInput
 } from '@/types/process'
 
-// Context interface
+// Interface do contexto
 interface NotificationContextType {
-  // Notifications
+  // Notificações
   notifications: Notification[]
   unreadCount: number
   addNotification: (notification: CreateNotificationInput) => string
@@ -24,34 +24,34 @@ interface NotificationContextType {
   clearHistory: () => void
   getNotificationById: (id: string) => Notification | undefined
 
-  // Active processes
+  // Processos ativos
   activeProcess: ProcessNotification | null
   startProcess: (input: CreateProcessInput) => string
   updateProcess: (processId: string, update: Partial<ProcessNotification>) => void
   completeProcess: (processId: string, results: ProcessResult[]) => void
   failProcess: (processId: string, error: string) => void
 
-  // Process results
+  // Resultados de processos
   processResults: ProcessResult[]
   addProcessResult: (result: ProcessResult) => void
   getResultsByBatchId: (batchId: string) => ProcessResult[]
   updateProcessResultStatus: (id: string, status: 'approved' | 'rejected' | 'pending_review', reviewerEmail: string, rejectionReason?: string, approvalReason?: string) => void
 
-  // UI State
+  // Estado da UI
   notificationCenterOpen: boolean
   setNotificationCenterOpen: (open: boolean) => void
   progressBarMinimized: boolean
   minimizeProgressBar: () => void
   showProgressBar: () => void
 
-  // Preferences
+  // Preferências
   preferences: NotificationPreferences
   updatePreferences: (prefs: Partial<NotificationPreferences>) => void
 }
 
 const NotificationContext = createContext<NotificationContextType | undefined>(undefined)
 
-// LocalStorage keys
+// Chaves do LocalStorage
 const STORAGE_KEYS = {
   NOTIFICATIONS: 'notifications',
   ACTIVE_PROCESS: 'active_process',
@@ -60,18 +60,18 @@ const STORAGE_KEYS = {
   PREFERENCES: 'notification_center_preferences',
 }
 
-// Constants
+// Constantes
 const MAX_NOTIFICATIONS = 100
 const MAX_NOTIFICATION_AGE_DAYS = 30
 
-// Helper functions for localStorage
+// Funções auxiliares para localStorage
 function loadFromStorage<T>(key: string, defaultValue: T): T {
   if (typeof window === 'undefined') return defaultValue
   try {
     const item = localStorage.getItem(key)
     if (!item) return defaultValue
     const parsed = JSON.parse(item)
-    // Convert date strings back to Date objects
+    // Converte strings de data de volta para objetos Date
     return convertDatesToObjects(parsed)
   } catch (error) {
     console.error(`Error loading ${key} from localStorage:`, error)
@@ -106,20 +106,20 @@ function convertDatesToObjects(obj: any): any {
   return obj
 }
 
-// Cleanup old notifications and remove duplicates
+// Limpa notificações antigas e remove duplicadas
 function cleanupOldNotifications(notifications: Notification[]): Notification[] {
   const cutoffDate = new Date()
   cutoffDate.setDate(cutoffDate.getDate() - MAX_NOTIFICATION_AGE_DAYS)
 
-  // Filter old notifications
+  // Filtra notificações antigas
   const filtered = notifications.filter(n => new Date(n.timestamp) > cutoffDate)
 
-  // Remove duplicates (same type, message, and metadata within 1 minute)
+  // Remove duplicadas (mesmo tipo, mensagem e metadata dentro de 1 minuto)
   const deduped: Notification[] = []
   for (const notif of filtered) {
     const isDuplicate = deduped.some(existing => {
       const timeDiff = Math.abs(new Date(notif.timestamp).getTime() - new Date(existing.timestamp).getTime())
-      const withinOneMinute = timeDiff < 60000 // 1 minute
+      const withinOneMinute = timeDiff < 60000 // 1 minuto
 
       const sameTypeAndMessage = existing.type === notif.type && existing.message === notif.message
 
@@ -136,13 +136,13 @@ function cleanupOldNotifications(notifications: Notification[]): Notification[] 
     }
   }
 
-  // Keep only the latest MAX_NOTIFICATIONS
+  // Mantém apenas as MAX_NOTIFICATIONS mais recentes
   return deduped.slice(-MAX_NOTIFICATIONS)
 }
 
-// Provider component
+// Componente Provider
 export function NotificationProvider({ children }: { children: React.ReactNode }) {
-  // State
+  // Estado
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [activeProcess, setActiveProcess] = useState<ProcessNotification | null>(null)
   const [processResults, setProcessResults] = useState<ProcessResult[]>([])
@@ -156,7 +156,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     autoMarkAsReadOnClick: true,
   })
 
-  // Load from localStorage on mount
+  // Carrega do localStorage na montagem
   useEffect(() => {
     const loadedNotifications = loadFromStorage<Notification[]>(STORAGE_KEYS.NOTIFICATIONS, [])
     const cleanedNotifications = cleanupOldNotifications(loadedNotifications)
@@ -181,7 +181,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     setPreferences(loadedPrefs)
   }, [])
 
-  // Save to localStorage when state changes
+  // Salva no localStorage quando o estado muda
   useEffect(() => {
     saveToStorage(STORAGE_KEYS.NOTIFICATIONS, notifications)
   }, [notifications])
@@ -202,7 +202,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     saveToStorage(STORAGE_KEYS.PREFERENCES, preferences)
   }, [preferences])
 
-  // Notification functions
+  // Funções de notificação
   const addNotification = useCallback((input: CreateNotificationInput): string => {
     const notification: Notification = {
       ...input,
@@ -211,16 +211,16 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     }
 
     setNotifications(prev => {
-      // Check for duplicate notifications with multiple criteria
+      // Verifica notificações duplicadas com múltiplos critérios
       const fiveSecondsAgo = new Date(Date.now() - 5000)
       const isDuplicate = prev.some(existing => {
-        // Same type and message
+        // Mesmo tipo e mensagem
         const sameTypeAndMessage = existing.type === notification.type && existing.message === notification.message
 
-        // Recent timestamp (within 5 seconds)
+        // Timestamp recente (dentro de 5 segundos)
         const isRecent = existing.timestamp > fiveSecondsAgo
 
-        // Same metadata (processId, batchId, or documentId)
+        // Mesmos metadados (processId, batchId, ou documentId)
         const sameMetadata =
           (existing.metadata?.processId && existing.metadata?.processId === notification.metadata?.processId) ||
           (existing.metadata?.batchId && existing.metadata?.batchId === notification.metadata?.batchId) ||
@@ -260,7 +260,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
 
   const unreadCount = notifications.filter(n => !n.read).length
 
-  // Process functions
+  // Funções de processo
   const startProcess = useCallback((input: CreateProcessInput): string => {
     const processId = `process-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
     const process: ProcessNotification = {
@@ -284,7 +284,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       processId,
     })
 
-    // Add notification
+    // Adiciona notificação
     addNotification({
       type: 'process_started',
       title: 'Processamento Iniciado',
@@ -321,10 +321,10 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         completedAt: new Date(),
       }
 
-      // Add results to process results
+      // Adiciona resultados aos resultados de processo
       setProcessResults(prevResults => [...prevResults, ...results])
 
-      // Add completion notification
+      // Adiciona notificação de conclusão
       const approved = results.filter(r => r.status === 'approved').length
       const rejected = results.filter(r => r.status === 'rejected').length
       const pending = results.filter(r => r.status === 'pending_review').length
@@ -358,7 +358,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         },
       })
 
-      // Auto-hide progress bar after 5 seconds
+      // Auto-oculta a barra de progresso após 5 segundos
       setTimeout(() => {
         setActiveProcess(null)
         setProgressBarState({ minimized: false, processId: null })
@@ -372,7 +372,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     setActiveProcess(prev => {
       if (!prev || prev.id !== processId) return prev
 
-      // Add error notification
+      // Adiciona notificação de erro
       addNotification({
         type: 'process_error',
         title: 'Erro no Processamento',
@@ -385,7 +385,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         },
       })
 
-      // Clear active process
+      // Limpa o processo ativo
       setTimeout(() => {
         setActiveProcess(null)
         setProgressBarState({ minimized: false, processId: null })
@@ -431,7 +431,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     )
   }, [])
 
-  // Progress bar functions
+  // Funções da barra de progresso
   const minimizeProgressBar = useCallback(() => {
     setProgressBarState(prev => ({ ...prev, minimized: true }))
   }, [])
@@ -442,12 +442,12 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
 
   const progressBarMinimized = progressBarState.minimized
 
-  // Preferences functions
+  // Funções de preferências
   const updatePreferences = useCallback((prefs: Partial<NotificationPreferences>) => {
     setPreferences(prev => ({ ...prev, ...prefs }))
   }, [])
 
-  // Update last opened when notification center opens
+  // Atualiza última abertura quando o centro de notificações abre
   useEffect(() => {
     if (notificationCenterOpen) {
       updatePreferences({ lastOpenedAt: new Date() })
@@ -487,7 +487,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   )
 }
 
-// Hook to use the context
+// Hook para usar o contexto
 export function useNotifications() {
   const context = useContext(NotificationContext)
   if (context === undefined) {

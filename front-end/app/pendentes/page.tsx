@@ -25,7 +25,7 @@ function PendentesContent() {
   const [detailsModalOpen, setDetailsModalOpen] = useState(false)
   const { unreadCount, activeProcess, setNotificationCenterOpen, processResults } = useNotifications()
 
-  // Auto-open modal if viewId is provided in URL
+  // Abre modal automaticamente se viewId for fornecido na URL
   useEffect(() => {
     const viewId = searchParams.get('viewId')
     if (viewId && processResults.length > 0) {
@@ -80,7 +80,7 @@ function PendentesContent() {
                     console.log('[DEBUG] Modal state set to open')
                   }}
                   onDownloadPDF={(result) => {
-                    // TODO: Implement PDF download
+                    // TODO: Implementar download de PDF
                     console.log("Download PDF:", result)
                   }}
                 />
@@ -95,7 +95,7 @@ function PendentesContent() {
           onOpenChange={setDetailsModalOpen}
           result={selectedResult}
           onDownloadPDF={selectedResult ? () => {
-            // TODO: Implement PDF download
+            // TODO: Implementar download de PDF
             console.log("Download PDF:", selectedResult)
           } : undefined}
         />

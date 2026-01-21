@@ -10,7 +10,7 @@ export function generateResultPDF(result: ProcessResult): void {
   const contentWidth = pageWidth - 2 * margin
   let yPosition = margin
 
-  // Helper function to add text with word wrap
+  // Função auxiliar para adicionar texto com quebra de linha
   const addText = (text: string, fontSize: number = 10, isBold: boolean = false) => {
     doc.setFontSize(fontSize)
     if (isBold) {
@@ -20,7 +20,7 @@ export function generateResultPDF(result: ProcessResult): void {
     }
     const lines = doc.splitTextToSize(text, contentWidth)
 
-    // Check if we need a new page
+    // Verifica se precisa de uma nova página
     if (yPosition + (lines.length * fontSize * 0.5) > doc.internal.pageSize.getHeight() - margin) {
       doc.addPage()
       yPosition = margin
@@ -40,8 +40,8 @@ export function generateResultPDF(result: ProcessResult): void {
     yPosition += 8
   }
 
-  // Header
-  doc.setFillColor(59, 130, 246) // Blue
+  // Cabeçalho
+  doc.setFillColor(59, 130, 246) // Azul
   doc.rect(0, 0, pageWidth, 40, "F")
   doc.setTextColor(255, 255, 255)
   addText("BRMED - Relatório de Processamento", 18, true)
@@ -50,7 +50,7 @@ export function generateResultPDF(result: ProcessResult): void {
   doc.setTextColor(0, 0, 0)
   addSpace(5)
 
-  // Status Badge
+  // Badge de status
   const statusText = result.status === "approved" ? "APROVADO" :
                      result.status === "rejected" ? "REJEITADO" : "PENDENTE"
   const statusColor = result.status === "approved" ? [34, 197, 94] :
@@ -64,7 +64,7 @@ export function generateResultPDF(result: ProcessResult): void {
   doc.setTextColor(0, 0, 0)
   addSpace(10)
 
-  // Basic Information Section
+  // Seção de informações básicas
   addText("Informações Básicas", 14, true)
   addSpace(3)
 
@@ -84,7 +84,7 @@ export function generateResultPDF(result: ProcessResult): void {
   addSpace(5)
   addDivider()
 
-  // Summary Section
+  // Seção de resumo
   addText("Resumo de Exames", 14, true)
   addSpace(3)
 
@@ -99,7 +99,7 @@ export function generateResultPDF(result: ProcessResult): void {
   addSpace(5)
   addDivider()
 
-  // Rejection Reason (if applicable)
+  // Motivo da rejeição (se aplicável)
   if (result.status === "rejected" && result.rejectionReason) {
     doc.setFillColor(254, 226, 226)
     doc.roundedRect(margin - 5, yPosition - 5, contentWidth + 10, 30, 3, 3, "F")
@@ -109,7 +109,7 @@ export function generateResultPDF(result: ProcessResult): void {
     addDivider()
   }
 
-  // Analysis Section
+  // Seção de análise
   if (result.result.validation_result?.analysis) {
     addText("Análise de Validação", 14, true)
     addSpace(3)
@@ -118,11 +118,11 @@ export function generateResultPDF(result: ProcessResult): void {
     addDivider()
   }
 
-  // Detailed Comparison
+  // Comparação detalhada
   addText("Comparação Detalhada de Exames", 14, true)
   addSpace(5)
 
-  // Exames Extraídos
+  // Exames extraídos
   addText("Exames Encontrados no Documento:", 12, true)
   addSpace(2)
   if (Array.isArray(result.result.ocr_result?.exames_extraidos) && result.result.ocr_result.exames_extraidos.length > 0) {
@@ -134,7 +134,7 @@ export function generateResultPDF(result: ProcessResult): void {
   }
   addSpace(5)
 
-  // Exames Obrigatórios
+  // Exames obrigatórios
   addText("Exames Obrigatórios (BRMED):", 12, true)
   addSpace(2)
   if (Array.isArray(result.result.brmed_result?.exames_obrigatorios) && result.result.brmed_result.exames_obrigatorios.length > 0) {
@@ -146,7 +146,7 @@ export function generateResultPDF(result: ProcessResult): void {
   }
   addSpace(5)
 
-  // Exames Faltantes
+  // Exames faltantes
   if (result.result.validation_result?.exames_faltantes && result.result.validation_result.exames_faltantes.length > 0) {
     doc.setTextColor(220, 38, 38)
     addText("Exames Faltantes:", 12, true)
@@ -160,7 +160,7 @@ export function generateResultPDF(result: ProcessResult): void {
     addSpace(5)
   }
 
-  // Exames Extras
+  // Exames extras
   if (result.result.validation_result?.exames_extras && result.result.validation_result.exames_extras.length > 0) {
     doc.setTextColor(37, 99, 235)
     addText("Exames Extras no Documento:", 12, true)
@@ -173,7 +173,7 @@ export function generateResultPDF(result: ProcessResult): void {
     })
   }
 
-  // Footer
+  // Rodapé
   const pageCount = doc.getNumberOfPages()
   for (let i = 1; i <= pageCount; i++) {
     doc.setPage(i)
