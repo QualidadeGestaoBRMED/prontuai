@@ -9,6 +9,7 @@ import logging
 import uuid
 from datetime import datetime
 import time
+import math
 
 # Importações do AWS Textract (para migração do OCR)
 import boto3
@@ -336,6 +337,16 @@ def aguardar_job_textract(
     raise TimeoutError(f"Job Textract não completou após {max_attempts} tentativas")
 
 
+def calcular_timeout_textract(tamanho_mb: float) -> int:
+    base = 30
+    per_mb = settings.TEXTRACT_WAIT_SECONDS_PER_MB
+    max_wait = settings.TEXTRACT_MAX_WAIT_SECONDS
+    if per_mb <= 0:
+        per_mb = base
+    estimado = max(base, int(math.ceil(tamanho_mb * per_mb)))
+    return min(estimado, max_wait)
+
+
 def coletar_resultados_textract(job_id: str) -> List[dict]:
     """
     Coleta todos os blocos de texto de um job Textract paginado.
@@ -508,7 +519,9 @@ def processar_arquivo_textract(file_path: str) -> str:
         logger.info(f"[OCR] Job iniciado com sucesso. JobId: {job_id}")
 
         # 3. Aguardar conclusão do job
-        aguardar_job_textract(job_id)
+        max_wait_seconds = calcular_timeout_textract(tamanho_mb)
+        logger.info(f"[OCR] Timeout maximo do Textract: {max_wait_seconds}s")
+        aguardar_job_textract(job_id, max_wait_seconds=max_wait_seconds)
 
         # 4. Coletar resultados paginados
         all_blocks = coletar_resultados_textract(job_id)
