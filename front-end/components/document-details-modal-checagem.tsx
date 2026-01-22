@@ -28,6 +28,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { ProcessResult } from "@/types/process"
+import ExamesComparativoTable from "@/components/exames-comparativo-table"
 
 interface DocumentDetailsModalChecagemProps {
   open: boolean
@@ -234,115 +235,61 @@ export function DocumentDetailsModalChecagem({
                 </>
               )}
 
+              {/* Checklist de Campos */}
+              {result.result.analysis_details?.field_checks?.length ? (
+                <>
+                  <Separator />
+                  <div>
+                    <h4 className="font-semibold mb-3">Checklist de Campos</h4>
+                    <div className="grid grid-cols-2 gap-2">
+                      {result.result.analysis_details.field_checks.map((item) => (
+                        <div
+                          key={item.field}
+                          className="flex items-center justify-between rounded border px-3 py-2"
+                        >
+                          <span className="text-sm">{item.label}</span>
+                          <Badge
+                            variant="secondary"
+                            className={item.found ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-600"}
+                          >
+                            {item.found ? "Encontrado" : "Não encontrado"}
+                          </Badge>
+                        </div>
+                      ))}
+                    </div>
+
+                    <details className="mt-3">
+                      <summary className="text-sm text-muted-foreground cursor-pointer">
+                        Evidências (trechos do OCR onde o campo aparece)
+                      </summary>
+                      <div className="mt-2 space-y-2">
+                        {result.result.analysis_details.field_checks.map((item) => (
+                          item.evidence?.length ? (
+                            <div key={`${item.field}-evidence`} className="text-sm">
+                              <p className="font-medium">{item.label}</p>
+                              <ul className="text-muted-foreground list-disc ml-5">
+                                {item.evidence.map((line, idx) => (
+                                  <li key={`${item.field}-${idx}`}>{line}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          ) : null
+                        ))}
+                      </div>
+                    </details>
+                  </div>
+                </>
+              ) : null}
+
               <Separator />
 
               {/* Detailed Comparison Table */}
               <div>
                 <h4 className="font-semibold mb-3">Comparação Detalhada</h4>
 
-                {/* Exames Extraídos (OCR) */}
-                <div className="mb-4">
-                  <h5 className="text-sm font-medium text-muted-foreground mb-2">
-                    Exames Encontrados no Documento ({Array.isArray(result.result.ocr_result?.exames_extraidos) ? result.result.ocr_result.exames_extraidos.length : 0})
-                  </h5>
-                  <div className="space-y-2">
-                    {(!result.result.ocr_result?.exames_extraidos || !Array.isArray(result.result.ocr_result.exames_extraidos) || result.result.ocr_result.exames_extraidos.length === 0) ? (
-                      <p className="text-sm text-muted-foreground italic">
-                        Nenhum exame extraído
-                      </p>
-                    ) : (
-                      <div className="grid grid-cols-2 gap-2">
-                        {(Array.isArray(result.result.ocr_result.exames_extraidos)
-                          ? result.result.ocr_result.exames_extraidos
-                          : []
-                        ).map(
-                          (exame, i) => (
-                            <div
-                              key={i}
-                              className="text-sm p-2 rounded border bg-blue-50 border-blue-200"
-                            >
-                              {exame}
-                            </div>
-                          )
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Exames Obrigatórios (BRMED) */}
-                <div className="mb-4">
-                  <h5 className="text-sm font-medium text-muted-foreground mb-2">
-                    Exames Obrigatórios (BRMED) ({Array.isArray(result.result.brmed_result?.exames_obrigatorios) ? result.result.brmed_result.exames_obrigatorios.length : 0})
-                  </h5>
-                  <div className="space-y-2">
-                    {(!result.result.brmed_result?.exames_obrigatorios || !Array.isArray(result.result.brmed_result.exames_obrigatorios) || result.result.brmed_result.exames_obrigatorios.length === 0) ? (
-                      <p className="text-sm text-muted-foreground italic">
-                        Nenhum exame obrigatório
-                      </p>
-                    ) : (
-                      <div className="grid grid-cols-2 gap-2">
-                        {(Array.isArray(result.result.brmed_result.exames_obrigatorios)
-                          ? result.result.brmed_result.exames_obrigatorios
-                          : []
-                        ).map(
-                          (exame, i) => (
-                            <div
-                              key={i}
-                              className="text-sm p-2 rounded border bg-purple-50 border-purple-200"
-                            >
-                              {exame}
-                            </div>
-                          )
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Exames Faltantes */}
-                {(result.result.validation_result?.exames_faltantes?.length || 0) > 0 && (
-                  <div className="mb-4">
-                    <h5 className="text-sm font-medium text-red-600 mb-2">
-                      Exames Faltantes ({result.result.validation_result?.exames_faltantes?.length || 0})
-                    </h5>
-                    <div className="space-y-2">
-                      <div className="grid grid-cols-2 gap-2">
-                        {result.result.validation_result?.exames_faltantes?.map(
-                          (exame, i) => (
-                            <div
-                              key={i}
-                              className="text-sm p-2 rounded border bg-red-50 border-red-200 text-red-900"
-                            >
-                              {exame}
-                            </div>
-                          )
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Exames Extras */}
-                {(result.result.validation_result?.exames_extras?.length || 0) > 0 && (
-                  <div>
-                    <h5 className="text-sm font-medium text-blue-600 mb-2">
-                      Exames Extras no Documento ({result.result.validation_result?.exames_extras?.length || 0})
-                    </h5>
-                    <div className="space-y-2">
-                      <div className="grid grid-cols-2 gap-2">
-                        {result.result.validation_result?.exames_extras?.map(
-                          (exame, i) => (
-                            <div
-                              key={i}
-                              className="text-sm p-2 rounded border bg-blue-50 border-blue-200 text-blue-900"
-                            >
-                              {exame}
-                            </div>
-                          )
-                        )}
-                      </div>
-                    </div>
+                {Array.isArray(result.result.tabela_comparacao) && result.result.tabela_comparacao.length > 0 && (
+                  <div className="mb-6">
+                    <ExamesComparativoTable tabela={result.result.tabela_comparacao} />
                   </div>
                 )}
               </div>

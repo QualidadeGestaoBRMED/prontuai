@@ -331,8 +331,19 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         )
       )
 
-      // Adiciona resultados aos resultados de processo
-      setProcessResults(prevResults => [...prevResults, ...results])
+      // Adiciona resultados aos resultados de processo (sem duplicar por id)
+      setProcessResults(prevResults => {
+        const merged = [...prevResults]
+        for (const result of results) {
+          const index = merged.findIndex(r => r.id === result.id)
+          if (index >= 0) {
+            merged[index] = result
+          } else {
+            merged.push(result)
+          }
+        }
+        return merged
+      })
 
       // Adiciona notificação de conclusão
       const approved = results.filter(r => r.status === 'approved').length

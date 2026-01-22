@@ -22,8 +22,13 @@ class Settings:
     AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
     AWS_REGION = os.getenv("AWS_REGION", "us-east-1")
     AWS_S3_BUCKET = os.getenv("AWS_S3_BUCKET")
-    TEXTRACT_MAX_WAIT_SECONDS = int(os.getenv("TEXTRACT_MAX_WAIT_SECONDS", 180))
-    TEXTRACT_WAIT_SECONDS_PER_MB = int(os.getenv("TEXTRACT_WAIT_SECONDS_PER_MB", 30))
+    TEXTRACT_MIN_WAIT_SECONDS = int(os.getenv("TEXTRACT_MIN_WAIT_SECONDS", 180))
+    TEXTRACT_MAX_WAIT_SECONDS = int(os.getenv("TEXTRACT_MAX_WAIT_SECONDS", 300))
+    TEXTRACT_WAIT_SECONDS_PER_MB = int(os.getenv("TEXTRACT_WAIT_SECONDS_PER_MB", 60))
+    TEXTRACT_EXTRA_WAIT_SECONDS = int(os.getenv("TEXTRACT_EXTRA_WAIT_SECONDS", 120))
+    TEXTRACT_PREPROCESS_PDF = os.getenv("TEXTRACT_PREPROCESS_PDF", "true").lower() == "true"
+    TEXTRACT_PREPROCESS_MAX_MB = float(os.getenv("TEXTRACT_PREPROCESS_MAX_MB", 1.0))
+    TEXTRACT_GS_PDFSETTINGS = os.getenv("TEXTRACT_GS_PDFSETTINGS", "ebook")
 
     # Feature Toggle: OCR Engine Selection
     USE_TEXTRACT = os.getenv("USE_TEXTRACT", "false").lower() == "true"

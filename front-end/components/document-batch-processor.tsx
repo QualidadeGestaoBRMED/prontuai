@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import { FileWithPreview } from "@/hooks/use-file-upload"
 import { ProcessingStepper, ProcessingStage } from "./processing-stepper"
 import { Card } from "./ui/card"
@@ -21,6 +21,30 @@ export interface DocumentProcessingResult {
   tabela_comparacao: TabelaComparacaoItem[]
   analise_comparacao: string
   decisao_final: string
+  analysis_details?: {
+    quality?: {
+      score: number
+      total_chars: number
+      total_lines: number
+      alpha_ratio: number
+      digit_ratio: number
+      unique_line_ratio: number
+    }
+    field_checks?: {
+      field: string
+      label: string
+      found: boolean
+      evidence: string[]
+    }[]
+    match_confidence?: {
+      exame: string
+      status: "encontrado" | "faltante" | "parcialmente_encontrado" | "extra_no_ocr"
+      match_type: "exato" | "similar" | "parcial" | "inferido" | "ausente" | "extra" | "invalido"
+      ocr_match: string | null
+      evidence: string[]
+      justificativa?: string
+    }[]
+  }
   erro?: string
 }
 
@@ -54,12 +78,13 @@ export function DocumentBatchProcessor({
   const [documents, setDocuments] = useState<DocumentProcessingState[]>([])
   const [isProcessing, setIsProcessing] = useState(false)
   const [processId, setProcessId] = useState<string | null>(null)
+  const hasInitializedRef = useRef(false)
   const { startProcess, updateProcess, completeProcess, failProcess } = useNotifications()
   const { startJob, pollJob } = useAsyncJob()
 
   useEffect(() => {
     // Inicializa estados dos documentos apenas uma vez
-    if (documents.length > 0) return
+    if (hasInitializedRef.current || documents.length > 0) return
 
     const initialDocs: DocumentProcessingState[] = files
       .filter((f) => f.file instanceof File)
@@ -72,6 +97,8 @@ export function DocumentBatchProcessor({
       }))
 
     if (initialDocs.length === 0) return
+
+    hasInitializedRef.current = true
 
     setDocuments(initialDocs)
     setIsProcessing(true)
@@ -414,17 +441,18 @@ export function DocumentBatchProcessor({
           examesFaltantes,
           examesExtras,
           result: {
-          cpf: doc.result?.cpf_processado || '',
-          patient_name: doc.result?.patient_name,
-          status: doc.error ? 'error' as const : 'success' as const,
-          ocr_result: {
-            text: '',
+            cpf: doc.result?.cpf_processado || '',
+            patient_name: doc.result?.patient_name,
+            status: doc.error ? 'error' as const : 'success' as const,
+            ocr_result: {
+              text: '',
               exames_extraidos: doc.result?.exames_ocr || [],
             },
             brmed_result: {
               exames_obrigatorios: doc.result?.exames_brnet || [],
             },
             tabela_comparacao: doc.result?.tabela_comparacao || [],
+            analysis_details: doc.result?.analysis_details,
             validation_result: {
               exames_faltantes: tabelaComparacao.filter(
                 e => e.status === 'faltante'
