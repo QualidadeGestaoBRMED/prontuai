@@ -159,10 +159,14 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   // Carrega do localStorage na montagem
   useEffect(() => {
     const loadedNotifications = loadFromStorage<Notification[]>(STORAGE_KEYS.NOTIFICATIONS, [])
-    const cleanedNotifications = cleanupOldNotifications(loadedNotifications)
+    const loadedProcess = loadFromStorage<ProcessNotification | null>(STORAGE_KEYS.ACTIVE_PROCESS, null)
+    const cleanedNotifications = cleanupOldNotifications(loadedNotifications).filter((notif) => {
+      if (notif.type !== 'process_started') return true
+      if (!loadedProcess?.id) return false
+      return notif.metadata?.processId === loadedProcess.id
+    })
     setNotifications(cleanedNotifications)
 
-    const loadedProcess = loadFromStorage<ProcessNotification | null>(STORAGE_KEYS.ACTIVE_PROCESS, null)
     setActiveProcess(loadedProcess)
 
     const loadedResults = loadFromStorage<ProcessResult[]>(STORAGE_KEYS.PROCESS_RESULTS, [])
@@ -321,6 +325,12 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         completedAt: new Date(),
       }
 
+      setNotifications(prevNotifications =>
+        prevNotifications.filter(
+          notif => !(notif.type === 'process_started' && notif.metadata?.processId === processId)
+        )
+      )
+
       // Adiciona resultados aos resultados de processo
       setProcessResults(prevResults => [...prevResults, ...results])
 
@@ -371,6 +381,12 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   const failProcess = useCallback((processId: string, error: string) => {
     setActiveProcess(prev => {
       if (!prev || prev.id !== processId) return prev
+
+      setNotifications(prevNotifications =>
+        prevNotifications.filter(
+          notif => !(notif.type === 'process_started' && notif.metadata?.processId === processId)
+        )
+      )
 
       // Adiciona notificação de erro
       addNotification({

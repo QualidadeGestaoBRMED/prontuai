@@ -395,39 +395,53 @@ export function DocumentBatchProcessor({
         .map((doc) => doc.result!)
 
       // Completa processo de notificação
-      const processResults = documents.map((doc) => ({
-        id: doc.id,
-        batchId: processId,
-        filename: doc.file.name,
-        cpf: doc.result?.cpf_processado || 'N/A',
-        patientName: 'Paciente',
-        uploadedAt: new Date(),
-        processedAt: new Date(),
-        status: doc.error ? 'rejected' as const : (
-          doc.result?.decisao_final.toLowerCase().includes('aprovado') ? 'approved' as const : 'pending_review' as const
-        ),
-        rejectionReason: doc.error,
-        examesFaltantes: doc.result?.tabela_comparacao.filter(e => e.status === 'faltante').length || 0,
-        examesExtras: doc.result?.tabela_comparacao.filter(e => e.status === 'extra_no_ocr').length || 0,
-        result: {
-          cpf: doc.result?.cpf_processado || '',
-          status: doc.error ? 'error' as const : 'success' as const,
-          ocr_result: {
-            text: '',
-            exames_extraidos: doc.result?.exames_ocr || [],
-          },
-          brmed_result: {
-            exames_obrigatorios: doc.result?.exames_brnet || [],
-          },
+      const processResults = documents.map((doc) => {
+        const tabelaComparacao = doc.result?.tabela_comparacao || []
+        const examesFaltantes = tabelaComparacao.filter(
+          (e) => e.status === 'faltante'
+        ).length
+        const examesExtras = tabelaComparacao.filter(
+          (e) => e.status === 'extra_no_ocr'
+        ).length
+
+        return {
+          id: doc.id,
+          batchId: processId,
+          filename: doc.file.name,
+          cpf: doc.result?.cpf_processado || 'N/A',
+          patientName: 'Paciente',
+          uploadedAt: new Date(),
+          processedAt: new Date(),
+          status: doc.error ? 'rejected' as const : (
+            examesFaltantes === 0 ? 'approved' as const : 'pending_review' as const
+          ),
+          rejectionReason: doc.error,
+          examesFaltantes,
+          examesExtras,
+          result: {
+            cpf: doc.result?.cpf_processado || '',
+            status: doc.error ? 'error' as const : 'success' as const,
+            ocr_result: {
+              text: '',
+              exames_extraidos: doc.result?.exames_ocr || [],
+            },
+            brmed_result: {
+              exames_obrigatorios: doc.result?.exames_brnet || [],
+            },
           validation_result: {
-            exames_faltantes: doc.result?.tabela_comparacao.filter(e => e.status === 'faltante').map(e => e.exame) || [],
-            exames_extras: doc.result?.tabela_comparacao.filter(e => e.status === 'extra_no_ocr').map(e => e.exame) || [],
+            exames_faltantes: tabelaComparacao.filter(
+              e => e.status === 'faltante'
+            ).map(e => e.exame),
+            exames_extras: tabelaComparacao.filter(
+              e => e.status === 'extra_no_ocr'
+            ).map(e => e.exame),
             analysis: doc.result?.analise_comparacao,
           },
-          error: doc.error,
-        },
-        submittedBy: 'usuario@grupobrmed.com.br',
-      }))
+            error: doc.error,
+          },
+          submittedBy: 'usuario@grupobrmed.com.br',
+        }
+      })
 
       completeProcess(processId, processResults)
       onComplete?.(results)
