@@ -49,6 +49,61 @@ except Exception as e:
     exam_similarity_index = None
     exam_similarity_data = None
 
+def _build_master_exam_terms() -> set[str]:
+    termos = set()
+    if not exam_similarity_data:
+        return termos
+    for item in exam_similarity_data:
+        principal = item.get("exame_principal")
+        if principal:
+            termos.add(ocr_service.normalizar_texto(principal))
+        for similar in item.get("similares") or []:
+            termos.add(ocr_service.normalizar_texto(similar))
+    return termos
+
+MASTER_EXAM_TERMS = _build_master_exam_terms()
+
+def _filtrar_exames_ocr(
+    exames_ocr: list[str],
+    exames_brnet: list[str],
+    markdown: str
+) -> list[str]:
+    exames_ocr = ocr_service.filtrar_exames(exames_ocr or [])
+    if not exames_brnet:
+        return exames_ocr
+
+    brnet_norm = {
+        ocr_service.normalizar_texto(exame)
+        for exame in exames_brnet
+        if exame
+    }
+    termos_validos = MASTER_EXAM_TERMS | brnet_norm
+
+    filtrados = []
+    vistos = set()
+    for exame in exames_ocr or []:
+        normalizado = ocr_service.normalizar_texto(exame)
+        if not normalizado:
+            continue
+        if normalizado not in termos_validos:
+            continue
+        if normalizado in vistos:
+            continue
+        vistos.add(normalizado)
+        filtrados.append(exame)
+
+    if markdown:
+        markdown_norm = f" {ocr_service.normalizar_texto(markdown)} "
+        for exame in exames_brnet:
+            normalizado = ocr_service.normalizar_texto(exame)
+            if not normalizado or normalizado in vistos:
+                continue
+            if f" {normalizado} " in markdown_norm:
+                vistos.add(normalizado)
+                filtrados.append(exame)
+
+    return filtrados
+
 async def comparar_exames_openai(exames_ocr: list[str], exames_brnet: list[str]) -> Dict[str, Any]:
     """
     Compara listas de exames usando o índice de similaridade e, se necessário, LLM para desempate.
@@ -225,6 +280,8 @@ async def processar_documento_completo(
             }
         }
 
+    exames_enviados = _filtrar_exames_ocr(exames_enviados, exames_brnet, markdown_content)
+
     # 3. Validar exames
     await send_progress(70, "validacao", "Validando exames com IA...")
     logger.info(f"[WORKFLOW] Realizando validação para CPF: {cpf_final}")
@@ -243,7 +300,11 @@ async def processar_documento_completo(
         "cpf": cpf_final if cpf_final else "Não encontrado",  # Apelido para compatibilidade
         "exames_ocr": exames_enviados if exames_enviados else [],
         "exames_brnet": exames_brnet if exames_brnet else [],
-        "analise_comparacao": resultado_validacao.get("analise_ia", "Análise de comparação de exames:"),
+        "analise_comparacao": (
+            resultado_validacao.get("analise_ia")
+            or resultado_validacao.get("mensagem")
+            or "Análise de comparação de exames:"
+        ),
         "tabela_comparacao": resultado_validacao["exames_comparativo"],
         "decisao_final": resultado_validacao["mensagem"],
         "erro": None,  # Inicialmente sem erro
