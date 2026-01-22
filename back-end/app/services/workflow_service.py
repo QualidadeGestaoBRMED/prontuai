@@ -1,10 +1,12 @@
 import os
+import re
 from typing import Dict, Any, Optional, List
 from fastapi import UploadFile
 from app.services import ocr_service, brmed_service, validacao_service
 from app.core.config import settings
 import logging
 import json
+import asyncio
 from openai import OpenAI
 import faiss
 import pickle
@@ -49,6 +51,12 @@ except Exception as e:
     exam_similarity_index = None
     exam_similarity_data = None
 
+def _normalizar_busca(texto: str) -> str:
+    normalizado = ocr_service.normalizar_texto(texto)
+    normalizado = re.sub(r"[^A-Z0-9 ]+", " ", normalizado)
+    normalizado = re.sub(r"\s+", " ", normalizado).strip()
+    return normalizado
+
 def _build_master_exam_terms() -> set[str]:
     termos = set()
     if not exam_similarity_data:
@@ -56,12 +64,239 @@ def _build_master_exam_terms() -> set[str]:
     for item in exam_similarity_data:
         principal = item.get("exame_principal")
         if principal:
-            termos.add(ocr_service.normalizar_texto(principal))
+            termos.add(_normalizar_busca(principal))
         for similar in item.get("similares") or []:
-            termos.add(ocr_service.normalizar_texto(similar))
+            termos.add(_normalizar_busca(similar))
     return termos
 
 MASTER_EXAM_TERMS = _build_master_exam_terms()
+
+def _build_synonym_map() -> Dict[str, set[str]]:
+    synonym_map: Dict[str, set[str]] = {}
+    if not exam_similarity_data:
+        return synonym_map
+    for item in exam_similarity_data:
+        principal = item.get("exame_principal")
+        similares = item.get("similares") or []
+        termos = [principal] + list(similares) if principal else list(similares)
+        termos_norm = {_normalizar_busca(t) for t in termos if t}
+        for termo in termos_norm:
+            if termo not in synonym_map:
+                synonym_map[termo] = set()
+            synonym_map[termo].update(termos_norm)
+    return synonym_map
+
+EXAM_SYNONYM_MAP = _build_synonym_map()
+
+def _extrair_linhas_markdown(markdown: str) -> list[tuple[str, str]]:
+    linhas = []
+    for linha in markdown.splitlines():
+        linha_limpa = linha.strip()
+        if not linha_limpa:
+            continue
+        linhas.append((linha_limpa, _normalizar_busca(linha_limpa)))
+    return linhas
+
+def _buscar_evidencias(termo: str, linhas: list[tuple[str, str]]) -> list[str]:
+    if not termo:
+        return []
+    termo_norm = _normalizar_busca(termo)
+    if not termo_norm:
+        return []
+    alvo = f" {termo_norm} "
+    evidencias = []
+    for original, normalizado in linhas:
+        if alvo in f" {normalizado} ":
+            evidencias.append(original)
+        if len(evidencias) >= 3:
+            break
+    return evidencias
+
+def _avaliar_campos(
+    markdown: str,
+    linhas: list[tuple[str, str]],
+    patient_name: Optional[str] = None
+) -> list[Dict[str, Any]]:
+    checks = []
+
+    def add_check(field: str, label: str, evidencias: list[str]):
+        checks.append({
+            "field": field,
+            "label": label,
+            "found": bool(evidencias),
+            "evidence": evidencias,
+        })
+
+    cpf_regex = re.compile(r"\b\d{3}[.\s]?\d{3}[.\s]?\d{3}[-\s]?\d{2}\b|\b[A-Z]{2}/\d{11}\b")
+    data_regex = re.compile(r"\b\d{2}[/-]\d{2}[/-]\d{2,4}\b")
+    crm_regex = re.compile(r"\bCRM\b")
+
+    evidencias_cpf = [linha for linha, _ in linhas if cpf_regex.search(linha)]
+    evidencias_data = [linha for linha, _ in linhas if data_regex.search(linha)]
+    evidencias_crm = [linha for linha, _ in linhas if crm_regex.search(linha)]
+    evidencias_assinatura = [
+        linha for linha, normalizado in linhas
+        if "ASSINATURA" in normalizado or "ASSINADO" in normalizado or "CARIMBO" in normalizado
+        or "RUBRICA" in normalizado or "___" in linha
+    ]
+
+    add_check("cpf", "CPF", evidencias_cpf[:3])
+    if patient_name:
+        add_check("nome_paciente", "Nome do paciente", _buscar_evidencias(patient_name, linhas))
+    add_check("data", "Data", evidencias_data[:3])
+    add_check("crm_medico", "CRM do medico", evidencias_crm[:3])
+    add_check("assinatura", "Assinatura/Carimbo", evidencias_assinatura[:3])
+
+    return checks
+
+def _avaliar_qualidade(markdown: str, linhas: list[tuple[str, str]]) -> Dict[str, Any]:
+    total_chars = len(markdown)
+    total_lines = len(linhas)
+    nonspace = sum(1 for c in markdown if not c.isspace())
+    alpha = sum(1 for c in markdown if c.isalpha())
+    digits = sum(1 for c in markdown if c.isdigit())
+    unique_lines = len({linha for linha, _ in linhas})
+    alpha_ratio = (alpha / nonspace) if nonspace else 0
+    digit_ratio = (digits / nonspace) if nonspace else 0
+    unique_ratio = (unique_lines / total_lines) if total_lines else 0
+
+    score = 20
+    if total_chars >= 500:
+        score += 15
+    if total_chars >= 1000:
+        score += 15
+    if total_lines >= 20:
+        score += 10
+    if alpha_ratio >= 0.55:
+        score += 15
+    if unique_ratio >= 0.6:
+        score += 15
+    if digit_ratio >= 0.05:
+        score += 10
+
+    score = max(0, min(100, score))
+
+    return {
+        "score": score,
+        "total_chars": total_chars,
+        "total_lines": total_lines,
+        "alpha_ratio": round(alpha_ratio, 3),
+        "digit_ratio": round(digit_ratio, 3),
+        "unique_line_ratio": round(unique_ratio, 3),
+    }
+
+def _token_subset_match(a: str, b: str) -> bool:
+    a_tokens = set(a.split())
+    b_tokens = set(b.split())
+    return bool(a_tokens) and a_tokens.issubset(b_tokens)
+
+def _tokens_relevantes(texto: str) -> set[str]:
+    stopwords = {"DE", "DA", "DO", "DAS", "DOS", "E", "COM", "SEM", "PARA", "POR"}
+    return {t for t in texto.split() if len(t) >= 3 and t not in stopwords}
+
+def _token_overlap_match(a: str, b: str) -> bool:
+    a_tokens = _tokens_relevantes(a)
+    b_tokens = _tokens_relevantes(b)
+    if not a_tokens or not b_tokens:
+        return False
+    overlap = a_tokens & b_tokens
+    if not overlap:
+        return False
+    overlap_ratio = len(overlap) / len(a_tokens)
+    max_len = max(len(t) for t in overlap)
+    return overlap_ratio >= 0.75 or (overlap_ratio >= 0.5 and max_len >= 8)
+
+def _match_ocr_exame(
+    exame_brnet: str,
+    exames_ocr: list[str],
+    linhas: list[tuple[str, str]]
+) -> Dict[str, Any]:
+    norm_brnet = _normalizar_busca(exame_brnet)
+    if not norm_brnet:
+        return {"match_type": "invalido", "ocr_match": None, "evidence": []}
+
+    for exame in exames_ocr:
+        if _normalizar_busca(exame) == norm_brnet:
+            return {
+                "match_type": "exato",
+                "ocr_match": exame,
+                "evidence": _buscar_evidencias(exame, linhas)
+            }
+
+    synonyms = EXAM_SYNONYM_MAP.get(norm_brnet, set())
+    if synonyms:
+        for exame in exames_ocr:
+            if _normalizar_busca(exame) in synonyms:
+                return {
+                    "match_type": "similar",
+                    "ocr_match": exame,
+                    "evidence": _buscar_evidencias(exame, linhas)
+                }
+
+    for exame in exames_ocr:
+        if _token_subset_match(norm_brnet, _normalizar_busca(exame)):
+            return {
+                "match_type": "parcial",
+                "ocr_match": exame,
+                "evidence": _buscar_evidencias(exame, linhas)
+            }
+
+    for exame in exames_ocr:
+        if _token_overlap_match(norm_brnet, _normalizar_busca(exame)):
+            return {
+                "match_type": "parcial",
+                "ocr_match": exame,
+                "evidence": _buscar_evidencias(exame, linhas)
+            }
+
+    return {
+        "match_type": "inferido",
+        "ocr_match": None,
+        "evidence": _buscar_evidencias(exame_brnet, linhas)
+    }
+
+def _avaliar_confianca_exames(
+    comparacao: list[Dict[str, Any]],
+    exames_ocr: list[str],
+    linhas: list[tuple[str, str]]
+) -> list[Dict[str, Any]]:
+    detalhes = []
+    for item in comparacao:
+        status = item.get("status")
+        exame = item.get("exame")
+        if not exame:
+            continue
+        if status == "extra_no_ocr":
+            detalhes.append({
+                "exame": exame,
+                "status": status,
+                "match_type": "extra",
+                "ocr_match": exame,
+                "evidence": _buscar_evidencias(exame, linhas),
+                "justificativa": item.get("justificativa", "")
+            })
+            continue
+        if status == "faltante":
+            detalhes.append({
+                "exame": exame,
+                "status": status,
+                "match_type": "ausente",
+                "ocr_match": None,
+                "evidence": _buscar_evidencias(exame, linhas),
+                "justificativa": item.get("justificativa", "")
+            })
+            continue
+
+        match_info = _match_ocr_exame(exame, exames_ocr, linhas)
+        detalhes.append({
+            "exame": exame,
+            "status": status,
+            "match_type": match_info["match_type"],
+            "ocr_match": match_info["ocr_match"],
+            "evidence": match_info["evidence"],
+            "justificativa": item.get("justificativa", "")
+        })
+    return detalhes
 
 def _filtrar_exames_ocr(
     exames_ocr: list[str],
@@ -72,30 +307,39 @@ def _filtrar_exames_ocr(
     if not exames_brnet:
         return exames_ocr
 
-    brnet_norm = {
-        ocr_service.normalizar_texto(exame)
-        for exame in exames_brnet
-        if exame
-    }
-    termos_validos = MASTER_EXAM_TERMS | brnet_norm
+    brnet_norm_list = []
+    brnet_norm_set = set()
+    for exame in exames_brnet:
+        normalizado = _normalizar_busca(exame)
+        if not normalizado:
+            continue
+        brnet_norm_set.add(normalizado)
+        brnet_norm_list.append((exame, normalizado))
+    termos_validos = MASTER_EXAM_TERMS | brnet_norm_set
 
     filtrados = []
     vistos = set()
     for exame in exames_ocr or []:
-        normalizado = ocr_service.normalizar_texto(exame)
+        normalizado = _normalizar_busca(exame)
         if not normalizado:
             continue
+        chave = normalizado
         if normalizado not in termos_validos:
+            for _, brnet_norm in brnet_norm_list:
+                if _token_subset_match(brnet_norm, normalizado) or _token_overlap_match(brnet_norm, normalizado):
+                    chave = brnet_norm
+                    break
+            else:
+                continue
+        if chave in vistos:
             continue
-        if normalizado in vistos:
-            continue
-        vistos.add(normalizado)
+        vistos.add(chave)
         filtrados.append(exame)
 
     if markdown:
-        markdown_norm = f" {ocr_service.normalizar_texto(markdown)} "
+        markdown_norm = f" {_normalizar_busca(markdown)} "
         for exame in exames_brnet:
-            normalizado = ocr_service.normalizar_texto(exame)
+            normalizado = _normalizar_busca(exame)
             if not normalizado or normalizado in vistos:
                 continue
             if f" {normalizado} " in markdown_norm:
@@ -206,7 +450,14 @@ async def processar_documento_completo(
 
     # 1. Processar documento com OCR e extrair informações iniciais
     await send_progress(10, "ocr", "Processando documento com OCR...")
-    ocr_resultado = await ocr_service.ocr_pipeline(arquivo)
+    def ocr_progress_hook(message: str):
+        if progress_callback:
+            asyncio.create_task(send_progress(20, "ocr", message))
+
+    ocr_resultado = await ocr_service.ocr_pipeline(
+        arquivo,
+        progress_hook=ocr_progress_hook
+    )
     await send_progress(30, "ocr", f"OCR concluído. {len(ocr_resultado.get('exames', []))} exames encontrados")
     cpf_inicial = ocr_resultado.get("cpf")
     exames_enviados = ocr_resultado.get("exames", [])
@@ -298,6 +549,17 @@ async def processar_documento_completo(
     await send_progress(90, "validacao", "Validação concluída, preparando resultado...")
     logger.info(f"[WORKFLOW] Validação concluída.")
 
+    linhas_markdown = _extrair_linhas_markdown(markdown_content or "")
+    analysis_details = {
+        "quality": _avaliar_qualidade(markdown_content or "", linhas_markdown),
+        "field_checks": _avaliar_campos(markdown_content or "", linhas_markdown, patient_name),
+        "match_confidence": _avaliar_confianca_exames(
+            resultado_validacao.get("exames_comparativo", []),
+            exames_enviados,
+            linhas_markdown
+        ),
+    }
+
     # Prepara o objeto de resposta final para o frontend
     resposta_final = {
         "cpf_processado": cpf_final if cpf_final else "Não encontrado",
@@ -312,6 +574,7 @@ async def processar_documento_completo(
         ),
         "tabela_comparacao": resultado_validacao["exames_comparativo"],
         "decisao_final": resultado_validacao["mensagem"],
+        "analysis_details": analysis_details,
         "erro": None,  # Inicialmente sem erro
         # Estrutura completa para compatibilidade com front-end (DocumentProcessingResult)
         "ocr_result": {

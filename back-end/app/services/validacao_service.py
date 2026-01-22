@@ -1,5 +1,7 @@
 import os
-from typing import List, Dict, Any
+import re
+import unicodedata
+from typing import List, Dict, Any, Optional
 import logging
 from app.core.config import settings
 from tenacity import retry, wait_exponential, stop_after_attempt
@@ -41,6 +43,82 @@ except Exception as e:
     logger.error(f"Erro ao carregar o índice de similaridade de exames: {e}")
     exam_similarity_index = None
     exam_similarity_data = None
+
+def _normalizar_exame(texto: str) -> str:
+    texto_normalizado = unicodedata.normalize("NFKD", texto or "")
+    texto_normalizado = "".join(
+        c for c in texto_normalizado if not unicodedata.combining(c)
+    )
+    texto_normalizado = re.sub(r"[^A-Z0-9 ]+", " ", texto_normalizado.upper())
+    texto_normalizado = re.sub(r"\s+", " ", texto_normalizado).strip()
+    if not texto_normalizado:
+        return ""
+    texto_normalizado = re.sub(r"\bRAIO\s*X\b", "RADIOGRAFIA", texto_normalizado)
+    texto_normalizado = re.sub(r"\bRX\b", "RADIOGRAFIA", texto_normalizado)
+    return texto_normalizado
+
+def _tokens_relevantes(texto: str) -> set[str]:
+    stopwords = {"DE", "DA", "DO", "DAS", "DOS", "E", "COM", "SEM", "PARA", "POR"}
+    return {t for t in texto.split() if len(t) >= 3 and t not in stopwords}
+
+def _token_subset_match(a: str, b: str) -> bool:
+    a_tokens = set(a.split())
+    b_tokens = set(b.split())
+    return bool(a_tokens) and a_tokens.issubset(b_tokens)
+
+def _token_overlap_match(a: str, b: str) -> bool:
+    a_tokens = _tokens_relevantes(a)
+    b_tokens = _tokens_relevantes(b)
+    if not a_tokens or not b_tokens:
+        return False
+    overlap = a_tokens & b_tokens
+    if not overlap:
+        return False
+    overlap_ratio = len(overlap) / len(a_tokens)
+    max_len = max(len(t) for t in overlap)
+    return overlap_ratio >= 0.75 or (overlap_ratio >= 0.5 and max_len >= 8)
+
+def _build_synonym_map() -> Dict[str, set[str]]:
+    synonym_map: Dict[str, set[str]] = {}
+    if not exam_similarity_data:
+        return synonym_map
+    for item in exam_similarity_data:
+        principal = item.get("exame_principal")
+        similares = item.get("similares") or []
+        sinonimos = item.get("sinonimos") or []
+        termos = [principal] + list(similares) + list(sinonimos) if principal else list(similares) + list(sinonimos)
+        termos_norm = {_normalizar_exame(t) for t in termos if t}
+        for termo in termos_norm:
+            if termo not in synonym_map:
+                synonym_map[termo] = set()
+            synonym_map[termo].update(termos_norm)
+    return synonym_map
+
+EXAM_SYNONYM_MAP = _build_synonym_map()
+
+def _match_exame_local(exame_brnet: str, exames_ocr: List[str]) -> Optional[str]:
+    norm_brnet = _normalizar_exame(exame_brnet)
+    if not norm_brnet:
+        return None
+    synonyms = EXAM_SYNONYM_MAP.get(norm_brnet, set())
+
+    for exame in exames_ocr:
+        norm_ocr = _normalizar_exame(exame)
+        if not norm_ocr:
+            continue
+        if norm_ocr == norm_brnet:
+            return exame
+        if synonyms and norm_ocr in synonyms:
+            return exame
+
+    for exame in exames_ocr:
+        norm_ocr = _normalizar_exame(exame)
+        if not norm_ocr:
+            continue
+        if _token_subset_match(norm_brnet, norm_ocr) or _token_overlap_match(norm_brnet, norm_ocr):
+            return exame
+
+    return None
 
 async def comparar_exames_com_rag(exames_ocr: list[str], exames_brnet: list[str]) -> Dict[str, Any]:
     """
@@ -160,6 +238,93 @@ async def validar_exames(cpf: str, exames_obrigatorios: List[str], exames_enviad
     if isinstance(comparacao_final, dict) and "erro" in comparacao_final:
         return {"status_liberado": False, "mensagem": comparacao_final["erro"], "exames_comparativo": [], "auditoria_salva_em": "", "erro": comparacao_final["erro"]}
 
+    def extrair_lista_comparacao(resultado: Any) -> List[Dict[str, Any]] | None:
+        if isinstance(resultado, list):
+            return resultado if all(isinstance(item, dict) for item in resultado) else None
+        if isinstance(resultado, dict):
+            for key in ("comparacao", "comparativo", "resultado", "exames"):
+                valor = resultado.get(key)
+                if isinstance(valor, list) and all(isinstance(item, dict) for item in valor):
+                    return valor
+            for valor in resultado.values():
+                if isinstance(valor, list) and all(isinstance(item, dict) for item in valor):
+                    return valor
+        return None
+
+    comparacao_list = extrair_lista_comparacao(comparacao_final)
+    if comparacao_list is None:
+        logger.error(f"Formato inesperado de comparacao_final: {type(comparacao_final)}")
+        return {
+            "status_liberado": False,
+            "mensagem": "Erro ao validar exames: formato de resposta inesperado.",
+            "exames_comparativo": [],
+            "auditoria_salva_em": "",
+            "erro": "formato_de_resposta_invalido"
+        }
+
+    brnet_norm_list = []
+    brnet_norm_set = set()
+    for exame in exames_brnet or []:
+        normalizado = _normalizar_exame(exame)
+        if not normalizado:
+            continue
+        brnet_norm_set.add(normalizado)
+        brnet_norm_list.append((exame, normalizado))
+
+    ocr_norm_to_brnet = {}
+    for exame_brnet, _ in brnet_norm_list:
+        match = _match_exame_local(exame_brnet, exames_enviados or [])
+        if match:
+            ocr_norm_to_brnet[_normalizar_exame(match)] = exame_brnet
+
+    extras_matched = set()
+    for item in comparacao_list:
+        if item.get("status") != "faltante":
+            continue
+        exame = item.get("exame")
+        if not exame:
+            continue
+        match = _match_exame_local(exame, exames_enviados or [])
+        if match:
+            item["status"] = "encontrado"
+            item["justificativa"] = f"Correspondencia aproximada com '{match}'."
+            extras_matched.add(_normalizar_exame(match))
+
+    comparacao_corrigida = []
+    brnet_present_norms = set()
+    for item in comparacao_list:
+        status = item.get("status")
+        exame = item.get("exame")
+        if not exame or not status:
+            continue
+        normalizado = _normalizar_exame(exame)
+        if status == "extra_no_ocr":
+            if normalizado in extras_matched or normalizado in brnet_norm_set or normalizado in ocr_norm_to_brnet:
+                continue
+        if normalizado and status != "extra_no_ocr":
+            if normalizado in brnet_present_norms:
+                continue
+            brnet_present_norms.add(normalizado)
+        comparacao_corrigida.append(item)
+
+    for exame_brnet, normalizado in brnet_norm_list:
+        if normalizado in brnet_present_norms:
+            continue
+        match = _match_exame_local(exame_brnet, exames_enviados or [])
+        if match:
+            comparacao_corrigida.append({
+                "exame": exame_brnet,
+                "status": "encontrado",
+                "justificativa": f"Correspondencia aproximada com '{match}'."
+            })
+        else:
+            comparacao_corrigida.append({
+                "exame": exame_brnet,
+                "status": "faltante",
+                "justificativa": "Exame obrigatório não encontrado no OCR."
+            })
+        brnet_present_norms.add(normalizado)
+
     # Processa o resultado da comparação para determinar o status final
     status_liberado = True
     exames_faltantes = []
@@ -167,19 +332,25 @@ async def validar_exames(cpf: str, exames_obrigatorios: List[str], exames_enviad
     exames_comparativo = []
 
     # Primeiro, adicione todos os exames obrigatórios com seu status
-    for item in comparacao_final:
-        if item["status"] == "encontrado":
-            exames_comparativo.append({"exame": item["exame"], "status": "encontrado", "justificativa": item.get("justificativa", "")})
-            exames_presentes.append(item["exame"])
-        elif item["status"] == "faltante":
-            exames_comparativo.append({"exame": item["exame"], "status": "faltante", "justificativa": item.get("justificativa", "")})
-            exames_faltantes.append(item["exame"])
-        elif item["status"] == "extra_no_ocr":
-            exames_comparativo.append({"exame": item["exame"], "status": "extra_no_ocr", "justificativa": item.get("justificativa", "")})
+    for item in comparacao_corrigida:
+        status = item.get("status")
+        exame = item.get("exame")
+        if not exame or not status:
+            continue
+        if status == "encontrado":
+            exames_comparativo.append({"exame": exame, "status": "encontrado", "justificativa": item.get("justificativa", "")})
+            exames_presentes.append(exame)
+        elif status == "faltante":
+            exames_comparativo.append({"exame": exame, "status": "faltante", "justificativa": item.get("justificativa", "")})
+            exames_faltantes.append(exame)
+        elif status == "extra_no_ocr":
+            if _normalizar_exame(exame) in extras_matched:
+                continue
+            exames_comparativo.append({"exame": exame, "status": "extra_no_ocr", "justificativa": item.get("justificativa", "")})
 
     status_liberado = len(exames_faltantes) == 0
 
-    caminho_auditoria = salvar_auditoria(cpf, exames_obrigatorios, exames_enviados, comparacao_final)
+    caminho_auditoria = salvar_auditoria(cpf, exames_obrigatorios, exames_enviados, comparacao_corrigida)
     
     # Prepara a resposta final para o frontend
     resposta_final = {
