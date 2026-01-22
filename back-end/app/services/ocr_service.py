@@ -2,6 +2,7 @@ import os
 import tempfile
 import re
 import json
+import unicodedata
 from openai import OpenAI
 from typing import Dict, Any, List, Optional
 import logging
@@ -66,6 +67,7 @@ ou qualquer header do tipo '## NOME DO EXAME'. Extraia o nome do exame do header
 Nesses casos, extraia apenas o nome antes do hífen como exame.
 Se o texto não contiver uma lista clara de exames ou procedimentos, retorne uma lista vazia.
 Não infira exames a partir de menções genéricas como 'exame de sangue'.
+Ignore nomes de empresas, marcas, logos ou setores (ex: "BR MED", "SAUDE CORPORATIVA").
 Responda APENAS com um objeto JSON válido, sem nenhum texto adicional antes ou depois.
 O formato do JSON deve ser: {"exames": ["<exame1>", "<exame2>"]}.
 Se nenhum exame for encontrado, use uma lista vazia [] para a chave "exames".
@@ -84,6 +86,46 @@ Responda APENAS com um objeto JSON válido, sem nenhum texto adicional antes ou 
 O formato do JSON deve ser: {"cpf": "<cpf_extraido>"}.
 Se o CPF não for encontrado, use o valor null para a chave "cpf".
 """
+
+NON_EXAM_TERMS = {
+    "BR MED",
+    "BRMED",
+    "SAUDE CORPORATIVA",
+    "SAUDE",
+    "CORPORATIVA",
+    "BR MED SAUDE CORPORATIVA",
+    "FICHA MEDICA",
+    "FICHA MEDICA PERIODICO",
+}
+
+def normalizar_texto(texto: str) -> str:
+    texto_normalizado = unicodedata.normalize("NFKD", texto)
+    texto_normalizado = "".join(
+        c for c in texto_normalizado if not unicodedata.combining(c)
+    )
+    texto_normalizado = re.sub(r"\s+", " ", texto_normalizado).strip().upper()
+    return texto_normalizado
+
+def filtrar_exames(exames: List[str]) -> List[str]:
+    filtrados = []
+    vistos = set()
+    for exame in exames:
+        if not isinstance(exame, str):
+            continue
+        normalizado = normalizar_texto(exame)
+        if not normalizado:
+            continue
+        if normalizado in NON_EXAM_TERMS:
+            continue
+        if re.search(r"\bBR\s*MED\b", normalizado):
+            continue
+        if "SAUDE CORPORATIVA" in normalizado:
+            continue
+        if normalizado in vistos:
+            continue
+        vistos.add(normalizado)
+        filtrados.append(exame)
+    return filtrados
 
 def extrair_cpf_ia(markdown: str) -> str:
     """Extrai CPF do markdown usando LLM."""
@@ -527,6 +569,7 @@ def extrair_exames_ia(markdown: str) -> Dict[str, Any]:
         data = json.loads(response.choices[0].message.content)
         if "exames" not in data:
             return {"exames": [], "erro": "Resposta da IA não contém a chave 'exames'."}
+        data["exames"] = filtrar_exames(data.get("exames", []))
         return data
     except json.JSONDecodeError:
         return {"exames": [], "erro": "Falha ao decodificar o JSON da resposta da IA."}
