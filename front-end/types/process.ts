@@ -10,6 +10,35 @@ export type TabelaComparacaoItem = {
   justificativa: string
 }
 
+export type FieldCheck = {
+  field: string
+  label: string
+  found: boolean
+  evidence: string[]
+}
+
+export type MatchConfidence = {
+  exame: string
+  status: "encontrado" | "faltante" | "parcialmente_encontrado" | "extra_no_ocr"
+  match_type: "exato" | "similar" | "parcial" | "inferido" | "ausente" | "extra" | "invalido"
+  ocr_match: string | null
+  evidence: string[]
+  justificativa?: string
+}
+
+export type AnalysisDetails = {
+  quality: {
+    score: number
+    total_chars: number
+    total_lines: number
+    alpha_ratio: number
+    digit_ratio: number
+    unique_line_ratio: number
+  }
+  field_checks: FieldCheck[]
+  match_confidence: MatchConfidence[]
+}
+
 // Documento individual dentro de um lote
 export interface ProcessDocument {
   filename: string
@@ -67,6 +96,7 @@ export interface DocumentProcessingResult {
     empresa?: string
   }
   tabela_comparacao?: TabelaComparacaoItem[]
+  analysis_details?: AnalysisDetails
   validation_result?: {
     exames_faltantes: string[]
     exames_extras: string[]

@@ -71,8 +71,10 @@ export default function ExamesComparativoTable({ tabela = [] }: ExamesComparativ
     <TooltipProvider>
       <Table className="w-full">
         <TableHeader>
-          <TableRow className="">
-            <TableHead className="w-1/3">Exame Previsto</TableHead><TableHead className="w-1/6 text-center">Status</TableHead><TableHead className="flex pl-32 pt-2.5 text-right">Justificativa</TableHead>
+          <TableRow>
+            <TableHead className="w-2/5">Exame Previsto</TableHead>
+            <TableHead className="w-1/5 text-center">Status</TableHead>
+            <TableHead className="w-2/5 text-left">Justificativa</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -80,19 +82,24 @@ export default function ExamesComparativoTable({ tabela = [] }: ExamesComparativ
             const conf = getConformidade(item.status);
             return (
               <TableRow key={`${item.exame}-${index}`}>
-                <TableCell className="font-medium px-4">
+                <TableCell className="font-medium align-top">
                   {item.exame}
-                </TableCell><TableCell className={`text-center font-medium ${conf.color}`}>
+                </TableCell>
+                <TableCell className={`text-center font-medium align-top ${conf.color}`}>
                   <div className="flex flex-col items-center justify-center gap-1">
                     {conf.icon}
                     <span className="text-xs mt-1">{conf.label}</span>
                   </div>
-                </TableCell><TableCell className=" pr-10 pt-4 text-sm text-muted-foreground flex justify-end text-right">
+                </TableCell>
+                <TableCell className="text-sm text-muted-foreground align-top">
                   <Tooltip>
                     <TooltipTrigger asChild>
-                      <InfoIcon className="cursor-help size-4" />
+                      <span className="inline-flex items-center gap-2 text-muted-foreground">
+                        <InfoIcon className="size-4 cursor-help text-muted-foreground" />
+                        <span className="text-xs">Passe o mouse</span>
+                      </span>
                     </TooltipTrigger>
-                    <TooltipContent>
+                    <TooltipContent className="max-w-md">
                       <p>{item.justificativa}</p>
                     </TooltipContent>
                   </Tooltip>

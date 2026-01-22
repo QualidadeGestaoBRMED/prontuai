@@ -19,27 +19,39 @@ def extract_nome_e_exames(conteudo: str) -> Dict[str, Any]:
         nome = nome.split("\t")[0].split("  ")[0].strip()
 
     # Extrai a seção 4 (Exames) até o final do texto
-    exames_match = re.search(r"4\. Exames / Exams:[\s\S]*", conteudo)
-    exames_texto = exames_match.group(0).strip() if exames_match else ""
+    exames_texto = ""
+    inicio = re.search(r"4\. Exames / Exams:", conteudo)
+    if inicio:
+        start_idx = inicio.start()
+        fim = re.search(r"\n\s*(5\.|6\.)\s", conteudo[start_idx:])
+        if fim:
+            end_idx = start_idx + fim.start()
+            exames_texto = conteudo[start_idx:end_idx].strip()
+        else:
+            exames_texto = conteudo[start_idx:].strip()
     logger.info(f"Exames texto extraído: {exames_texto[:500]}...")
 
     # Extrai todos os grupos de palavras (exames) em cada linha, ignora linha de seção
     exames = []
     for linha in exames_texto.splitlines():
-        linha_limpa = linha.strip().replace('\t', ' ')
+        linha_raw = linha.strip()
+        linha_limpa = linha_raw.replace('\t', ' ')
         logger.info(f"Linha limpa para extração de exames: {linha_limpa}")
-        if not linha_limpa or linha_limpa.lower().startswith("4. exames") or linha_limpa.lower().startswith("obrigatório") or "não requer preparo prévio" in linha_limpa.lower() or "jejum" in linha_limpa.lower() or "horas antes do exame" in linha_limpa.lower() or "evitar" in linha_limpa.lower() or "não ingerir" in linha_limpa.lower() or "manter dieta" in linha_limpa.lower() or "informar os medicamentos" in linha_limpa.lower() or "caso faça uso de óculos" in linha_limpa.lower() or "não se expor a sons fortes" in linha_limpa.lower() or "voltar imprimir" in linha_limpa.lower() or "copyright" in linha_limpa.lower():
+        if not linha_limpa or linha_limpa.lower().startswith(("4. exames", "4.1")) or linha_limpa.lower().startswith("obrigatório") or re.match(r"^\d+\)", linha_limpa) or "voltar imprimir" in linha_limpa.lower() or "copyright" in linha_limpa.lower():
             continue
-        # Regex para capturar o nome do exame em português antes do '/' ou do final da linha
-        # Prioriza o texto antes do primeiro '/' para capturar o nome em português
-        # Permite asteriscos (*) que indicam obrigatoriedade
-        match = re.match(r"^([A-ZÀ-Úa-zà-úÇçÊêÍíÓóÕõÂâÊêÔôÃãÕõÇç\s\*]+?)(?:\s*/.*)?$", linha_limpa)
-        if match:
-            exame = match.group(1).strip()
-            # Remover asterisco no final (indica obrigatoriedade)
-            exame = exame.rstrip('*').strip()
-            if exame and exame not in exames:
-                exames.append(exame)
+        partes = [p.strip() for p in re.split(r"\t+", linha_raw) if p.strip()]
+        if len(partes) <= 1:
+            partes = [p.strip() for p in re.split(r"\s{2,}", linha_limpa) if p.strip()]
+        for parte in partes:
+            # Regex para capturar o nome do exame em português antes do '/' ou do final da linha
+            # Permite asteriscos (*) que indicam obrigatoriedade e caracteres comuns em exames
+            match = re.match(r"^([A-ZÀ-Úa-zà-úÇçÊêÍíÓóÕõÂâÊêÔôÃãÕõÇç0-9\s\*\-()/]+?)(?:\s*/.*)?$", parte)
+            if match:
+                exame = match.group(1).strip()
+                # Remover asterisco no final (indica obrigatoriedade)
+                exame = exame.rstrip('*').strip()
+                if exame and exame not in exames:
+                    exames.append(exame)
     logger.info(f"Exames extraídos: {exames}")
     return {"nome": nome, "exames": exames}
 
