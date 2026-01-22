@@ -14,13 +14,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
-
-// Define o tipo para cada item na tabela de comparação, baseado no novo JSON
-export type TabelaComparacaoItem = {
-  exame: string;
-  status: "encontrado" | "faltante" | "parcialmente_encontrado" | "extra_no_ocr";
-  justificativa: string;
-};
+import { TabelaComparacaoItem } from "@/types/process"
 
 // Define as props do componente, que agora recebe a tabela de comparação
 export interface ExamesComparativoTableProps {
@@ -75,7 +69,7 @@ export default function ExamesComparativoTable({ tabela = [] }: ExamesComparativ
 
   return (
     <TooltipProvider>
-      <Table className="ml-4 w-max">
+      <Table className="w-full">
         <TableHeader>
           <TableRow className="">
             <TableHead className="w-1/3">Exame Previsto</TableHead><TableHead className="w-1/6 text-center">Status</TableHead><TableHead className="flex pl-32 pt-2.5 text-right">Justificativa</TableHead>

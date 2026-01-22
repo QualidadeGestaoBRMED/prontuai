@@ -8,25 +8,20 @@ import { Badge } from "./ui/badge"
 import { FileIcon, AlertCircleIcon, CheckCircle2Icon } from "lucide-react"
 import { formatBytes } from "@/hooks/use-file-upload"
 import { useNotifications } from "@/hooks/use-notifications"
-import { ProcessStep } from "@/types/process"
+import { ProcessStep, TabelaComparacaoItem } from "@/types/process"
 import { API_ENDPOINTS } from "@/lib/config"
 import { useAsyncJob } from "@/hooks/use-async-job"
 import { Job } from "@/types/job"
 
 export interface DocumentProcessingResult {
   cpf_processado: string
+  patient_name?: string
   exames_ocr: string[]
   exames_brnet: string[]
   tabela_comparacao: TabelaComparacaoItem[]
   analise_comparacao: string
   decisao_final: string
   erro?: string
-}
-
-export interface TabelaComparacaoItem {
-  exame: string
-  status: "encontrado" | "faltante" | "parcialmente_encontrado" | "extra_no_ocr"
-  justificativa: string
 }
 
 interface DocumentProcessingState {
@@ -409,9 +404,9 @@ export function DocumentBatchProcessor({
           batchId: processId,
           filename: doc.file.name,
           cpf: doc.result?.cpf_processado || 'N/A',
-          patientName: 'Paciente',
-          uploadedAt: new Date(),
-          processedAt: new Date(),
+        patientName: doc.result?.patient_name || 'Paciente',
+        uploadedAt: new Date(),
+        processedAt: new Date(),
           status: doc.error ? 'rejected' as const : (
             examesFaltantes === 0 ? 'approved' as const : 'pending_review' as const
           ),
@@ -419,19 +414,21 @@ export function DocumentBatchProcessor({
           examesFaltantes,
           examesExtras,
           result: {
-            cpf: doc.result?.cpf_processado || '',
-            status: doc.error ? 'error' as const : 'success' as const,
-            ocr_result: {
-              text: '',
+          cpf: doc.result?.cpf_processado || '',
+          patient_name: doc.result?.patient_name,
+          status: doc.error ? 'error' as const : 'success' as const,
+          ocr_result: {
+            text: '',
               exames_extraidos: doc.result?.exames_ocr || [],
             },
             brmed_result: {
               exames_obrigatorios: doc.result?.exames_brnet || [],
             },
-          validation_result: {
-            exames_faltantes: tabelaComparacao.filter(
-              e => e.status === 'faltante'
-            ).map(e => e.exame),
+            tabela_comparacao: doc.result?.tabela_comparacao || [],
+            validation_result: {
+              exames_faltantes: tabelaComparacao.filter(
+                e => e.status === 'faltante'
+              ).map(e => e.exame),
             exames_extras: tabelaComparacao.filter(
               e => e.status === 'extra_no_ocr'
             ).map(e => e.exame),

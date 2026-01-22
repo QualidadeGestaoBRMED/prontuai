@@ -4,6 +4,11 @@ export type ProcessStatus = 'processing' | 'completed' | 'error'
 export type ProcessStep = 'upload' | 'ocr' | 'brmed' | 'validation' | 'completed'
 export type DocumentStatus = 'pending' | 'processing' | 'completed' | 'error'
 export type ResultStatus = 'approved' | 'rejected' | 'pending_review'
+export type TabelaComparacaoItem = {
+  exame: string
+  status: "encontrado" | "faltante" | "parcialmente_encontrado" | "extra_no_ocr"
+  justificativa: string
+}
 
 // Documento individual dentro de um lote
 export interface ProcessDocument {
@@ -61,6 +66,7 @@ export interface DocumentProcessingResult {
     exames_obrigatorios: string[]
     empresa?: string
   }
+  tabela_comparacao?: TabelaComparacaoItem[]
   validation_result?: {
     exames_faltantes: string[]
     exames_extras: string[]

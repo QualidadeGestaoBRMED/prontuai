@@ -22,6 +22,8 @@ class Settings:
     AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
     AWS_REGION = os.getenv("AWS_REGION", "us-east-1")
     AWS_S3_BUCKET = os.getenv("AWS_S3_BUCKET")
+    TEXTRACT_MAX_WAIT_SECONDS = int(os.getenv("TEXTRACT_MAX_WAIT_SECONDS", 180))
+    TEXTRACT_WAIT_SECONDS_PER_MB = int(os.getenv("TEXTRACT_WAIT_SECONDS_PER_MB", 30))
 
     # Feature Toggle: OCR Engine Selection
     USE_TEXTRACT = os.getenv("USE_TEXTRACT", "false").lower() == "true"
