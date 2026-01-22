@@ -218,6 +218,7 @@ async def processar_documento_completo(
 
     cpf_final = None
     brmed_resultado = None
+    patient_name = None
 
     # 2. Tentar com o CPF inicial (se houver)
     if cpf_inicial:
@@ -227,6 +228,7 @@ async def processar_documento_completo(
         if "erro" not in brmed_resultado:
             cpf_final = cpf_inicial
             exames_brnet = brmed_resultado.get("exames", [])
+            patient_name = brmed_resultado.get("nome")
             await send_progress(60, "brmed", f"Exames obrigatórios obtidos: {len(exames_brnet)} exames")
         else:
             logger.warning(f'[WORKFLOW] Consulta BRMED falhou para CPF {cpf_inicial}: {brmed_resultado["erro"]}')
@@ -249,6 +251,7 @@ async def processar_documento_completo(
                 if "erro" not in brmed_resultado:
                     cpf_final = alt_cpf
                     exames_brnet = brmed_resultado.get("exames", [])
+                    patient_name = brmed_resultado.get("nome")
                     await send_progress(60, "brmed", f"CPF válido encontrado! {len(exames_brnet)} exames obrigatórios")
                     break # Encontrou um CPF válido, sai do loop
                 else:
@@ -263,6 +266,7 @@ async def processar_documento_completo(
             "status": "error",
             "cpf": "Não encontrado",
             "cpf_processado": "Não encontrado",
+            "patient_name": patient_name,
             "mensagem": "Não foi possível extrair um CPF válido ou consultar exames obrigatórios.",
             "decisao_final": "Erro no processamento",
             "erro": "Não foi possível extrair um CPF válido ou consultar exames obrigatórios.",
@@ -298,6 +302,7 @@ async def processar_documento_completo(
     resposta_final = {
         "cpf_processado": cpf_final if cpf_final else "Não encontrado",
         "cpf": cpf_final if cpf_final else "Não encontrado",  # Apelido para compatibilidade
+        "patient_name": patient_name,
         "exames_ocr": exames_enviados if exames_enviados else [],
         "exames_brnet": exames_brnet if exames_brnet else [],
         "analise_comparacao": (

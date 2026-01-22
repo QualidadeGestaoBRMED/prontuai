@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { ProcessResult } from "@/types/process"
+import ExamesComparativoTable from "@/components/exames-comparativo-table"
 import { Download } from "lucide-react"
 
 interface DocumentDetailsModalProps {
@@ -76,7 +77,7 @@ export function DocumentDetailsModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-7xl max-h-[90vh] p-4">
+      <DialogContent className="w-[90vw] max-w-6xl max-h-[90vh] p-4">
         <DialogHeader className="pr-8">
           <div className="space-y-1">
             <DialogTitle className="text-2xl">
@@ -196,6 +197,12 @@ export function DocumentDetailsModal({
             {/* Detailed Comparison Table */}
             <div>
               <h4 className="font-semibold mb-3">Comparação Detalhada</h4>
+
+              {Array.isArray(result.result.tabela_comparacao) && result.result.tabela_comparacao.length > 0 && (
+                <div className="mb-6">
+                  <ExamesComparativoTable tabela={result.result.tabela_comparacao} />
+                </div>
+              )}
 
               {/* Exames Extraídos (OCR) */}
               <div className="mb-4">
