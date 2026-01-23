@@ -1,4 +1,5 @@
 import os
+import time
 import re
 from typing import Dict, Any, Optional, List
 from fastapi import UploadFile
@@ -441,6 +442,7 @@ async def processar_documento_completo(
         progress_callback: Callback opcional para enviar progresso (SSE)
     """
     logger.info(f"[WORKFLOW] Iniciando processamento completo para: {arquivo.filename}")
+    start_total = time.perf_counter()
 
     # Função auxiliar para enviar progresso
     async def send_progress(progress: int, step: str, message: str):
@@ -450,6 +452,7 @@ async def processar_documento_completo(
 
     # 1. Processar documento com OCR e extrair informações iniciais
     await send_progress(10, "ocr", "Processando documento com OCR...")
+    t_ocr = time.perf_counter()
     def ocr_progress_hook(message: str):
         if progress_callback:
             asyncio.create_task(send_progress(20, "ocr", message))
@@ -458,6 +461,7 @@ async def processar_documento_completo(
         arquivo,
         progress_hook=ocr_progress_hook
     )
+    logger.info(f"[WORKFLOW] OCR concluído em {time.perf_counter() - t_ocr:.2f}s")
     await send_progress(30, "ocr", f"OCR concluído. {len(ocr_resultado.get('exames', []))} exames encontrados")
     cpf_inicial = ocr_resultado.get("cpf")
     exames_enviados = ocr_resultado.get("exames", [])
@@ -474,8 +478,10 @@ async def processar_documento_completo(
     # 2. Tentar com o CPF inicial (se houver)
     if cpf_inicial:
         await send_progress(40, "brmed", f"Consultando exames obrigatórios (CPF: {cpf_inicial[:3]}***)")
+        t_brmed = time.perf_counter()
         logger.info(f"[WORKFLOW] Tentando consultar BRMED com CPF inicial: {cpf_inicial}")
         brmed_resultado = await brmed_service.consultar_exames_brmed(cpf_inicial)
+        logger.info(f"[WORKFLOW] Consulta BRMED concluída em {time.perf_counter() - t_brmed:.2f}s")
         if "erro" not in brmed_resultado:
             cpf_final = cpf_inicial
             exames_brnet = brmed_resultado.get("exames", [])
@@ -497,8 +503,10 @@ async def processar_documento_completo(
         for idx, alt_cpf in enumerate(cpfs_alternativos):
             if alt_cpf not in cpfs_tentados: # Evita tentar o mesmo CPF novamente
                 await send_progress(45 + (idx * 5), "brmed", f"Tentando CPF alternativo {idx + 1}...")
+                t_brmed_alt = time.perf_counter()
                 logger.info(f"[WORKFLOW] Tentando consultar BRMED com CPF alternativo: {alt_cpf}")
                 brmed_resultado = await brmed_service.consultar_exames_brmed(alt_cpf)
+                logger.info(f"[WORKFLOW] Consulta BRMED concluída em {time.perf_counter() - t_brmed_alt:.2f}s")
                 if "erro" not in brmed_resultado:
                     cpf_final = alt_cpf
                     exames_brnet = brmed_resultado.get("exames", [])
@@ -539,6 +547,7 @@ async def processar_documento_completo(
 
     # 3. Validar exames
     await send_progress(70, "validacao", "Validando exames com IA...")
+    t_validacao = time.perf_counter()
     logger.info(f"[WORKFLOW] Realizando validação para CPF: {cpf_final}")
     resultado_validacao = await validacao_service.validar_exames(
         cpf=cpf_final,
@@ -546,6 +555,7 @@ async def processar_documento_completo(
         exames_enviados=exames_enviados,
         exames_brnet=exames_brnet
     )
+    logger.info(f"[WORKFLOW] Validação concluída em {time.perf_counter() - t_validacao:.2f}s")
     await send_progress(90, "validacao", "Validação concluída, preparando resultado...")
     logger.info(f"[WORKFLOW] Validação concluída.")
 
@@ -604,5 +614,6 @@ async def processar_documento_completo(
 
     await send_progress(100, "concluido", "Processamento concluído com sucesso!")
     logger.info(f"[WORKFLOW] Processamento completo finalizado para: {arquivo.filename}")
+    logger.info(f"[WORKFLOW] Processamento completo em {time.perf_counter() - start_total:.2f}s")
 
     return resposta_final

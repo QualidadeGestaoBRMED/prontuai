@@ -1,4 +1,5 @@
 import os
+import time
 import tempfile
 import re
 import json
@@ -575,6 +576,7 @@ def processar_arquivo_textract(
         Exception: Outros erros inesperados
     """
     logger.info(f"[OCR] Processando com AWS Textract (Assíncrono) via S3: {file_path}")
+    start_total = time.perf_counter()
 
     # Reparar PDF para garantir compatibilidade com Textract
     pdf_reparado = reparar_pdf_para_textract(file_path)
@@ -594,6 +596,7 @@ def processar_arquivo_textract(
 
     try:
         # 1. Upload do PDF reparado para S3
+        t_upload = time.perf_counter()
         logger.info(f"[OCR] Fazendo upload para S3: s3://{bucket_name}/{s3_key}")
 
         with open(pdf_otimizado, 'rb') as file_data:
@@ -602,9 +605,10 @@ def processar_arquivo_textract(
         # Verificar tamanho do arquivo
         file_size = os.path.getsize(pdf_otimizado)
         tamanho_mb = file_size / (1024 * 1024)
-        logger.info(f"[OCR] Upload concluído. Tamanho: {tamanho_mb:.2f} MB")
+        logger.info(f"[OCR] Upload concluído. Tamanho: {tamanho_mb:.2f} MB (em {time.perf_counter() - t_upload:.2f}s)")
 
         # 2. Iniciar processamento assíncrono com Textract
+        t_start = time.perf_counter()
         logger.info(f"[OCR] Iniciando job Textract assíncrono (StartDocumentTextDetection)...")
 
         response = textract_client.start_document_text_detection(
@@ -617,10 +621,13 @@ def processar_arquivo_textract(
         )
 
         job_id = response['JobId']
-        logger.info(f"[OCR] Job iniciado com sucesso. JobId: {job_id}")
+        logger.info(f"[OCR] Job iniciado com sucesso. JobId: {job_id} (em {time.perf_counter() - t_start:.2f}s)")
 
         # 3. Aguardar conclusão do job
+        t_wait = time.perf_counter()
         max_wait_seconds = calcular_timeout_textract(tamanho_mb)
+        if settings.TEXTRACT_FALLBACK_TO_LOCAL:
+            max_wait_seconds = min(max_wait_seconds, settings.TEXTRACT_FALLBACK_AFTER_SECONDS)
         logger.info(f"[OCR] Timeout maximo do Textract: {max_wait_seconds}s")
         last_status = {"value": "IN_PROGRESS"}
         def status_hook(status: str):
@@ -653,15 +660,19 @@ def processar_arquivo_textract(
         if last_status["value"] in ["IN_PROGRESS", "PENDING"]:
             logger.info("[OCR] Status ainda pendente, usando waiter do boto3")
             aguardar_job_textract_com_backoff(job_id, settings.TEXTRACT_MAX_WAIT_SECONDS)
+        logger.info(f"[OCR] Job Textract finalizado em {time.perf_counter() - t_wait:.2f}s (status={last_status['value']})")
 
         # 4. Coletar resultados paginados
+        t_collect = time.perf_counter()
         all_blocks = coletar_resultados_textract(job_id)
+        logger.info(f"[OCR] Resultados coletados em {time.perf_counter() - t_collect:.2f}s")
 
         # 5. Converter blocos em markdown
+        t_conv = time.perf_counter()
         logger.info(f"[OCR] Convertendo {len(all_blocks)} blocos em markdown...")
         markdown = textract_to_markdown({'Blocks': all_blocks})
 
-        logger.info(f"[OCR] Conversão concluída. Markdown gerado: {len(markdown)} caracteres")
+        logger.info(f"[OCR] Conversão concluída em {time.perf_counter() - t_conv:.2f}s. Markdown gerado: {len(markdown)} caracteres")
         return markdown
 
     except ClientError as e:
@@ -701,6 +712,7 @@ def processar_arquivo_textract(
                 logger.debug(f"[OCR] Arquivo temporário reparado removido: {pdf_reparado}")
             except Exception as e:
                 logger.warning(f"[OCR] Não foi possível remover arquivo temporário: {e}")
+        logger.info(f"[OCR] Fluxo Textract assíncrono completo em {time.perf_counter() - start_total:.2f}s")
 
 
 def extrair_exames_ia(markdown: str) -> Dict[str, Any]:
@@ -748,6 +760,7 @@ async def ocr_pipeline(file, salvar_markdown=True, progress_hook: Optional[Calla
     - Docling (local): quando USE_TEXTRACT=false (padrão)
     """
     logger.info(f"[OCR] Iniciando pipeline OCR para arquivo: {file.filename}")
+    start_total = time.perf_counter()
 
     # Determinar qual motor usar
     usar_textract = settings.USE_TEXTRACT and textract_client is not None
@@ -792,6 +805,14 @@ async def ocr_pipeline(file, salvar_markdown=True, progress_hook: Optional[Calla
                     temp_path,
                     progress_hook=progress_hook
                 )
+            except TimeoutError as e:
+                if settings.TEXTRACT_FALLBACK_TO_LOCAL:
+                    logger.warning(f"[OCR] {e}. Fallback para OCR local (Docling).")
+                    if progress_hook:
+                        progress_hook("Fila Textract, usando OCR local.")
+                    markdown = processar_arquivo_docling(temp_path)
+                else:
+                    raise
         else:
             markdown = processar_arquivo_docling(temp_path)
 
@@ -800,6 +821,7 @@ async def ocr_pipeline(file, salvar_markdown=True, progress_hook: Optional[Calla
         # Remover arquivo temporário original
         if os.path.exists(temp_path):
             os.remove(temp_path)
+        logger.info(f"[OCR] Pipeline OCR finalizado em {time.perf_counter() - start_total:.2f}s")
 
     # Salvar markdown
     caminho_md = None

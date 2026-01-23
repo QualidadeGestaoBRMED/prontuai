@@ -29,6 +29,8 @@ class Settings:
     TEXTRACT_PREPROCESS_PDF = os.getenv("TEXTRACT_PREPROCESS_PDF", "true").lower() == "true"
     TEXTRACT_PREPROCESS_MAX_MB = float(os.getenv("TEXTRACT_PREPROCESS_MAX_MB", 1.0))
     TEXTRACT_GS_PDFSETTINGS = os.getenv("TEXTRACT_GS_PDFSETTINGS", "ebook")
+    TEXTRACT_FALLBACK_TO_LOCAL = os.getenv("TEXTRACT_FALLBACK_TO_LOCAL", "true").lower() == "true"
+    TEXTRACT_FALLBACK_AFTER_SECONDS = int(os.getenv("TEXTRACT_FALLBACK_AFTER_SECONDS", 90))
 
     # Feature Toggle: OCR Engine Selection
     USE_TEXTRACT = os.getenv("USE_TEXTRACT", "false").lower() == "true"
