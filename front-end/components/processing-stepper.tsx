@@ -86,7 +86,7 @@ export function ProcessingStepper({
               className="relative items-start not-last:flex-1 group"
               loading={isLoading}
             >
-              <StepperTrigger className="items-start rounded pb-8 last:pb-0 cursor-default">
+            <StepperTrigger className="flex-row items-start gap-3 rounded pb-8 last:pb-0 cursor-default">
                 <StepperIndicator className="mt-0.5">
                   {isCompleted ? (
                     <CheckIcon className="size-3" />
@@ -94,9 +94,9 @@ export function ProcessingStepper({
                     <Icon className="size-3" />
                   )}
                 </StepperIndicator>
-                <div className="mt-0.5 space-y-1 px-3 text-left">
-                  <StepperTitle className="text-base">{title}</StepperTitle>
-                  <StepperDescription className="text-sm">
+                <div className="mt-0.5 min-w-0 space-y-1 text-left">
+                  <StepperTitle className="text-base leading-tight">{title}</StepperTitle>
+                  <StepperDescription className="text-sm leading-snug">
                     {isActive && statusMessage ? statusMessage : description}
                   </StepperDescription>
                 </div>
