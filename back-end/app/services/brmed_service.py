@@ -4,6 +4,7 @@ from datetime import datetime
 from playwright.async_api import async_playwright
 from typing import Dict, Any
 import logging
+import time
 
 logger = logging.getLogger(__name__)
 
@@ -59,6 +60,7 @@ def extract_nome_e_exames(conteudo: str) -> Dict[str, Any]:
 
 async def consultar_exames_brmed(cpf: str) -> Dict[str, Any]:
     """Executa automação Playwright para consultar exames obrigatórios na BRMED."""
+    start_total = time.perf_counter()
     async with async_playwright() as p:
         browser = await p.chromium.launch(
             headless=True,  # Modo sem interface gráfica para melhor desempenho
@@ -82,6 +84,7 @@ async def consultar_exames_brmed(cpf: str) -> Dict[str, Any]:
             logger.info("Iniciando automação Playwright...")
             # --- autenticação ---
             logger.info("Navegando para a página de login...")
+            t_login = time.perf_counter()
             await page.goto("https://operacoes.grupobrmed.com.br/")
             await page.fill("input[name='username']", os.getenv("BRMED_USERNAME"))
             await page.fill("input[name='password']", os.getenv("BRMED_PASSWORD"))
@@ -93,7 +96,7 @@ async def consultar_exames_brmed(cpf: str) -> Dict[str, Any]:
             await page.wait_for_timeout(2000)
             await page.evaluate("document.querySelector('#radio_cpf').click()")
             await page.wait_for_timeout(1000)
-            logger.info("Autenticação e seleção de CPF concluídos.")
+            logger.info(f"Autenticação e seleção de CPF concluídos em {time.perf_counter() - t_login:.2f}s.")
 
             # --- consulta pelo CPF ---
             # Formatar CPF: 12345678909 -> 123.456.789-09
@@ -101,6 +104,7 @@ async def consultar_exames_brmed(cpf: str) -> Dict[str, Any]:
             cpf_formatado = f"{cpf_limpo[:3]}.{cpf_limpo[3:6]}.{cpf_limpo[6:9]}-{cpf_limpo[9:11]}"
 
             logger.info(f"Consultando CPF: {cpf} (formatado: {cpf_formatado})")
+            t_consulta = time.perf_counter()
 
             # Limpar o campo antes de digitar
             await page.click("input[type='text']")
@@ -111,7 +115,7 @@ async def consultar_exames_brmed(cpf: str) -> Dict[str, Any]:
                 .scroll_into_view_if_needed()
             await page.click("input[type='submit'].button-bold", force=True)
             await page.wait_for_load_state("networkidle", timeout=30000)
-            logger.info("Consulta de CPF realizada.")
+            logger.info(f"Consulta de CPF realizada em {time.perf_counter() - t_consulta:.2f}s.")
 
             # Debug: verificar se a tabela com resultados existe
             table_exists = await page.locator("table.tabledata").count()
@@ -170,4 +174,5 @@ async def consultar_exames_brmed(cpf: str) -> Dict[str, Any]:
         finally:
             if browser:
                 await browser.close()
-                logger.info("Navegador Playwright fechado.") 
+                logger.info("Navegador Playwright fechado.")
+            logger.info(f"Consulta BRMED finalizada em {time.perf_counter() - start_total:.2f}s.")
