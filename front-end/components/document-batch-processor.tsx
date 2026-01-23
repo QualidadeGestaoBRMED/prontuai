@@ -53,6 +53,7 @@ interface DocumentProcessingState {
   file: File
   stage: ProcessingStage
   progress: number
+  displayProgress: number
   statusMessage: string
   result?: DocumentProcessingResult
   error?: string
@@ -93,6 +94,7 @@ export function DocumentBatchProcessor({
         file: f.file as File,
         stage: "upload" as ProcessingStage,
         progress: 0,
+        displayProgress: 0,
         statusMessage: "Preparando envio...",
       }))
 
@@ -127,6 +129,25 @@ export function DocumentBatchProcessor({
       })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setDocuments((prev) =>
+        prev.map((doc) => {
+          if (doc.displayProgress === doc.progress) return doc
+          const delta = doc.progress - doc.displayProgress
+          if (delta <= 0) return doc
+          const step = Math.max(1, Math.ceil(delta / 12))
+          return {
+            ...doc,
+            displayProgress: Math.min(doc.progress, doc.displayProgress + step),
+          }
+        })
+      )
+    }, 200)
+
+    return () => clearInterval(interval)
   }, [])
 
   const processDocument = useCallback(
@@ -312,6 +333,7 @@ export function DocumentBatchProcessor({
                       ...doc,
                       stage: "completed",
                       progress: 100,
+                      displayProgress: 100,
                       statusMessage: "Processamento concluído!",
                       result,
                     }
@@ -362,7 +384,7 @@ export function DocumentBatchProcessor({
 
     // Calcula progresso médio
     const avgProgress = Math.round(
-      documents.reduce((sum, d) => sum + d.progress, 0) / documents.length
+      documents.reduce((sum, d) => sum + d.displayProgress, 0) / documents.length
     )
 
     // Determina etapa atual baseado no progresso médio
@@ -393,7 +415,7 @@ export function DocumentBatchProcessor({
         status: d.error ? 'error' as const :
                 d.stage === 'completed' ? 'completed' as const :
                 d.progress > 0 ? 'processing' as const : 'pending' as const,
-        progress: d.progress,
+        progress: d.displayProgress,
         error: d.error,
       })),
     })
@@ -486,7 +508,7 @@ export function DocumentBatchProcessor({
             Progresso médio:{" "}
             <span className="font-medium">
               {Math.round(
-                documents.reduce((sum, d) => sum + d.progress, 0) / documents.length
+                documents.reduce((sum, d) => sum + d.displayProgress, 0) / documents.length
               )}%
             </span>
           </p>
@@ -525,7 +547,7 @@ export function DocumentBatchProcessor({
                 )}
               </div>
               <div className="text-right">
-                <p className="text-2xl font-bold tabular-nums">{doc.progress}%</p>
+                <p className="text-2xl font-bold tabular-nums">{doc.displayProgress}%</p>
                 {doc.stage !== "completed" && !doc.error && (
                   <p className="text-xs text-muted-foreground mt-1">
                     {doc.stage === "upload" && "Upload"}
