@@ -1,6 +1,8 @@
 "use client"
 
 import { useState } from "react"
+import { useSearchParams } from "next/navigation"
+import { useSession } from "next-auth/react"
 import { AppSidebar } from "@/components/app-sidebar"
 import {
   SidebarInset,
@@ -10,7 +12,7 @@ import {
 import UserDropdown from "@/components/user-dropdown"
 import { DocumentUploadZone } from "@/components/document-upload-zone"
 import { DocumentBatchProcessor, DocumentProcessingResult } from "@/components/document-batch-processor"
-import { ChatSidebar } from "@/components/chat-sidebar"
+// import { ChatSidebar } from "@/components/chat-sidebar"
 import { FileWithPreview } from "@/hooks/use-file-upload"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
@@ -28,34 +30,37 @@ import { generateResultPDF } from "@/lib/pdf-generator"
 type PageState = "upload" | "processing" | "completed"
 
 export default function Page() {
+  const searchParams = useSearchParams()
+  const autoOpenUpload = searchParams.get("reenviar") === "1"
   const [pageState, setPageState] = useState<PageState>("upload")
   const [filesToProcess, setFilesToProcess] = useState<FileWithPreview[]>([])
-  const [chatInitialMessage, setChatInitialMessage] = useState<string>()
+  // const [chatInitialMessage, setChatInitialMessage] = useState<string>()
   const [selectedResult, setSelectedResult] = useState<ProcessResult | null>(null)
   const [detailsModalOpen, setDetailsModalOpen] = useState(false)
   const { unreadCount, activeProcess, setNotificationCenterOpen, processResults, progressBarMinimized, showProgressBar } = useNotifications()
+  const { data: session } = useSession()
 
   // Don't auto-navigate to results - let user control the state
 
   const handleProcessFiles = (files: FileWithPreview[]) => {
     setFilesToProcess(files)
     setPageState("processing")
-    setChatInitialMessage(
-      `Recebi ${files.length} ${files.length === 1 ? "documento" : "documentos"}! Iniciando processamento...`
-    )
+    // setChatInitialMessage(
+    //   `Recebi ${files.length} ${files.length === 1 ? "documento" : "documentos"}! Iniciando processamento...`
+    // )
   }
 
   const handleProcessingComplete = (completedResults: DocumentProcessingResult[]) => {
     setPageState("completed")
-    setChatInitialMessage(
-      `Processamento concluído! ${completedResults.length} ${completedResults.length === 1 ? "documento processado" : "documentos processados"}.`
-    )
+    // setChatInitialMessage(
+    //   `Processamento concluído! ${completedResults.length} ${completedResults.length === 1 ? "documento processado" : "documentos processados"}.`
+    // )
   }
 
   const handleStartOver = () => {
     setPageState("upload")
     setFilesToProcess([])
-    setChatInitialMessage(undefined)
+    // setChatInitialMessage(undefined)
   }
 
   return (
@@ -98,7 +103,7 @@ export default function Page() {
                       Faça upload dos documentos médicos para validação automática
                     </p>
                   </div>
-                  <DocumentUploadZone onProcessFiles={handleProcessFiles} />
+                  <DocumentUploadZone onProcessFiles={handleProcessFiles} autoOpen={autoOpenUpload} />
                 </div>
               )}
 
@@ -141,6 +146,7 @@ export default function Page() {
                   <DocumentBatchProcessor
                     files={filesToProcess}
                     onComplete={handleProcessingComplete}
+                    submittedBy={session?.user?.email || undefined}
                   />
                 </div>
               )}
@@ -226,10 +232,10 @@ export default function Page() {
             </div>
           </div>
 
-          {/* Chat Sidebar */}
-          <div className="w-96 shrink-0 border-l">
+          {/* FAQ removido temporariamente (manter para retorno futuro). */}
+          {/* <div className="w-96 shrink-0 border-l">
             <ChatSidebar initialMessage={chatInitialMessage} />
-          </div>
+          </div> */}
         </div>
       </SidebarInset>
       <NotificationCenter />

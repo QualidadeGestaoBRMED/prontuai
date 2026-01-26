@@ -159,9 +159,17 @@ export default function Page() {
 
   const handleAprovar = (id: string, approvalReason: string) => {
     const result = processResults.find((r) => r.id === id);
+    const approvalReasonValue = approvalReason?.trim() || "";
+    const approvalReasonNormalized = approvalReasonValue.length ? approvalReasonValue : undefined;
 
     // Atualiza no contexto de notificações
-    updateProcessResultStatus(id, 'approved', session?.user?.email || 'revisor@grupobrmed.com.br', undefined, approvalReason);
+    updateProcessResultStatus(
+      id,
+      'approved',
+      session?.user?.email || 'revisor@grupobrmed.com.br',
+      undefined,
+      approvalReasonNormalized
+    );
 
     // Atualiza estado local (array documentos)
     setDocumentos((docs) =>
@@ -171,7 +179,7 @@ export default function Page() {
               ...doc,
               status: "aprovado",
               dataProcessamento: new Date().toISOString(),
-              approvalReason,
+              approvalReason: approvalReasonNormalized,
             }
           : doc
       )
@@ -181,17 +189,20 @@ export default function Page() {
     if (result) {
       const reviewerEmail = session?.user?.email || 'revisor@grupobrmed.com.br'
       const reviewerName = session?.user?.name || 'um revisor'
+      const mensagemJustificativa = approvalReasonNormalized
+        ? ` Justificativa: ${approvalReasonNormalized}`
+        : ""
 
       addNotification({
         type: 'review_approved',
         title: 'Documento Aprovado',
-        message: `Seu documento do paciente ${result.patientName} foi aprovado por ${reviewerName}. Justificativa: ${approvalReason}`,
+        message: `Seu documento do paciente ${result.patientName} foi aprovado por ${reviewerName}.${mensagemJustificativa}`,
         read: false,
         metadata: {
           documentId: id,
           cpf: result.cpf,
           reviewerEmail,
-          approvalReason,
+          approvalReason: approvalReasonNormalized,
         },
         variant: 'success',
       });

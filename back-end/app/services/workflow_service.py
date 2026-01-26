@@ -339,11 +339,18 @@ def _filtrar_exames_ocr(
 
     if markdown:
         markdown_norm = f" {_normalizar_busca(markdown)} "
+        linhas = _extrair_linhas_markdown(markdown)
         for exame in exames_brnet:
             normalizado = _normalizar_busca(exame)
             if not normalizado or normalizado in vistos:
                 continue
-            if f" {normalizado} " in markdown_norm:
+            encontrou = f" {normalizado} " in markdown_norm
+            if not encontrou:
+                for _, linha_norm in linhas:
+                    if _token_subset_match(normalizado, linha_norm) or _token_overlap_match(normalizado, linha_norm):
+                        encontrou = True
+                        break
+            if encontrou:
                 vistos.add(normalizado)
                 filtrados.append(exame)
 

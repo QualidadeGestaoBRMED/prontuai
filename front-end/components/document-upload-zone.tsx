@@ -19,6 +19,7 @@ import {
   type FileWithPreview,
 } from "@/hooks/use-file-upload"
 import { Button } from "@/components/ui/button"
+import { useEffect, useRef } from "react"
 
 const getFileIcon = (file: FileWithPreview) => {
   const fileType = file.file instanceof File ? file.file.type : file.file.type
@@ -59,13 +60,16 @@ interface DocumentUploadZoneProps {
   onProcessFiles?: (files: FileWithPreview[]) => void
   maxSize?: number
   maxFiles?: number
+  autoOpen?: boolean
 }
 
 export function DocumentUploadZone({
   onProcessFiles,
   maxSize = 5 * 1024 * 1024,
   maxFiles = 10,
+  autoOpen = false,
 }: DocumentUploadZoneProps) {
+  const hasAutoOpened = useRef(false)
   const [
     { files, isDragging, errors },
     {
@@ -83,6 +87,13 @@ export function DocumentUploadZone({
     maxFiles,
     maxSize,
   })
+
+  useEffect(() => {
+    if (autoOpen && !hasAutoOpened.current) {
+      hasAutoOpened.current = true
+      openFileDialog()
+    }
+  }, [autoOpen, openFileDialog])
 
   const handleProcessFiles = () => {
     if (onProcessFiles && files.length > 0) {
