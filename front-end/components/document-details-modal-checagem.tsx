@@ -25,8 +25,8 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
 import { ProcessResult } from "@/types/process"
 import ExamesComparativoTable from "@/components/exames-comparativo-table"
 
@@ -48,7 +48,6 @@ export function DocumentDetailsModalChecagem({
   onDownloadPDF,
 }: DocumentDetailsModalChecagemProps) {
   const [motivo, setMotivo] = useState("")
-  const [approvalReason, setApprovalReason] = useState("")
   const [showRejectDialog, setShowRejectDialog] = useState(false)
   const [showApproveDialog, setShowApproveDialog] = useState(false)
 
@@ -88,7 +87,7 @@ export function DocumentDetailsModalChecagem({
     if (status === "rejected" && reviewedBy) {
       return (
         <Badge variant="destructive">
-          Documentos Incompletos - Reenviar
+          Rejeitado pelo Revisor
         </Badge>
       )
     }
@@ -98,12 +97,9 @@ export function DocumentDetailsModalChecagem({
   }
 
   const handleAprovar = () => {
-    if (approvalReason.trim()) {
-      onAprovar(result.id, approvalReason)
-      setApprovalReason("")
-      setShowApproveDialog(false)
-      onOpenChange(false)
-    }
+    onAprovar(result.id, "")
+    setShowApproveDialog(false)
+    onOpenChange(false)
   }
 
   const handleRejeitar = () => {
@@ -116,7 +112,6 @@ export function DocumentDetailsModalChecagem({
   }
 
   const isPending = !result.reviewedBy
-
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
@@ -299,10 +294,14 @@ export function DocumentDetailsModalChecagem({
           {/* Footer Actions */}
           <div className="flex items-center justify-between pt-4 border-t">
             {onDownloadPDF && (
-              <Button variant="outline" size="sm" onClick={onDownloadPDF}>
-                <Download className="size-4 mr-2" />
-                Download PDF
-              </Button>
+              <div className="flex gap-2">
+                {onDownloadPDF && (
+                  <Button variant="outline" size="sm" onClick={onDownloadPDF}>
+                    <Download className="size-4 mr-2" />
+                    Download PDF
+                  </Button>
+                )}
+              </div>
             )}
             <div className="flex gap-2 ml-auto">
               {isPending && (
@@ -338,27 +337,14 @@ export function DocumentDetailsModalChecagem({
           <AlertDialogHeader>
             <AlertDialogTitle>Confirmar aprovação</AlertDialogTitle>
             <AlertDialogDescription className="text-foreground">
-              Informe a justificativa para aprovar o documento do paciente{" "}
+              Confirme a aprovação do documento do paciente{" "}
               <strong>{result.patientName}</strong> (CPF: {result.cpf}).
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <div className="space-y-2 py-4">
-            <Label htmlFor="approvalReason" className="text-foreground">Justificativa da aprovação</Label>
-            <Textarea
-              id="approvalReason"
-              placeholder="Ex: Exames equivalentes foram aceitos, documentação complementar validada, etc."
-              value={approvalReason}
-              onChange={(e) => setApprovalReason(e.target.value)}
-              rows={4}
-            />
-          </div>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setApprovalReason("")}>
-              Cancelar
-            </AlertDialogCancel>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleAprovar}
-              disabled={!approvalReason.trim()}
               className="bg-green-600 hover:bg-green-700"
             >
               Aprovar

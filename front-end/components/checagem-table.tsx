@@ -176,18 +176,20 @@ export function CheckagemTable({
         id: "actions",
         cell: ({ row }) => {
           return (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={(e) => {
-                e.stopPropagation();
-                onViewDetails?.(row.original.id);
-              }}
-              className="gap-2"
-            >
-              <EyeIcon className="size-4" />
-              Ver
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onViewDetails?.(row.original.id);
+                }}
+                className="gap-2"
+              >
+                <EyeIcon className="size-4" />
+                Ver
+              </Button>
+            </div>
           );
         },
         enableSorting: false,
