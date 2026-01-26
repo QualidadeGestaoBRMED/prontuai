@@ -16,6 +16,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { ProcessResult } from "@/types/process"
 import ExamesComparativoTable from "@/components/exames-comparativo-table"
 import { Download } from "lucide-react"
+import { useRouter } from "next/navigation"
 
 interface DocumentDetailsModalProps {
   open: boolean
@@ -30,6 +31,7 @@ export function DocumentDetailsModal({
   result,
   onDownloadPDF,
 }: DocumentDetailsModalProps) {
+  const router = useRouter()
   if (!result) return null
 
   const getStatusBadge = (result: ProcessResult) => {
@@ -73,6 +75,13 @@ export function DocumentDetailsModal({
 
     // Fallback
     return <Badge variant="secondary">{status}</Badge>
+  }
+
+  const canResend = result.status === "pending_review" || result.status === "rejected"
+
+  const handleReenviar = () => {
+    router.push(`/anexar-prontuario?reenviar=1&cpf=${encodeURIComponent(result.cpf)}`)
+    onOpenChange(false)
   }
 
   return (
@@ -255,15 +264,30 @@ export function DocumentDetailsModal({
 
         {/* Footer Actions */}
         <div className="flex items-center justify-between pt-4 border-t">
-          {onDownloadPDF && (
-            <Button variant="outline" size="sm" onClick={onDownloadPDF}>
-              <Download className="size-4 mr-2" />
-              Download PDF
-            </Button>
+          {(canResend || onDownloadPDF) && (
+            <div className="flex gap-2">
+              {onDownloadPDF && (
+                <Button variant="outline" size="sm" onClick={onDownloadPDF}>
+                  <Download className="size-4 mr-2" />
+                  Download PDF
+                </Button>
+              )}
+            </div>
           )}
-          <Button variant="ghost" onClick={() => onOpenChange(false)} className="ml-auto">
-            Fechar
-          </Button>
+          <div className="flex items-center gap-2 ml-auto">
+            <Button variant="ghost" onClick={() => onOpenChange(false)}>
+              Fechar
+            </Button>
+            {canResend && (
+              <Button
+                size="sm"
+                onClick={handleReenviar}
+                className="bg-primary text-primary-foreground hover:bg-primary/90"
+              >
+                Reenviar documento
+              </Button>
+            )}
+          </div>
         </div>
       </DialogContent>
     </Dialog>

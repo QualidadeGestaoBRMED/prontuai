@@ -1665,3 +1665,2021 @@ HDL * / HDL *	TRIGLICERÍDEOS * / TRIGLYCERIDES *
 2025-07-30 07:36:26,452 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
 2025-07-30 07:36:26,454 [INFO] app.services.faq_service: Tokens do prompt: 619 | Tokens de completação: 69 | Total: 688
 2025-07-30 07:36:26,455 [INFO] app.services.faq_service: Distâncias dos vizinhos: [0.94863546 1.0239552 ]
+2026-01-26 10:50:11,046 [INFO] main: 🚀 Iniciando aplicação...
+2026-01-26 10:50:11,047 [INFO] app.core.migrations: ============================================================
+2026-01-26 10:50:11,047 [INFO] app.core.migrations: VERIFICANDO MIGRAÇÕES DO BANCO DE DADOS
+2026-01-26 10:50:11,047 [INFO] app.core.migrations: ============================================================
+2026-01-26 10:50:12,159 [INFO] app.core.migrations: ✓ Banco de dados já migrado (todas as colunas existem)
+2026-01-26 10:50:12,159 [INFO] app.core.migrations: Nenhuma migração necessária - banco já atualizado
+2026-01-26 11:31:16,507 [INFO] app.api.v1.auth: Usuário autenticado: gabriel.rodrigues@grupobrmed.com.br (role: ADMIN, clinic_id: None)
+2026-01-26 13:42:39,338 [INFO] app.api.v1_brmed: [REQUEST-ASYNC] Documento recebido: BR MED - ADRIEL DE SA BATISTA.pdf (2.75MB)
+2026-01-26 13:42:39,338 [INFO] app.api.v1_brmed: [REQUEST-ASYNC] Exames obrigatórios: 0
+2026-01-26 13:42:39,338 [INFO] app.core.job_manager: [JobManager] Job criado: 730a3a16-8552-49e9-8f8b-f1aca7ee17ac (tipo=document_processing)
+2026-01-26 13:42:39,343 [INFO] app.api.v1_brmed: [JOB 730a3a16-8552-49e9-8f8b-f1aca7ee17ac] Arquivo salvo temporariamente: /tmp/tmp88wf8oe3.pdf
+2026-01-26 13:42:39,343 [INFO] app.api.v1_brmed: [JOB 730a3a16-8552-49e9-8f8b-f1aca7ee17ac] Task adicionada ao background
+2026-01-26 13:42:39,344 [INFO] app.api.v1_brmed: [JOB 730a3a16-8552-49e9-8f8b-f1aca7ee17ac] Iniciando processamento em background
+2026-01-26 13:42:39,344 [INFO] app.core.job_manager: [JOB 730a3a16-8552-49e9-8f8b-f1aca7ee17ac] Iniciado
+2026-01-26 13:42:39,345 [INFO] app.services.workflow_service: [WORKFLOW] Iniciando processamento completo para: BR MED - ADRIEL DE SA BATISTA.pdf
+2026-01-26 13:42:39,345 [INFO] app.services.workflow_service: [WORKFLOW-PROGRESS] 10% - ocr: Processando documento com OCR...
+2026-01-26 13:42:39,345 [INFO] app.services.ocr_service: [OCR] Iniciando pipeline OCR para arquivo: BR MED - ADRIEL DE SA BATISTA.pdf
+2026-01-26 13:42:39,345 [INFO] app.services.ocr_service: [OCR] Motor selecionado: AWS Textract
+2026-01-26 13:42:39,347 [INFO] app.services.ocr_service: [OCR] Iniciando conversão com AWS Textract para: BR MED - ADRIEL DE SA BATISTA.pdf
+2026-01-26 13:42:39,348 [INFO] app.services.ocr_service: [OCR] Processando com AWS Textract (Síncrono): /tmp/tmpz9d14_mx.pdf
+2026-01-26 13:42:39,348 [INFO] app.services.ocr_service: [OCR] Reparando PDF para compatibilidade Textract: /tmp/tmpz9d14_mx.pdf
+2026-01-26 13:42:39,374 [INFO] app.services.ocr_service: [OCR] PDF reparado salvo em: /tmp/tmp8nay_wt3.pdf
+2026-01-26 13:42:39,380 [INFO] app.services.ocr_service: [OCR] Heurística PDF: páginas=3, chars_medio=0.0, imagens_ratio=0.00
+2026-01-26 13:42:39,380 [INFO] app.services.ocr_service: [OCR] Documento escaneado detectado. Pulando compressao para evitar perda.
+2026-01-26 13:42:39,382 [INFO] app.services.ocr_service: [OCR] Tamanho do arquivo: 2.75 MB
+2026-01-26 13:42:39,382 [INFO] app.services.ocr_service: [OCR] Chamando detect_document_text (síncrono)...
+2026-01-26 13:42:41,625 [ERROR] app.services.ocr_service: [OCR] Erro AWS [UnsupportedDocumentException]: Request has unsupported document format
+2026-01-26 13:42:41,626 [WARNING] app.services.ocr_service: [OCR] Documento nao suportado no modo sincrono, usando assincrono
+2026-01-26 13:42:41,626 [INFO] app.services.ocr_service: [OCR] Processando com AWS Textract (Assíncrono) via S3: /tmp/tmpz9d14_mx.pdf
+2026-01-26 13:42:41,626 [INFO] app.services.ocr_service: [OCR] Reparando PDF para compatibilidade Textract: /tmp/tmpz9d14_mx.pdf
+2026-01-26 13:42:41,639 [INFO] app.services.ocr_service: [OCR] PDF reparado salvo em: /tmp/tmp8wydx0yn.pdf
+2026-01-26 13:42:41,643 [INFO] app.services.ocr_service: [OCR] Heurística PDF: páginas=3, chars_medio=0.0, imagens_ratio=0.00
+2026-01-26 13:42:41,644 [INFO] app.services.ocr_service: [OCR] Documento escaneado detectado. Pulando compressao para evitar perda.
+2026-01-26 13:42:41,644 [INFO] app.services.ocr_service: [OCR] Fazendo upload para S3: s3://brmed-exam-ocr/textract-temp/20260126_134241_60134656_tmpz9d14_mx.pdf
+2026-01-26 13:42:43,152 [INFO] app.services.ocr_service: [OCR] Upload concluído. Tamanho: 2.75 MB (em 1.51s)
+2026-01-26 13:42:43,152 [INFO] app.services.ocr_service: [OCR] Iniciando job Textract assíncrono (StartDocumentTextDetection)...
+2026-01-26 13:42:43,830 [INFO] app.services.ocr_service: [OCR] Job iniciado com sucesso. JobId: eb9ddf632cc2810c45af82973a8d7db16a97e85c7e15ad57b73ff439db9e0b43 (em 0.68s)
+2026-01-26 13:42:43,830 [INFO] app.services.ocr_service: [OCR] Timeout maximo do Textract: 90s
+2026-01-26 13:42:43,830 [INFO] app.services.ocr_service: [OCR] Aguardando conclusão do job Textract: eb9ddf632cc2810c45af82973a8d7db16a97e85c7e15ad57b73ff439db9e0b43
+2026-01-26 13:44:14,402 [WARNING] app.services.ocr_service: [OCR] Timeout atingido, estendendo espera por mais 120s
+2026-01-26 13:44:14,402 [INFO] app.services.ocr_service: [OCR] Aguardando conclusão do job Textract: eb9ddf632cc2810c45af82973a8d7db16a97e85c7e15ad57b73ff439db9e0b43
+2026-01-26 13:46:16,805 [ERROR] app.services.ocr_service: [OCR] Timeout ao aguardar job Textract: Job Textract não completou após 120 segundos
+2026-01-26 13:46:16,805 [INFO] app.services.ocr_service: [OCR] Removendo arquivo do S3: textract-temp/20260126_134241_60134656_tmpz9d14_mx.pdf
+2026-01-26 13:46:17,399 [INFO] app.services.ocr_service: [OCR] Arquivo removido do S3 com sucesso
+2026-01-26 13:46:17,400 [INFO] app.services.ocr_service: [OCR] Fluxo Textract assíncrono completo em 215.77s
+2026-01-26 13:46:17,401 [INFO] app.services.ocr_service: [OCR] Pipeline OCR finalizado em 218.06s
+2026-01-26 13:46:17,401 [ERROR] app.api.v1_brmed: [JOB 730a3a16-8552-49e9-8f8b-f1aca7ee17ac] Erro durante processamento: Job Textract não completou após 120 segundos
+Traceback (most recent call last):
+  File "/home/brmed/Área de trabalho/projetos/prontuai/back-end/app/services/ocr_service.py", line 874, in ocr_pipeline
+    markdown = processar_arquivo_textract_sincrono(temp_path)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/brmed/Área de trabalho/projetos/prontuai/back-end/app/services/ocr_service.py", line 611, in processar_arquivo_textract_sincrono
+    response = textract_client.detect_document_text(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/brmed/Área de trabalho/projetos/prontuai/back-end/venv/lib/python3.12/site-packages/botocore/client.py", line 602, in _api_call
+    return self._make_api_call(operation_name, kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/brmed/Área de trabalho/projetos/prontuai/back-end/venv/lib/python3.12/site-packages/botocore/context.py", line 123, in wrapper
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/brmed/Área de trabalho/projetos/prontuai/back-end/venv/lib/python3.12/site-packages/botocore/client.py", line 1078, in _make_api_call
+    raise error_class(parsed_response, operation_name)
+botocore.errorfactory.UnsupportedDocumentException: An error occurred (UnsupportedDocumentException) when calling the DetectDocumentText operation: Request has unsupported document format
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/brmed/Área de trabalho/projetos/prontuai/back-end/app/services/ocr_service.py", line 727, in processar_arquivo_textract
+    aguardar_job_textract(
+  File "/home/brmed/Área de trabalho/projetos/prontuai/back-end/app/services/ocr_service.py", line 448, in aguardar_job_textract
+    raise TimeoutError(
+TimeoutError: Job Textract não completou após 90 segundos
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/brmed/Área de trabalho/projetos/prontuai/back-end/app/api/v1_brmed.py", line 292, in process_document_background
+    resultado = await workflow_service.processar_documento_completo(
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/brmed/Área de trabalho/projetos/prontuai/back-end/app/services/workflow_service.py", line 467, in processar_documento_completo
+    ocr_resultado = await ocr_service.ocr_pipeline(
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/brmed/Área de trabalho/projetos/prontuai/back-end/app/services/ocr_service.py", line 886, in ocr_pipeline
+    markdown = processar_arquivo_textract(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/brmed/Área de trabalho/projetos/prontuai/back-end/app/services/ocr_service.py", line 741, in processar_arquivo_textract
+    aguardar_job_textract(
+  File "/home/brmed/Área de trabalho/projetos/prontuai/back-end/app/services/ocr_service.py", line 448, in aguardar_job_textract
+    raise TimeoutError(
+TimeoutError: Job Textract não completou após 120 segundos
+2026-01-26 13:46:17,403 [ERROR] app.core.job_manager: [JOB 730a3a16-8552-49e9-8f8b-f1aca7ee17ac] Falhou: Job Textract não completou após 120 segundos
+2026-01-26 13:46:17,404 [INFO] app.services.workflow_service: [WORKFLOW-PROGRESS] 20% - ocr: OCR em andamento (job iniciado)
+2026-01-26 13:46:17,404 [INFO] app.services.workflow_service: [WORKFLOW-PROGRESS] 20% - ocr: OCR em andamento (in_progress)...
+2026-01-26 13:46:17,404 [INFO] app.services.workflow_service: [WORKFLOW-PROGRESS] 20% - ocr: OCR em andamento (in_progress)...
+2026-01-26 13:46:17,404 [INFO] app.services.workflow_service: [WORKFLOW-PROGRESS] 20% - ocr: OCR em andamento (in_progress)...
+2026-01-26 13:46:17,404 [INFO] app.services.workflow_service: [WORKFLOW-PROGRESS] 20% - ocr: OCR em andamento (in_progress)...
+2026-01-26 13:46:17,404 [INFO] app.services.workflow_service: [WORKFLOW-PROGRESS] 20% - ocr: OCR em andamento (in_progress)...
+2026-01-26 13:46:17,404 [INFO] app.services.workflow_service: [WORKFLOW-PROGRESS] 20% - ocr: OCR em andamento (job iniciado)
+2026-01-26 13:46:17,404 [INFO] app.services.workflow_service: [WORKFLOW-PROGRESS] 20% - ocr: OCR em andamento (in_progress)...
+2026-01-26 13:46:17,404 [INFO] app.services.workflow_service: [WORKFLOW-PROGRESS] 20% - ocr: OCR em andamento (in_progress)...
+2026-01-26 13:46:17,404 [INFO] app.services.workflow_service: [WORKFLOW-PROGRESS] 20% - ocr: OCR em andamento (in_progress)...
+2026-01-26 13:46:17,404 [INFO] app.services.workflow_service: [WORKFLOW-PROGRESS] 20% - ocr: OCR em andamento (in_progress)...
+2026-01-26 13:46:17,404 [INFO] app.services.workflow_service: [WORKFLOW-PROGRESS] 20% - ocr: OCR em andamento (in_progress)...
+2026-01-26 13:46:17,404 [INFO] app.services.workflow_service: [WORKFLOW-PROGRESS] 20% - ocr: OCR em andamento (in_progress)...
+2026-01-26 13:46:17,404 [INFO] app.services.workflow_service: [WORKFLOW-PROGRESS] 20% - ocr: OCR em andamento (in_progress)...
+2026-01-26 13:46:39,815 [INFO] app.api.v1_brmed: [REQUEST-ASYNC] Documento recebido: BR MED - ADRIEL DE SA BATISTA.pdf (2.75MB)
+2026-01-26 13:46:39,815 [INFO] app.api.v1_brmed: [REQUEST-ASYNC] Exames obrigatórios: 0
+2026-01-26 13:46:39,815 [INFO] app.core.job_manager: [JobManager] Job criado: b6cb1426-41ab-43e8-9021-d6f3791a19cd (tipo=document_processing)
+2026-01-26 13:46:39,820 [INFO] app.api.v1_brmed: [JOB b6cb1426-41ab-43e8-9021-d6f3791a19cd] Arquivo salvo temporariamente: /tmp/tmp9e401583.pdf
+2026-01-26 13:46:39,820 [INFO] app.api.v1_brmed: [JOB b6cb1426-41ab-43e8-9021-d6f3791a19cd] Task adicionada ao background
+2026-01-26 13:46:39,821 [INFO] app.api.v1_brmed: [JOB b6cb1426-41ab-43e8-9021-d6f3791a19cd] Iniciando processamento em background
+2026-01-26 13:46:39,821 [INFO] app.core.job_manager: [JOB b6cb1426-41ab-43e8-9021-d6f3791a19cd] Iniciado
+2026-01-26 13:46:39,823 [INFO] app.services.workflow_service: [WORKFLOW] Iniciando processamento completo para: BR MED - ADRIEL DE SA BATISTA.pdf
+2026-01-26 13:46:39,823 [INFO] app.services.workflow_service: [WORKFLOW-PROGRESS] 10% - ocr: Processando documento com OCR...
+2026-01-26 13:46:39,823 [INFO] app.services.ocr_service: [OCR] Iniciando pipeline OCR para arquivo: BR MED - ADRIEL DE SA BATISTA.pdf
+2026-01-26 13:46:39,823 [INFO] app.services.ocr_service: [OCR] Motor selecionado: AWS Textract
+2026-01-26 13:46:39,827 [INFO] app.services.ocr_service: [OCR] Iniciando conversão com AWS Textract para: BR MED - ADRIEL DE SA BATISTA.pdf
+2026-01-26 13:46:39,827 [INFO] app.services.ocr_service: [OCR] Processando com AWS Textract (Síncrono): /tmp/tmp0qdxxl08.pdf
+2026-01-26 13:46:39,827 [INFO] app.services.ocr_service: [OCR] Reparando PDF para compatibilidade Textract: /tmp/tmp0qdxxl08.pdf
+2026-01-26 13:46:39,851 [INFO] app.services.ocr_service: [OCR] PDF reparado salvo em: /tmp/tmps1h17f65.pdf
+2026-01-26 13:46:39,855 [INFO] app.services.ocr_service: [OCR] Heurística PDF: páginas=3, chars_medio=0.0, imagens_ratio=0.00
+2026-01-26 13:46:39,855 [INFO] app.services.ocr_service: [OCR] Documento escaneado detectado. Pulando compressao para evitar perda.
+2026-01-26 13:46:39,859 [INFO] app.services.ocr_service: [OCR] Tamanho do arquivo: 2.75 MB
+2026-01-26 13:46:39,859 [INFO] app.services.ocr_service: [OCR] Chamando detect_document_text (síncrono)...
+2026-01-26 13:46:41,444 [ERROR] app.services.ocr_service: [OCR] Erro AWS [UnsupportedDocumentException]: Request has unsupported document format
+2026-01-26 13:46:41,445 [WARNING] app.services.ocr_service: [OCR] Documento nao suportado no modo sincrono, usando assincrono
+2026-01-26 13:46:41,445 [INFO] app.services.ocr_service: [OCR] Processando com AWS Textract (Assíncrono) via S3: /tmp/tmp0qdxxl08.pdf
+2026-01-26 13:46:41,445 [INFO] app.services.ocr_service: [OCR] Reparando PDF para compatibilidade Textract: /tmp/tmp0qdxxl08.pdf
+2026-01-26 13:46:41,456 [INFO] app.services.ocr_service: [OCR] PDF reparado salvo em: /tmp/tmpeko5ylk6.pdf
+2026-01-26 13:46:41,458 [INFO] app.services.ocr_service: [OCR] Heurística PDF: páginas=3, chars_medio=0.0, imagens_ratio=0.00
+2026-01-26 13:46:41,459 [INFO] app.services.ocr_service: [OCR] Documento escaneado detectado. Pulando compressao para evitar perda.
+2026-01-26 13:46:41,459 [INFO] app.services.ocr_service: [OCR] Fazendo upload para S3: s3://brmed-exam-ocr/textract-temp/20260126_134641_ad085fac_tmp0qdxxl08.pdf
+2026-01-26 13:46:42,981 [INFO] app.services.ocr_service: [OCR] Upload concluído. Tamanho: 2.75 MB (em 1.52s)
+2026-01-26 13:46:42,981 [INFO] app.services.ocr_service: [OCR] Iniciando job Textract assíncrono (StartDocumentTextDetection)...
+2026-01-26 13:46:43,637 [INFO] app.services.ocr_service: [OCR] Job iniciado com sucesso. JobId: af3183b88f66ccfff601f6368a0c5c8102402a62b836d57bb92ba28e9428bcdf (em 0.66s)
+2026-01-26 13:46:43,637 [INFO] app.services.ocr_service: [OCR] Timeout maximo do Textract: 90s
+2026-01-26 13:46:43,637 [INFO] app.services.ocr_service: [OCR] Aguardando conclusão do job Textract: af3183b88f66ccfff601f6368a0c5c8102402a62b836d57bb92ba28e9428bcdf
+2026-01-26 13:48:44,275 [INFO] main: 🚀 Iniciando aplicação...
+2026-01-26 13:48:44,276 [INFO] app.core.migrations: ============================================================
+2026-01-26 13:48:44,276 [INFO] app.core.migrations: VERIFICANDO MIGRAÇÕES DO BANCO DE DADOS
+2026-01-26 13:48:44,276 [INFO] app.core.migrations: ============================================================
+2026-01-26 13:48:45,363 [INFO] app.core.migrations: ✓ Banco de dados já migrado (todas as colunas existem)
+2026-01-26 13:48:45,363 [INFO] app.core.migrations: Nenhuma migração necessária - banco já atualizado
+2026-01-26 13:49:02,440 [INFO] app.api.v1_brmed: [REQUEST-ASYNC] Documento recebido: BRMED - PERIODICO - JOEL FERREIRA BARBOSA  - COMPLETO.pdf (0.34MB)
+2026-01-26 13:49:02,440 [INFO] app.api.v1_brmed: [REQUEST-ASYNC] Exames obrigatórios: 0
+2026-01-26 13:49:02,440 [INFO] app.core.job_manager: [JobManager] Job criado: df3d95d9-2b6a-48ef-bc50-016cb01546d5 (tipo=document_processing)
+2026-01-26 13:49:02,441 [INFO] app.api.v1_brmed: [JOB df3d95d9-2b6a-48ef-bc50-016cb01546d5] Arquivo salvo temporariamente: /tmp/tmpo5q4nx2z.pdf
+2026-01-26 13:49:02,441 [INFO] app.api.v1_brmed: [JOB df3d95d9-2b6a-48ef-bc50-016cb01546d5] Task adicionada ao background
+2026-01-26 13:49:02,442 [INFO] app.api.v1_brmed: [JOB df3d95d9-2b6a-48ef-bc50-016cb01546d5] Iniciando processamento em background
+2026-01-26 13:49:02,442 [INFO] app.core.job_manager: [JOB df3d95d9-2b6a-48ef-bc50-016cb01546d5] Iniciado
+2026-01-26 13:49:02,442 [INFO] app.services.workflow_service: [WORKFLOW] Iniciando processamento completo para: BRMED - PERIODICO - JOEL FERREIRA BARBOSA  - COMPLETO.pdf
+2026-01-26 13:49:02,442 [INFO] app.services.workflow_service: [WORKFLOW-PROGRESS] 10% - ocr: Processando documento com OCR...
+2026-01-26 13:49:02,442 [INFO] app.services.ocr_service: [OCR] Iniciando pipeline OCR para arquivo: BRMED - PERIODICO - JOEL FERREIRA BARBOSA  - COMPLETO.pdf
+2026-01-26 13:49:02,442 [INFO] app.services.ocr_service: [OCR] Motor selecionado: AWS Textract
+2026-01-26 13:49:02,446 [INFO] app.services.ocr_service: [OCR] Iniciando conversão com AWS Textract para: BRMED - PERIODICO - JOEL FERREIRA BARBOSA  - COMPLETO.pdf
+2026-01-26 13:49:02,446 [INFO] app.services.ocr_service: [OCR] Processando com AWS Textract (Síncrono): /tmp/tmpw6kyscbe.pdf
+2026-01-26 13:49:02,446 [INFO] app.services.ocr_service: [OCR] Reparando PDF para compatibilidade Textract: /tmp/tmpw6kyscbe.pdf
+2026-01-26 13:49:02,448 [INFO] app.services.ocr_service: [OCR] PDF reparado salvo em: /tmp/tmplkv6q71g.pdf
+2026-01-26 13:49:02,449 [INFO] app.services.ocr_service: [OCR] Heurística PDF: páginas=2, chars_medio=0.0, imagens_ratio=0.00
+2026-01-26 13:49:02,450 [INFO] app.services.ocr_service: [OCR] Documento escaneado detectado. Pulando compressao para evitar perda.
+2026-01-26 13:49:02,450 [INFO] app.services.ocr_service: [OCR] Tamanho do arquivo: 0.34 MB
+2026-01-26 13:49:02,450 [INFO] app.services.ocr_service: [OCR] Chamando detect_document_text (síncrono)...
+2026-01-26 13:49:04,753 [ERROR] app.services.ocr_service: [OCR] Erro AWS [UnsupportedDocumentException]: Request has unsupported document format
+2026-01-26 13:49:04,754 [WARNING] app.services.ocr_service: [OCR] Documento nao suportado no modo sincrono, usando assincrono
+2026-01-26 13:49:04,754 [INFO] app.services.ocr_service: [OCR] Processando com AWS Textract (Assíncrono) via S3: /tmp/tmpw6kyscbe.pdf
+2026-01-26 13:49:04,754 [INFO] app.services.ocr_service: [OCR] Reparando PDF para compatibilidade Textract: /tmp/tmpw6kyscbe.pdf
+2026-01-26 13:49:04,756 [INFO] app.services.ocr_service: [OCR] PDF reparado salvo em: /tmp/tmpbznm7z4f.pdf
+2026-01-26 13:49:04,757 [INFO] app.services.ocr_service: [OCR] Heurística PDF: páginas=2, chars_medio=0.0, imagens_ratio=0.00
+2026-01-26 13:49:04,758 [INFO] app.services.ocr_service: [OCR] Documento escaneado detectado. Pulando compressao para evitar perda.
+2026-01-26 13:49:04,758 [INFO] app.services.ocr_service: [OCR] Fazendo upload para S3: s3://brmed-exam-ocr/textract-temp/20260126_134904_e9054d3a_tmpw6kyscbe.pdf
+2026-01-26 13:49:05,992 [INFO] app.services.ocr_service: [OCR] Upload concluído. Tamanho: 0.34 MB (em 1.23s)
+2026-01-26 13:49:05,992 [INFO] app.services.ocr_service: [OCR] Iniciando job Textract assíncrono (StartDocumentTextDetection)...
+2026-01-26 13:49:06,698 [INFO] app.services.ocr_service: [OCR] Job iniciado com sucesso. JobId: a0f04fffd29008d0fb2933008231746fddcbd16a603d33acf1376d6fb1c5983b (em 0.71s)
+2026-01-26 13:49:06,698 [INFO] app.services.ocr_service: [OCR] Timeout maximo do Textract: 90s
+2026-01-26 13:49:06,698 [INFO] app.services.ocr_service: [OCR] Aguardando conclusão do job Textract: a0f04fffd29008d0fb2933008231746fddcbd16a603d33acf1376d6fb1c5983b
+2026-01-26 13:49:18,942 [INFO] app.services.ocr_service: [OCR] Job concluído com sucesso após 11 tentativas
+2026-01-26 13:49:18,942 [INFO] app.services.ocr_service: [OCR] Job Textract finalizado em 12.24s (status=SUCCEEDED)
+2026-01-26 13:49:18,942 [INFO] app.services.ocr_service: [OCR] Coletando resultados do job: a0f04fffd29008d0fb2933008231746fddcbd16a603d33acf1376d6fb1c5983b
+2026-01-26 13:49:19,157 [INFO] app.services.ocr_service: [OCR] Total de blocos coletados: 621
+2026-01-26 13:49:19,157 [INFO] app.services.ocr_service: [OCR] Resultados coletados em 0.21s
+2026-01-26 13:49:19,157 [INFO] app.services.ocr_service: [OCR] Convertendo 621 blocos em markdown...
+2026-01-26 13:49:19,157 [INFO] app.services.ocr_service: [OCR] Conversão concluída em 0.00s. Markdown gerado: 3732 caracteres
+2026-01-26 13:49:19,157 [INFO] app.services.ocr_service: [OCR] Removendo arquivo do S3: textract-temp/20260126_134904_e9054d3a_tmpw6kyscbe.pdf
+2026-01-26 13:49:19,548 [INFO] app.services.ocr_service: [OCR] Arquivo removido do S3 com sucesso
+2026-01-26 13:49:19,549 [INFO] app.services.ocr_service: [OCR] Fluxo Textract assíncrono completo em 14.79s
+2026-01-26 13:49:19,550 [INFO] app.services.ocr_service: [OCR] Conversão concluída. Markdown gerado: 3732 caracteres
+2026-01-26 13:49:19,550 [INFO] app.services.ocr_service: [OCR] Pipeline OCR finalizado em 17.11s
+2026-01-26 13:49:19,550 [INFO] app.services.ocr_service: [OCR] Markdown salvo em: ocr_resultados/ocr_BRMED - PERIODICO - JOEL FERREIRA BARBOSA  - COMPLETO_20260126_134919.md
+2026-01-26 13:49:19,550 [INFO] app.services.ocr_service: [OCR] Extraindo CPF via regex...
+2026-01-26 13:49:19,550 [INFO] app.services.ocr_service: [OCR] CPF extraído: 01792655398
+2026-01-26 13:49:19,550 [INFO] app.services.ocr_service: [OCR] Iniciando extração de exames via OpenAI GPT...
+2026-01-26 13:49:21,702 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-01-26 13:49:21,716 [INFO] app.services.ocr_service: [OCR] Exames extraídos: 1 encontrados - ['CLÍNICO OCUPACIONAL']
+2026-01-26 13:49:21,716 [INFO] app.services.ocr_service: [OCR] Pipeline OCR concluído para: BRMED - PERIODICO - JOEL FERREIRA BARBOSA  - COMPLETO.pdf
+2026-01-26 13:49:21,716 [INFO] app.services.workflow_service: [WORKFLOW] OCR concluído em 19.27s
+2026-01-26 13:49:21,716 [INFO] app.services.workflow_service: [WORKFLOW-PROGRESS] 30% - ocr: OCR concluído. 1 exames encontrados
+2026-01-26 13:49:21,717 [INFO] app.services.workflow_service: [WORKFLOW-PROGRESS] 40% - brmed: Consultando exames obrigatórios (CPF: 017***)
+2026-01-26 13:49:21,717 [INFO] app.services.workflow_service: [WORKFLOW] Tentando consultar BRMED com CPF inicial: 01792655398
+2026-01-26 13:49:21,717 [INFO] app.services.workflow_service: [WORKFLOW-PROGRESS] 20% - ocr: OCR em andamento (job iniciado)
+2026-01-26 13:49:22,361 [INFO] app.services.brmed_service: Iniciando automação Playwright...
+2026-01-26 13:49:22,361 [INFO] app.services.brmed_service: Navegando para a página de login...
+2026-01-26 13:49:31,758 [INFO] app.services.brmed_service: Autenticação e seleção de CPF concluídos em 9.40s.
+2026-01-26 13:49:31,758 [INFO] app.services.brmed_service: Consultando CPF: 01792655398 (formatado: 017.926.553-98)
+2026-01-26 13:49:34,157 [INFO] app.services.brmed_service: Consulta de CPF realizada em 2.40s.
+2026-01-26 13:49:34,172 [INFO] app.services.brmed_service: Tabelas com classe 'tabledata' encontradas: 1
+2026-01-26 13:49:34,179 [INFO] app.services.brmed_service: Links de paciente encontrados: 1
+2026-01-26 13:49:37,280 [INFO] app.services.brmed_service: Clicando em 'Guia de Encaminhamento'...
+2026-01-26 13:49:42,403 [INFO] app.services.brmed_service: Nova página da guia carregada e aguardando.
+2026-01-26 13:49:42,410 [INFO] app.services.brmed_service: Conteúdo bruto da página salvo em: resultados/debug_conteudo_01792655398_20260126_134922.txt
+2026-01-26 13:49:42,411 [INFO] app.services.brmed_service: Conteúdo recebido para extração: Olá, thiago.simoes
+
+Você está logado em: Operações
+
+Logout
+
+Página inicial
+Cadastrar paciente
+Agenda
+1 pendência(s)
+6 grupos faltando dados financeiros
+51 exame(s) sem preço
+28 exame(s) sem valor de repasse
+Relatório
+Área administrativa
+Está em:
+Início >
+Consulta de Paciente >
+Imprimir guia de agendamento
+
+
+VOUCHER
+
+
+PERIÓDICO
+
+
+Periodical
+
+
+
+Prezado(a) / Dear,
+Recebemos sua solicitação e confirmamos o agendamento conforme detalhes a seguir / Your request has been received and your scheduling is...
+2026-01-26 13:49:42,411 [INFO] app.services.brmed_service: Nome match object: <re.Match object; span=(580, 638), match='Nome / Name: JOEL FERREIRA BARBOSA\tIdentidade / >
+2026-01-26 13:49:42,411 [INFO] app.services.brmed_service: Nome extraído: JOEL FERREIRA BARBOSA
+2026-01-26 13:49:42,411 [INFO] app.services.brmed_service: Exames texto extraído: 4. Exames / Exams:
+
+4.1 Realizados na própria clínica / Performed at the clinic itself:
+
+
+CLÍNICO OCUPACIONAL * / CLINICAL EXAMINATION *
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+	
+Obrigatório * / Mandatory *...
+2026-01-26 13:49:42,411 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 4. Exames / Exams:
+2026-01-26 13:49:42,411 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 13:49:42,411 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 4.1 Realizados na própria clínica / Performed at the clinic itself:
+2026-01-26 13:49:42,411 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 13:49:42,411 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 13:49:42,411 [INFO] app.services.brmed_service: Linha limpa para extração de exames: CLÍNICO OCUPACIONAL * / CLINICAL EXAMINATION *
+2026-01-26 13:49:42,412 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 13:49:42,412 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 13:49:42,412 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 13:49:42,412 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 13:49:42,412 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 13:49:42,412 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 13:49:42,412 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 13:49:42,412 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 13:49:42,412 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 13:49:42,412 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 13:49:42,412 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 13:49:42,412 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 13:49:42,412 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 13:49:42,412 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 13:49:42,412 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 13:49:42,412 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 13:49:42,412 [INFO] app.services.brmed_service: Linha limpa para extração de exames: Obrigatório * / Mandatory *
+2026-01-26 13:49:42,412 [INFO] app.services.brmed_service: Exames extraídos: ['CLÍNICO OCUPACIONAL']
+2026-01-26 13:49:42,412 [INFO] app.services.brmed_service: Resultado da extração salvo em: resultados/guia_01792655398_20260126_134922.json
+2026-01-26 13:49:42,445 [INFO] app.services.brmed_service: Navegador Playwright fechado.
+2026-01-26 13:49:42,445 [INFO] app.services.brmed_service: Consulta BRMED finalizada em 20.73s.
+2026-01-26 13:49:42,455 [INFO] app.services.workflow_service: [WORKFLOW] Consulta BRMED concluída em 20.74s
+2026-01-26 13:49:42,456 [INFO] app.services.workflow_service: [WORKFLOW-PROGRESS] 60% - brmed: Exames obrigatórios obtidos: 1 exames
+2026-01-26 13:49:42,457 [INFO] app.services.workflow_service: [WORKFLOW-PROGRESS] 70% - validacao: Validando exames com IA...
+2026-01-26 13:49:42,457 [INFO] app.services.workflow_service: [WORKFLOW] Realizando validação para CPF: 01792655398
+2026-01-26 13:49:44,471 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2026-01-26 13:49:46,365 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-01-26 13:49:46,368 [INFO] app.services.workflow_service: [WORKFLOW] Validação concluída em 3.91s
+2026-01-26 13:49:46,369 [INFO] app.services.workflow_service: [WORKFLOW-PROGRESS] 90% - validacao: Validação concluída, preparando resultado...
+2026-01-26 13:49:46,369 [INFO] app.services.workflow_service: [WORKFLOW] Validação concluída.
+2026-01-26 13:49:46,370 [INFO] app.services.workflow_service: [WORKFLOW-PROGRESS] 100% - concluido: Processamento concluído com sucesso!
+2026-01-26 13:49:46,370 [INFO] app.services.workflow_service: [WORKFLOW] Processamento completo finalizado para: BRMED - PERIODICO - JOEL FERREIRA BARBOSA  - COMPLETO.pdf
+2026-01-26 13:49:46,370 [INFO] app.services.workflow_service: [WORKFLOW] Processamento completo em 43.93s
+2026-01-26 13:49:46,370 [INFO] app.core.job_manager: [JOB df3d95d9-2b6a-48ef-bc50-016cb01546d5] Concluído com sucesso
+2026-01-26 13:49:46,370 [INFO] app.api.v1_brmed: [JOB df3d95d9-2b6a-48ef-bc50-016cb01546d5] Concluído com sucesso
+2026-01-26 13:51:11,449 [INFO] app.api.v1_brmed: [REQUEST-ASYNC] Documento recebido: BR MED - ADMISISONAL - DAVID ANTUNES DOS SANTOS.pdf (2.42MB)
+2026-01-26 13:51:11,449 [INFO] app.api.v1_brmed: [REQUEST-ASYNC] Exames obrigatórios: 0
+2026-01-26 13:51:11,449 [INFO] app.core.job_manager: [JobManager] Job criado: be15f0d0-5e02-44e1-aacc-f68c105ca0ae (tipo=document_processing)
+2026-01-26 13:51:11,453 [INFO] app.api.v1_brmed: [JOB be15f0d0-5e02-44e1-aacc-f68c105ca0ae] Arquivo salvo temporariamente: /tmp/tmp8p7f1lm3.pdf
+2026-01-26 13:51:11,454 [INFO] app.api.v1_brmed: [JOB be15f0d0-5e02-44e1-aacc-f68c105ca0ae] Task adicionada ao background
+2026-01-26 13:51:11,454 [INFO] app.api.v1_brmed: [JOB be15f0d0-5e02-44e1-aacc-f68c105ca0ae] Iniciando processamento em background
+2026-01-26 13:51:11,454 [INFO] app.core.job_manager: [JOB be15f0d0-5e02-44e1-aacc-f68c105ca0ae] Iniciado
+2026-01-26 13:51:11,455 [INFO] app.services.workflow_service: [WORKFLOW] Iniciando processamento completo para: BR MED - ADMISISONAL - DAVID ANTUNES DOS SANTOS.pdf
+2026-01-26 13:51:11,455 [INFO] app.services.workflow_service: [WORKFLOW-PROGRESS] 10% - ocr: Processando documento com OCR...
+2026-01-26 13:51:11,455 [INFO] app.services.ocr_service: [OCR] Iniciando pipeline OCR para arquivo: BR MED - ADMISISONAL - DAVID ANTUNES DOS SANTOS.pdf
+2026-01-26 13:51:11,456 [INFO] app.services.ocr_service: [OCR] Motor selecionado: AWS Textract
+2026-01-26 13:51:11,458 [INFO] app.services.ocr_service: [OCR] Iniciando conversão com AWS Textract para: BR MED - ADMISISONAL - DAVID ANTUNES DOS SANTOS.pdf
+2026-01-26 13:51:11,458 [INFO] app.services.ocr_service: [OCR] Processando com AWS Textract (Síncrono): /tmp/tmpxqrhcxbz.pdf
+2026-01-26 13:51:11,458 [INFO] app.services.ocr_service: [OCR] Reparando PDF para compatibilidade Textract: /tmp/tmpxqrhcxbz.pdf
+2026-01-26 13:51:11,471 [INFO] app.services.ocr_service: [OCR] PDF reparado salvo em: /tmp/tmp0fiigj53.pdf
+2026-01-26 13:51:11,474 [INFO] app.services.ocr_service: [OCR] Heurística PDF: páginas=3, chars_medio=0.0, imagens_ratio=0.00
+2026-01-26 13:51:11,474 [INFO] app.services.ocr_service: [OCR] Documento escaneado detectado. Pulando compressao para evitar perda.
+2026-01-26 13:51:11,476 [INFO] app.services.ocr_service: [OCR] Tamanho do arquivo: 2.42 MB
+2026-01-26 13:51:11,476 [INFO] app.services.ocr_service: [OCR] Chamando detect_document_text (síncrono)...
+2026-01-26 13:51:13,635 [ERROR] app.services.ocr_service: [OCR] Erro AWS [UnsupportedDocumentException]: Request has unsupported document format
+2026-01-26 13:51:13,635 [WARNING] app.services.ocr_service: [OCR] Documento nao suportado no modo sincrono, usando assincrono
+2026-01-26 13:51:13,636 [INFO] app.services.ocr_service: [OCR] Processando com AWS Textract (Assíncrono) via S3: /tmp/tmpxqrhcxbz.pdf
+2026-01-26 13:51:13,636 [INFO] app.services.ocr_service: [OCR] Reparando PDF para compatibilidade Textract: /tmp/tmpxqrhcxbz.pdf
+2026-01-26 13:51:13,651 [INFO] app.services.ocr_service: [OCR] PDF reparado salvo em: /tmp/tmpi9e7wr8r.pdf
+2026-01-26 13:51:13,656 [INFO] app.services.ocr_service: [OCR] Heurística PDF: páginas=3, chars_medio=0.0, imagens_ratio=0.00
+2026-01-26 13:51:13,656 [INFO] app.services.ocr_service: [OCR] Documento escaneado detectado. Pulando compressao para evitar perda.
+2026-01-26 13:51:13,656 [INFO] app.services.ocr_service: [OCR] Fazendo upload para S3: s3://brmed-exam-ocr/textract-temp/20260126_135113_7478f9da_tmpxqrhcxbz.pdf
+2026-01-26 13:51:15,281 [INFO] app.services.ocr_service: [OCR] Upload concluído. Tamanho: 2.42 MB (em 1.63s)
+2026-01-26 13:51:15,282 [INFO] app.services.ocr_service: [OCR] Iniciando job Textract assíncrono (StartDocumentTextDetection)...
+2026-01-26 13:51:15,954 [INFO] app.services.ocr_service: [OCR] Job iniciado com sucesso. JobId: fffe157005fdd5b670cfe83bf93e8e7622237f8a7ce635dfac257c1e31c09045 (em 0.67s)
+2026-01-26 13:51:15,954 [INFO] app.services.ocr_service: [OCR] Timeout maximo do Textract: 90s
+2026-01-26 13:51:15,954 [INFO] app.services.ocr_service: [OCR] Aguardando conclusão do job Textract: fffe157005fdd5b670cfe83bf93e8e7622237f8a7ce635dfac257c1e31c09045
+2026-01-26 13:51:27,314 [INFO] app.services.ocr_service: [OCR] Job concluído com sucesso após 10 tentativas
+2026-01-26 13:51:27,315 [INFO] app.services.ocr_service: [OCR] Job Textract finalizado em 11.36s (status=SUCCEEDED)
+2026-01-26 13:51:27,315 [INFO] app.services.ocr_service: [OCR] Coletando resultados do job: fffe157005fdd5b670cfe83bf93e8e7622237f8a7ce635dfac257c1e31c09045
+2026-01-26 13:51:29,507 [INFO] app.services.ocr_service: [OCR] Total de blocos coletados: 4216
+2026-01-26 13:51:29,507 [INFO] app.services.ocr_service: [OCR] Resultados coletados em 2.19s
+2026-01-26 13:51:29,507 [INFO] app.services.ocr_service: [OCR] Convertendo 4216 blocos em markdown...
+2026-01-26 13:51:29,509 [INFO] app.services.ocr_service: [OCR] Conversão concluída em 0.00s. Markdown gerado: 22028 caracteres
+2026-01-26 13:51:29,509 [INFO] app.services.ocr_service: [OCR] Removendo arquivo do S3: textract-temp/20260126_135113_7478f9da_tmpxqrhcxbz.pdf
+2026-01-26 13:51:29,900 [INFO] app.services.ocr_service: [OCR] Arquivo removido do S3 com sucesso
+2026-01-26 13:51:29,902 [INFO] app.services.ocr_service: [OCR] Fluxo Textract assíncrono completo em 16.27s
+2026-01-26 13:51:29,906 [INFO] app.services.ocr_service: [OCR] Conversão concluída. Markdown gerado: 22028 caracteres
+2026-01-26 13:51:29,907 [INFO] app.services.ocr_service: [OCR] Pipeline OCR finalizado em 18.45s
+2026-01-26 13:51:29,907 [INFO] app.services.ocr_service: [OCR] Markdown salvo em: ocr_resultados/ocr_BR MED - ADMISISONAL - DAVID ANTUNES DOS SANTOS_20260126_135129.md
+2026-01-26 13:51:29,908 [INFO] app.services.ocr_service: [OCR] Extraindo CPF via regex...
+2026-01-26 13:51:29,908 [INFO] app.services.ocr_service: [OCR] CPF extraído: 35797702843
+2026-01-26 13:51:29,908 [INFO] app.services.ocr_service: [OCR] Iniciando extração de exames via OpenAI GPT...
+2026-01-26 13:51:34,759 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-01-26 13:51:34,764 [INFO] app.services.ocr_service: [OCR] Exames extraídos: 11 encontrados - ['ACUIDADE VISUAL', 'ESPIROMETRIA', 'AUDIOMETRIA TONAL', 'ELETROCARDIOGRAMA', 'ELETROENCEFALOGRAMA', 'HEMOGRAMA', 'GLICEMIA DE JEJUM', 'RADIOGRAFIA DE TÓRAX PADRÃO OIT', 'AVALIAÇÃO PSICOLÓGICA', 'TIPAGEM SANGUÍNEA', 'GLUCOSE']
+2026-01-26 13:51:34,764 [INFO] app.services.ocr_service: [OCR] Pipeline OCR concluído para: BR MED - ADMISISONAL - DAVID ANTUNES DOS SANTOS.pdf
+2026-01-26 13:51:34,764 [INFO] app.services.workflow_service: [WORKFLOW] OCR concluído em 23.31s
+2026-01-26 13:51:34,764 [INFO] app.services.workflow_service: [WORKFLOW-PROGRESS] 30% - ocr: OCR concluído. 11 exames encontrados
+2026-01-26 13:51:34,764 [INFO] app.services.workflow_service: [WORKFLOW-PROGRESS] 40% - brmed: Consultando exames obrigatórios (CPF: 357***)
+2026-01-26 13:51:34,764 [INFO] app.services.workflow_service: [WORKFLOW] Tentando consultar BRMED com CPF inicial: 35797702843
+2026-01-26 13:51:34,765 [INFO] app.services.workflow_service: [WORKFLOW-PROGRESS] 20% - ocr: OCR em andamento (job iniciado)
+2026-01-26 13:51:35,142 [INFO] app.services.brmed_service: Iniciando automação Playwright...
+2026-01-26 13:51:35,142 [INFO] app.services.brmed_service: Navegando para a página de login...
+2026-01-26 13:51:45,112 [INFO] app.services.brmed_service: Autenticação e seleção de CPF concluídos em 9.97s.
+2026-01-26 13:51:45,112 [INFO] app.services.brmed_service: Consultando CPF: 35797702843 (formatado: 357.977.028-43)
+2026-01-26 13:51:47,520 [INFO] app.services.brmed_service: Consulta de CPF realizada em 2.41s.
+2026-01-26 13:51:47,537 [INFO] app.services.brmed_service: Tabelas com classe 'tabledata' encontradas: 1
+2026-01-26 13:51:47,543 [INFO] app.services.brmed_service: Links de paciente encontrados: 1
+2026-01-26 13:51:48,843 [INFO] app.services.brmed_service: Clicando em 'Guia de Encaminhamento'...
+2026-01-26 13:51:53,504 [INFO] app.services.brmed_service: Nova página da guia carregada e aguardando.
+2026-01-26 13:51:53,513 [INFO] app.services.brmed_service: Conteúdo bruto da página salvo em: resultados/debug_conteudo_35797702843_20260126_135135.txt
+2026-01-26 13:51:53,513 [INFO] app.services.brmed_service: Conteúdo recebido para extração: Olá, thiago.simoes
+
+Você está logado em: Operações
+
+Logout
+
+Página inicial
+Cadastrar paciente
+Agenda
+1 pendência(s)
+6 grupos faltando dados financeiros
+51 exame(s) sem preço
+28 exame(s) sem valor de repasse
+Relatório
+Área administrativa
+Está em:
+Início >
+Consulta de Paciente >
+Imprimir guia de agendamento
+
+
+VOUCHER
+
+
+ADMISSIONAL
+
+
+Pre-employment
+
+
+
+Prezado(a) / Dear,
+Recebemos sua solicitação e confirmamos o agendamento conforme detalhes a seguir / Your request has been received and your schedul...
+2026-01-26 13:51:53,513 [INFO] app.services.brmed_service: Nome match object: <re.Match object; span=(613, 674), match='Nome / Name: DAVID ANTUNES DOS SANTOS\tIdentidade>
+2026-01-26 13:51:53,513 [INFO] app.services.brmed_service: Nome extraído: DAVID ANTUNES DOS SANTOS
+2026-01-26 13:51:53,513 [INFO] app.services.brmed_service: Exames texto extraído: 4. Exames / Exams:
+
+4.1 Realizados na própria clínica / Performed at the clinic itself:
+
+
+TIPAGEM SANGUÍNEA / FATOR RH * / BLOOD TYPING / RH FACTOR *	AUDIOMETRIA TONAL * / PURE TONE AUDIOMETRY *
+ESPIROMETRIA * / SPIROMETRY *	CLÍNICO OCUPACIONAL * / CLINICAL EXAMINATION *
+GLICEMIA DE JEJUM * / GLUCOSE *	ELETROCARDIOGRAMA * / ELECTROCARDIOGRAM *
+ELETROENCEFALOGRAMA * / ELECTROENCEPHALOGRAM *	ACUIDADE VISUAL COM SENSO CROMÁTICO * / VISUAL ACUITY WITH COLOR TEST *
+RADIOGRAFIA DE TÓRAX - PADRÃO OIT *...
+2026-01-26 13:51:53,513 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 4. Exames / Exams:
+2026-01-26 13:51:53,514 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 13:51:53,514 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 4.1 Realizados na própria clínica / Performed at the clinic itself:
+2026-01-26 13:51:53,514 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 13:51:53,514 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 13:51:53,514 [INFO] app.services.brmed_service: Linha limpa para extração de exames: TIPAGEM SANGUÍNEA / FATOR RH * / BLOOD TYPING / RH FACTOR * AUDIOMETRIA TONAL * / PURE TONE AUDIOMETRY *
+2026-01-26 13:51:53,514 [INFO] app.services.brmed_service: Linha limpa para extração de exames: ESPIROMETRIA * / SPIROMETRY * CLÍNICO OCUPACIONAL * / CLINICAL EXAMINATION *
+2026-01-26 13:51:53,514 [INFO] app.services.brmed_service: Linha limpa para extração de exames: GLICEMIA DE JEJUM * / GLUCOSE * ELETROCARDIOGRAMA * / ELECTROCARDIOGRAM *
+2026-01-26 13:51:53,514 [INFO] app.services.brmed_service: Linha limpa para extração de exames: ELETROENCEFALOGRAMA * / ELECTROENCEPHALOGRAM * ACUIDADE VISUAL COM SENSO CROMÁTICO * / VISUAL ACUITY WITH COLOR TEST *
+2026-01-26 13:51:53,514 [INFO] app.services.brmed_service: Linha limpa para extração de exames: RADIOGRAFIA DE TÓRAX - PADRÃO OIT * / CHEST - STANDARD OIT RADIOGRAPHY * HEMOGRAMA COMPLETO COM PLAQUETAS * / COMPLETE BLOOD COUNT WITH PLATELETS *
+2026-01-26 13:51:53,514 [INFO] app.services.brmed_service: Linha limpa para extração de exames: AVALIAÇÃO PSICOLÓGICA * / PSYCHOLOGICAL ASSESSMENT *
+2026-01-26 13:51:53,514 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 13:51:53,514 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 13:51:53,514 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 13:51:53,514 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 13:51:53,514 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 13:51:53,514 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 13:51:53,514 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 13:51:53,514 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 13:51:53,514 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 13:51:53,514 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 13:51:53,514 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 13:51:53,514 [INFO] app.services.brmed_service: Linha limpa para extração de exames: Obrigatório * / Mandatory *
+2026-01-26 13:51:53,514 [INFO] app.services.brmed_service: Exames extraídos: ['TIPAGEM SANGUÍNEA', 'AUDIOMETRIA TONAL', 'ESPIROMETRIA', 'CLÍNICO OCUPACIONAL', 'GLICEMIA DE JEJUM', 'ELETROCARDIOGRAMA', 'ELETROENCEFALOGRAMA', 'ACUIDADE VISUAL COM SENSO CROMÁTICO', 'RADIOGRAFIA DE TÓRAX - PADRÃO OIT', 'HEMOGRAMA COMPLETO COM PLAQUETAS', 'AVALIAÇÃO PSICOLÓGICA']
+2026-01-26 13:51:53,515 [INFO] app.services.brmed_service: Resultado da extração salvo em: resultados/guia_35797702843_20260126_135135.json
+2026-01-26 13:51:53,548 [INFO] app.services.brmed_service: Navegador Playwright fechado.
+2026-01-26 13:51:53,548 [INFO] app.services.brmed_service: Consulta BRMED finalizada em 18.78s.
+2026-01-26 13:51:53,558 [INFO] app.services.workflow_service: [WORKFLOW] Consulta BRMED concluída em 18.79s
+2026-01-26 13:51:53,558 [INFO] app.services.workflow_service: [WORKFLOW-PROGRESS] 60% - brmed: Exames obrigatórios obtidos: 11 exames
+2026-01-26 13:51:53,566 [INFO] app.services.workflow_service: [WORKFLOW-PROGRESS] 70% - validacao: Validando exames com IA...
+2026-01-26 13:51:53,567 [INFO] app.services.workflow_service: [WORKFLOW] Realizando validação para CPF: 35797702843
+2026-01-26 13:51:54,016 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2026-01-26 13:51:54,315 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2026-01-26 13:51:54,624 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2026-01-26 13:51:54,965 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2026-01-26 13:51:55,244 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2026-01-26 13:51:55,566 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2026-01-26 13:51:55,864 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2026-01-26 13:51:56,255 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2026-01-26 13:51:56,561 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2026-01-26 13:51:56,964 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2026-01-26 13:51:57,303 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2026-01-26 13:52:15,498 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-01-26 13:52:15,505 [INFO] app.services.workflow_service: [WORKFLOW] Validação concluída em 21.94s
+2026-01-26 13:52:15,506 [INFO] app.services.workflow_service: [WORKFLOW-PROGRESS] 90% - validacao: Validação concluída, preparando resultado...
+2026-01-26 13:52:15,506 [INFO] app.services.workflow_service: [WORKFLOW] Validação concluída.
+2026-01-26 13:52:15,515 [INFO] app.services.workflow_service: [WORKFLOW-PROGRESS] 100% - concluido: Processamento concluído com sucesso!
+2026-01-26 13:52:15,516 [INFO] app.services.workflow_service: [WORKFLOW] Processamento completo finalizado para: BR MED - ADMISISONAL - DAVID ANTUNES DOS SANTOS.pdf
+2026-01-26 13:52:15,516 [INFO] app.services.workflow_service: [WORKFLOW] Processamento completo em 64.06s
+2026-01-26 13:52:15,516 [INFO] app.core.job_manager: [JOB be15f0d0-5e02-44e1-aacc-f68c105ca0ae] Concluído com sucesso
+2026-01-26 13:52:15,516 [INFO] app.api.v1_brmed: [JOB be15f0d0-5e02-44e1-aacc-f68c105ca0ae] Concluído com sucesso
+2026-01-26 13:53:17,110 [INFO] app.api.v1_brmed: [REQUEST-ASYNC] Documento recebido: BR MED - PER - JOSE AILTON DA SILVA CHAGAS - COMPLETO.pdf (2.95MB)
+2026-01-26 13:53:17,110 [INFO] app.api.v1_brmed: [REQUEST-ASYNC] Exames obrigatórios: 0
+2026-01-26 13:53:17,110 [INFO] app.core.job_manager: [JobManager] Job criado: 432fff50-5a1d-425b-852d-1bc2dbb77b8f (tipo=document_processing)
+2026-01-26 13:53:17,114 [INFO] app.api.v1_brmed: [JOB 432fff50-5a1d-425b-852d-1bc2dbb77b8f] Arquivo salvo temporariamente: /tmp/tmp_xovpfdy.pdf
+2026-01-26 13:53:17,114 [INFO] app.api.v1_brmed: [JOB 432fff50-5a1d-425b-852d-1bc2dbb77b8f] Task adicionada ao background
+2026-01-26 13:53:17,115 [INFO] app.api.v1_brmed: [JOB 432fff50-5a1d-425b-852d-1bc2dbb77b8f] Iniciando processamento em background
+2026-01-26 13:53:17,115 [INFO] app.core.job_manager: [JOB 432fff50-5a1d-425b-852d-1bc2dbb77b8f] Iniciado
+2026-01-26 13:53:17,115 [INFO] app.services.workflow_service: [WORKFLOW] Iniciando processamento completo para: BR MED - PER - JOSE AILTON DA SILVA CHAGAS - COMPLETO.pdf
+2026-01-26 13:53:17,115 [INFO] app.services.workflow_service: [WORKFLOW-PROGRESS] 10% - ocr: Processando documento com OCR...
+2026-01-26 13:53:17,115 [INFO] app.services.ocr_service: [OCR] Iniciando pipeline OCR para arquivo: BR MED - PER - JOSE AILTON DA SILVA CHAGAS - COMPLETO.pdf
+2026-01-26 13:53:17,115 [INFO] app.services.ocr_service: [OCR] Motor selecionado: AWS Textract
+2026-01-26 13:53:17,118 [INFO] app.services.ocr_service: [OCR] Iniciando conversão com AWS Textract para: BR MED - PER - JOSE AILTON DA SILVA CHAGAS - COMPLETO.pdf
+2026-01-26 13:53:17,118 [INFO] app.services.ocr_service: [OCR] Processando com AWS Textract (Síncrono): /tmp/tmp3fe1f74f.pdf
+2026-01-26 13:53:17,118 [INFO] app.services.ocr_service: [OCR] Reparando PDF para compatibilidade Textract: /tmp/tmp3fe1f74f.pdf
+2026-01-26 13:53:17,131 [INFO] app.services.ocr_service: [OCR] PDF reparado salvo em: /tmp/tmpoo07d6q9.pdf
+2026-01-26 13:53:17,133 [INFO] app.services.ocr_service: [OCR] Heurística PDF: páginas=3, chars_medio=0.0, imagens_ratio=0.00
+2026-01-26 13:53:17,133 [INFO] app.services.ocr_service: [OCR] Documento escaneado detectado. Pulando compressao para evitar perda.
+2026-01-26 13:53:17,134 [INFO] app.services.ocr_service: [OCR] Tamanho do arquivo: 2.95 MB
+2026-01-26 13:53:17,134 [INFO] app.services.ocr_service: [OCR] Chamando detect_document_text (síncrono)...
+2026-01-26 13:53:19,535 [ERROR] app.services.ocr_service: [OCR] Erro AWS [UnsupportedDocumentException]: Request has unsupported document format
+2026-01-26 13:53:19,536 [WARNING] app.services.ocr_service: [OCR] Documento nao suportado no modo sincrono, usando assincrono
+2026-01-26 13:53:19,536 [INFO] app.services.ocr_service: [OCR] Processando com AWS Textract (Assíncrono) via S3: /tmp/tmp3fe1f74f.pdf
+2026-01-26 13:53:19,536 [INFO] app.services.ocr_service: [OCR] Reparando PDF para compatibilidade Textract: /tmp/tmp3fe1f74f.pdf
+2026-01-26 13:53:19,561 [INFO] app.services.ocr_service: [OCR] PDF reparado salvo em: /tmp/tmpprckpnsm.pdf
+2026-01-26 13:53:19,565 [INFO] app.services.ocr_service: [OCR] Heurística PDF: páginas=3, chars_medio=0.0, imagens_ratio=0.00
+2026-01-26 13:53:19,565 [INFO] app.services.ocr_service: [OCR] Documento escaneado detectado. Pulando compressao para evitar perda.
+2026-01-26 13:53:19,565 [INFO] app.services.ocr_service: [OCR] Fazendo upload para S3: s3://brmed-exam-ocr/textract-temp/20260126_135319_f63b934f_tmp3fe1f74f.pdf
+2026-01-26 13:53:21,462 [INFO] app.services.ocr_service: [OCR] Upload concluído. Tamanho: 2.95 MB (em 1.90s)
+2026-01-26 13:53:21,462 [INFO] app.services.ocr_service: [OCR] Iniciando job Textract assíncrono (StartDocumentTextDetection)...
+2026-01-26 13:53:22,165 [INFO] app.services.ocr_service: [OCR] Job iniciado com sucesso. JobId: 33185bc2f90111a0e9565fbc29a22973508dfd945a455393247969eb605b630e (em 0.70s)
+2026-01-26 13:53:22,165 [INFO] app.services.ocr_service: [OCR] Timeout maximo do Textract: 90s
+2026-01-26 13:53:22,165 [INFO] app.services.ocr_service: [OCR] Aguardando conclusão do job Textract: 33185bc2f90111a0e9565fbc29a22973508dfd945a455393247969eb605b630e
+2026-01-26 13:53:40,964 [INFO] app.services.ocr_service: [OCR] Job concluído com sucesso após 14 tentativas
+2026-01-26 13:53:40,965 [INFO] app.services.ocr_service: [OCR] Job Textract finalizado em 18.80s (status=SUCCEEDED)
+2026-01-26 13:53:40,966 [INFO] app.services.ocr_service: [OCR] Coletando resultados do job: 33185bc2f90111a0e9565fbc29a22973508dfd945a455393247969eb605b630e
+2026-01-26 13:53:44,012 [INFO] app.services.ocr_service: [OCR] Total de blocos coletados: 5141
+2026-01-26 13:53:44,012 [INFO] app.services.ocr_service: [OCR] Resultados coletados em 3.05s
+2026-01-26 13:53:44,012 [INFO] app.services.ocr_service: [OCR] Convertendo 5141 blocos em markdown...
+2026-01-26 13:53:44,014 [INFO] app.services.ocr_service: [OCR] Conversão concluída em 0.00s. Markdown gerado: 25974 caracteres
+2026-01-26 13:53:44,014 [INFO] app.services.ocr_service: [OCR] Removendo arquivo do S3: textract-temp/20260126_135319_f63b934f_tmp3fe1f74f.pdf
+2026-01-26 13:53:44,459 [INFO] app.services.ocr_service: [OCR] Arquivo removido do S3 com sucesso
+2026-01-26 13:53:44,460 [INFO] app.services.ocr_service: [OCR] Fluxo Textract assíncrono completo em 24.92s
+2026-01-26 13:53:44,467 [INFO] app.services.ocr_service: [OCR] Conversão concluída. Markdown gerado: 25974 caracteres
+2026-01-26 13:53:44,468 [INFO] app.services.ocr_service: [OCR] Pipeline OCR finalizado em 27.35s
+2026-01-26 13:53:44,468 [INFO] app.services.ocr_service: [OCR] Markdown salvo em: ocr_resultados/ocr_BR MED - PER - JOSE AILTON DA SILVA CHAGAS - COMPLETO_20260126_135344.md
+2026-01-26 13:53:44,469 [INFO] app.services.ocr_service: [OCR] Extraindo CPF via regex...
+2026-01-26 13:53:44,469 [INFO] app.services.ocr_service: [OCR] CPF extraído: 01139561340
+2026-01-26 13:53:44,469 [INFO] app.services.ocr_service: [OCR] Iniciando extração de exames via OpenAI GPT...
+2026-01-26 13:53:48,676 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-01-26 13:53:48,681 [INFO] app.services.ocr_service: [OCR] Exames extraídos: 12 encontrados - ['ELETROENCEFALOGRAMA', 'AUDIOMETRIA TONAL', 'ESPIROMETRIA', 'AVALIAÇÃO ODONTOLÓGICA', 'GLICEMIA DE JEJUM', 'AVALIAÇÃO PSICOSSOCIAL', 'COPROCULTURA', 'ELETROCARDIOGRAMA', 'RAIO-X COLUNA LOMBO-SACRA', 'HEMOGRAMA', 'PARASITOLÓGICO DE FEZES', 'TESTE TOXICOLÓGICO URINÁRIO']
+2026-01-26 13:53:48,681 [INFO] app.services.ocr_service: [OCR] Pipeline OCR concluído para: BR MED - PER - JOSE AILTON DA SILVA CHAGAS - COMPLETO.pdf
+2026-01-26 13:53:48,682 [INFO] app.services.workflow_service: [WORKFLOW] OCR concluído em 31.57s
+2026-01-26 13:53:48,682 [INFO] app.services.workflow_service: [WORKFLOW-PROGRESS] 30% - ocr: OCR concluído. 12 exames encontrados
+2026-01-26 13:53:48,682 [INFO] app.services.workflow_service: [WORKFLOW-PROGRESS] 40% - brmed: Consultando exames obrigatórios (CPF: 011***)
+2026-01-26 13:53:48,682 [INFO] app.services.workflow_service: [WORKFLOW] Tentando consultar BRMED com CPF inicial: 01139561340
+2026-01-26 13:53:48,682 [INFO] app.services.workflow_service: [WORKFLOW-PROGRESS] 20% - ocr: OCR em andamento (job iniciado)
+2026-01-26 13:53:48,682 [INFO] app.services.workflow_service: [WORKFLOW-PROGRESS] 20% - ocr: OCR em andamento (in_progress)...
+2026-01-26 13:53:49,070 [INFO] app.services.brmed_service: Iniciando automação Playwright...
+2026-01-26 13:53:49,070 [INFO] app.services.brmed_service: Navegando para a página de login...
+2026-01-26 13:53:58,437 [INFO] app.services.brmed_service: Autenticação e seleção de CPF concluídos em 9.37s.
+2026-01-26 13:53:58,437 [INFO] app.services.brmed_service: Consultando CPF: 01139561340 (formatado: 011.395.613-40)
+2026-01-26 13:54:00,853 [INFO] app.services.brmed_service: Consulta de CPF realizada em 2.42s.
+2026-01-26 13:54:00,870 [INFO] app.services.brmed_service: Tabelas com classe 'tabledata' encontradas: 1
+2026-01-26 13:54:00,876 [INFO] app.services.brmed_service: Links de paciente encontrados: 1
+2026-01-26 13:54:03,486 [INFO] app.services.brmed_service: Clicando em 'Guia de Encaminhamento'...
+2026-01-26 13:54:08,109 [INFO] app.services.brmed_service: Nova página da guia carregada e aguardando.
+2026-01-26 13:54:08,116 [INFO] app.services.brmed_service: Conteúdo bruto da página salvo em: resultados/debug_conteudo_01139561340_20260126_135349.txt
+2026-01-26 13:54:08,117 [INFO] app.services.brmed_service: Conteúdo recebido para extração: Olá, thiago.simoes
+
+Você está logado em: Operações
+
+Logout
+
+Página inicial
+Cadastrar paciente
+Agenda
+1 pendência(s)
+6 grupos faltando dados financeiros
+51 exame(s) sem preço
+28 exame(s) sem valor de repasse
+Relatório
+Área administrativa
+Está em:
+Início >
+Consulta de Paciente >
+Imprimir guia de agendamento
+
+
+VOUCHER
+
+
+PERIÓDICO
+
+
+Periodical
+
+
+
+Prezado(a) / Dear,
+Recebemos sua solicitação e confirmamos o agendamento conforme detalhes a seguir / Your request has been received and your scheduling is...
+2026-01-26 13:54:08,117 [INFO] app.services.brmed_service: Nome match object: <re.Match object; span=(582, 646), match='Nome / Name: JOSE AILTON DA SILVA CHAGAS\tIdentid>
+2026-01-26 13:54:08,117 [INFO] app.services.brmed_service: Nome extraído: JOSE AILTON DA SILVA CHAGAS
+2026-01-26 13:54:08,117 [INFO] app.services.brmed_service: Exames texto extraído: 4. Exames / Exams:
+
+4.1 Realizados na própria clínica / Performed at the clinic itself:
+
+
+AUDIOMETRIA TONAL * / PURE TONE AUDIOMETRY *	COPROCULTURA * / COPROCULTURE *
+ESPIROMETRIA * / SPIROMETRY *	CLÍNICO OCUPACIONAL * / CLINICAL EXAMINATION *
+HEMOGRAMA COMPLETO COM PLAQUETAS * / COMPLETE BLOOD COUNT WITH PLATELETS *	GLICEMIA DE JEJUM * / GLUCOSE *
+AVALIAÇÃO PSICOSSOCIAL * / PSYCHOSOCIAL ASSESSMENT *	ELETROCARDIOGRAMA * / ELECTROCARDIOGRAM *
+ACUIDADE VISUAL COM SENSO CROMÁTICO * / VISUAL ACUITY ...
+2026-01-26 13:54:08,117 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 4. Exames / Exams:
+2026-01-26 13:54:08,117 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 13:54:08,117 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 4.1 Realizados na própria clínica / Performed at the clinic itself:
+2026-01-26 13:54:08,117 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 13:54:08,117 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 13:54:08,117 [INFO] app.services.brmed_service: Linha limpa para extração de exames: AUDIOMETRIA TONAL * / PURE TONE AUDIOMETRY * COPROCULTURA * / COPROCULTURE *
+2026-01-26 13:54:08,117 [INFO] app.services.brmed_service: Linha limpa para extração de exames: ESPIROMETRIA * / SPIROMETRY * CLÍNICO OCUPACIONAL * / CLINICAL EXAMINATION *
+2026-01-26 13:54:08,117 [INFO] app.services.brmed_service: Linha limpa para extração de exames: HEMOGRAMA COMPLETO COM PLAQUETAS * / COMPLETE BLOOD COUNT WITH PLATELETS * GLICEMIA DE JEJUM * / GLUCOSE *
+2026-01-26 13:54:08,117 [INFO] app.services.brmed_service: Linha limpa para extração de exames: AVALIAÇÃO PSICOSSOCIAL * / PSYCHOSOCIAL ASSESSMENT * ELETROCARDIOGRAMA * / ELECTROCARDIOGRAM *
+2026-01-26 13:54:08,117 [INFO] app.services.brmed_service: Linha limpa para extração de exames: ACUIDADE VISUAL COM SENSO CROMÁTICO * / VISUAL ACUITY WITH COLOR TEST * RADIOGRAFIA DE COLUNA LOMBO SACRA AP/PERFIL * / LUMBAR COLUMN RADIOGRAPHY *
+2026-01-26 13:54:08,117 [INFO] app.services.brmed_service: Linha limpa para extração de exames: RADIOGRAFIA DE TÓRAX - PADRÃO OIT * / CHEST - STANDARD OIT RADIOGRAPHY * ELETROENCEFALOGRAMA * / ELECTROENCEPHALOGRAM *
+2026-01-26 13:54:08,117 [INFO] app.services.brmed_service: Linha limpa para extração de exames: TRIAGEM TOXICOLÓGICO * / TOXICOLOGICAL SCREENING * AVALIAÇÃO ODONTOLÓGICA * / DENTAL ASSESSMENT *
+2026-01-26 13:54:08,117 [INFO] app.services.brmed_service: Linha limpa para extração de exames: PARASITOLÓGICO DE FEZES * / FECAL PARASITOLOGY *
+2026-01-26 13:54:08,117 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 13:54:08,117 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 13:54:08,117 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 13:54:08,117 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 13:54:08,117 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 13:54:08,117 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 13:54:08,117 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 13:54:08,117 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 13:54:08,117 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 13:54:08,117 [INFO] app.services.brmed_service: Linha limpa para extração de exames: Obrigatório * / Mandatory *
+2026-01-26 13:54:08,117 [INFO] app.services.brmed_service: Exames extraídos: ['AUDIOMETRIA TONAL', 'COPROCULTURA', 'ESPIROMETRIA', 'CLÍNICO OCUPACIONAL', 'HEMOGRAMA COMPLETO COM PLAQUETAS', 'GLICEMIA DE JEJUM', 'AVALIAÇÃO PSICOSSOCIAL', 'ELETROCARDIOGRAMA', 'ACUIDADE VISUAL COM SENSO CROMÁTICO', 'RADIOGRAFIA DE COLUNA LOMBO SACRA AP', 'RADIOGRAFIA DE TÓRAX - PADRÃO OIT', 'ELETROENCEFALOGRAMA', 'TRIAGEM TOXICOLÓGICO', 'AVALIAÇÃO ODONTOLÓGICA', 'PARASITOLÓGICO DE FEZES']
+2026-01-26 13:54:08,118 [INFO] app.services.brmed_service: Resultado da extração salvo em: resultados/guia_01139561340_20260126_135349.json
+2026-01-26 13:54:08,147 [INFO] app.services.brmed_service: Navegador Playwright fechado.
+2026-01-26 13:54:08,147 [INFO] app.services.brmed_service: Consulta BRMED finalizada em 19.47s.
+2026-01-26 13:54:08,156 [INFO] app.services.workflow_service: [WORKFLOW] Consulta BRMED concluída em 19.47s
+2026-01-26 13:54:08,157 [INFO] app.services.workflow_service: [WORKFLOW-PROGRESS] 60% - brmed: Exames obrigatórios obtidos: 15 exames
+2026-01-26 13:54:08,166 [INFO] app.services.workflow_service: [WORKFLOW-PROGRESS] 70% - validacao: Validando exames com IA...
+2026-01-26 13:54:08,166 [INFO] app.services.workflow_service: [WORKFLOW] Realizando validação para CPF: 01139561340
+2026-01-26 13:54:08,570 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2026-01-26 13:54:09,014 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2026-01-26 13:54:09,320 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2026-01-26 13:54:09,632 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2026-01-26 13:54:10,003 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2026-01-26 13:54:10,423 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2026-01-26 13:54:10,889 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2026-01-26 13:54:11,180 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2026-01-26 13:54:11,676 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2026-01-26 13:54:12,331 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2026-01-26 13:54:12,827 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2026-01-26 13:54:13,276 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2026-01-26 13:54:13,738 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2026-01-26 13:54:14,067 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2026-01-26 13:54:14,543 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2026-01-26 13:54:36,463 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-01-26 13:54:36,469 [INFO] app.services.workflow_service: [WORKFLOW] Validação concluída em 28.30s
+2026-01-26 13:54:36,469 [INFO] app.services.workflow_service: [WORKFLOW-PROGRESS] 90% - validacao: Validação concluída, preparando resultado...
+2026-01-26 13:54:36,470 [INFO] app.services.workflow_service: [WORKFLOW] Validação concluída.
+2026-01-26 13:54:36,484 [INFO] app.services.workflow_service: [WORKFLOW-PROGRESS] 100% - concluido: Processamento concluído com sucesso!
+2026-01-26 13:54:36,484 [INFO] app.services.workflow_service: [WORKFLOW] Processamento completo finalizado para: BR MED - PER - JOSE AILTON DA SILVA CHAGAS - COMPLETO.pdf
+2026-01-26 13:54:36,484 [INFO] app.services.workflow_service: [WORKFLOW] Processamento completo em 79.37s
+2026-01-26 13:54:36,484 [INFO] app.core.job_manager: [JOB 432fff50-5a1d-425b-852d-1bc2dbb77b8f] Concluído com sucesso
+2026-01-26 13:54:36,484 [INFO] app.api.v1_brmed: [JOB 432fff50-5a1d-425b-852d-1bc2dbb77b8f] Concluído com sucesso
+2026-01-26 13:56:01,715 [INFO] app.api.v1_brmed: [REQUEST-ASYNC] Documento recebido: BR MED  - ADM - HELENO DIAS REBOUÇAS - ASO.pdf (2.99MB)
+2026-01-26 13:56:01,715 [INFO] app.api.v1_brmed: [REQUEST-ASYNC] Exames obrigatórios: 0
+2026-01-26 13:56:01,716 [INFO] app.core.job_manager: [JobManager] Job criado: 9701dbba-0ce6-465f-a998-47cab00813b9 (tipo=document_processing)
+2026-01-26 13:56:01,719 [INFO] app.api.v1_brmed: [JOB 9701dbba-0ce6-465f-a998-47cab00813b9] Arquivo salvo temporariamente: /tmp/tmp3r9_0yi0.pdf
+2026-01-26 13:56:01,719 [INFO] app.api.v1_brmed: [JOB 9701dbba-0ce6-465f-a998-47cab00813b9] Task adicionada ao background
+2026-01-26 13:56:01,719 [INFO] app.api.v1_brmed: [JOB 9701dbba-0ce6-465f-a998-47cab00813b9] Iniciando processamento em background
+2026-01-26 13:56:01,719 [INFO] app.core.job_manager: [JOB 9701dbba-0ce6-465f-a998-47cab00813b9] Iniciado
+2026-01-26 13:56:01,720 [INFO] app.services.workflow_service: [WORKFLOW] Iniciando processamento completo para: BR MED  - ADM - HELENO DIAS REBOUÇAS - ASO.pdf
+2026-01-26 13:56:01,720 [INFO] app.services.workflow_service: [WORKFLOW-PROGRESS] 10% - ocr: Processando documento com OCR...
+2026-01-26 13:56:01,720 [INFO] app.services.ocr_service: [OCR] Iniciando pipeline OCR para arquivo: BR MED  - ADM - HELENO DIAS REBOUÇAS - ASO.pdf
+2026-01-26 13:56:01,720 [INFO] app.services.ocr_service: [OCR] Motor selecionado: AWS Textract
+2026-01-26 13:56:01,724 [INFO] app.services.ocr_service: [OCR] Iniciando conversão com AWS Textract para: BR MED  - ADM - HELENO DIAS REBOUÇAS - ASO.pdf
+2026-01-26 13:56:01,724 [INFO] app.services.ocr_service: [OCR] Processando com AWS Textract (Síncrono): /tmp/tmphpe5j8ow.pdf
+2026-01-26 13:56:01,724 [INFO] app.services.ocr_service: [OCR] Reparando PDF para compatibilidade Textract: /tmp/tmphpe5j8ow.pdf
+2026-01-26 13:56:01,738 [INFO] app.services.ocr_service: [OCR] PDF reparado salvo em: /tmp/tmpwrfiygxq.pdf
+2026-01-26 13:56:01,741 [INFO] app.services.ocr_service: [OCR] Heurística PDF: páginas=3, chars_medio=0.0, imagens_ratio=0.00
+2026-01-26 13:56:01,741 [INFO] app.services.ocr_service: [OCR] Documento escaneado detectado. Pulando compressao para evitar perda.
+2026-01-26 13:56:01,742 [INFO] app.services.ocr_service: [OCR] Tamanho do arquivo: 2.99 MB
+2026-01-26 13:56:01,742 [INFO] app.services.ocr_service: [OCR] Chamando detect_document_text (síncrono)...
+2026-01-26 13:56:03,878 [ERROR] app.services.ocr_service: [OCR] Erro AWS [UnsupportedDocumentException]: Request has unsupported document format
+2026-01-26 13:56:03,879 [WARNING] app.services.ocr_service: [OCR] Documento nao suportado no modo sincrono, usando assincrono
+2026-01-26 13:56:03,879 [INFO] app.services.ocr_service: [OCR] Processando com AWS Textract (Assíncrono) via S3: /tmp/tmphpe5j8ow.pdf
+2026-01-26 13:56:03,879 [INFO] app.services.ocr_service: [OCR] Reparando PDF para compatibilidade Textract: /tmp/tmphpe5j8ow.pdf
+2026-01-26 13:56:03,894 [INFO] app.services.ocr_service: [OCR] PDF reparado salvo em: /tmp/tmpgjkuejch.pdf
+2026-01-26 13:56:03,898 [INFO] app.services.ocr_service: [OCR] Heurística PDF: páginas=3, chars_medio=0.0, imagens_ratio=0.00
+2026-01-26 13:56:03,898 [INFO] app.services.ocr_service: [OCR] Documento escaneado detectado. Pulando compressao para evitar perda.
+2026-01-26 13:56:03,899 [INFO] app.services.ocr_service: [OCR] Fazendo upload para S3: s3://brmed-exam-ocr/textract-temp/20260126_135603_e5ab7258_tmphpe5j8ow.pdf
+2026-01-26 13:56:05,676 [INFO] app.services.ocr_service: [OCR] Upload concluído. Tamanho: 2.99 MB (em 1.78s)
+2026-01-26 13:56:05,676 [INFO] app.services.ocr_service: [OCR] Iniciando job Textract assíncrono (StartDocumentTextDetection)...
+2026-01-26 13:56:06,346 [INFO] app.services.ocr_service: [OCR] Job iniciado com sucesso. JobId: ea47fa334c438f1a4a7bb74bf98641e6e8529210f117fc1943247eafe96d1d03 (em 0.67s)
+2026-01-26 13:56:06,346 [INFO] app.services.ocr_service: [OCR] Timeout maximo do Textract: 90s
+2026-01-26 13:56:06,346 [INFO] app.services.ocr_service: [OCR] Aguardando conclusão do job Textract: ea47fa334c438f1a4a7bb74bf98641e6e8529210f117fc1943247eafe96d1d03
+2026-01-26 13:56:46,864 [INFO] app.services.ocr_service: [OCR] Job concluído com sucesso após 24 tentativas
+2026-01-26 13:56:46,865 [INFO] app.services.ocr_service: [OCR] Job Textract finalizado em 40.52s (status=SUCCEEDED)
+2026-01-26 13:56:46,865 [INFO] app.services.ocr_service: [OCR] Coletando resultados do job: ea47fa334c438f1a4a7bb74bf98641e6e8529210f117fc1943247eafe96d1d03
+2026-01-26 13:56:50,041 [INFO] app.services.ocr_service: [OCR] Total de blocos coletados: 5130
+2026-01-26 13:56:50,041 [INFO] app.services.ocr_service: [OCR] Resultados coletados em 3.18s
+2026-01-26 13:56:50,041 [INFO] app.services.ocr_service: [OCR] Convertendo 5130 blocos em markdown...
+2026-01-26 13:56:50,043 [INFO] app.services.ocr_service: [OCR] Conversão concluída em 0.00s. Markdown gerado: 26025 caracteres
+2026-01-26 13:56:50,043 [INFO] app.services.ocr_service: [OCR] Removendo arquivo do S3: textract-temp/20260126_135603_e5ab7258_tmphpe5j8ow.pdf
+2026-01-26 13:56:50,542 [INFO] app.services.ocr_service: [OCR] Arquivo removido do S3 com sucesso
+2026-01-26 13:56:50,543 [INFO] app.services.ocr_service: [OCR] Fluxo Textract assíncrono completo em 46.66s
+2026-01-26 13:56:50,549 [INFO] app.services.ocr_service: [OCR] Conversão concluída. Markdown gerado: 26025 caracteres
+2026-01-26 13:56:50,550 [INFO] app.services.ocr_service: [OCR] Pipeline OCR finalizado em 48.83s
+2026-01-26 13:56:50,551 [INFO] app.services.ocr_service: [OCR] Markdown salvo em: ocr_resultados/ocr_BR MED  - ADM - HELENO DIAS REBOUÇAS - ASO_20260126_135650.md
+2026-01-26 13:56:50,551 [INFO] app.services.ocr_service: [OCR] Extraindo CPF via regex...
+2026-01-26 13:56:50,551 [INFO] app.services.ocr_service: [OCR] CPF extraído: 02583339362
+2026-01-26 13:56:50,551 [INFO] app.services.ocr_service: [OCR] Iniciando extração de exames via OpenAI GPT...
+2026-01-26 13:56:55,633 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-01-26 13:56:55,636 [INFO] app.services.ocr_service: [OCR] Exames extraídos: 20 encontrados - ['ACUIDADE VISUAL', 'LIPIDOGRAMA', 'AUDIOMETRIA TONAL', 'PSICOSSOCIAL', 'AVALIAÇÃO ODONTOLÓGICA', 'CLÍNICO OCUPACIONAL', 'CREATININA', 'ROMBERG', 'ELETROCARDIOGRAMA', 'TGO', 'ELETROENCEFALOGRAMA', 'TGP', 'ESPIROMETRIA', 'GLICOSE', 'URÉIA', 'ÁCIDO ÚRICO', 'HEMOGRAMA', 'LIPIDOGRAMA COMPLETO', 'TESTE DE ROMBERG', 'RAIO-X']
+2026-01-26 13:56:55,636 [INFO] app.services.ocr_service: [OCR] Pipeline OCR concluído para: BR MED  - ADM - HELENO DIAS REBOUÇAS - ASO.pdf
+2026-01-26 13:56:55,636 [INFO] app.services.workflow_service: [WORKFLOW] OCR concluído em 53.92s
+2026-01-26 13:56:55,636 [INFO] app.services.workflow_service: [WORKFLOW-PROGRESS] 30% - ocr: OCR concluído. 20 exames encontrados
+2026-01-26 13:56:55,636 [INFO] app.services.workflow_service: [WORKFLOW-PROGRESS] 40% - brmed: Consultando exames obrigatórios (CPF: 025***)
+2026-01-26 13:56:55,636 [INFO] app.services.workflow_service: [WORKFLOW] Tentando consultar BRMED com CPF inicial: 02583339362
+2026-01-26 13:56:55,637 [INFO] app.services.workflow_service: [WORKFLOW-PROGRESS] 20% - ocr: OCR em andamento (job iniciado)
+2026-01-26 13:56:55,637 [INFO] app.services.workflow_service: [WORKFLOW-PROGRESS] 20% - ocr: OCR em andamento (in_progress)...
+2026-01-26 13:56:55,637 [INFO] app.services.workflow_service: [WORKFLOW-PROGRESS] 20% - ocr: OCR em andamento (in_progress)...
+2026-01-26 13:56:56,023 [INFO] app.services.brmed_service: Iniciando automação Playwright...
+2026-01-26 13:56:56,023 [INFO] app.services.brmed_service: Navegando para a página de login...
+2026-01-26 13:57:05,581 [INFO] app.services.brmed_service: Autenticação e seleção de CPF concluídos em 9.56s.
+2026-01-26 13:57:05,581 [INFO] app.services.brmed_service: Consultando CPF: 02583339362 (formatado: 025.833.393-62)
+2026-01-26 13:57:07,910 [INFO] app.services.brmed_service: Consulta de CPF realizada em 2.33s.
+2026-01-26 13:57:07,927 [INFO] app.services.brmed_service: Tabelas com classe 'tabledata' encontradas: 1
+2026-01-26 13:57:07,932 [INFO] app.services.brmed_service: Links de paciente encontrados: 2
+2026-01-26 13:57:09,444 [INFO] app.services.brmed_service: Clicando em 'Guia de Encaminhamento'...
+2026-01-26 13:57:14,094 [INFO] app.services.brmed_service: Nova página da guia carregada e aguardando.
+2026-01-26 13:57:14,102 [INFO] app.services.brmed_service: Conteúdo bruto da página salvo em: resultados/debug_conteudo_02583339362_20260126_135656.txt
+2026-01-26 13:57:14,102 [INFO] app.services.brmed_service: Conteúdo recebido para extração: Olá, thiago.simoes
+
+Você está logado em: Operações
+
+Logout
+
+Página inicial
+Cadastrar paciente
+Agenda
+1 pendência(s)
+6 grupos faltando dados financeiros
+51 exame(s) sem preço
+28 exame(s) sem valor de repasse
+Relatório
+Área administrativa
+Está em:
+Início >
+Consulta de Paciente >
+Imprimir guia de agendamento
+
+
+VOUCHER
+
+
+ADMISSIONAL
+
+
+Pre-employment
+
+
+
+Prezado(a) / Dear,
+Recebemos sua solicitação e confirmamos o agendamento conforme detalhes a seguir / Your request has been received and your schedul...
+2026-01-26 13:57:14,102 [INFO] app.services.brmed_service: Nome match object: <re.Match object; span=(630, 687), match='Nome / Name: HELENO DIAS REBOUCAS\tIdentidade / I>
+2026-01-26 13:57:14,102 [INFO] app.services.brmed_service: Nome extraído: HELENO DIAS REBOUCAS
+2026-01-26 13:57:14,102 [INFO] app.services.brmed_service: Exames texto extraído: 4. Exames / Exams:
+
+4.1 Realizados na própria clínica / Performed at the clinic itself:
+
+
+TIPAGEM SANGUÍNEA / FATOR RH * / BLOOD TYPING / RH FACTOR *	RADIOGRAFIA DE COLUNA LOMBO SACRA AP/PERFIL * / LUMBAR COLUMN RADIOGRAPHY *
+AUDIOMETRIA TONAL * / PURE TONE AUDIOMETRY *	ROMBERG * / ROMBERG *
+CREATININA * / CREATININE *	ESPIROMETRIA * / SPIROMETRY *
+CLÍNICO OCUPACIONAL * / CLINICAL EXAMINATION *	RADIOGRAFIA DE TÓRAX PA * / CHEST PA RADIOGRAPHY *
+GLICOSE * / GLUCOSE *	ELETROCARDIOGRAMA * / ELECTRO...
+2026-01-26 13:57:14,102 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 4. Exames / Exams:
+2026-01-26 13:57:14,102 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 13:57:14,102 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 4.1 Realizados na própria clínica / Performed at the clinic itself:
+2026-01-26 13:57:14,102 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 13:57:14,103 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 13:57:14,103 [INFO] app.services.brmed_service: Linha limpa para extração de exames: TIPAGEM SANGUÍNEA / FATOR RH * / BLOOD TYPING / RH FACTOR * RADIOGRAFIA DE COLUNA LOMBO SACRA AP/PERFIL * / LUMBAR COLUMN RADIOGRAPHY *
+2026-01-26 13:57:14,103 [INFO] app.services.brmed_service: Linha limpa para extração de exames: AUDIOMETRIA TONAL * / PURE TONE AUDIOMETRY * ROMBERG * / ROMBERG *
+2026-01-26 13:57:14,103 [INFO] app.services.brmed_service: Linha limpa para extração de exames: CREATININA * / CREATININE * ESPIROMETRIA * / SPIROMETRY *
+2026-01-26 13:57:14,103 [INFO] app.services.brmed_service: Linha limpa para extração de exames: CLÍNICO OCUPACIONAL * / CLINICAL EXAMINATION * RADIOGRAFIA DE TÓRAX PA * / CHEST PA RADIOGRAPHY *
+2026-01-26 13:57:14,103 [INFO] app.services.brmed_service: Linha limpa para extração de exames: GLICOSE * / GLUCOSE * ELETROCARDIOGRAMA * / ELECTROCARDIOGRAM *
+2026-01-26 13:57:14,103 [INFO] app.services.brmed_service: Linha limpa para extração de exames: ELETROENCEFALOGRAMA * / ELECTROENCEPHALOGRAM * ACUIDADE VISUAL COM SENSO CROMÁTICO * / VISUAL ACUITY WITH COLOR TEST *
+2026-01-26 13:57:14,103 [INFO] app.services.brmed_service: Linha limpa para extração de exames: LIPIDOGRAMA (PERFIL LIPÍDICO) * / LIPIDOGRAM (LIPID PROFILE) * ÁCIDO ÚRICO * / URIC ACID *
+2026-01-26 13:57:14,103 [INFO] app.services.brmed_service: Linha limpa para extração de exames: HEMOGRAMA COMPLETO COM PLAQUETAS * / COMPLETE BLOOD COUNT WITH PLATELETS * PSICOSSOCIAL * / PSYCHOSOCIAL *
+2026-01-26 13:57:14,103 [INFO] app.services.brmed_service: Linha limpa para extração de exames: TGO (AST) * / TGO (AST) * TGP (ALT) * / TGP (ALT) *
+2026-01-26 13:57:14,103 [INFO] app.services.brmed_service: Linha limpa para extração de exames: AVALIAÇÃO ODONTOLÓGICA * / DENTAL ASSESSMENT * URÉIA * / UREA *
+2026-01-26 13:57:14,104 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 13:57:14,104 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 13:57:14,104 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 13:57:14,104 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 13:57:14,104 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 13:57:14,104 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 13:57:14,104 [INFO] app.services.brmed_service: Linha limpa para extração de exames: Obrigatório * / Mandatory *
+2026-01-26 13:57:14,104 [INFO] app.services.brmed_service: Exames extraídos: ['TIPAGEM SANGUÍNEA', 'RADIOGRAFIA DE COLUNA LOMBO SACRA AP', 'AUDIOMETRIA TONAL', 'ROMBERG', 'CREATININA', 'ESPIROMETRIA', 'CLÍNICO OCUPACIONAL', 'RADIOGRAFIA DE TÓRAX PA', 'GLICOSE', 'ELETROCARDIOGRAMA', 'ELETROENCEFALOGRAMA', 'ACUIDADE VISUAL COM SENSO CROMÁTICO', 'LIPIDOGRAMA (PERFIL LIPÍDICO)', 'ÁCIDO ÚRICO', 'HEMOGRAMA COMPLETO COM PLAQUETAS', 'PSICOSSOCIAL', 'TGO (AST)', 'TGP (ALT)', 'AVALIAÇÃO ODONTOLÓGICA', 'URÉIA']
+2026-01-26 13:57:14,104 [INFO] app.services.brmed_service: Resultado da extração salvo em: resultados/guia_02583339362_20260126_135656.json
+2026-01-26 13:57:14,136 [INFO] app.services.brmed_service: Navegador Playwright fechado.
+2026-01-26 13:57:14,136 [INFO] app.services.brmed_service: Consulta BRMED finalizada em 18.50s.
+2026-01-26 13:57:14,147 [INFO] app.services.workflow_service: [WORKFLOW] Consulta BRMED concluída em 18.51s
+2026-01-26 13:57:14,147 [INFO] app.services.workflow_service: [WORKFLOW-PROGRESS] 60% - brmed: Exames obrigatórios obtidos: 20 exames
+2026-01-26 13:57:14,157 [INFO] app.services.workflow_service: [WORKFLOW-PROGRESS] 70% - validacao: Validando exames com IA...
+2026-01-26 13:57:14,157 [INFO] app.services.workflow_service: [WORKFLOW] Realizando validação para CPF: 02583339362
+2026-01-26 13:57:14,567 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2026-01-26 13:57:14,869 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2026-01-26 13:57:15,155 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2026-01-26 13:57:15,446 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2026-01-26 13:57:15,793 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2026-01-26 13:57:16,131 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2026-01-26 13:57:16,437 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2026-01-26 13:57:16,746 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2026-01-26 13:57:17,030 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2026-01-26 13:57:17,309 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2026-01-26 13:57:17,597 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2026-01-26 13:57:17,863 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2026-01-26 13:57:18,156 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2026-01-26 13:57:18,445 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2026-01-26 13:57:18,754 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2026-01-26 13:57:19,030 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2026-01-26 13:57:19,454 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2026-01-26 13:57:19,730 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2026-01-26 13:57:20,017 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2026-01-26 13:57:20,320 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2026-01-26 13:57:40,477 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-01-26 13:57:40,482 [INFO] app.services.workflow_service: [WORKFLOW] Validação concluída em 26.32s
+2026-01-26 13:57:40,482 [INFO] app.services.workflow_service: [WORKFLOW-PROGRESS] 90% - validacao: Validação concluída, preparando resultado...
+2026-01-26 13:57:40,482 [INFO] app.services.workflow_service: [WORKFLOW] Validação concluída.
+2026-01-26 13:57:40,494 [INFO] app.services.workflow_service: [WORKFLOW-PROGRESS] 100% - concluido: Processamento concluído com sucesso!
+2026-01-26 13:57:40,494 [INFO] app.services.workflow_service: [WORKFLOW] Processamento completo finalizado para: BR MED  - ADM - HELENO DIAS REBOUÇAS - ASO.pdf
+2026-01-26 13:57:40,494 [INFO] app.services.workflow_service: [WORKFLOW] Processamento completo em 98.77s
+2026-01-26 13:57:40,495 [INFO] app.core.job_manager: [JOB 9701dbba-0ce6-465f-a998-47cab00813b9] Concluído com sucesso
+2026-01-26 13:57:40,495 [INFO] app.api.v1_brmed: [JOB 9701dbba-0ce6-465f-a998-47cab00813b9] Concluído com sucesso
+2026-01-26 14:00:25,167 [INFO] app.api.v1_brmed: [REQUEST-ASYNC] Documento recebido: BR MED - PER - JOSE AILTON DA SILVA CHAGAS - COMPLETO.pdf (2.95MB)
+2026-01-26 14:00:25,167 [INFO] app.api.v1_brmed: [REQUEST-ASYNC] Exames obrigatórios: 0
+2026-01-26 14:00:25,167 [INFO] app.core.job_manager: [JobManager] Job criado: 30e67dd1-42f1-4ca2-9a7b-db9b1251a783 (tipo=document_processing)
+2026-01-26 14:00:25,170 [INFO] app.api.v1_brmed: [JOB 30e67dd1-42f1-4ca2-9a7b-db9b1251a783] Arquivo salvo temporariamente: /tmp/tmpf1iu7lae.pdf
+2026-01-26 14:00:25,170 [INFO] app.api.v1_brmed: [JOB 30e67dd1-42f1-4ca2-9a7b-db9b1251a783] Task adicionada ao background
+2026-01-26 14:00:25,170 [INFO] app.api.v1_brmed: [JOB 30e67dd1-42f1-4ca2-9a7b-db9b1251a783] Iniciando processamento em background
+2026-01-26 14:00:25,170 [INFO] app.core.job_manager: [JOB 30e67dd1-42f1-4ca2-9a7b-db9b1251a783] Iniciado
+2026-01-26 14:00:25,171 [INFO] app.services.workflow_service: [WORKFLOW] Iniciando processamento completo para: BR MED - PER - JOSE AILTON DA SILVA CHAGAS - COMPLETO.pdf
+2026-01-26 14:00:25,171 [INFO] app.services.workflow_service: [WORKFLOW-PROGRESS] 10% - ocr: Processando documento com OCR...
+2026-01-26 14:00:25,171 [INFO] app.services.ocr_service: [OCR] Iniciando pipeline OCR para arquivo: BR MED - PER - JOSE AILTON DA SILVA CHAGAS - COMPLETO.pdf
+2026-01-26 14:00:25,171 [INFO] app.services.ocr_service: [OCR] Motor selecionado: AWS Textract
+2026-01-26 14:00:25,174 [INFO] app.services.ocr_service: [OCR] Iniciando conversão com AWS Textract para: BR MED - PER - JOSE AILTON DA SILVA CHAGAS - COMPLETO.pdf
+2026-01-26 14:00:25,174 [INFO] app.services.ocr_service: [OCR] Processando com AWS Textract (Síncrono): /tmp/tmpot4753ou.pdf
+2026-01-26 14:00:25,174 [INFO] app.services.ocr_service: [OCR] Reparando PDF para compatibilidade Textract: /tmp/tmpot4753ou.pdf
+2026-01-26 14:00:25,187 [INFO] app.services.ocr_service: [OCR] PDF reparado salvo em: /tmp/tmpfv8h0wul.pdf
+2026-01-26 14:00:25,189 [INFO] app.services.ocr_service: [OCR] Heurística PDF: páginas=3, chars_medio=0.0, imagens_ratio=0.00
+2026-01-26 14:00:25,189 [INFO] app.services.ocr_service: [OCR] Documento escaneado detectado. Pulando compressao para evitar perda.
+2026-01-26 14:00:25,190 [INFO] app.services.ocr_service: [OCR] Tamanho do arquivo: 2.95 MB
+2026-01-26 14:00:25,190 [INFO] app.services.ocr_service: [OCR] Chamando detect_document_text (síncrono)...
+2026-01-26 14:00:27,376 [ERROR] app.services.ocr_service: [OCR] Erro AWS [UnsupportedDocumentException]: Request has unsupported document format
+2026-01-26 14:00:27,377 [WARNING] app.services.ocr_service: [OCR] Documento nao suportado no modo sincrono, usando assincrono
+2026-01-26 14:00:27,377 [INFO] app.services.ocr_service: [OCR] Processando com AWS Textract (Assíncrono) via S3: /tmp/tmpot4753ou.pdf
+2026-01-26 14:00:27,377 [INFO] app.services.ocr_service: [OCR] Reparando PDF para compatibilidade Textract: /tmp/tmpot4753ou.pdf
+2026-01-26 14:00:27,389 [INFO] app.services.ocr_service: [OCR] PDF reparado salvo em: /tmp/tmpxt9i8gts.pdf
+2026-01-26 14:00:27,391 [INFO] app.services.ocr_service: [OCR] Heurística PDF: páginas=3, chars_medio=0.0, imagens_ratio=0.00
+2026-01-26 14:00:27,391 [INFO] app.services.ocr_service: [OCR] Documento escaneado detectado. Pulando compressao para evitar perda.
+2026-01-26 14:00:27,392 [INFO] app.services.ocr_service: [OCR] Fazendo upload para S3: s3://brmed-exam-ocr/textract-temp/20260126_140027_4e216e27_tmpot4753ou.pdf
+2026-01-26 14:00:28,974 [INFO] app.services.ocr_service: [OCR] Upload concluído. Tamanho: 2.95 MB (em 1.58s)
+2026-01-26 14:00:28,974 [INFO] app.services.ocr_service: [OCR] Iniciando job Textract assíncrono (StartDocumentTextDetection)...
+2026-01-26 14:00:29,793 [INFO] app.services.ocr_service: [OCR] Job iniciado com sucesso. JobId: 30ae50a78e5f1d363e33f46843c1ad73aadc83dabc74d8098c5c21def920a243 (em 0.82s)
+2026-01-26 14:00:29,793 [INFO] app.services.ocr_service: [OCR] Timeout maximo do Textract: 90s
+2026-01-26 14:00:29,793 [INFO] app.services.ocr_service: [OCR] Aguardando conclusão do job Textract: 30ae50a78e5f1d363e33f46843c1ad73aadc83dabc74d8098c5c21def920a243
+2026-01-26 14:00:41,060 [INFO] app.services.ocr_service: [OCR] Job concluído com sucesso após 10 tentativas
+2026-01-26 14:00:41,061 [INFO] app.services.ocr_service: [OCR] Job Textract finalizado em 11.27s (status=SUCCEEDED)
+2026-01-26 14:00:41,061 [INFO] app.services.ocr_service: [OCR] Coletando resultados do job: 30ae50a78e5f1d363e33f46843c1ad73aadc83dabc74d8098c5c21def920a243
+2026-01-26 14:00:43,669 [INFO] app.services.ocr_service: [OCR] Total de blocos coletados: 5141
+2026-01-26 14:00:43,669 [INFO] app.services.ocr_service: [OCR] Resultados coletados em 2.61s
+2026-01-26 14:00:43,669 [INFO] app.services.ocr_service: [OCR] Convertendo 5141 blocos em markdown...
+2026-01-26 14:00:43,671 [INFO] app.services.ocr_service: [OCR] Conversão concluída em 0.00s. Markdown gerado: 25974 caracteres
+2026-01-26 14:00:43,671 [INFO] app.services.ocr_service: [OCR] Removendo arquivo do S3: textract-temp/20260126_140027_4e216e27_tmpot4753ou.pdf
+2026-01-26 14:00:44,118 [INFO] app.services.ocr_service: [OCR] Arquivo removido do S3 com sucesso
+2026-01-26 14:00:44,119 [INFO] app.services.ocr_service: [OCR] Fluxo Textract assíncrono completo em 16.74s
+2026-01-26 14:00:44,125 [INFO] app.services.ocr_service: [OCR] Conversão concluída. Markdown gerado: 25974 caracteres
+2026-01-26 14:00:44,126 [INFO] app.services.ocr_service: [OCR] Pipeline OCR finalizado em 18.96s
+2026-01-26 14:00:44,127 [INFO] app.services.ocr_service: [OCR] Markdown salvo em: ocr_resultados/ocr_BR MED - PER - JOSE AILTON DA SILVA CHAGAS - COMPLETO_20260126_140044.md
+2026-01-26 14:00:44,127 [INFO] app.services.ocr_service: [OCR] Extraindo CPF via regex...
+2026-01-26 14:00:44,127 [INFO] app.services.ocr_service: [OCR] CPF extraído: 01139561340
+2026-01-26 14:00:44,127 [INFO] app.services.ocr_service: [OCR] Iniciando extração de exames via OpenAI GPT...
+2026-01-26 14:00:48,349 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-01-26 14:00:48,355 [INFO] app.services.ocr_service: [OCR] Exames extraídos: 11 encontrados - ['ELETROENCEFALOGRAMA', 'AUDIOMETRIA TONAL', 'ESPIROMETRIA', 'AVALIAÇÃO ODONTOLÓGICA', 'GLICEMIA DE JEJUM', 'AVALIAÇÃO PSICOSSOCIAL', 'COPROCULTURA', 'ELETROCARDIOGRAMA', 'PARASITOLÓGICO DE FEZES', 'RAIO-X COLUNA LOMBO-SACRA', 'TESTE TOXICOLÓGICO URINÁRIO']
+2026-01-26 14:00:48,355 [INFO] app.services.ocr_service: [OCR] Pipeline OCR concluído para: BR MED - PER - JOSE AILTON DA SILVA CHAGAS - COMPLETO.pdf
+2026-01-26 14:00:48,355 [INFO] app.services.workflow_service: [WORKFLOW] OCR concluído em 23.18s
+2026-01-26 14:00:48,355 [INFO] app.services.workflow_service: [WORKFLOW-PROGRESS] 30% - ocr: OCR concluído. 11 exames encontrados
+2026-01-26 14:00:48,356 [INFO] app.services.workflow_service: [WORKFLOW-PROGRESS] 40% - brmed: Consultando exames obrigatórios (CPF: 011***)
+2026-01-26 14:00:48,356 [INFO] app.services.workflow_service: [WORKFLOW] Tentando consultar BRMED com CPF inicial: 01139561340
+2026-01-26 14:00:48,356 [INFO] app.services.workflow_service: [WORKFLOW-PROGRESS] 20% - ocr: OCR em andamento (job iniciado)
+2026-01-26 14:00:48,746 [INFO] app.services.brmed_service: Iniciando automação Playwright...
+2026-01-26 14:00:48,747 [INFO] app.services.brmed_service: Navegando para a página de login...
+2026-01-26 14:00:58,185 [INFO] app.services.brmed_service: Autenticação e seleção de CPF concluídos em 9.44s.
+2026-01-26 14:00:58,185 [INFO] app.services.brmed_service: Consultando CPF: 01139561340 (formatado: 011.395.613-40)
+2026-01-26 14:01:00,500 [INFO] app.services.brmed_service: Consulta de CPF realizada em 2.32s.
+2026-01-26 14:01:00,519 [INFO] app.services.brmed_service: Tabelas com classe 'tabledata' encontradas: 1
+2026-01-26 14:01:00,525 [INFO] app.services.brmed_service: Links de paciente encontrados: 1
+2026-01-26 14:01:03,352 [INFO] app.services.brmed_service: Clicando em 'Guia de Encaminhamento'...
+2026-01-26 14:01:07,934 [INFO] app.services.brmed_service: Nova página da guia carregada e aguardando.
+2026-01-26 14:01:07,941 [INFO] app.services.brmed_service: Conteúdo bruto da página salvo em: resultados/debug_conteudo_01139561340_20260126_140048.txt
+2026-01-26 14:01:07,941 [INFO] app.services.brmed_service: Conteúdo recebido para extração: Olá, thiago.simoes
+
+Você está logado em: Operações
+
+Logout
+
+Página inicial
+Cadastrar paciente
+Agenda
+0 pendência(s)
+6 grupos faltando dados financeiros
+51 exame(s) sem preço
+28 exame(s) sem valor de repasse
+Relatório
+Área administrativa
+Está em:
+Início >
+Consulta de Paciente >
+Imprimir guia de agendamento
+
+
+VOUCHER
+
+
+PERIÓDICO
+
+
+Periodical
+
+
+
+Prezado(a) / Dear,
+Recebemos sua solicitação e confirmamos o agendamento conforme detalhes a seguir / Your request has been received and your scheduling is...
+2026-01-26 14:01:07,941 [INFO] app.services.brmed_service: Nome match object: <re.Match object; span=(582, 646), match='Nome / Name: JOSE AILTON DA SILVA CHAGAS\tIdentid>
+2026-01-26 14:01:07,941 [INFO] app.services.brmed_service: Nome extraído: JOSE AILTON DA SILVA CHAGAS
+2026-01-26 14:01:07,941 [INFO] app.services.brmed_service: Exames texto extraído: 4. Exames / Exams:
+
+4.1 Realizados na própria clínica / Performed at the clinic itself:
+
+
+AUDIOMETRIA TONAL * / PURE TONE AUDIOMETRY *	COPROCULTURA * / COPROCULTURE *
+ESPIROMETRIA * / SPIROMETRY *	CLÍNICO OCUPACIONAL * / CLINICAL EXAMINATION *
+HEMOGRAMA COMPLETO COM PLAQUETAS * / COMPLETE BLOOD COUNT WITH PLATELETS *	GLICEMIA DE JEJUM * / GLUCOSE *
+AVALIAÇÃO PSICOSSOCIAL * / PSYCHOSOCIAL ASSESSMENT *	ELETROCARDIOGRAMA * / ELECTROCARDIOGRAM *
+ACUIDADE VISUAL COM SENSO CROMÁTICO * / VISUAL ACUITY ...
+2026-01-26 14:01:07,942 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 4. Exames / Exams:
+2026-01-26 14:01:07,942 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 14:01:07,942 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 4.1 Realizados na própria clínica / Performed at the clinic itself:
+2026-01-26 14:01:07,942 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 14:01:07,942 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 14:01:07,942 [INFO] app.services.brmed_service: Linha limpa para extração de exames: AUDIOMETRIA TONAL * / PURE TONE AUDIOMETRY * COPROCULTURA * / COPROCULTURE *
+2026-01-26 14:01:07,942 [INFO] app.services.brmed_service: Linha limpa para extração de exames: ESPIROMETRIA * / SPIROMETRY * CLÍNICO OCUPACIONAL * / CLINICAL EXAMINATION *
+2026-01-26 14:01:07,942 [INFO] app.services.brmed_service: Linha limpa para extração de exames: HEMOGRAMA COMPLETO COM PLAQUETAS * / COMPLETE BLOOD COUNT WITH PLATELETS * GLICEMIA DE JEJUM * / GLUCOSE *
+2026-01-26 14:01:07,942 [INFO] app.services.brmed_service: Linha limpa para extração de exames: AVALIAÇÃO PSICOSSOCIAL * / PSYCHOSOCIAL ASSESSMENT * ELETROCARDIOGRAMA * / ELECTROCARDIOGRAM *
+2026-01-26 14:01:07,942 [INFO] app.services.brmed_service: Linha limpa para extração de exames: ACUIDADE VISUAL COM SENSO CROMÁTICO * / VISUAL ACUITY WITH COLOR TEST * RADIOGRAFIA DE COLUNA LOMBO SACRA AP/PERFIL * / LUMBAR COLUMN RADIOGRAPHY *
+2026-01-26 14:01:07,942 [INFO] app.services.brmed_service: Linha limpa para extração de exames: RADIOGRAFIA DE TÓRAX - PADRÃO OIT * / CHEST - STANDARD OIT RADIOGRAPHY * ELETROENCEFALOGRAMA * / ELECTROENCEPHALOGRAM *
+2026-01-26 14:01:07,942 [INFO] app.services.brmed_service: Linha limpa para extração de exames: TRIAGEM TOXICOLÓGICO * / TOXICOLOGICAL SCREENING * AVALIAÇÃO ODONTOLÓGICA * / DENTAL ASSESSMENT *
+2026-01-26 14:01:07,942 [INFO] app.services.brmed_service: Linha limpa para extração de exames: PARASITOLÓGICO DE FEZES * / FECAL PARASITOLOGY *
+2026-01-26 14:01:07,942 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 14:01:07,942 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 14:01:07,942 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 14:01:07,942 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 14:01:07,942 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 14:01:07,942 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 14:01:07,943 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 14:01:07,943 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 14:01:07,943 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 14:01:07,943 [INFO] app.services.brmed_service: Linha limpa para extração de exames: Obrigatório * / Mandatory *
+2026-01-26 14:01:07,943 [INFO] app.services.brmed_service: Exames extraídos: ['AUDIOMETRIA TONAL', 'COPROCULTURA', 'ESPIROMETRIA', 'CLÍNICO OCUPACIONAL', 'HEMOGRAMA COMPLETO COM PLAQUETAS', 'GLICEMIA DE JEJUM', 'AVALIAÇÃO PSICOSSOCIAL', 'ELETROCARDIOGRAMA', 'ACUIDADE VISUAL COM SENSO CROMÁTICO', 'RADIOGRAFIA DE COLUNA LOMBO SACRA AP', 'RADIOGRAFIA DE TÓRAX - PADRÃO OIT', 'ELETROENCEFALOGRAMA', 'TRIAGEM TOXICOLÓGICO', 'AVALIAÇÃO ODONTOLÓGICA', 'PARASITOLÓGICO DE FEZES']
+2026-01-26 14:01:07,943 [INFO] app.services.brmed_service: Resultado da extração salvo em: resultados/guia_01139561340_20260126_140048.json
+2026-01-26 14:01:07,977 [INFO] app.services.brmed_service: Navegador Playwright fechado.
+2026-01-26 14:01:07,977 [INFO] app.services.brmed_service: Consulta BRMED finalizada em 19.62s.
+2026-01-26 14:01:07,989 [INFO] app.services.workflow_service: [WORKFLOW] Consulta BRMED concluída em 19.63s
+2026-01-26 14:01:07,989 [INFO] app.services.workflow_service: [WORKFLOW-PROGRESS] 60% - brmed: Exames obrigatórios obtidos: 15 exames
+2026-01-26 14:01:07,999 [INFO] app.services.workflow_service: [WORKFLOW-PROGRESS] 70% - validacao: Validando exames com IA...
+2026-01-26 14:01:07,999 [INFO] app.services.workflow_service: [WORKFLOW] Realizando validação para CPF: 01139561340
+2026-01-26 14:01:08,525 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2026-01-26 14:01:09,074 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2026-01-26 14:01:09,397 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2026-01-26 14:01:10,072 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2026-01-26 14:01:10,793 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2026-01-26 14:01:11,059 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2026-01-26 14:01:11,328 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2026-01-26 14:01:11,775 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2026-01-26 14:01:12,217 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2026-01-26 14:01:12,904 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2026-01-26 14:01:13,321 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2026-01-26 14:01:13,754 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2026-01-26 14:01:14,193 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2026-01-26 14:01:14,915 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2026-01-26 14:01:15,332 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2026-01-26 14:01:42,257 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-01-26 14:01:42,265 [INFO] app.services.workflow_service: [WORKFLOW] Validação concluída em 34.27s
+2026-01-26 14:01:42,265 [INFO] app.services.workflow_service: [WORKFLOW-PROGRESS] 90% - validacao: Validação concluída, preparando resultado...
+2026-01-26 14:01:42,265 [INFO] app.services.workflow_service: [WORKFLOW] Validação concluída.
+2026-01-26 14:01:42,277 [INFO] app.services.workflow_service: [WORKFLOW-PROGRESS] 100% - concluido: Processamento concluído com sucesso!
+2026-01-26 14:01:42,277 [INFO] app.services.workflow_service: [WORKFLOW] Processamento completo finalizado para: BR MED - PER - JOSE AILTON DA SILVA CHAGAS - COMPLETO.pdf
+2026-01-26 14:01:42,277 [INFO] app.services.workflow_service: [WORKFLOW] Processamento completo em 77.11s
+2026-01-26 14:01:42,277 [INFO] app.core.job_manager: [JOB 30e67dd1-42f1-4ca2-9a7b-db9b1251a783] Concluído com sucesso
+2026-01-26 14:01:42,277 [INFO] app.api.v1_brmed: [JOB 30e67dd1-42f1-4ca2-9a7b-db9b1251a783] Concluído com sucesso
+2026-01-26 14:06:54,407 [INFO] main: 🚀 Iniciando aplicação...
+2026-01-26 14:06:54,409 [INFO] app.core.migrations: ============================================================
+2026-01-26 14:06:54,409 [INFO] app.core.migrations: VERIFICANDO MIGRAÇÕES DO BANCO DE DADOS
+2026-01-26 14:06:54,409 [INFO] app.core.migrations: ============================================================
+2026-01-26 14:06:55,515 [INFO] app.core.migrations: ✓ Banco de dados já migrado (todas as colunas existem)
+2026-01-26 14:06:55,515 [INFO] app.core.migrations: Nenhuma migração necessária - banco já atualizado
+2026-01-26 14:07:19,855 [INFO] app.api.v1.auth: Usuário autenticado: gabriel.rodrigues@grupobrmed.com.br (role: ADMIN, clinic_id: None)
+2026-01-26 14:07:38,995 [INFO] app.api.v1_brmed: [REQUEST-ASYNC] Documento recebido: BRMED - PERIODICO - JOEL FERREIRA BARBOSA  - COMPLETO.pdf (0.34MB)
+2026-01-26 14:07:38,995 [INFO] app.api.v1_brmed: [REQUEST-ASYNC] Exames obrigatórios: 0
+2026-01-26 14:07:38,996 [INFO] app.core.job_manager: [JobManager] Job criado: 0807f84e-cb36-41d8-bf9f-6f4dd07bbcd1 (tipo=document_processing)
+2026-01-26 14:07:38,996 [INFO] app.api.v1_brmed: [JOB 0807f84e-cb36-41d8-bf9f-6f4dd07bbcd1] Arquivo salvo temporariamente: /tmp/tmp85hy7jwf.pdf
+2026-01-26 14:07:38,996 [INFO] app.api.v1_brmed: [JOB 0807f84e-cb36-41d8-bf9f-6f4dd07bbcd1] Task adicionada ao background
+2026-01-26 14:07:38,997 [INFO] app.api.v1_brmed: [JOB 0807f84e-cb36-41d8-bf9f-6f4dd07bbcd1] Iniciando processamento em background
+2026-01-26 14:07:38,997 [INFO] app.core.job_manager: [JOB 0807f84e-cb36-41d8-bf9f-6f4dd07bbcd1] Iniciado
+2026-01-26 14:07:38,997 [INFO] app.services.workflow_service: [WORKFLOW] Iniciando processamento completo para: BRMED - PERIODICO - JOEL FERREIRA BARBOSA  - COMPLETO.pdf
+2026-01-26 14:07:38,997 [INFO] app.services.workflow_service: [WORKFLOW-PROGRESS] 10% - ocr: Processando documento com OCR...
+2026-01-26 14:07:38,997 [INFO] app.services.ocr_service: [OCR] Iniciando pipeline OCR para arquivo: BRMED - PERIODICO - JOEL FERREIRA BARBOSA  - COMPLETO.pdf
+2026-01-26 14:07:38,997 [INFO] app.services.ocr_service: [OCR] Motor selecionado: AWS Textract
+2026-01-26 14:07:39,003 [INFO] app.services.ocr_service: [OCR] Iniciando conversão com AWS Textract para: BRMED - PERIODICO - JOEL FERREIRA BARBOSA  - COMPLETO.pdf
+2026-01-26 14:07:39,003 [INFO] app.services.ocr_service: [OCR] Processando com AWS Textract (Síncrono): /tmp/tmp6p9q1li7.pdf
+2026-01-26 14:07:39,003 [INFO] app.services.ocr_service: [OCR] Reparando PDF para compatibilidade Textract: /tmp/tmp6p9q1li7.pdf
+2026-01-26 14:07:39,006 [INFO] app.services.ocr_service: [OCR] PDF reparado salvo em: /tmp/tmpi880jhti.pdf
+2026-01-26 14:07:39,007 [INFO] app.services.ocr_service: [OCR] Heurística PDF: páginas=2, chars_medio=0.0, imagens_ratio=0.00
+2026-01-26 14:07:39,007 [INFO] app.services.ocr_service: [OCR] Documento escaneado detectado. Pulando compressao para evitar perda.
+2026-01-26 14:07:39,007 [INFO] app.services.ocr_service: [OCR] Tamanho do arquivo: 0.34 MB
+2026-01-26 14:07:39,007 [INFO] app.services.ocr_service: [OCR] Chamando detect_document_text (síncrono)...
+2026-01-26 14:07:40,752 [ERROR] app.services.ocr_service: [OCR] Erro AWS [UnsupportedDocumentException]: Request has unsupported document format
+2026-01-26 14:07:40,753 [WARNING] app.services.ocr_service: [OCR] Documento nao suportado no modo sincrono, usando assincrono
+2026-01-26 14:07:40,753 [INFO] app.services.ocr_service: [OCR] Processando com AWS Textract (Assíncrono) via S3: /tmp/tmp6p9q1li7.pdf
+2026-01-26 14:07:40,753 [INFO] app.services.ocr_service: [OCR] Reparando PDF para compatibilidade Textract: /tmp/tmp6p9q1li7.pdf
+2026-01-26 14:07:40,755 [INFO] app.services.ocr_service: [OCR] PDF reparado salvo em: /tmp/tmpgajeq4ip.pdf
+2026-01-26 14:07:40,756 [INFO] app.services.ocr_service: [OCR] Heurística PDF: páginas=2, chars_medio=0.0, imagens_ratio=0.00
+2026-01-26 14:07:40,756 [INFO] app.services.ocr_service: [OCR] Documento escaneado detectado. Pulando compressao para evitar perda.
+2026-01-26 14:07:40,756 [INFO] app.services.ocr_service: [OCR] Fazendo upload para S3: s3://brmed-exam-ocr/textract-temp/20260126_140740_6a5b671f_tmp6p9q1li7.pdf
+2026-01-26 14:07:41,956 [INFO] app.services.ocr_service: [OCR] Upload concluído. Tamanho: 0.34 MB (em 1.20s)
+2026-01-26 14:07:41,956 [INFO] app.services.ocr_service: [OCR] Iniciando job Textract assíncrono (StartDocumentTextDetection)...
+2026-01-26 14:07:42,731 [INFO] app.services.ocr_service: [OCR] Job iniciado com sucesso. JobId: d7679d77af97615724f67082097b4cfc8afe41a9537388317d0e4ebae647f1ae (em 0.77s)
+2026-01-26 14:07:42,731 [INFO] app.services.ocr_service: [OCR] Timeout maximo do Textract: 90s
+2026-01-26 14:07:42,731 [INFO] app.services.ocr_service: [OCR] Aguardando conclusão do job Textract: d7679d77af97615724f67082097b4cfc8afe41a9537388317d0e4ebae647f1ae
+2026-01-26 14:07:48,079 [INFO] app.services.ocr_service: [OCR] Job concluído com sucesso após 5 tentativas
+2026-01-26 14:07:48,079 [INFO] app.services.ocr_service: [OCR] Job Textract finalizado em 5.35s (status=SUCCEEDED)
+2026-01-26 14:07:48,080 [INFO] app.services.ocr_service: [OCR] Coletando resultados do job: d7679d77af97615724f67082097b4cfc8afe41a9537388317d0e4ebae647f1ae
+2026-01-26 14:07:48,463 [INFO] app.services.ocr_service: [OCR] Total de blocos coletados: 621
+2026-01-26 14:07:48,463 [INFO] app.services.ocr_service: [OCR] Resultados coletados em 0.38s
+2026-01-26 14:07:48,463 [INFO] app.services.ocr_service: [OCR] Convertendo 621 blocos em markdown...
+2026-01-26 14:07:48,463 [INFO] app.services.ocr_service: [OCR] Conversão concluída em 0.00s. Markdown gerado: 3732 caracteres
+2026-01-26 14:07:48,463 [INFO] app.services.ocr_service: [OCR] Removendo arquivo do S3: textract-temp/20260126_140740_6a5b671f_tmp6p9q1li7.pdf
+2026-01-26 14:07:48,889 [INFO] app.services.ocr_service: [OCR] Arquivo removido do S3 com sucesso
+2026-01-26 14:07:48,889 [INFO] app.services.ocr_service: [OCR] Fluxo Textract assíncrono completo em 8.14s
+2026-01-26 14:07:48,891 [INFO] app.services.ocr_service: [OCR] Conversão concluída. Markdown gerado: 3732 caracteres
+2026-01-26 14:07:48,891 [INFO] app.services.ocr_service: [OCR] Pipeline OCR finalizado em 9.89s
+2026-01-26 14:07:48,891 [INFO] app.services.ocr_service: [OCR] Markdown salvo em: ocr_resultados/ocr_BRMED - PERIODICO - JOEL FERREIRA BARBOSA  - COMPLETO_20260126_140748.md
+2026-01-26 14:07:48,891 [INFO] app.services.ocr_service: [OCR] Extraindo CPF via regex...
+2026-01-26 14:07:48,891 [INFO] app.services.ocr_service: [OCR] CPF extraído: 01792655398
+2026-01-26 14:07:48,891 [INFO] app.services.ocr_service: [OCR] Iniciando extração de exames via OpenAI GPT...
+2026-01-26 14:07:50,678 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-01-26 14:07:50,684 [INFO] app.services.ocr_service: [OCR] Exames extraídos: 1 encontrados - ['CLÍNICO OCUPACIONAL']
+2026-01-26 14:07:50,684 [INFO] app.services.ocr_service: [OCR] Pipeline OCR concluído para: BRMED - PERIODICO - JOEL FERREIRA BARBOSA  - COMPLETO.pdf
+2026-01-26 14:07:50,685 [INFO] app.services.workflow_service: [WORKFLOW] OCR concluído em 11.69s
+2026-01-26 14:07:50,685 [INFO] app.services.workflow_service: [WORKFLOW-PROGRESS] 30% - ocr: OCR concluído. 1 exames encontrados
+2026-01-26 14:07:50,685 [INFO] app.services.workflow_service: [WORKFLOW-PROGRESS] 40% - brmed: Consultando exames obrigatórios (CPF: 017***)
+2026-01-26 14:07:50,685 [INFO] app.services.workflow_service: [WORKFLOW] Tentando consultar BRMED com CPF inicial: 01792655398
+2026-01-26 14:07:50,685 [INFO] app.services.workflow_service: [WORKFLOW-PROGRESS] 20% - ocr: OCR em andamento (job iniciado)
+2026-01-26 14:07:51,331 [INFO] app.services.brmed_service: Iniciando automação Playwright...
+2026-01-26 14:07:51,331 [INFO] app.services.brmed_service: Navegando para a página de login...
+2026-01-26 14:08:01,287 [INFO] app.services.brmed_service: Autenticação e seleção de CPF concluídos em 9.96s.
+2026-01-26 14:08:01,287 [INFO] app.services.brmed_service: Consultando CPF: 01792655398 (formatado: 017.926.553-98)
+2026-01-26 14:08:03,629 [INFO] app.services.brmed_service: Consulta de CPF realizada em 2.34s.
+2026-01-26 14:08:03,646 [INFO] app.services.brmed_service: Tabelas com classe 'tabledata' encontradas: 1
+2026-01-26 14:08:03,656 [INFO] app.services.brmed_service: Links de paciente encontrados: 1
+2026-01-26 14:08:06,080 [INFO] app.services.brmed_service: Clicando em 'Guia de Encaminhamento'...
+2026-01-26 14:08:10,723 [INFO] app.services.brmed_service: Nova página da guia carregada e aguardando.
+2026-01-26 14:08:10,731 [INFO] app.services.brmed_service: Conteúdo bruto da página salvo em: resultados/debug_conteudo_01792655398_20260126_140751.txt
+2026-01-26 14:08:10,731 [INFO] app.services.brmed_service: Conteúdo recebido para extração: Olá, thiago.simoes
+
+Você está logado em: Operações
+
+Logout
+
+Página inicial
+Cadastrar paciente
+Agenda
+0 pendência(s)
+6 grupos faltando dados financeiros
+51 exame(s) sem preço
+28 exame(s) sem valor de repasse
+Relatório
+Área administrativa
+Está em:
+Início >
+Consulta de Paciente >
+Imprimir guia de agendamento
+
+
+VOUCHER
+
+
+PERIÓDICO
+
+
+Periodical
+
+
+
+Prezado(a) / Dear,
+Recebemos sua solicitação e confirmamos o agendamento conforme detalhes a seguir / Your request has been received and your scheduling is...
+2026-01-26 14:08:10,732 [INFO] app.services.brmed_service: Nome match object: <re.Match object; span=(580, 638), match='Nome / Name: JOEL FERREIRA BARBOSA\tIdentidade / >
+2026-01-26 14:08:10,732 [INFO] app.services.brmed_service: Nome extraído: JOEL FERREIRA BARBOSA
+2026-01-26 14:08:10,732 [INFO] app.services.brmed_service: Exames texto extraído: 4. Exames / Exams:
+
+4.1 Realizados na própria clínica / Performed at the clinic itself:
+
+
+CLÍNICO OCUPACIONAL * / CLINICAL EXAMINATION *
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+	
+Obrigatório * / Mandatory *...
+2026-01-26 14:08:10,732 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 4. Exames / Exams:
+2026-01-26 14:08:10,732 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 14:08:10,732 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 4.1 Realizados na própria clínica / Performed at the clinic itself:
+2026-01-26 14:08:10,732 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 14:08:10,732 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 14:08:10,732 [INFO] app.services.brmed_service: Linha limpa para extração de exames: CLÍNICO OCUPACIONAL * / CLINICAL EXAMINATION *
+2026-01-26 14:08:10,732 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 14:08:10,732 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 14:08:10,732 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 14:08:10,732 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 14:08:10,732 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 14:08:10,733 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 14:08:10,733 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 14:08:10,733 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 14:08:10,733 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 14:08:10,733 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 14:08:10,733 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 14:08:10,733 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 14:08:10,733 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 14:08:10,733 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 14:08:10,733 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 14:08:10,733 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 14:08:10,733 [INFO] app.services.brmed_service: Linha limpa para extração de exames: Obrigatório * / Mandatory *
+2026-01-26 14:08:10,733 [INFO] app.services.brmed_service: Exames extraídos: ['CLÍNICO OCUPACIONAL']
+2026-01-26 14:08:10,733 [INFO] app.services.brmed_service: Resultado da extração salvo em: resultados/guia_01792655398_20260126_140751.json
+2026-01-26 14:08:10,765 [INFO] app.services.brmed_service: Navegador Playwright fechado.
+2026-01-26 14:08:10,765 [INFO] app.services.brmed_service: Consulta BRMED finalizada em 20.08s.
+2026-01-26 14:08:10,775 [INFO] app.services.workflow_service: [WORKFLOW] Consulta BRMED concluída em 20.09s
+2026-01-26 14:08:10,775 [INFO] app.services.workflow_service: [WORKFLOW-PROGRESS] 60% - brmed: Exames obrigatórios obtidos: 1 exames
+2026-01-26 14:08:10,776 [INFO] app.services.workflow_service: [WORKFLOW-PROGRESS] 70% - validacao: Validando exames com IA...
+2026-01-26 14:08:10,777 [INFO] app.services.workflow_service: [WORKFLOW] Realizando validação para CPF: 01792655398
+2026-01-26 14:08:11,231 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2026-01-26 14:08:12,864 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-01-26 14:08:12,867 [INFO] app.services.workflow_service: [WORKFLOW] Validação concluída em 2.09s
+2026-01-26 14:08:12,867 [INFO] app.services.workflow_service: [WORKFLOW-PROGRESS] 90% - validacao: Validação concluída, preparando resultado...
+2026-01-26 14:08:12,867 [INFO] app.services.workflow_service: [WORKFLOW] Validação concluída.
+2026-01-26 14:08:12,868 [INFO] app.services.workflow_service: [WORKFLOW-PROGRESS] 100% - concluido: Processamento concluído com sucesso!
+2026-01-26 14:08:12,868 [INFO] app.services.workflow_service: [WORKFLOW] Processamento completo finalizado para: BRMED - PERIODICO - JOEL FERREIRA BARBOSA  - COMPLETO.pdf
+2026-01-26 14:08:12,868 [INFO] app.services.workflow_service: [WORKFLOW] Processamento completo em 33.87s
+2026-01-26 14:08:12,869 [INFO] app.core.job_manager: [JOB 0807f84e-cb36-41d8-bf9f-6f4dd07bbcd1] Concluído com sucesso
+2026-01-26 14:08:12,869 [INFO] app.api.v1_brmed: [JOB 0807f84e-cb36-41d8-bf9f-6f4dd07bbcd1] Concluído com sucesso
+2026-01-26 14:09:10,381 [INFO] app.api.v1_brmed: [REQUEST-ASYNC] Documento recebido: BR MED - PER - JOSE AILTON DA SILVA CHAGAS - COMPLETO.pdf (2.95MB)
+2026-01-26 14:09:10,381 [INFO] app.api.v1_brmed: [REQUEST-ASYNC] Exames obrigatórios: 0
+2026-01-26 14:09:10,381 [INFO] app.core.job_manager: [JobManager] Job criado: b59a9130-7eed-4fa2-b554-75e4220920d5 (tipo=document_processing)
+2026-01-26 14:09:10,385 [INFO] app.api.v1_brmed: [JOB b59a9130-7eed-4fa2-b554-75e4220920d5] Arquivo salvo temporariamente: /tmp/tmpm2a5355z.pdf
+2026-01-26 14:09:10,385 [INFO] app.api.v1_brmed: [JOB b59a9130-7eed-4fa2-b554-75e4220920d5] Task adicionada ao background
+2026-01-26 14:09:10,386 [INFO] app.api.v1_brmed: [JOB b59a9130-7eed-4fa2-b554-75e4220920d5] Iniciando processamento em background
+2026-01-26 14:09:10,386 [INFO] app.core.job_manager: [JOB b59a9130-7eed-4fa2-b554-75e4220920d5] Iniciado
+2026-01-26 14:09:10,387 [INFO] app.services.workflow_service: [WORKFLOW] Iniciando processamento completo para: BR MED - PER - JOSE AILTON DA SILVA CHAGAS - COMPLETO.pdf
+2026-01-26 14:09:10,388 [INFO] app.services.workflow_service: [WORKFLOW-PROGRESS] 10% - ocr: Processando documento com OCR...
+2026-01-26 14:09:10,388 [INFO] app.services.ocr_service: [OCR] Iniciando pipeline OCR para arquivo: BR MED - PER - JOSE AILTON DA SILVA CHAGAS - COMPLETO.pdf
+2026-01-26 14:09:10,388 [INFO] app.services.ocr_service: [OCR] Motor selecionado: AWS Textract
+2026-01-26 14:09:10,390 [INFO] app.services.ocr_service: [OCR] Iniciando conversão com AWS Textract para: BR MED - PER - JOSE AILTON DA SILVA CHAGAS - COMPLETO.pdf
+2026-01-26 14:09:10,390 [INFO] app.services.ocr_service: [OCR] Processando com AWS Textract (Síncrono): /tmp/tmp_0k00h9r.pdf
+2026-01-26 14:09:10,390 [INFO] app.services.ocr_service: [OCR] Reparando PDF para compatibilidade Textract: /tmp/tmp_0k00h9r.pdf
+2026-01-26 14:09:10,407 [INFO] app.services.ocr_service: [OCR] PDF reparado salvo em: /tmp/tmppv0oj2wx.pdf
+2026-01-26 14:09:10,412 [INFO] app.services.ocr_service: [OCR] Heurística PDF: páginas=3, chars_medio=0.0, imagens_ratio=0.00
+2026-01-26 14:09:10,412 [INFO] app.services.ocr_service: [OCR] Documento escaneado detectado. Pulando compressao para evitar perda.
+2026-01-26 14:09:10,413 [INFO] app.services.ocr_service: [OCR] Tamanho do arquivo: 2.95 MB
+2026-01-26 14:09:10,413 [INFO] app.services.ocr_service: [OCR] Chamando detect_document_text (síncrono)...
+2026-01-26 14:09:13,156 [ERROR] app.services.ocr_service: [OCR] Erro AWS [UnsupportedDocumentException]: Request has unsupported document format
+2026-01-26 14:09:13,157 [WARNING] app.services.ocr_service: [OCR] Documento nao suportado no modo sincrono, usando assincrono
+2026-01-26 14:09:13,157 [INFO] app.services.ocr_service: [OCR] Processando com AWS Textract (Assíncrono) via S3: /tmp/tmp_0k00h9r.pdf
+2026-01-26 14:09:13,157 [INFO] app.services.ocr_service: [OCR] Reparando PDF para compatibilidade Textract: /tmp/tmp_0k00h9r.pdf
+2026-01-26 14:09:13,171 [INFO] app.services.ocr_service: [OCR] PDF reparado salvo em: /tmp/tmp183630g_.pdf
+2026-01-26 14:09:13,176 [INFO] app.services.ocr_service: [OCR] Heurística PDF: páginas=3, chars_medio=0.0, imagens_ratio=0.00
+2026-01-26 14:09:13,176 [INFO] app.services.ocr_service: [OCR] Documento escaneado detectado. Pulando compressao para evitar perda.
+2026-01-26 14:09:13,176 [INFO] app.services.ocr_service: [OCR] Fazendo upload para S3: s3://brmed-exam-ocr/textract-temp/20260126_140913_65413e00_tmp_0k00h9r.pdf
+2026-01-26 14:09:14,971 [INFO] app.services.ocr_service: [OCR] Upload concluído. Tamanho: 2.95 MB (em 1.79s)
+2026-01-26 14:09:14,971 [INFO] app.services.ocr_service: [OCR] Iniciando job Textract assíncrono (StartDocumentTextDetection)...
+2026-01-26 14:09:15,692 [INFO] app.services.ocr_service: [OCR] Job iniciado com sucesso. JobId: b0f64aab1412e21528096b5857a2cc796f7fa7be7863d711e7adf38f7d8192d5 (em 0.72s)
+2026-01-26 14:09:15,692 [INFO] app.services.ocr_service: [OCR] Timeout maximo do Textract: 90s
+2026-01-26 14:09:15,693 [INFO] app.services.ocr_service: [OCR] Aguardando conclusão do job Textract: b0f64aab1412e21528096b5857a2cc796f7fa7be7863d711e7adf38f7d8192d5
+2026-01-26 14:09:30,426 [INFO] app.services.ocr_service: [OCR] Job concluído com sucesso após 12 tentativas
+2026-01-26 14:09:30,427 [INFO] app.services.ocr_service: [OCR] Job Textract finalizado em 14.73s (status=SUCCEEDED)
+2026-01-26 14:09:30,427 [INFO] app.services.ocr_service: [OCR] Coletando resultados do job: b0f64aab1412e21528096b5857a2cc796f7fa7be7863d711e7adf38f7d8192d5
+2026-01-26 14:09:33,615 [INFO] app.services.ocr_service: [OCR] Total de blocos coletados: 5141
+2026-01-26 14:09:33,616 [INFO] app.services.ocr_service: [OCR] Resultados coletados em 3.19s
+2026-01-26 14:09:33,616 [INFO] app.services.ocr_service: [OCR] Convertendo 5141 blocos em markdown...
+2026-01-26 14:09:33,617 [INFO] app.services.ocr_service: [OCR] Conversão concluída em 0.00s. Markdown gerado: 25974 caracteres
+2026-01-26 14:09:33,617 [INFO] app.services.ocr_service: [OCR] Removendo arquivo do S3: textract-temp/20260126_140913_65413e00_tmp_0k00h9r.pdf
+2026-01-26 14:09:34,022 [INFO] app.services.ocr_service: [OCR] Arquivo removido do S3 com sucesso
+2026-01-26 14:09:34,023 [INFO] app.services.ocr_service: [OCR] Fluxo Textract assíncrono completo em 20.87s
+2026-01-26 14:09:34,028 [INFO] app.services.ocr_service: [OCR] Conversão concluída. Markdown gerado: 25974 caracteres
+2026-01-26 14:09:34,029 [INFO] app.services.ocr_service: [OCR] Pipeline OCR finalizado em 23.64s
+2026-01-26 14:09:34,030 [INFO] app.services.ocr_service: [OCR] Markdown salvo em: ocr_resultados/ocr_BR MED - PER - JOSE AILTON DA SILVA CHAGAS - COMPLETO_20260126_140934.md
+2026-01-26 14:09:34,030 [INFO] app.services.ocr_service: [OCR] Extraindo CPF via regex...
+2026-01-26 14:09:34,030 [INFO] app.services.ocr_service: [OCR] CPF extraído: 01139561340
+2026-01-26 14:09:34,030 [INFO] app.services.ocr_service: [OCR] Iniciando extração de exames via OpenAI GPT...
+2026-01-26 14:09:42,979 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-01-26 14:09:42,982 [INFO] app.services.ocr_service: [OCR] Exames extraídos: 11 encontrados - ['ELETROENCEFALOGRAMA', 'AUDIOMETRIA TONAL', 'ESPIROMETRIA', 'AVALIAÇÃO ODONTOLÓGICA', 'GLICEMIA DE JEJUM', 'AVALIAÇÃO PSICOSSOCIAL', 'COPROCULTURA', 'ELETROCARDIOGRAMA', 'PARASITOLÓGICO DE FEZES', 'RAIO-X COLUNA LOMBO-SACRA', 'TESTE TOXICOLÓGICO URINÁRIO']
+2026-01-26 14:09:42,982 [INFO] app.services.ocr_service: [OCR] Pipeline OCR concluído para: BR MED - PER - JOSE AILTON DA SILVA CHAGAS - COMPLETO.pdf
+2026-01-26 14:09:42,982 [INFO] app.services.workflow_service: [WORKFLOW] OCR concluído em 32.59s
+2026-01-26 14:09:42,982 [INFO] app.services.workflow_service: [WORKFLOW-PROGRESS] 30% - ocr: OCR concluído. 11 exames encontrados
+2026-01-26 14:09:42,982 [INFO] app.services.workflow_service: [WORKFLOW-PROGRESS] 40% - brmed: Consultando exames obrigatórios (CPF: 011***)
+2026-01-26 14:09:42,982 [INFO] app.services.workflow_service: [WORKFLOW] Tentando consultar BRMED com CPF inicial: 01139561340
+2026-01-26 14:09:42,982 [INFO] app.services.workflow_service: [WORKFLOW-PROGRESS] 20% - ocr: OCR em andamento (job iniciado)
+2026-01-26 14:09:43,375 [INFO] app.services.brmed_service: Iniciando automação Playwright...
+2026-01-26 14:09:43,375 [INFO] app.services.brmed_service: Navegando para a página de login...
+2026-01-26 14:09:53,446 [INFO] app.services.brmed_service: Autenticação e seleção de CPF concluídos em 10.07s.
+2026-01-26 14:09:53,446 [INFO] app.services.brmed_service: Consultando CPF: 01139561340 (formatado: 011.395.613-40)
+2026-01-26 14:09:55,894 [INFO] app.services.brmed_service: Consulta de CPF realizada em 2.45s.
+2026-01-26 14:09:55,910 [INFO] app.services.brmed_service: Tabelas com classe 'tabledata' encontradas: 1
+2026-01-26 14:09:55,916 [INFO] app.services.brmed_service: Links de paciente encontrados: 1
+2026-01-26 14:09:58,640 [INFO] app.services.brmed_service: Clicando em 'Guia de Encaminhamento'...
+2026-01-26 14:10:03,307 [INFO] app.services.brmed_service: Nova página da guia carregada e aguardando.
+2026-01-26 14:10:03,315 [INFO] app.services.brmed_service: Conteúdo bruto da página salvo em: resultados/debug_conteudo_01139561340_20260126_140943.txt
+2026-01-26 14:10:03,315 [INFO] app.services.brmed_service: Conteúdo recebido para extração: Olá, thiago.simoes
+
+Você está logado em: Operações
+
+Logout
+
+Página inicial
+Cadastrar paciente
+Agenda
+2 pendência(s)
+6 grupos faltando dados financeiros
+51 exame(s) sem preço
+28 exame(s) sem valor de repasse
+Relatório
+Área administrativa
+Está em:
+Início >
+Consulta de Paciente >
+Imprimir guia de agendamento
+
+
+VOUCHER
+
+
+PERIÓDICO
+
+
+Periodical
+
+
+
+Prezado(a) / Dear,
+Recebemos sua solicitação e confirmamos o agendamento conforme detalhes a seguir / Your request has been received and your scheduling is...
+2026-01-26 14:10:03,315 [INFO] app.services.brmed_service: Nome match object: <re.Match object; span=(582, 646), match='Nome / Name: JOSE AILTON DA SILVA CHAGAS\tIdentid>
+2026-01-26 14:10:03,315 [INFO] app.services.brmed_service: Nome extraído: JOSE AILTON DA SILVA CHAGAS
+2026-01-26 14:10:03,315 [INFO] app.services.brmed_service: Exames texto extraído: 4. Exames / Exams:
+
+4.1 Realizados na própria clínica / Performed at the clinic itself:
+
+
+AUDIOMETRIA TONAL * / PURE TONE AUDIOMETRY *	COPROCULTURA * / COPROCULTURE *
+ESPIROMETRIA * / SPIROMETRY *	CLÍNICO OCUPACIONAL * / CLINICAL EXAMINATION *
+HEMOGRAMA COMPLETO COM PLAQUETAS * / COMPLETE BLOOD COUNT WITH PLATELETS *	GLICEMIA DE JEJUM * / GLUCOSE *
+AVALIAÇÃO PSICOSSOCIAL * / PSYCHOSOCIAL ASSESSMENT *	ELETROCARDIOGRAMA * / ELECTROCARDIOGRAM *
+ACUIDADE VISUAL COM SENSO CROMÁTICO * / VISUAL ACUITY ...
+2026-01-26 14:10:03,315 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 4. Exames / Exams:
+2026-01-26 14:10:03,315 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 14:10:03,315 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 4.1 Realizados na própria clínica / Performed at the clinic itself:
+2026-01-26 14:10:03,315 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 14:10:03,315 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 14:10:03,315 [INFO] app.services.brmed_service: Linha limpa para extração de exames: AUDIOMETRIA TONAL * / PURE TONE AUDIOMETRY * COPROCULTURA * / COPROCULTURE *
+2026-01-26 14:10:03,315 [INFO] app.services.brmed_service: Linha limpa para extração de exames: ESPIROMETRIA * / SPIROMETRY * CLÍNICO OCUPACIONAL * / CLINICAL EXAMINATION *
+2026-01-26 14:10:03,315 [INFO] app.services.brmed_service: Linha limpa para extração de exames: HEMOGRAMA COMPLETO COM PLAQUETAS * / COMPLETE BLOOD COUNT WITH PLATELETS * GLICEMIA DE JEJUM * / GLUCOSE *
+2026-01-26 14:10:03,315 [INFO] app.services.brmed_service: Linha limpa para extração de exames: AVALIAÇÃO PSICOSSOCIAL * / PSYCHOSOCIAL ASSESSMENT * ELETROCARDIOGRAMA * / ELECTROCARDIOGRAM *
+2026-01-26 14:10:03,315 [INFO] app.services.brmed_service: Linha limpa para extração de exames: ACUIDADE VISUAL COM SENSO CROMÁTICO * / VISUAL ACUITY WITH COLOR TEST * RADIOGRAFIA DE COLUNA LOMBO SACRA AP/PERFIL * / LUMBAR COLUMN RADIOGRAPHY *
+2026-01-26 14:10:03,316 [INFO] app.services.brmed_service: Linha limpa para extração de exames: RADIOGRAFIA DE TÓRAX - PADRÃO OIT * / CHEST - STANDARD OIT RADIOGRAPHY * ELETROENCEFALOGRAMA * / ELECTROENCEPHALOGRAM *
+2026-01-26 14:10:03,316 [INFO] app.services.brmed_service: Linha limpa para extração de exames: TRIAGEM TOXICOLÓGICO * / TOXICOLOGICAL SCREENING * AVALIAÇÃO ODONTOLÓGICA * / DENTAL ASSESSMENT *
+2026-01-26 14:10:03,316 [INFO] app.services.brmed_service: Linha limpa para extração de exames: PARASITOLÓGICO DE FEZES * / FECAL PARASITOLOGY *
+2026-01-26 14:10:03,316 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 14:10:03,316 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 14:10:03,316 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 14:10:03,316 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 14:10:03,316 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 14:10:03,316 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 14:10:03,316 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 14:10:03,316 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 14:10:03,316 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 14:10:03,316 [INFO] app.services.brmed_service: Linha limpa para extração de exames: Obrigatório * / Mandatory *
+2026-01-26 14:10:03,316 [INFO] app.services.brmed_service: Exames extraídos: ['AUDIOMETRIA TONAL', 'COPROCULTURA', 'ESPIROMETRIA', 'CLÍNICO OCUPACIONAL', 'HEMOGRAMA COMPLETO COM PLAQUETAS', 'GLICEMIA DE JEJUM', 'AVALIAÇÃO PSICOSSOCIAL', 'ELETROCARDIOGRAMA', 'ACUIDADE VISUAL COM SENSO CROMÁTICO', 'RADIOGRAFIA DE COLUNA LOMBO SACRA AP', 'RADIOGRAFIA DE TÓRAX - PADRÃO OIT', 'ELETROENCEFALOGRAMA', 'TRIAGEM TOXICOLÓGICO', 'AVALIAÇÃO ODONTOLÓGICA', 'PARASITOLÓGICO DE FEZES']
+2026-01-26 14:10:03,316 [INFO] app.services.brmed_service: Resultado da extração salvo em: resultados/guia_01139561340_20260126_140943.json
+2026-01-26 14:10:03,345 [INFO] app.services.brmed_service: Navegador Playwright fechado.
+2026-01-26 14:10:03,345 [INFO] app.services.brmed_service: Consulta BRMED finalizada em 20.36s.
+2026-01-26 14:10:03,354 [INFO] app.services.workflow_service: [WORKFLOW] Consulta BRMED concluída em 20.37s
+2026-01-26 14:10:03,355 [INFO] app.services.workflow_service: [WORKFLOW-PROGRESS] 60% - brmed: Exames obrigatórios obtidos: 15 exames
+2026-01-26 14:10:03,365 [INFO] app.services.workflow_service: [WORKFLOW-PROGRESS] 70% - validacao: Validando exames com IA...
+2026-01-26 14:10:03,365 [INFO] app.services.workflow_service: [WORKFLOW] Realizando validação para CPF: 01139561340
+2026-01-26 14:10:03,915 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2026-01-26 14:10:04,245 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2026-01-26 14:10:04,742 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2026-01-26 14:10:05,127 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2026-01-26 14:10:05,459 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2026-01-26 14:10:05,780 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2026-01-26 14:10:06,109 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2026-01-26 14:10:07,089 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2026-01-26 14:10:07,557 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2026-01-26 14:10:07,851 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2026-01-26 14:10:08,441 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2026-01-26 14:10:08,722 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2026-01-26 14:10:09,029 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2026-01-26 14:10:09,335 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2026-01-26 14:10:09,759 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2026-01-26 14:10:36,180 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-01-26 14:10:36,183 [INFO] app.services.workflow_service: [WORKFLOW] Validação concluída em 32.82s
+2026-01-26 14:10:36,183 [INFO] app.services.workflow_service: [WORKFLOW-PROGRESS] 90% - validacao: Validação concluída, preparando resultado...
+2026-01-26 14:10:36,183 [INFO] app.services.workflow_service: [WORKFLOW] Validação concluída.
+2026-01-26 14:10:36,194 [INFO] app.services.workflow_service: [WORKFLOW-PROGRESS] 100% - concluido: Processamento concluído com sucesso!
+2026-01-26 14:10:36,194 [INFO] app.services.workflow_service: [WORKFLOW] Processamento completo finalizado para: BR MED - PER - JOSE AILTON DA SILVA CHAGAS - COMPLETO.pdf
+2026-01-26 14:10:36,194 [INFO] app.services.workflow_service: [WORKFLOW] Processamento completo em 85.81s
+2026-01-26 14:10:36,194 [INFO] app.core.job_manager: [JOB b59a9130-7eed-4fa2-b554-75e4220920d5] Concluído com sucesso
+2026-01-26 14:10:36,194 [INFO] app.api.v1_brmed: [JOB b59a9130-7eed-4fa2-b554-75e4220920d5] Concluído com sucesso
+2026-01-26 14:10:55,732 [INFO] app.api.v1_brmed: [REQUEST-ASYNC] Documento recebido: BR MED  - ADM - HELENO DIAS REBOUÇAS - ASO.pdf (2.99MB)
+2026-01-26 14:10:55,732 [INFO] app.api.v1_brmed: [REQUEST-ASYNC] Exames obrigatórios: 0
+2026-01-26 14:10:55,732 [INFO] app.core.job_manager: [JobManager] Job criado: 7abe374d-46b9-422c-ae44-a3963bbcf210 (tipo=document_processing)
+2026-01-26 14:10:55,737 [INFO] app.api.v1_brmed: [JOB 7abe374d-46b9-422c-ae44-a3963bbcf210] Arquivo salvo temporariamente: /tmp/tmp4lcy8rbl.pdf
+2026-01-26 14:10:55,737 [INFO] app.api.v1_brmed: [JOB 7abe374d-46b9-422c-ae44-a3963bbcf210] Task adicionada ao background
+2026-01-26 14:10:55,737 [INFO] app.api.v1_brmed: [JOB 7abe374d-46b9-422c-ae44-a3963bbcf210] Iniciando processamento em background
+2026-01-26 14:10:55,737 [INFO] app.core.job_manager: [JOB 7abe374d-46b9-422c-ae44-a3963bbcf210] Iniciado
+2026-01-26 14:10:55,738 [INFO] app.services.workflow_service: [WORKFLOW] Iniciando processamento completo para: BR MED  - ADM - HELENO DIAS REBOUÇAS - ASO.pdf
+2026-01-26 14:10:55,738 [INFO] app.services.workflow_service: [WORKFLOW-PROGRESS] 10% - ocr: Processando documento com OCR...
+2026-01-26 14:10:55,738 [INFO] app.services.ocr_service: [OCR] Iniciando pipeline OCR para arquivo: BR MED  - ADM - HELENO DIAS REBOUÇAS - ASO.pdf
+2026-01-26 14:10:55,738 [INFO] app.services.ocr_service: [OCR] Motor selecionado: AWS Textract
+2026-01-26 14:10:55,741 [INFO] app.services.ocr_service: [OCR] Iniciando conversão com AWS Textract para: BR MED  - ADM - HELENO DIAS REBOUÇAS - ASO.pdf
+2026-01-26 14:10:55,741 [INFO] app.services.ocr_service: [OCR] Processando com AWS Textract (Síncrono): /tmp/tmpt56dreel.pdf
+2026-01-26 14:10:55,741 [INFO] app.services.ocr_service: [OCR] Reparando PDF para compatibilidade Textract: /tmp/tmpt56dreel.pdf
+2026-01-26 14:10:55,752 [INFO] app.services.ocr_service: [OCR] PDF reparado salvo em: /tmp/tmp65tgcjlj.pdf
+2026-01-26 14:10:55,756 [INFO] app.services.ocr_service: [OCR] Heurística PDF: páginas=3, chars_medio=0.0, imagens_ratio=0.00
+2026-01-26 14:10:55,756 [INFO] app.services.ocr_service: [OCR] Documento escaneado detectado. Pulando compressao para evitar perda.
+2026-01-26 14:10:55,756 [INFO] app.services.ocr_service: [OCR] Tamanho do arquivo: 2.99 MB
+2026-01-26 14:10:55,756 [INFO] app.services.ocr_service: [OCR] Chamando detect_document_text (síncrono)...
+2026-01-26 14:10:58,759 [ERROR] app.services.ocr_service: [OCR] Erro AWS [UnsupportedDocumentException]: Request has unsupported document format
+2026-01-26 14:10:58,759 [WARNING] app.services.ocr_service: [OCR] Documento nao suportado no modo sincrono, usando assincrono
+2026-01-26 14:10:58,760 [INFO] app.services.ocr_service: [OCR] Processando com AWS Textract (Assíncrono) via S3: /tmp/tmpt56dreel.pdf
+2026-01-26 14:10:58,760 [INFO] app.services.ocr_service: [OCR] Reparando PDF para compatibilidade Textract: /tmp/tmpt56dreel.pdf
+2026-01-26 14:10:58,770 [INFO] app.services.ocr_service: [OCR] PDF reparado salvo em: /tmp/tmpxxm_po5f.pdf
+2026-01-26 14:10:58,773 [INFO] app.services.ocr_service: [OCR] Heurística PDF: páginas=3, chars_medio=0.0, imagens_ratio=0.00
+2026-01-26 14:10:58,773 [INFO] app.services.ocr_service: [OCR] Documento escaneado detectado. Pulando compressao para evitar perda.
+2026-01-26 14:10:58,773 [INFO] app.services.ocr_service: [OCR] Fazendo upload para S3: s3://brmed-exam-ocr/textract-temp/20260126_141058_082b843e_tmpt56dreel.pdf
+2026-01-26 14:11:02,992 [INFO] app.services.ocr_service: [OCR] Upload concluído. Tamanho: 2.99 MB (em 4.22s)
+2026-01-26 14:11:02,992 [INFO] app.services.ocr_service: [OCR] Iniciando job Textract assíncrono (StartDocumentTextDetection)...
+2026-01-26 14:11:15,982 [INFO] app.services.ocr_service: [OCR] Job iniciado com sucesso. JobId: 31fbfdc5197950d6ea262893723c22b70f6992b9bf31d9dd628ebb168310e1cc (em 12.99s)
+2026-01-26 14:11:15,982 [INFO] app.services.ocr_service: [OCR] Timeout maximo do Textract: 90s
+2026-01-26 14:11:15,982 [INFO] app.services.ocr_service: [OCR] Aguardando conclusão do job Textract: 31fbfdc5197950d6ea262893723c22b70f6992b9bf31d9dd628ebb168310e1cc
+2026-01-26 14:11:28,672 [INFO] app.services.ocr_service: [OCR] Job concluído com sucesso após 11 tentativas
+2026-01-26 14:11:28,673 [INFO] app.services.ocr_service: [OCR] Job Textract finalizado em 12.69s (status=SUCCEEDED)
+2026-01-26 14:11:28,674 [INFO] app.services.ocr_service: [OCR] Coletando resultados do job: 31fbfdc5197950d6ea262893723c22b70f6992b9bf31d9dd628ebb168310e1cc
+2026-01-26 14:11:31,753 [INFO] app.services.ocr_service: [OCR] Total de blocos coletados: 5130
+2026-01-26 14:11:31,753 [INFO] app.services.ocr_service: [OCR] Resultados coletados em 3.08s
+2026-01-26 14:11:31,753 [INFO] app.services.ocr_service: [OCR] Convertendo 5130 blocos em markdown...
+2026-01-26 14:11:31,755 [INFO] app.services.ocr_service: [OCR] Conversão concluída em 0.00s. Markdown gerado: 26025 caracteres
+2026-01-26 14:11:31,755 [INFO] app.services.ocr_service: [OCR] Removendo arquivo do S3: textract-temp/20260126_141058_082b843e_tmpt56dreel.pdf
+2026-01-26 14:11:32,219 [INFO] app.services.ocr_service: [OCR] Arquivo removido do S3 com sucesso
+2026-01-26 14:11:32,220 [INFO] app.services.ocr_service: [OCR] Fluxo Textract assíncrono completo em 33.46s
+2026-01-26 14:11:32,227 [INFO] app.services.ocr_service: [OCR] Conversão concluída. Markdown gerado: 26025 caracteres
+2026-01-26 14:11:32,228 [INFO] app.services.ocr_service: [OCR] Pipeline OCR finalizado em 36.49s
+2026-01-26 14:11:32,228 [INFO] app.services.ocr_service: [OCR] Markdown salvo em: ocr_resultados/ocr_BR MED  - ADM - HELENO DIAS REBOUÇAS - ASO_20260126_141132.md
+2026-01-26 14:11:32,228 [INFO] app.services.ocr_service: [OCR] Extraindo CPF via regex...
+2026-01-26 14:11:32,229 [INFO] app.services.ocr_service: [OCR] CPF extraído: 02583339362
+2026-01-26 14:11:32,229 [INFO] app.services.ocr_service: [OCR] Iniciando extração de exames via OpenAI GPT...
+2026-01-26 14:11:38,270 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-01-26 14:11:38,271 [INFO] app.services.ocr_service: [OCR] Exames extraídos: 20 encontrados - ['ACUIDADE VISUAL', 'LIPIDOGRAMA', 'AUDIOMETRIA TONAL', 'PSICOSSOCIAL', 'AVALIAÇÃO ODONTOLÓGICA', 'CLÍNICO OCUPACIONAL', 'CREATININA', 'ROMBERG', 'ELETROCARDIOGRAMA', 'TGO', 'ELETROENCEFALOGRAMA', 'TGP', 'ESPIROMETRIA', 'GLICOSE', 'URÉIA', 'ÁCIDO ÚRICO', 'HEMOGRAMA', 'LIPIDOGRAMA COMPLETO', 'TESTE DE ROMBERG', 'RAIO-X']
+2026-01-26 14:11:38,271 [INFO] app.services.ocr_service: [OCR] Pipeline OCR concluído para: BR MED  - ADM - HELENO DIAS REBOUÇAS - ASO.pdf
+2026-01-26 14:11:38,271 [INFO] app.services.workflow_service: [WORKFLOW] OCR concluído em 42.53s
+2026-01-26 14:11:38,271 [INFO] app.services.workflow_service: [WORKFLOW-PROGRESS] 30% - ocr: OCR concluído. 20 exames encontrados
+2026-01-26 14:11:38,271 [INFO] app.services.workflow_service: [WORKFLOW-PROGRESS] 40% - brmed: Consultando exames obrigatórios (CPF: 025***)
+2026-01-26 14:11:38,271 [INFO] app.services.workflow_service: [WORKFLOW] Tentando consultar BRMED com CPF inicial: 02583339362
+2026-01-26 14:11:38,271 [INFO] app.services.workflow_service: [WORKFLOW-PROGRESS] 20% - ocr: OCR em andamento (job iniciado)
+2026-01-26 14:11:38,608 [INFO] app.services.brmed_service: Iniciando automação Playwright...
+2026-01-26 14:11:38,609 [INFO] app.services.brmed_service: Navegando para a página de login...
+2026-01-26 14:11:48,644 [INFO] app.services.brmed_service: Autenticação e seleção de CPF concluídos em 10.03s.
+2026-01-26 14:11:48,644 [INFO] app.services.brmed_service: Consultando CPF: 02583339362 (formatado: 025.833.393-62)
+2026-01-26 14:11:50,966 [INFO] app.services.brmed_service: Consulta de CPF realizada em 2.32s.
+2026-01-26 14:11:50,980 [INFO] app.services.brmed_service: Tabelas com classe 'tabledata' encontradas: 1
+2026-01-26 14:11:50,985 [INFO] app.services.brmed_service: Links de paciente encontrados: 2
+2026-01-26 14:11:52,531 [INFO] app.services.brmed_service: Clicando em 'Guia de Encaminhamento'...
+2026-01-26 14:11:57,738 [INFO] app.services.brmed_service: Nova página da guia carregada e aguardando.
+2026-01-26 14:11:57,745 [INFO] app.services.brmed_service: Conteúdo bruto da página salvo em: resultados/debug_conteudo_02583339362_20260126_141138.txt
+2026-01-26 14:11:57,746 [INFO] app.services.brmed_service: Conteúdo recebido para extração: Olá, thiago.simoes
+
+Você está logado em: Operações
+
+Logout
+
+Página inicial
+Cadastrar paciente
+Agenda
+2 pendência(s)
+6 grupos faltando dados financeiros
+51 exame(s) sem preço
+28 exame(s) sem valor de repasse
+Relatório
+Área administrativa
+Está em:
+Início >
+Consulta de Paciente >
+Imprimir guia de agendamento
+
+
+VOUCHER
+
+
+ADMISSIONAL
+
+
+Pre-employment
+
+
+
+Prezado(a) / Dear,
+Recebemos sua solicitação e confirmamos o agendamento conforme detalhes a seguir / Your request has been received and your schedul...
+2026-01-26 14:11:57,746 [INFO] app.services.brmed_service: Nome match object: <re.Match object; span=(630, 687), match='Nome / Name: HELENO DIAS REBOUCAS\tIdentidade / I>
+2026-01-26 14:11:57,746 [INFO] app.services.brmed_service: Nome extraído: HELENO DIAS REBOUCAS
+2026-01-26 14:11:57,746 [INFO] app.services.brmed_service: Exames texto extraído: 4. Exames / Exams:
+
+4.1 Realizados na própria clínica / Performed at the clinic itself:
+
+
+TIPAGEM SANGUÍNEA / FATOR RH * / BLOOD TYPING / RH FACTOR *	RADIOGRAFIA DE COLUNA LOMBO SACRA AP/PERFIL * / LUMBAR COLUMN RADIOGRAPHY *
+AUDIOMETRIA TONAL * / PURE TONE AUDIOMETRY *	ROMBERG * / ROMBERG *
+CREATININA * / CREATININE *	ESPIROMETRIA * / SPIROMETRY *
+CLÍNICO OCUPACIONAL * / CLINICAL EXAMINATION *	RADIOGRAFIA DE TÓRAX PA * / CHEST PA RADIOGRAPHY *
+GLICOSE * / GLUCOSE *	ELETROCARDIOGRAMA * / ELECTRO...
+2026-01-26 14:11:57,746 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 4. Exames / Exams:
+2026-01-26 14:11:57,746 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 14:11:57,746 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 4.1 Realizados na própria clínica / Performed at the clinic itself:
+2026-01-26 14:11:57,746 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 14:11:57,746 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 14:11:57,746 [INFO] app.services.brmed_service: Linha limpa para extração de exames: TIPAGEM SANGUÍNEA / FATOR RH * / BLOOD TYPING / RH FACTOR * RADIOGRAFIA DE COLUNA LOMBO SACRA AP/PERFIL * / LUMBAR COLUMN RADIOGRAPHY *
+2026-01-26 14:11:57,746 [INFO] app.services.brmed_service: Linha limpa para extração de exames: AUDIOMETRIA TONAL * / PURE TONE AUDIOMETRY * ROMBERG * / ROMBERG *
+2026-01-26 14:11:57,746 [INFO] app.services.brmed_service: Linha limpa para extração de exames: CREATININA * / CREATININE * ESPIROMETRIA * / SPIROMETRY *
+2026-01-26 14:11:57,746 [INFO] app.services.brmed_service: Linha limpa para extração de exames: CLÍNICO OCUPACIONAL * / CLINICAL EXAMINATION * RADIOGRAFIA DE TÓRAX PA * / CHEST PA RADIOGRAPHY *
+2026-01-26 14:11:57,746 [INFO] app.services.brmed_service: Linha limpa para extração de exames: GLICOSE * / GLUCOSE * ELETROCARDIOGRAMA * / ELECTROCARDIOGRAM *
+2026-01-26 14:11:57,746 [INFO] app.services.brmed_service: Linha limpa para extração de exames: ELETROENCEFALOGRAMA * / ELECTROENCEPHALOGRAM * ACUIDADE VISUAL COM SENSO CROMÁTICO * / VISUAL ACUITY WITH COLOR TEST *
+2026-01-26 14:11:57,746 [INFO] app.services.brmed_service: Linha limpa para extração de exames: LIPIDOGRAMA (PERFIL LIPÍDICO) * / LIPIDOGRAM (LIPID PROFILE) * ÁCIDO ÚRICO * / URIC ACID *
+2026-01-26 14:11:57,746 [INFO] app.services.brmed_service: Linha limpa para extração de exames: HEMOGRAMA COMPLETO COM PLAQUETAS * / COMPLETE BLOOD COUNT WITH PLATELETS * PSICOSSOCIAL * / PSYCHOSOCIAL *
+2026-01-26 14:11:57,746 [INFO] app.services.brmed_service: Linha limpa para extração de exames: TGO (AST) * / TGO (AST) * TGP (ALT) * / TGP (ALT) *
+2026-01-26 14:11:57,746 [INFO] app.services.brmed_service: Linha limpa para extração de exames: AVALIAÇÃO ODONTOLÓGICA * / DENTAL ASSESSMENT * URÉIA * / UREA *
+2026-01-26 14:11:57,746 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 14:11:57,746 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 14:11:57,746 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 14:11:57,746 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 14:11:57,746 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 14:11:57,746 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 14:11:57,746 [INFO] app.services.brmed_service: Linha limpa para extração de exames: Obrigatório * / Mandatory *
+2026-01-26 14:11:57,746 [INFO] app.services.brmed_service: Exames extraídos: ['TIPAGEM SANGUÍNEA', 'RADIOGRAFIA DE COLUNA LOMBO SACRA AP', 'AUDIOMETRIA TONAL', 'ROMBERG', 'CREATININA', 'ESPIROMETRIA', 'CLÍNICO OCUPACIONAL', 'RADIOGRAFIA DE TÓRAX PA', 'GLICOSE', 'ELETROCARDIOGRAMA', 'ELETROENCEFALOGRAMA', 'ACUIDADE VISUAL COM SENSO CROMÁTICO', 'LIPIDOGRAMA (PERFIL LIPÍDICO)', 'ÁCIDO ÚRICO', 'HEMOGRAMA COMPLETO COM PLAQUETAS', 'PSICOSSOCIAL', 'TGO (AST)', 'TGP (ALT)', 'AVALIAÇÃO ODONTOLÓGICA', 'URÉIA']
+2026-01-26 14:11:57,746 [INFO] app.services.brmed_service: Resultado da extração salvo em: resultados/guia_02583339362_20260126_141138.json
+2026-01-26 14:11:57,772 [INFO] app.services.brmed_service: Navegador Playwright fechado.
+2026-01-26 14:11:57,772 [INFO] app.services.brmed_service: Consulta BRMED finalizada em 19.50s.
+2026-01-26 14:11:57,780 [INFO] app.services.workflow_service: [WORKFLOW] Consulta BRMED concluída em 19.51s
+2026-01-26 14:11:57,780 [INFO] app.services.workflow_service: [WORKFLOW-PROGRESS] 60% - brmed: Exames obrigatórios obtidos: 20 exames
+2026-01-26 14:11:57,790 [INFO] app.services.workflow_service: [WORKFLOW-PROGRESS] 70% - validacao: Validando exames com IA...
+2026-01-26 14:11:57,790 [INFO] app.services.workflow_service: [WORKFLOW] Realizando validação para CPF: 02583339362
+2026-01-26 14:11:58,148 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2026-01-26 14:11:58,498 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2026-01-26 14:11:58,920 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2026-01-26 14:11:59,231 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2026-01-26 14:11:59,625 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2026-01-26 14:11:59,922 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2026-01-26 14:12:00,456 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2026-01-26 14:12:00,894 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2026-01-26 14:12:01,175 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2026-01-26 14:12:01,480 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2026-01-26 14:12:01,785 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2026-01-26 14:12:02,222 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2026-01-26 14:12:02,688 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2026-01-26 14:12:02,977 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2026-01-26 14:12:03,266 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2026-01-26 14:12:03,739 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2026-01-26 14:12:04,165 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2026-01-26 14:12:04,628 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2026-01-26 14:12:04,959 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2026-01-26 14:12:05,499 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2026-01-26 14:12:20,281 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-01-26 14:12:20,284 [INFO] app.services.workflow_service: [WORKFLOW] Validação concluída em 22.49s
+2026-01-26 14:12:20,284 [INFO] app.services.workflow_service: [WORKFLOW-PROGRESS] 90% - validacao: Validação concluída, preparando resultado...
+2026-01-26 14:12:20,284 [INFO] app.services.workflow_service: [WORKFLOW] Validação concluída.
+2026-01-26 14:12:20,296 [INFO] app.services.workflow_service: [WORKFLOW-PROGRESS] 100% - concluido: Processamento concluído com sucesso!
+2026-01-26 14:12:20,296 [INFO] app.services.workflow_service: [WORKFLOW] Processamento completo finalizado para: BR MED  - ADM - HELENO DIAS REBOUÇAS - ASO.pdf
+2026-01-26 14:12:20,296 [INFO] app.services.workflow_service: [WORKFLOW] Processamento completo em 84.56s
+2026-01-26 14:12:20,296 [INFO] app.core.job_manager: [JOB 7abe374d-46b9-422c-ae44-a3963bbcf210] Concluído com sucesso
+2026-01-26 14:12:20,296 [INFO] app.api.v1_brmed: [JOB 7abe374d-46b9-422c-ae44-a3963bbcf210] Concluído com sucesso
+2026-01-26 14:14:31,957 [INFO] app.api.v1_brmed: [REQUEST-ASYNC] Documento recebido: BR MED - ADMISISONAL - DAVID ANTUNES DOS SANTOS.pdf (2.42MB)
+2026-01-26 14:14:31,957 [INFO] app.api.v1_brmed: [REQUEST-ASYNC] Exames obrigatórios: 0
+2026-01-26 14:14:31,957 [INFO] app.core.job_manager: [JobManager] Job criado: 65e08781-c714-485a-b85a-2625c53f0d8b (tipo=document_processing)
+2026-01-26 14:14:31,959 [INFO] app.api.v1_brmed: [JOB 65e08781-c714-485a-b85a-2625c53f0d8b] Arquivo salvo temporariamente: /tmp/tmpvq7mtadx.pdf
+2026-01-26 14:14:31,959 [INFO] app.api.v1_brmed: [JOB 65e08781-c714-485a-b85a-2625c53f0d8b] Task adicionada ao background
+2026-01-26 14:14:31,960 [INFO] app.api.v1_brmed: [JOB 65e08781-c714-485a-b85a-2625c53f0d8b] Iniciando processamento em background
+2026-01-26 14:14:31,960 [INFO] app.core.job_manager: [JOB 65e08781-c714-485a-b85a-2625c53f0d8b] Iniciado
+2026-01-26 14:14:31,961 [INFO] app.services.workflow_service: [WORKFLOW] Iniciando processamento completo para: BR MED - ADMISISONAL - DAVID ANTUNES DOS SANTOS.pdf
+2026-01-26 14:14:31,961 [INFO] app.services.workflow_service: [WORKFLOW-PROGRESS] 10% - ocr: Processando documento com OCR...
+2026-01-26 14:14:31,961 [INFO] app.services.ocr_service: [OCR] Iniciando pipeline OCR para arquivo: BR MED - ADMISISONAL - DAVID ANTUNES DOS SANTOS.pdf
+2026-01-26 14:14:31,961 [INFO] app.services.ocr_service: [OCR] Motor selecionado: AWS Textract
+2026-01-26 14:14:31,963 [INFO] app.services.ocr_service: [OCR] Iniciando conversão com AWS Textract para: BR MED - ADMISISONAL - DAVID ANTUNES DOS SANTOS.pdf
+2026-01-26 14:14:31,963 [INFO] app.services.ocr_service: [OCR] Processando com AWS Textract (Síncrono): /tmp/tmpn66k_utl.pdf
+2026-01-26 14:14:31,963 [INFO] app.services.ocr_service: [OCR] Reparando PDF para compatibilidade Textract: /tmp/tmpn66k_utl.pdf
+2026-01-26 14:14:31,972 [INFO] app.services.ocr_service: [OCR] PDF reparado salvo em: /tmp/tmp86x_51pg.pdf
+2026-01-26 14:14:31,974 [INFO] app.services.ocr_service: [OCR] Heurística PDF: páginas=3, chars_medio=0.0, imagens_ratio=0.00
+2026-01-26 14:14:31,974 [INFO] app.services.ocr_service: [OCR] Documento escaneado detectado. Pulando compressao para evitar perda.
+2026-01-26 14:14:31,976 [INFO] app.services.ocr_service: [OCR] Tamanho do arquivo: 2.42 MB
+2026-01-26 14:14:31,976 [INFO] app.services.ocr_service: [OCR] Chamando detect_document_text (síncrono)...
+2026-01-26 14:14:34,520 [ERROR] app.services.ocr_service: [OCR] Erro AWS [UnsupportedDocumentException]: Request has unsupported document format
+2026-01-26 14:14:34,520 [WARNING] app.services.ocr_service: [OCR] Documento nao suportado no modo sincrono, usando assincrono
+2026-01-26 14:14:34,520 [INFO] app.services.ocr_service: [OCR] Processando com AWS Textract (Assíncrono) via S3: /tmp/tmpn66k_utl.pdf
+2026-01-26 14:14:34,520 [INFO] app.services.ocr_service: [OCR] Reparando PDF para compatibilidade Textract: /tmp/tmpn66k_utl.pdf
+2026-01-26 14:14:34,542 [INFO] app.services.ocr_service: [OCR] PDF reparado salvo em: /tmp/tmpggkgewyi.pdf
+2026-01-26 14:14:34,544 [INFO] app.services.ocr_service: [OCR] Heurística PDF: páginas=3, chars_medio=0.0, imagens_ratio=0.00
+2026-01-26 14:14:34,544 [INFO] app.services.ocr_service: [OCR] Documento escaneado detectado. Pulando compressao para evitar perda.
+2026-01-26 14:14:34,544 [INFO] app.services.ocr_service: [OCR] Fazendo upload para S3: s3://brmed-exam-ocr/textract-temp/20260126_141434_f4fd4f48_tmpn66k_utl.pdf
+2026-01-26 14:14:36,486 [INFO] app.services.ocr_service: [OCR] Upload concluído. Tamanho: 2.42 MB (em 1.94s)
+2026-01-26 14:14:36,486 [INFO] app.services.ocr_service: [OCR] Iniciando job Textract assíncrono (StartDocumentTextDetection)...
+2026-01-26 14:14:37,310 [INFO] app.services.ocr_service: [OCR] Job iniciado com sucesso. JobId: daabed23109564d49b6f20a0ab693c7e648612aa02dd62c2acf3dc90c5ff9205 (em 0.82s)
+2026-01-26 14:14:37,310 [INFO] app.services.ocr_service: [OCR] Timeout maximo do Textract: 90s
+2026-01-26 14:14:37,310 [INFO] app.services.ocr_service: [OCR] Aguardando conclusão do job Textract: daabed23109564d49b6f20a0ab693c7e648612aa02dd62c2acf3dc90c5ff9205
+2026-01-26 14:15:00,489 [INFO] app.services.ocr_service: [OCR] Job concluído com sucesso após 16 tentativas
+2026-01-26 14:15:00,490 [INFO] app.services.ocr_service: [OCR] Job Textract finalizado em 23.18s (status=SUCCEEDED)
+2026-01-26 14:15:00,490 [INFO] app.services.ocr_service: [OCR] Coletando resultados do job: daabed23109564d49b6f20a0ab693c7e648612aa02dd62c2acf3dc90c5ff9205
+2026-01-26 14:15:04,091 [INFO] app.services.ocr_service: [OCR] Total de blocos coletados: 4216
+2026-01-26 14:15:04,091 [INFO] app.services.ocr_service: [OCR] Resultados coletados em 3.60s
+2026-01-26 14:15:04,091 [INFO] app.services.ocr_service: [OCR] Convertendo 4216 blocos em markdown...
+2026-01-26 14:15:04,092 [INFO] app.services.ocr_service: [OCR] Conversão concluída em 0.00s. Markdown gerado: 22028 caracteres
+2026-01-26 14:15:04,092 [INFO] app.services.ocr_service: [OCR] Removendo arquivo do S3: textract-temp/20260126_141434_f4fd4f48_tmpn66k_utl.pdf
+2026-01-26 14:15:04,675 [INFO] app.services.ocr_service: [OCR] Arquivo removido do S3 com sucesso
+2026-01-26 14:15:04,676 [INFO] app.services.ocr_service: [OCR] Fluxo Textract assíncrono completo em 30.16s
+2026-01-26 14:15:04,681 [INFO] app.services.ocr_service: [OCR] Conversão concluída. Markdown gerado: 22028 caracteres
+2026-01-26 14:15:04,682 [INFO] app.services.ocr_service: [OCR] Pipeline OCR finalizado em 32.72s
+2026-01-26 14:15:04,682 [INFO] app.services.ocr_service: [OCR] Markdown salvo em: ocr_resultados/ocr_BR MED - ADMISISONAL - DAVID ANTUNES DOS SANTOS_20260126_141504.md
+2026-01-26 14:15:04,682 [INFO] app.services.ocr_service: [OCR] Extraindo CPF via regex...
+2026-01-26 14:15:04,682 [INFO] app.services.ocr_service: [OCR] CPF extraído: 35797702843
+2026-01-26 14:15:04,682 [INFO] app.services.ocr_service: [OCR] Iniciando extração de exames via OpenAI GPT...
+2026-01-26 14:15:08,575 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-01-26 14:15:08,576 [INFO] app.services.ocr_service: [OCR] Exames extraídos: 11 encontrados - ['ACUIDADE VISUAL', 'ESPIROMETRIA', 'AUDIOMETRIA TONAL', 'ELETROCARDIOGRAMA', 'ELETROENCEFALOGRAMA', 'HEMOGRAMA', 'GLICEMIA DE JEJUM', 'RADIOGRAFIA DE TÓRAX PADRÃO OIT', 'AVALIAÇÃO PSICOLÓGICA', 'TIPAGEM SANGUÍNEA', 'GLUCOSE']
+2026-01-26 14:15:08,576 [INFO] app.services.ocr_service: [OCR] Pipeline OCR concluído para: BR MED - ADMISISONAL - DAVID ANTUNES DOS SANTOS.pdf
+2026-01-26 14:15:08,576 [INFO] app.services.workflow_service: [WORKFLOW] OCR concluído em 36.62s
+2026-01-26 14:15:08,576 [INFO] app.services.workflow_service: [WORKFLOW-PROGRESS] 30% - ocr: OCR concluído. 11 exames encontrados
+2026-01-26 14:15:08,576 [INFO] app.services.workflow_service: [WORKFLOW-PROGRESS] 40% - brmed: Consultando exames obrigatórios (CPF: 357***)
+2026-01-26 14:15:08,576 [INFO] app.services.workflow_service: [WORKFLOW] Tentando consultar BRMED com CPF inicial: 35797702843
+2026-01-26 14:15:08,576 [INFO] app.services.workflow_service: [WORKFLOW-PROGRESS] 20% - ocr: OCR em andamento (job iniciado)
+2026-01-26 14:15:08,576 [INFO] app.services.workflow_service: [WORKFLOW-PROGRESS] 20% - ocr: OCR em andamento (in_progress)...
+2026-01-26 14:15:08,945 [INFO] app.services.brmed_service: Iniciando automação Playwright...
+2026-01-26 14:15:08,945 [INFO] app.services.brmed_service: Navegando para a página de login...
+2026-01-26 14:15:19,208 [INFO] app.services.brmed_service: Autenticação e seleção de CPF concluídos em 10.26s.
+2026-01-26 14:15:19,208 [INFO] app.services.brmed_service: Consultando CPF: 35797702843 (formatado: 357.977.028-43)
+2026-01-26 14:15:21,546 [INFO] app.services.brmed_service: Consulta de CPF realizada em 2.34s.
+2026-01-26 14:15:21,560 [INFO] app.services.brmed_service: Tabelas com classe 'tabledata' encontradas: 1
+2026-01-26 14:15:21,564 [INFO] app.services.brmed_service: Links de paciente encontrados: 1
+2026-01-26 14:15:22,940 [INFO] app.services.brmed_service: Clicando em 'Guia de Encaminhamento'...
+2026-01-26 14:15:28,078 [INFO] app.services.brmed_service: Nova página da guia carregada e aguardando.
+2026-01-26 14:15:28,085 [INFO] app.services.brmed_service: Conteúdo bruto da página salvo em: resultados/debug_conteudo_35797702843_20260126_141508.txt
+2026-01-26 14:15:28,086 [INFO] app.services.brmed_service: Conteúdo recebido para extração: Olá, thiago.simoes
+
+Você está logado em: Operações
+
+Logout
+
+Página inicial
+Cadastrar paciente
+Agenda
+0 pendência(s)
+6 grupos faltando dados financeiros
+51 exame(s) sem preço
+28 exame(s) sem valor de repasse
+Relatório
+Área administrativa
+Está em:
+Início >
+Consulta de Paciente >
+Imprimir guia de agendamento
+
+
+VOUCHER
+
+
+ADMISSIONAL
+
+
+Pre-employment
+
+
+
+Prezado(a) / Dear,
+Recebemos sua solicitação e confirmamos o agendamento conforme detalhes a seguir / Your request has been received and your schedul...
+2026-01-26 14:15:28,086 [INFO] app.services.brmed_service: Nome match object: <re.Match object; span=(613, 674), match='Nome / Name: DAVID ANTUNES DOS SANTOS\tIdentidade>
+2026-01-26 14:15:28,086 [INFO] app.services.brmed_service: Nome extraído: DAVID ANTUNES DOS SANTOS
+2026-01-26 14:15:28,086 [INFO] app.services.brmed_service: Exames texto extraído: 4. Exames / Exams:
+
+4.1 Realizados na própria clínica / Performed at the clinic itself:
+
+
+TIPAGEM SANGUÍNEA / FATOR RH * / BLOOD TYPING / RH FACTOR *	AUDIOMETRIA TONAL * / PURE TONE AUDIOMETRY *
+ESPIROMETRIA * / SPIROMETRY *	CLÍNICO OCUPACIONAL * / CLINICAL EXAMINATION *
+GLICEMIA DE JEJUM * / GLUCOSE *	ELETROCARDIOGRAMA * / ELECTROCARDIOGRAM *
+ELETROENCEFALOGRAMA * / ELECTROENCEPHALOGRAM *	ACUIDADE VISUAL COM SENSO CROMÁTICO * / VISUAL ACUITY WITH COLOR TEST *
+RADIOGRAFIA DE TÓRAX - PADRÃO OIT *...
+2026-01-26 14:15:28,086 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 4. Exames / Exams:
+2026-01-26 14:15:28,086 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 14:15:28,086 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 4.1 Realizados na própria clínica / Performed at the clinic itself:
+2026-01-26 14:15:28,086 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 14:15:28,086 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 14:15:28,086 [INFO] app.services.brmed_service: Linha limpa para extração de exames: TIPAGEM SANGUÍNEA / FATOR RH * / BLOOD TYPING / RH FACTOR * AUDIOMETRIA TONAL * / PURE TONE AUDIOMETRY *
+2026-01-26 14:15:28,086 [INFO] app.services.brmed_service: Linha limpa para extração de exames: ESPIROMETRIA * / SPIROMETRY * CLÍNICO OCUPACIONAL * / CLINICAL EXAMINATION *
+2026-01-26 14:15:28,086 [INFO] app.services.brmed_service: Linha limpa para extração de exames: GLICEMIA DE JEJUM * / GLUCOSE * ELETROCARDIOGRAMA * / ELECTROCARDIOGRAM *
+2026-01-26 14:15:28,086 [INFO] app.services.brmed_service: Linha limpa para extração de exames: ELETROENCEFALOGRAMA * / ELECTROENCEPHALOGRAM * ACUIDADE VISUAL COM SENSO CROMÁTICO * / VISUAL ACUITY WITH COLOR TEST *
+2026-01-26 14:15:28,086 [INFO] app.services.brmed_service: Linha limpa para extração de exames: RADIOGRAFIA DE TÓRAX - PADRÃO OIT * / CHEST - STANDARD OIT RADIOGRAPHY * HEMOGRAMA COMPLETO COM PLAQUETAS * / COMPLETE BLOOD COUNT WITH PLATELETS *
+2026-01-26 14:15:28,086 [INFO] app.services.brmed_service: Linha limpa para extração de exames: AVALIAÇÃO PSICOLÓGICA * / PSYCHOLOGICAL ASSESSMENT *
+2026-01-26 14:15:28,086 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 14:15:28,086 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 14:15:28,086 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 14:15:28,086 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 14:15:28,086 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 14:15:28,086 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 14:15:28,086 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 14:15:28,086 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 14:15:28,086 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 14:15:28,086 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 14:15:28,086 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 14:15:28,086 [INFO] app.services.brmed_service: Linha limpa para extração de exames: Obrigatório * / Mandatory *
+2026-01-26 14:15:28,086 [INFO] app.services.brmed_service: Exames extraídos: ['TIPAGEM SANGUÍNEA', 'AUDIOMETRIA TONAL', 'ESPIROMETRIA', 'CLÍNICO OCUPACIONAL', 'GLICEMIA DE JEJUM', 'ELETROCARDIOGRAMA', 'ELETROENCEFALOGRAMA', 'ACUIDADE VISUAL COM SENSO CROMÁTICO', 'RADIOGRAFIA DE TÓRAX - PADRÃO OIT', 'HEMOGRAMA COMPLETO COM PLAQUETAS', 'AVALIAÇÃO PSICOLÓGICA']
+2026-01-26 14:15:28,087 [INFO] app.services.brmed_service: Resultado da extração salvo em: resultados/guia_35797702843_20260126_141508.json
+2026-01-26 14:15:28,134 [INFO] app.services.brmed_service: Navegador Playwright fechado.
+2026-01-26 14:15:28,134 [INFO] app.services.brmed_service: Consulta BRMED finalizada em 19.56s.
+2026-01-26 14:15:28,142 [INFO] app.services.workflow_service: [WORKFLOW] Consulta BRMED concluída em 19.57s
+2026-01-26 14:15:28,143 [INFO] app.services.workflow_service: [WORKFLOW-PROGRESS] 60% - brmed: Exames obrigatórios obtidos: 11 exames
+2026-01-26 14:15:28,151 [INFO] app.services.workflow_service: [WORKFLOW-PROGRESS] 70% - validacao: Validando exames com IA...
+2026-01-26 14:15:28,151 [INFO] app.services.workflow_service: [WORKFLOW] Realizando validação para CPF: 35797702843
+2026-01-26 14:15:28,669 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2026-01-26 14:15:29,154 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2026-01-26 14:15:29,438 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2026-01-26 14:15:30,331 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2026-01-26 14:15:30,663 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2026-01-26 14:15:30,997 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2026-01-26 14:15:31,327 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2026-01-26 14:15:31,635 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2026-01-26 14:15:32,021 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2026-01-26 14:15:32,310 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2026-01-26 14:15:32,665 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2026-01-26 14:15:48,075 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-01-26 14:15:48,084 [INFO] app.services.workflow_service: [WORKFLOW] Validação concluída em 19.93s
+2026-01-26 14:15:48,084 [INFO] app.services.workflow_service: [WORKFLOW-PROGRESS] 90% - validacao: Validação concluída, preparando resultado...
+2026-01-26 14:15:48,084 [INFO] app.services.workflow_service: [WORKFLOW] Validação concluída.
+2026-01-26 14:15:48,093 [INFO] app.services.workflow_service: [WORKFLOW-PROGRESS] 100% - concluido: Processamento concluído com sucesso!
+2026-01-26 14:15:48,093 [INFO] app.services.workflow_service: [WORKFLOW] Processamento completo finalizado para: BR MED - ADMISISONAL - DAVID ANTUNES DOS SANTOS.pdf
+2026-01-26 14:15:48,093 [INFO] app.services.workflow_service: [WORKFLOW] Processamento completo em 76.13s
+2026-01-26 14:15:48,094 [INFO] app.core.job_manager: [JOB 65e08781-c714-485a-b85a-2625c53f0d8b] Concluído com sucesso
+2026-01-26 14:15:48,094 [INFO] app.api.v1_brmed: [JOB 65e08781-c714-485a-b85a-2625c53f0d8b] Concluído com sucesso
+2026-01-26 14:17:00,191 [INFO] app.api.v1_brmed: [REQUEST-ASYNC] Documento recebido: BRMED - PERIODICO - JOEL FERREIRA BARBOSA  - COMPLETO.pdf (0.34MB)
+2026-01-26 14:17:00,191 [INFO] app.api.v1_brmed: [REQUEST-ASYNC] Exames obrigatórios: 0
+2026-01-26 14:17:00,192 [INFO] app.core.job_manager: [JobManager] Job criado: 8a3a7b11-7dca-428c-a485-65e50b7413e6 (tipo=document_processing)
+2026-01-26 14:17:00,192 [INFO] app.api.v1_brmed: [JOB 8a3a7b11-7dca-428c-a485-65e50b7413e6] Arquivo salvo temporariamente: /tmp/tmp45uzj_b0.pdf
+2026-01-26 14:17:00,192 [INFO] app.api.v1_brmed: [JOB 8a3a7b11-7dca-428c-a485-65e50b7413e6] Task adicionada ao background
+2026-01-26 14:17:00,193 [INFO] app.api.v1_brmed: [JOB 8a3a7b11-7dca-428c-a485-65e50b7413e6] Iniciando processamento em background
+2026-01-26 14:17:00,193 [INFO] app.core.job_manager: [JOB 8a3a7b11-7dca-428c-a485-65e50b7413e6] Iniciado
+2026-01-26 14:17:00,193 [INFO] app.services.workflow_service: [WORKFLOW] Iniciando processamento completo para: BRMED - PERIODICO - JOEL FERREIRA BARBOSA  - COMPLETO.pdf
+2026-01-26 14:17:00,193 [INFO] app.services.workflow_service: [WORKFLOW-PROGRESS] 10% - ocr: Processando documento com OCR...
+2026-01-26 14:17:00,193 [INFO] app.services.ocr_service: [OCR] Iniciando pipeline OCR para arquivo: BRMED - PERIODICO - JOEL FERREIRA BARBOSA  - COMPLETO.pdf
+2026-01-26 14:17:00,193 [INFO] app.services.ocr_service: [OCR] Motor selecionado: AWS Textract
+2026-01-26 14:17:00,194 [INFO] app.services.ocr_service: [OCR] Iniciando conversão com AWS Textract para: BRMED - PERIODICO - JOEL FERREIRA BARBOSA  - COMPLETO.pdf
+2026-01-26 14:17:00,194 [INFO] app.services.ocr_service: [OCR] Processando com AWS Textract (Síncrono): /tmp/tmpku2hpvy2.pdf
+2026-01-26 14:17:00,194 [INFO] app.services.ocr_service: [OCR] Reparando PDF para compatibilidade Textract: /tmp/tmpku2hpvy2.pdf
+2026-01-26 14:17:00,196 [INFO] app.services.ocr_service: [OCR] PDF reparado salvo em: /tmp/tmpouttqa2b.pdf
+2026-01-26 14:17:00,196 [INFO] app.services.ocr_service: [OCR] Heurística PDF: páginas=2, chars_medio=0.0, imagens_ratio=0.00
+2026-01-26 14:17:00,196 [INFO] app.services.ocr_service: [OCR] Documento escaneado detectado. Pulando compressao para evitar perda.
+2026-01-26 14:17:00,197 [INFO] app.services.ocr_service: [OCR] Tamanho do arquivo: 0.34 MB
+2026-01-26 14:17:00,197 [INFO] app.services.ocr_service: [OCR] Chamando detect_document_text (síncrono)...
+2026-01-26 14:18:50,161 [ERROR] app.services.ocr_service: [OCR] Erro inesperado ao processar com Textract síncrono: Could not connect to the endpoint URL: "https://textract.us-east-1.amazonaws.com/"
+2026-01-26 14:18:50,161 [INFO] app.services.ocr_service: [OCR] Pipeline OCR finalizado em 109.97s
+2026-01-26 14:18:50,161 [ERROR] app.api.v1_brmed: [JOB 8a3a7b11-7dca-428c-a485-65e50b7413e6] Erro durante processamento: Could not connect to the endpoint URL: "https://textract.us-east-1.amazonaws.com/"
+Traceback (most recent call last):
+  File "/home/brmed/Área de trabalho/projetos/prontuai/back-end/venv/lib/python3.12/site-packages/urllib3/connection.py", line 204, in _new_conn
+    sock = connection.create_connection(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/brmed/Área de trabalho/projetos/prontuai/back-end/venv/lib/python3.12/site-packages/urllib3/util/connection.py", line 60, in create_connection
+    for res in socket.getaddrinfo(host, port, family, socket.SOCK_STREAM):
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/socket.py", line 963, in getaddrinfo
+    for res in _socket.getaddrinfo(host, port, family, type, proto, flags):
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+socket.gaierror: [Errno -3] Temporary failure in name resolution
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/brmed/Área de trabalho/projetos/prontuai/back-end/venv/lib/python3.12/site-packages/botocore/httpsession.py", line 465, in send
+    urllib_response = conn.urlopen(
+                      ^^^^^^^^^^^^^
+  File "/home/brmed/Área de trabalho/projetos/prontuai/back-end/venv/lib/python3.12/site-packages/urllib3/connectionpool.py", line 841, in urlopen
+    retries = retries.increment(
+              ^^^^^^^^^^^^^^^^^^
+  File "/home/brmed/Área de trabalho/projetos/prontuai/back-end/venv/lib/python3.12/site-packages/urllib3/util/retry.py", line 465, in increment
+    raise reraise(type(error), error, _stacktrace)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/brmed/Área de trabalho/projetos/prontuai/back-end/venv/lib/python3.12/site-packages/urllib3/util/util.py", line 39, in reraise
+    raise value
+  File "/home/brmed/Área de trabalho/projetos/prontuai/back-end/venv/lib/python3.12/site-packages/urllib3/connectionpool.py", line 787, in urlopen
+    response = self._make_request(
+               ^^^^^^^^^^^^^^^^^^^
+  File "/home/brmed/Área de trabalho/projetos/prontuai/back-end/venv/lib/python3.12/site-packages/urllib3/connectionpool.py", line 488, in _make_request
+    raise new_e
+  File "/home/brmed/Área de trabalho/projetos/prontuai/back-end/venv/lib/python3.12/site-packages/urllib3/connectionpool.py", line 464, in _make_request
+    self._validate_conn(conn)
+  File "/home/brmed/Área de trabalho/projetos/prontuai/back-end/venv/lib/python3.12/site-packages/urllib3/connectionpool.py", line 1093, in _validate_conn
+    conn.connect()
+  File "/home/brmed/Área de trabalho/projetos/prontuai/back-end/venv/lib/python3.12/site-packages/urllib3/connection.py", line 759, in connect
+    self.sock = sock = self._new_conn()
+                       ^^^^^^^^^^^^^^^^
+  File "/home/brmed/Área de trabalho/projetos/prontuai/back-end/venv/lib/python3.12/site-packages/urllib3/connection.py", line 211, in _new_conn
+    raise NameResolutionError(self.host, self, e) from e
+urllib3.exceptions.NameResolutionError: AWSHTTPSConnection(host='textract.us-east-1.amazonaws.com', port=443): Failed to resolve 'textract.us-east-1.amazonaws.com' ([Errno -3] Temporary failure in name resolution)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/brmed/Área de trabalho/projetos/prontuai/back-end/app/api/v1_brmed.py", line 292, in process_document_background
+    resultado = await workflow_service.processar_documento_completo(
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/brmed/Área de trabalho/projetos/prontuai/back-end/app/services/workflow_service.py", line 467, in processar_documento_completo
+    ocr_resultado = await ocr_service.ocr_pipeline(
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/brmed/Área de trabalho/projetos/prontuai/back-end/app/services/ocr_service.py", line 874, in ocr_pipeline
+    markdown = processar_arquivo_textract_sincrono(temp_path)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/brmed/Área de trabalho/projetos/prontuai/back-end/app/services/ocr_service.py", line 611, in processar_arquivo_textract_sincrono
+    response = textract_client.detect_document_text(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/brmed/Área de trabalho/projetos/prontuai/back-end/venv/lib/python3.12/site-packages/botocore/client.py", line 602, in _api_call
+    return self._make_api_call(operation_name, kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/brmed/Área de trabalho/projetos/prontuai/back-end/venv/lib/python3.12/site-packages/botocore/context.py", line 123, in wrapper
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/brmed/Área de trabalho/projetos/prontuai/back-end/venv/lib/python3.12/site-packages/botocore/client.py", line 1060, in _make_api_call
+    http, parsed_response = self._make_request(
+                            ^^^^^^^^^^^^^^^^^^^
+  File "/home/brmed/Área de trabalho/projetos/prontuai/back-end/venv/lib/python3.12/site-packages/botocore/client.py", line 1084, in _make_request
+    return self._endpoint.make_request(operation_model, request_dict)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/brmed/Área de trabalho/projetos/prontuai/back-end/venv/lib/python3.12/site-packages/botocore/endpoint.py", line 119, in make_request
+    return self._send_request(request_dict, operation_model)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/brmed/Área de trabalho/projetos/prontuai/back-end/venv/lib/python3.12/site-packages/botocore/endpoint.py", line 200, in _send_request
+    while self._needs_retry(
+          ^^^^^^^^^^^^^^^^^^
+  File "/home/brmed/Área de trabalho/projetos/prontuai/back-end/venv/lib/python3.12/site-packages/botocore/endpoint.py", line 360, in _needs_retry
+    responses = self._event_emitter.emit(
+                ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/brmed/Área de trabalho/projetos/prontuai/back-end/venv/lib/python3.12/site-packages/botocore/hooks.py", line 412, in emit
+    return self._emitter.emit(aliased_event_name, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/brmed/Área de trabalho/projetos/prontuai/back-end/venv/lib/python3.12/site-packages/botocore/hooks.py", line 256, in emit
+    return self._emit(event_name, kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/brmed/Área de trabalho/projetos/prontuai/back-end/venv/lib/python3.12/site-packages/botocore/hooks.py", line 239, in _emit
+    response = handler(**kwargs)
+               ^^^^^^^^^^^^^^^^^
+  File "/home/brmed/Área de trabalho/projetos/prontuai/back-end/venv/lib/python3.12/site-packages/botocore/retryhandler.py", line 207, in __call__
+    if self._checker(**checker_kwargs):
+       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/brmed/Área de trabalho/projetos/prontuai/back-end/venv/lib/python3.12/site-packages/botocore/retryhandler.py", line 284, in __call__
+    should_retry = self._should_retry(
+                   ^^^^^^^^^^^^^^^^^^^
+  File "/home/brmed/Área de trabalho/projetos/prontuai/back-end/venv/lib/python3.12/site-packages/botocore/retryhandler.py", line 320, in _should_retry
+    return self._checker(attempt_number, response, caught_exception)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/brmed/Área de trabalho/projetos/prontuai/back-end/venv/lib/python3.12/site-packages/botocore/retryhandler.py", line 363, in __call__
+    checker_response = checker(
+                       ^^^^^^^^
+  File "/home/brmed/Área de trabalho/projetos/prontuai/back-end/venv/lib/python3.12/site-packages/botocore/retryhandler.py", line 247, in __call__
+    return self._check_caught_exception(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/brmed/Área de trabalho/projetos/prontuai/back-end/venv/lib/python3.12/site-packages/botocore/retryhandler.py", line 416, in _check_caught_exception
+    raise caught_exception
+  File "/home/brmed/Área de trabalho/projetos/prontuai/back-end/venv/lib/python3.12/site-packages/botocore/endpoint.py", line 279, in _do_get_response
+    http_response = self._send(request)
+                    ^^^^^^^^^^^^^^^^^^^
+  File "/home/brmed/Área de trabalho/projetos/prontuai/back-end/venv/lib/python3.12/site-packages/botocore/endpoint.py", line 383, in _send
+    return self.http_session.send(request)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/brmed/Área de trabalho/projetos/prontuai/back-end/venv/lib/python3.12/site-packages/botocore/httpsession.py", line 494, in send
+    raise EndpointConnectionError(endpoint_url=request.url, error=e)
+botocore.exceptions.EndpointConnectionError: Could not connect to the endpoint URL: "https://textract.us-east-1.amazonaws.com/"
+2026-01-26 14:18:50,167 [ERROR] app.core.job_manager: [JOB 8a3a7b11-7dca-428c-a485-65e50b7413e6] Falhou: Could not connect to the endpoint URL: "https://textract.us-east-1.amazonaws.com/"
+2026-01-26 14:21:00,470 [INFO] main: 🚀 Iniciando aplicação...
+2026-01-26 14:21:00,471 [INFO] app.core.migrations: ============================================================
+2026-01-26 14:21:00,471 [INFO] app.core.migrations: VERIFICANDO MIGRAÇÕES DO BANCO DE DADOS
+2026-01-26 14:21:00,471 [INFO] app.core.migrations: ============================================================
+2026-01-26 14:21:01,578 [INFO] app.core.migrations: ✓ Banco de dados já migrado (todas as colunas existem)
+2026-01-26 14:21:01,578 [INFO] app.core.migrations: Nenhuma migração necessária - banco já atualizado
+2026-01-26 14:21:05,905 [INFO] app.api.v1.auth: Usuário autenticado: gabriel.rodrigues@grupobrmed.com.br (role: ADMIN, clinic_id: None)
+2026-01-26 14:21:21,305 [INFO] app.api.v1_brmed: [REQUEST-ASYNC] Documento recebido: BRMED - PERIODICO - JOEL FERREIRA BARBOSA  - COMPLETO.pdf (0.34MB)
+2026-01-26 14:21:21,305 [INFO] app.api.v1_brmed: [REQUEST-ASYNC] Exames obrigatórios: 0
+2026-01-26 14:21:21,305 [INFO] app.core.job_manager: [JobManager] Job criado: 455f17f8-e5be-43df-9eae-f57aac631160 (tipo=document_processing)
+2026-01-26 14:21:21,306 [INFO] app.api.v1_brmed: [JOB 455f17f8-e5be-43df-9eae-f57aac631160] Arquivo salvo temporariamente: /tmp/tmpllguga1w.pdf
+2026-01-26 14:21:21,306 [INFO] app.api.v1_brmed: [JOB 455f17f8-e5be-43df-9eae-f57aac631160] Task adicionada ao background
+2026-01-26 14:21:21,307 [INFO] app.api.v1_brmed: [JOB 455f17f8-e5be-43df-9eae-f57aac631160] Iniciando processamento em background
+2026-01-26 14:21:21,307 [INFO] app.core.job_manager: [JOB 455f17f8-e5be-43df-9eae-f57aac631160] Iniciado
+2026-01-26 14:21:21,307 [INFO] app.services.workflow_service: [WORKFLOW] Iniciando processamento completo para: BRMED - PERIODICO - JOEL FERREIRA BARBOSA  - COMPLETO.pdf
+2026-01-26 14:21:21,307 [INFO] app.services.workflow_service: [WORKFLOW-PROGRESS] 10% - ocr: Processando documento com OCR...
+2026-01-26 14:21:21,307 [INFO] app.services.ocr_service: [OCR] Iniciando pipeline OCR para arquivo: BRMED - PERIODICO - JOEL FERREIRA BARBOSA  - COMPLETO.pdf
+2026-01-26 14:21:21,307 [INFO] app.services.ocr_service: [OCR] Motor selecionado: AWS Textract
+2026-01-26 14:21:21,312 [INFO] app.services.ocr_service: [OCR] Iniciando conversão com AWS Textract para: BRMED - PERIODICO - JOEL FERREIRA BARBOSA  - COMPLETO.pdf
+2026-01-26 14:21:21,312 [INFO] app.services.ocr_service: [OCR] Processando com AWS Textract (Síncrono): /tmp/tmpcba4vk9o.pdf
+2026-01-26 14:21:21,312 [INFO] app.services.ocr_service: [OCR] Reparando PDF para compatibilidade Textract: /tmp/tmpcba4vk9o.pdf
+2026-01-26 14:21:21,315 [INFO] app.services.ocr_service: [OCR] PDF reparado salvo em: /tmp/tmpq_pt4fjb.pdf
+2026-01-26 14:21:21,317 [INFO] app.services.ocr_service: [OCR] Heurística PDF: páginas=2, chars_medio=0.0, imagens_ratio=0.00
+2026-01-26 14:21:21,317 [INFO] app.services.ocr_service: [OCR] Documento escaneado detectado. Pulando compressao para evitar perda.
+2026-01-26 14:21:21,317 [INFO] app.services.ocr_service: [OCR] Tamanho do arquivo: 0.34 MB
+2026-01-26 14:21:21,317 [INFO] app.services.ocr_service: [OCR] Chamando detect_document_text (síncrono)...
+2026-01-26 14:21:22,818 [ERROR] app.services.ocr_service: [OCR] Erro AWS [UnsupportedDocumentException]: Request has unsupported document format
+2026-01-26 14:21:22,818 [WARNING] app.services.ocr_service: [OCR] Documento nao suportado no modo sincrono, usando assincrono
+2026-01-26 14:21:22,818 [INFO] app.services.ocr_service: [OCR] Processando com AWS Textract (Assíncrono) via S3: /tmp/tmpcba4vk9o.pdf
+2026-01-26 14:21:22,818 [INFO] app.services.ocr_service: [OCR] Reparando PDF para compatibilidade Textract: /tmp/tmpcba4vk9o.pdf
+2026-01-26 14:21:22,820 [INFO] app.services.ocr_service: [OCR] PDF reparado salvo em: /tmp/tmpymkcyecx.pdf
+2026-01-26 14:21:22,821 [INFO] app.services.ocr_service: [OCR] Heurística PDF: páginas=2, chars_medio=0.0, imagens_ratio=0.00
+2026-01-26 14:21:22,821 [INFO] app.services.ocr_service: [OCR] Documento escaneado detectado. Pulando compressao para evitar perda.
+2026-01-26 14:21:22,821 [INFO] app.services.ocr_service: [OCR] Fazendo upload para S3: s3://brmed-exam-ocr/textract-temp/20260126_142122_4f560628_tmpcba4vk9o.pdf
+2026-01-26 14:21:23,878 [INFO] app.services.ocr_service: [OCR] Upload concluído. Tamanho: 0.34 MB (em 1.06s)
+2026-01-26 14:21:23,878 [INFO] app.services.ocr_service: [OCR] Iniciando job Textract assíncrono (StartDocumentTextDetection)...
+2026-01-26 14:21:24,565 [INFO] app.services.ocr_service: [OCR] Job iniciado com sucesso. JobId: 450bed2b7bc6741fc13a22f9f8c94633c07952614f9dc1ace9297065bbec3cc7 (em 0.69s)
+2026-01-26 14:21:24,565 [INFO] app.services.ocr_service: [OCR] Timeout maximo do Textract: 90s
+2026-01-26 14:21:24,565 [INFO] app.services.ocr_service: [OCR] Aguardando conclusão do job Textract: 450bed2b7bc6741fc13a22f9f8c94633c07952614f9dc1ace9297065bbec3cc7
+2026-01-26 14:25:25,805 [INFO] main: 🚀 Iniciando aplicação...
+2026-01-26 14:25:25,805 [INFO] app.core.migrations: ============================================================
+2026-01-26 14:25:25,805 [INFO] app.core.migrations: VERIFICANDO MIGRAÇÕES DO BANCO DE DADOS
+2026-01-26 14:25:25,805 [INFO] app.core.migrations: ============================================================
+2026-01-26 14:25:26,842 [INFO] app.core.migrations: ✓ Banco de dados já migrado (todas as colunas existem)
+2026-01-26 14:25:26,842 [INFO] app.core.migrations: Nenhuma migração necessária - banco já atualizado
+2026-01-26 14:25:38,000 [INFO] app.api.v1.auth: Usuário autenticado: gabriel.rodrigues@grupobrmed.com.br (role: ADMIN, clinic_id: None)
+2026-01-26 14:26:19,994 [INFO] app.api.v1_brmed: [REQUEST-ASYNC] Documento recebido: BRMED - PERIODICO - JOEL FERREIRA BARBOSA  - COMPLETO.pdf (0.34MB)
+2026-01-26 14:26:19,994 [INFO] app.api.v1_brmed: [REQUEST-ASYNC] Exames obrigatórios: 0
+2026-01-26 14:26:19,994 [INFO] app.core.job_manager: [JobManager] Job criado: 938500ce-fef8-4bb5-8459-e9c9ec30d98f (tipo=document_processing)
+2026-01-26 14:26:19,995 [INFO] app.api.v1_brmed: [JOB 938500ce-fef8-4bb5-8459-e9c9ec30d98f] Arquivo salvo temporariamente: /tmp/tmp2mv8ook9.pdf
+2026-01-26 14:26:19,995 [INFO] app.api.v1_brmed: [JOB 938500ce-fef8-4bb5-8459-e9c9ec30d98f] Task adicionada ao background
+2026-01-26 14:26:19,996 [INFO] app.api.v1_brmed: [JOB 938500ce-fef8-4bb5-8459-e9c9ec30d98f] Iniciando processamento em background
+2026-01-26 14:26:19,996 [INFO] app.core.job_manager: [JOB 938500ce-fef8-4bb5-8459-e9c9ec30d98f] Iniciado
+2026-01-26 14:26:19,996 [INFO] app.services.workflow_service: [WORKFLOW] Iniciando processamento completo para: BRMED - PERIODICO - JOEL FERREIRA BARBOSA  - COMPLETO.pdf
+2026-01-26 14:26:19,996 [INFO] app.services.workflow_service: [WORKFLOW-PROGRESS] 10% - ocr: Processando documento com OCR...
+2026-01-26 14:26:19,996 [INFO] app.services.ocr_service: [OCR] Iniciando pipeline OCR para arquivo: BRMED - PERIODICO - JOEL FERREIRA BARBOSA  - COMPLETO.pdf
+2026-01-26 14:26:19,996 [INFO] app.services.ocr_service: [OCR] Motor selecionado: AWS Textract
+2026-01-26 14:26:20,003 [INFO] app.services.ocr_service: [OCR] Iniciando conversão com AWS Textract para: BRMED - PERIODICO - JOEL FERREIRA BARBOSA  - COMPLETO.pdf
+2026-01-26 14:26:20,003 [INFO] app.services.ocr_service: [OCR] Processando com AWS Textract (Síncrono): /tmp/tmpr2348iz3.pdf
+2026-01-26 14:26:20,003 [INFO] app.services.ocr_service: [OCR] Reparando PDF para compatibilidade Textract: /tmp/tmpr2348iz3.pdf
+2026-01-26 14:26:20,008 [INFO] app.services.ocr_service: [OCR] PDF reparado salvo em: /tmp/tmpkdtbkk1_.pdf
+2026-01-26 14:26:20,009 [INFO] app.services.ocr_service: [OCR] Heurística PDF: páginas=2, chars_medio=0.0, imagens_ratio=0.00
+2026-01-26 14:26:20,009 [INFO] app.services.ocr_service: [OCR] Documento escaneado detectado. Pulando compressao para evitar perda.
+2026-01-26 14:26:20,010 [INFO] app.services.ocr_service: [OCR] Tamanho do arquivo: 0.34 MB
+2026-01-26 14:26:20,010 [INFO] app.services.ocr_service: [OCR] Chamando detect_document_text (síncrono)...
+2026-01-26 14:26:22,023 [ERROR] app.services.ocr_service: [OCR] Erro AWS [UnsupportedDocumentException]: Request has unsupported document format
+2026-01-26 14:26:22,024 [WARNING] app.services.ocr_service: [OCR] Documento nao suportado no modo sincrono, usando assincrono
+2026-01-26 14:26:22,024 [INFO] app.services.ocr_service: [OCR] Processando com AWS Textract (Assíncrono) via S3: /tmp/tmpr2348iz3.pdf
+2026-01-26 14:26:22,024 [INFO] app.services.ocr_service: [OCR] Reparando PDF para compatibilidade Textract: /tmp/tmpr2348iz3.pdf
+2026-01-26 14:26:22,026 [INFO] app.services.ocr_service: [OCR] PDF reparado salvo em: /tmp/tmph2460nvh.pdf
+2026-01-26 14:26:22,027 [INFO] app.services.ocr_service: [OCR] Heurística PDF: páginas=2, chars_medio=0.0, imagens_ratio=0.00
+2026-01-26 14:26:22,027 [INFO] app.services.ocr_service: [OCR] Documento escaneado detectado. Pulando compressao para evitar perda.
+2026-01-26 14:26:22,027 [INFO] app.services.ocr_service: [OCR] Fazendo upload para S3: s3://brmed-exam-ocr/textract-temp/20260126_142622_7d699553_tmpr2348iz3.pdf
+2026-01-26 14:26:23,074 [INFO] app.services.ocr_service: [OCR] Upload concluído. Tamanho: 0.34 MB (em 1.05s)
+2026-01-26 14:26:23,074 [INFO] app.services.ocr_service: [OCR] Iniciando job Textract assíncrono (StartDocumentTextDetection)...
+2026-01-26 14:26:23,761 [INFO] app.services.ocr_service: [OCR] Job iniciado com sucesso. JobId: 779d695c94d913d8f5602edb5df7f315a421991be4e6dcf7970910541cab8ff0 (em 0.69s)
+2026-01-26 14:26:23,761 [INFO] app.services.ocr_service: [OCR] Timeout maximo do Textract: 90s
+2026-01-26 14:26:23,761 [INFO] app.services.ocr_service: [OCR] Aguardando conclusão do job Textract: 779d695c94d913d8f5602edb5df7f315a421991be4e6dcf7970910541cab8ff0
+2026-01-26 14:27:54,489 [WARNING] app.services.ocr_service: [OCR] Timeout atingido, estendendo espera por mais 120s
+2026-01-26 14:27:54,490 [INFO] app.services.ocr_service: [OCR] Aguardando conclusão do job Textract: 779d695c94d913d8f5602edb5df7f315a421991be4e6dcf7970910541cab8ff0
+2026-01-26 14:28:45,833 [INFO] app.services.ocr_service: [OCR] Job concluído com sucesso após 29 tentativas
+2026-01-26 14:28:45,834 [INFO] app.services.ocr_service: [OCR] Job Textract finalizado em 142.07s (status=SUCCEEDED)
+2026-01-26 14:28:45,834 [INFO] app.services.ocr_service: [OCR] Coletando resultados do job: 779d695c94d913d8f5602edb5df7f315a421991be4e6dcf7970910541cab8ff0
+2026-01-26 14:28:46,205 [INFO] app.services.ocr_service: [OCR] Total de blocos coletados: 621
+2026-01-26 14:28:46,205 [INFO] app.services.ocr_service: [OCR] Resultados coletados em 0.37s
+2026-01-26 14:28:46,205 [INFO] app.services.ocr_service: [OCR] Convertendo 621 blocos em markdown...
+2026-01-26 14:28:46,206 [INFO] app.services.ocr_service: [OCR] Conversão concluída em 0.00s. Markdown gerado: 3732 caracteres
+2026-01-26 14:28:46,206 [INFO] app.services.ocr_service: [OCR] Removendo arquivo do S3: textract-temp/20260126_142622_7d699553_tmpr2348iz3.pdf
+2026-01-26 14:28:46,617 [INFO] app.services.ocr_service: [OCR] Arquivo removido do S3 com sucesso
+2026-01-26 14:28:46,617 [INFO] app.services.ocr_service: [OCR] Fluxo Textract assíncrono completo em 144.59s
+2026-01-26 14:28:46,618 [INFO] app.services.ocr_service: [OCR] Conversão concluída. Markdown gerado: 3732 caracteres
+2026-01-26 14:28:46,618 [INFO] app.services.ocr_service: [OCR] Pipeline OCR finalizado em 146.62s
+2026-01-26 14:28:46,618 [INFO] app.services.ocr_service: [OCR] Markdown salvo em: ocr_resultados/ocr_BRMED - PERIODICO - JOEL FERREIRA BARBOSA  - COMPLETO_20260126_142846.md
+2026-01-26 14:28:46,618 [INFO] app.services.ocr_service: [OCR] Extraindo CPF via regex...
+2026-01-26 14:28:46,619 [INFO] app.services.ocr_service: [OCR] CPF extraído: 01792655398
+2026-01-26 14:28:46,619 [INFO] app.services.ocr_service: [OCR] Iniciando extração de exames via OpenAI GPT...
+2026-01-26 14:28:47,974 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-01-26 14:28:47,983 [INFO] app.services.ocr_service: [OCR] Exames extraídos: 1 encontrados - ['CLÍNICO OCUPACIONAL']
+2026-01-26 14:28:47,983 [INFO] app.services.ocr_service: [OCR] Pipeline OCR concluído para: BRMED - PERIODICO - JOEL FERREIRA BARBOSA  - COMPLETO.pdf
+2026-01-26 14:28:47,984 [INFO] app.services.workflow_service: [WORKFLOW] OCR concluído em 147.99s
+2026-01-26 14:28:47,984 [INFO] app.services.workflow_service: [WORKFLOW-PROGRESS] 30% - ocr: OCR concluído. 1 exames encontrados
+2026-01-26 14:28:47,984 [INFO] app.services.workflow_service: [WORKFLOW-PROGRESS] 40% - brmed: Consultando exames obrigatórios (CPF: 017***)
+2026-01-26 14:28:47,984 [INFO] app.services.workflow_service: [WORKFLOW] Tentando consultar BRMED com CPF inicial: 01792655398
+2026-01-26 14:28:47,984 [INFO] app.services.workflow_service: [WORKFLOW-PROGRESS] 20% - ocr: OCR em andamento (job iniciado)
+2026-01-26 14:28:47,984 [INFO] app.services.workflow_service: [WORKFLOW-PROGRESS] 20% - ocr: OCR em andamento (in_progress)...
+2026-01-26 14:28:47,984 [INFO] app.services.workflow_service: [WORKFLOW-PROGRESS] 20% - ocr: OCR em andamento (in_progress)...
+2026-01-26 14:28:47,984 [INFO] app.services.workflow_service: [WORKFLOW-PROGRESS] 20% - ocr: OCR em andamento (in_progress)...
+2026-01-26 14:28:47,984 [INFO] app.services.workflow_service: [WORKFLOW-PROGRESS] 20% - ocr: OCR em andamento (in_progress)...
+2026-01-26 14:28:47,984 [INFO] app.services.workflow_service: [WORKFLOW-PROGRESS] 20% - ocr: OCR em andamento (in_progress)...
+2026-01-26 14:28:47,984 [INFO] app.services.workflow_service: [WORKFLOW-PROGRESS] 20% - ocr: OCR em andamento (job iniciado)
+2026-01-26 14:28:47,984 [INFO] app.services.workflow_service: [WORKFLOW-PROGRESS] 20% - ocr: OCR em andamento (in_progress)...
+2026-01-26 14:28:47,984 [INFO] app.services.workflow_service: [WORKFLOW-PROGRESS] 20% - ocr: OCR em andamento (in_progress)...
+2026-01-26 14:28:47,984 [INFO] app.services.workflow_service: [WORKFLOW-PROGRESS] 20% - ocr: OCR em andamento (in_progress)...
+2026-01-26 14:28:48,628 [INFO] app.services.brmed_service: Iniciando automação Playwright...
+2026-01-26 14:28:48,628 [INFO] app.services.brmed_service: Navegando para a página de login...
+2026-01-26 14:28:58,427 [INFO] app.services.brmed_service: Autenticação e seleção de CPF concluídos em 9.80s.
+2026-01-26 14:28:58,427 [INFO] app.services.brmed_service: Consultando CPF: 01792655398 (formatado: 017.926.553-98)
+2026-01-26 14:29:00,723 [INFO] app.services.brmed_service: Consulta de CPF realizada em 2.30s.
+2026-01-26 14:29:00,742 [INFO] app.services.brmed_service: Tabelas com classe 'tabledata' encontradas: 1
+2026-01-26 14:29:00,749 [INFO] app.services.brmed_service: Links de paciente encontrados: 1
+2026-01-26 14:29:03,185 [INFO] app.services.brmed_service: Clicando em 'Guia de Encaminhamento'...
+2026-01-26 14:29:07,881 [INFO] app.services.brmed_service: Nova página da guia carregada e aguardando.
+2026-01-26 14:29:07,888 [INFO] app.services.brmed_service: Conteúdo bruto da página salvo em: resultados/debug_conteudo_01792655398_20260126_142848.txt
+2026-01-26 14:29:07,888 [INFO] app.services.brmed_service: Conteúdo recebido para extração: Olá, thiago.simoes
+
+Você está logado em: Operações
+
+Logout
+
+Página inicial
+Cadastrar paciente
+Agenda
+0 pendência(s)
+6 grupos faltando dados financeiros
+22 exame(s) sem preço
+28 exame(s) sem valor de repasse
+Relatório
+Área administrativa
+Está em:
+Início >
+Consulta de Paciente >
+Imprimir guia de agendamento
+
+
+VOUCHER
+
+
+PERIÓDICO
+
+
+Periodical
+
+
+
+Prezado(a) / Dear,
+Recebemos sua solicitação e confirmamos o agendamento conforme detalhes a seguir / Your request has been received and your scheduling is...
+2026-01-26 14:29:07,888 [INFO] app.services.brmed_service: Nome match object: <re.Match object; span=(580, 638), match='Nome / Name: JOEL FERREIRA BARBOSA\tIdentidade / >
+2026-01-26 14:29:07,888 [INFO] app.services.brmed_service: Nome extraído: JOEL FERREIRA BARBOSA
+2026-01-26 14:29:07,889 [INFO] app.services.brmed_service: Exames texto extraído: 4. Exames / Exams:
+
+4.1 Realizados na própria clínica / Performed at the clinic itself:
+
+
+CLÍNICO OCUPACIONAL * / CLINICAL EXAMINATION *
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+	
+Obrigatório * / Mandatory *...
+2026-01-26 14:29:07,889 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 4. Exames / Exams:
+2026-01-26 14:29:07,889 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 14:29:07,889 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 4.1 Realizados na própria clínica / Performed at the clinic itself:
+2026-01-26 14:29:07,889 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 14:29:07,889 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 14:29:07,889 [INFO] app.services.brmed_service: Linha limpa para extração de exames: CLÍNICO OCUPACIONAL * / CLINICAL EXAMINATION *
+2026-01-26 14:29:07,889 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 14:29:07,889 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 14:29:07,889 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 14:29:07,889 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 14:29:07,889 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 14:29:07,889 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 14:29:07,889 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 14:29:07,889 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 14:29:07,889 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 14:29:07,889 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 14:29:07,889 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 14:29:07,889 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 14:29:07,889 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 14:29:07,889 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 14:29:07,889 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 14:29:07,889 [INFO] app.services.brmed_service: Linha limpa para extração de exames: 
+2026-01-26 14:29:07,889 [INFO] app.services.brmed_service: Linha limpa para extração de exames: Obrigatório * / Mandatory *
+2026-01-26 14:29:07,890 [INFO] app.services.brmed_service: Exames extraídos: ['CLÍNICO OCUPACIONAL']
+2026-01-26 14:29:07,890 [INFO] app.services.brmed_service: Resultado da extração salvo em: resultados/guia_01792655398_20260126_142848.json
+2026-01-26 14:29:07,922 [INFO] app.services.brmed_service: Navegador Playwright fechado.
+2026-01-26 14:29:07,922 [INFO] app.services.brmed_service: Consulta BRMED finalizada em 19.94s.
+2026-01-26 14:29:07,931 [INFO] app.services.workflow_service: [WORKFLOW] Consulta BRMED concluída em 19.95s
+2026-01-26 14:29:07,932 [INFO] app.services.workflow_service: [WORKFLOW-PROGRESS] 60% - brmed: Exames obrigatórios obtidos: 1 exames
+2026-01-26 14:29:07,934 [INFO] app.services.workflow_service: [WORKFLOW-PROGRESS] 70% - validacao: Validando exames com IA...
+2026-01-26 14:29:07,934 [INFO] app.services.workflow_service: [WORKFLOW] Realizando validação para CPF: 01792655398
+2026-01-26 14:29:09,300 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2026-01-26 14:29:11,786 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-01-26 14:29:11,790 [INFO] app.services.workflow_service: [WORKFLOW] Validação concluída em 3.86s
+2026-01-26 14:29:11,790 [INFO] app.services.workflow_service: [WORKFLOW-PROGRESS] 90% - validacao: Validação concluída, preparando resultado...
+2026-01-26 14:29:11,790 [INFO] app.services.workflow_service: [WORKFLOW] Validação concluída.
+2026-01-26 14:29:11,792 [INFO] app.services.workflow_service: [WORKFLOW-PROGRESS] 100% - concluido: Processamento concluído com sucesso!
+2026-01-26 14:29:11,792 [INFO] app.services.workflow_service: [WORKFLOW] Processamento completo finalizado para: BRMED - PERIODICO - JOEL FERREIRA BARBOSA  - COMPLETO.pdf
+2026-01-26 14:29:11,792 [INFO] app.services.workflow_service: [WORKFLOW] Processamento completo em 171.80s
+2026-01-26 14:29:11,792 [INFO] app.core.job_manager: [JOB 938500ce-fef8-4bb5-8459-e9c9ec30d98f] Concluído com sucesso
+2026-01-26 14:29:11,792 [INFO] app.api.v1_brmed: [JOB 938500ce-fef8-4bb5-8459-e9c9ec30d98f] Concluído com sucesso
+2026-01-26 14:38:50,603 [INFO] main: 🚀 Iniciando aplicação...
+2026-01-26 14:38:50,604 [INFO] app.core.migrations: ============================================================
+2026-01-26 14:38:50,604 [INFO] app.core.migrations: VERIFICANDO MIGRAÇÕES DO BANCO DE DADOS
+2026-01-26 14:38:50,604 [INFO] app.core.migrations: ============================================================
+2026-01-26 14:38:51,695 [INFO] app.core.migrations: ✓ Banco de dados já migrado (todas as colunas existem)
+2026-01-26 14:38:51,696 [INFO] app.core.migrations: Nenhuma migração necessária - banco já atualizado
+2026-01-26 14:39:02,055 [INFO] app.api.v1.auth: Usuário autenticado: gabriel.rodrigues@grupobrmed.com.br (role: ADMIN, clinic_id: None)
+2026-01-26 15:45:30,542 [INFO] main: 🚀 Iniciando aplicação...
+2026-01-26 15:45:30,542 [INFO] app.core.migrations: ============================================================
+2026-01-26 15:45:30,542 [INFO] app.core.migrations: VERIFICANDO MIGRAÇÕES DO BANCO DE DADOS
+2026-01-26 15:45:30,542 [INFO] app.core.migrations: ============================================================
+2026-01-26 15:45:31,600 [INFO] app.core.migrations: ✓ Banco de dados já migrado (todas as colunas existem)
+2026-01-26 15:45:31,600 [INFO] app.core.migrations: Nenhuma migração necessária - banco já atualizado
+2026-01-26 15:45:52,989 [INFO] app.api.v1.auth: Usuário autenticado: gabriel.rodrigues@grupobrmed.com.br (role: ADMIN, clinic_id: None)

@@ -63,6 +63,7 @@ interface DocumentBatchProcessorProps {
   files: FileWithPreview[]
   onComplete?: (results: DocumentProcessingResult[]) => void
   onError?: (error: string) => void
+  submittedBy?: string
   /**
    * Usa API assíncrona com polling (recomendado para evitar timeouts)
    * @default true
@@ -74,6 +75,7 @@ export function DocumentBatchProcessor({
   files,
   onComplete,
   onError,
+  submittedBy,
   useAsync = true, // Padrão: usar API assíncrona
 }: DocumentBatchProcessorProps) {
   const [documents, setDocuments] = useState<DocumentProcessingState[]>([])
@@ -486,7 +488,7 @@ export function DocumentBatchProcessor({
           },
             error: doc.error,
           },
-          submittedBy: 'usuario@grupobrmed.com.br',
+          submittedBy: submittedBy || 'usuario@grupobrmed.com.br',
         }
       })
 

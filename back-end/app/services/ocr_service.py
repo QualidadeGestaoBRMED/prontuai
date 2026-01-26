@@ -268,6 +268,67 @@ def reparar_pdf_para_textract(file_path: str) -> str:
         return file_path
 
 
+def _pagina_tem_imagem(page, depth: int = 0) -> bool:
+    if depth > 2:
+        return False
+    try:
+        resources = page.get("/Resources") if hasattr(page, "get") else None
+        if resources is None:
+            resources = page if isinstance(page, dict) else {}
+        if "/XObject" not in resources:
+            resources = resources.get("/Resources") if isinstance(resources, dict) else resources
+            if resources is None:
+                resources = {}
+        xobject = resources.get("/XObject") or {}
+        for obj in xobject.values():
+            try:
+                resolved = obj.get_object() if hasattr(obj, "get_object") else obj
+                subtype = resolved.get("/Subtype")
+                if subtype == "/Image":
+                    return True
+                if subtype == "/Form":
+                    form_resources = resolved.get("/Resources") or {}
+                    if form_resources.get("/XObject"):
+                        if _pagina_tem_imagem(form_resources, depth + 1):
+                            return True
+            except Exception:
+                continue
+    except Exception:
+        return False
+    return False
+
+def detectar_documento_digitalizado(file_path: str) -> bool:
+    try:
+        reader = PdfReader(file_path)
+        total_pages = len(reader.pages)
+        if total_pages == 0:
+            return False
+
+        max_pages = max(1, min(total_pages, settings.TEXTRACT_SCAN_DETECT_PAGES))
+        texto_total = 0
+        paginas_com_imagem = 0
+
+        for idx in range(max_pages):
+            page = reader.pages[idx]
+            texto = page.extract_text() or ""
+            texto_total += len(texto.strip())
+            if _pagina_tem_imagem(page):
+                paginas_com_imagem += 1
+
+        avg_chars = texto_total / max_pages if max_pages else 0
+        image_ratio = paginas_com_imagem / max_pages if max_pages else 0
+
+        logger.info(
+            f"[OCR] Heurística PDF: páginas={max_pages}, chars_medio={avg_chars:.1f}, imagens_ratio={image_ratio:.2f}"
+        )
+
+        if avg_chars < settings.TEXTRACT_SCAN_DETECT_MIN_CHARS_PER_PAGE:
+            return True
+        return image_ratio >= settings.TEXTRACT_SCAN_DETECT_MIN_IMAGE_RATIO
+    except Exception as e:
+        logger.warning(f"[OCR] Falha ao detectar documento digitalizado: {e}")
+        return False
+
 def otimizar_pdf_para_textract(file_path: str) -> str:
     """
     Tenta reduzir o tamanho do PDF para acelerar o Textract.
@@ -281,7 +342,23 @@ def otimizar_pdf_para_textract(file_path: str) -> str:
     except OSError:
         return file_path
 
-    if tamanho_mb <= settings.TEXTRACT_PREPROCESS_MAX_MB:
+    mode = settings.TEXTRACT_PREPROCESS_MODE
+    is_scanned = False
+    if mode == "auto":
+        is_scanned = detectar_documento_digitalizado(file_path)
+    elif mode == "scanned":
+        is_scanned = True
+    elif mode == "digital":
+        is_scanned = False
+
+    max_mb = settings.TEXTRACT_PREPROCESS_MAX_MB_SCANNED if is_scanned else settings.TEXTRACT_PREPROCESS_MAX_MB_DIGITAL
+    gs_quality = settings.TEXTRACT_GS_PDFSETTINGS_SCANNED if is_scanned else settings.TEXTRACT_GS_PDFSETTINGS_DIGITAL
+
+    if is_scanned and settings.TEXTRACT_PREPROCESS_SKIP_SCANNED:
+        logger.info("[OCR] Documento escaneado detectado. Pulando compressao para evitar perda.")
+        return file_path
+
+    if tamanho_mb <= max_mb:
         return file_path
 
     gs_path = shutil.which("gs")
@@ -292,7 +369,10 @@ def otimizar_pdf_para_textract(file_path: str) -> str:
     fd, temp_optimized_path = tempfile.mkstemp(suffix=".pdf")
     os.close(fd)
 
-    gs_quality = settings.TEXTRACT_GS_PDFSETTINGS
+    logger.info(
+        f"[OCR] Preprocessamento PDF: mode={mode}, scanned={is_scanned}, "
+        f"max_mb={max_mb}, gs={gs_quality}"
+    )
     cmd = [
         gs_path,
         "-sDEVICE=pdfwrite",
@@ -308,9 +388,19 @@ def otimizar_pdf_para_textract(file_path: str) -> str:
     try:
         subprocess.run(cmd, check=True)
         otimizado_mb = os.path.getsize(temp_optimized_path) / (1024 * 1024)
+        savings_mb = tamanho_mb - otimizado_mb
+        savings_ratio = savings_mb / tamanho_mb if tamanho_mb else 0
         logger.info(
             f"[OCR] PDF otimizado via Ghostscript: {tamanho_mb:.2f} MB -> {otimizado_mb:.2f} MB"
         )
+        if (
+            savings_mb < settings.TEXTRACT_GS_MIN_SAVINGS_MB
+            or savings_ratio < settings.TEXTRACT_GS_MIN_SAVINGS_RATIO
+        ):
+            logger.info("[OCR] Ganho pequeno na compressao. Mantendo PDF original.")
+            if os.path.exists(temp_optimized_path):
+                os.remove(temp_optimized_path)
+            return file_path
         return temp_optimized_path
     except Exception as e:
         logger.warning(f"[OCR] Falha ao otimizar PDF: {e}")
