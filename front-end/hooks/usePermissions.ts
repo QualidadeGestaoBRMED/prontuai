@@ -35,6 +35,28 @@ export interface PermissionsHook {
 export function usePermissions(): PermissionsHook {
   const { data: session, status } = useSession();
 
+  const bypassAuth = process.env.NEXT_PUBLIC_DEV_AUTH_BYPASS === "true";
+  const devRole = (process.env.NEXT_PUBLIC_DEV_ROLE || "ADMIN") as UserRole;
+
+  if (bypassAuth) {
+    const isAdmin = devRole === "ADMIN";
+    const isChecker = devRole === "CHECKER" || devRole === "ADMIN";
+    const isSender = devRole === "SENDER" || devRole === "ADMIN";
+
+    return {
+      user: { role: devRole, email: "dev@local" },
+      role: devRole,
+      isAdmin,
+      isChecker,
+      isSender,
+      canManageUsers: isAdmin,
+      canValidateExams: isChecker,
+      canSendDocuments: isSender,
+      isLoading: false,
+      isAuthenticated: true,
+    };
+  }
+
   const user = session?.user;
   const role = user?.role;
 

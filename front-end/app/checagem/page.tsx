@@ -19,6 +19,9 @@ import { ProcessResult } from "@/types/process";
 import { generateResultPDF } from "@/lib/pdf-generator";
 import { DocumentDetailsModalChecagem } from "@/components/document-details-modal-checagem";
 import { RequireRole } from "@/components/require-role";
+import { useDocuments } from "@/hooks/use-documents";
+import { documentToProcessResult } from "@/lib/document-mapper";
+import { API_ENDPOINTS } from "@/lib/config";
 
 // Mock data - fallback se não houver dados do localStorage
 const mockDocumentos: DocumentoChecagem[] = [
@@ -123,14 +126,18 @@ export default function Page() {
   const [documentos, setDocumentos] = useState<DocumentoChecagem[]>([]);
   const [selectedResult, setSelectedResult] = useState<ProcessResult | null>(null);
   const { processResults, updateProcessResultStatus, addNotification, unreadCount, activeProcess, setNotificationCenterOpen } = useNotifications();
+  const { documents } = useDocuments();
   const sessionData = useSession();
   const session = sessionData?.data || null;
+  const dbResults = documents.map(documentToProcessResult);
 
   // Carrega documentos de processResults que precisam de revisão
   useEffect(() => {
+    const dbResults = documents.map(documentToProcessResult);
+    const source = dbResults.length ? dbResults : processResults;
     // Converte ProcessResult para formato DocumentoChecagem
     // Inclui: aprovados pela IA (precisam de validação humana), pending_review (rejeitados pela IA), e rejeitados pela IA mas ainda não revisados por humano
-    const pendingDocs: DocumentoChecagem[] = processResults
+    const pendingDocs: DocumentoChecagem[] = source
       .filter(result =>
         result.status === 'approved' ||
         result.status === 'pending_review' ||
@@ -153,12 +160,11 @@ export default function Page() {
         submittedBy: result.submittedBy,
       }));
 
-    // Se não houver documentos pendentes do processResults, usa dados mock
-    setDocumentos(pendingDocs.length > 0 ? pendingDocs : mockDocumentos);
-  }, [processResults]);
+    setDocumentos(pendingDocs);
+  }, [processResults, documents]);
 
   const handleAprovar = (id: string, approvalReason: string) => {
-    const result = processResults.find((r) => r.id === id);
+    const result = (dbResults.length ? dbResults : processResults).find((r) => r.id === id);
     const approvalReasonValue = approvalReason?.trim() || "";
     const approvalReasonNormalized = approvalReasonValue.length ? approvalReasonValue : undefined;
 
@@ -170,6 +176,27 @@ export default function Page() {
       undefined,
       approvalReasonNormalized
     );
+
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+    if (session?.accessToken) {
+      headers.Authorization = `Bearer ${session.accessToken}`;
+    }
+
+    fetch(`${API_ENDPOINTS.DOCUMENTS}/${id}`, {
+      method: 'PATCH',
+      headers,
+      body: JSON.stringify({
+        validation_status: 'validated',
+        result_payload: {
+          ...(result?.result || {}),
+          reviewed_by: session?.user?.email || 'revisor@grupobrmed.com.br',
+          reviewed_at: new Date().toISOString(),
+          approvalReason: approvalReasonNormalized,
+        }
+      })
+    }).catch(() => {});
 
     // Atualiza estado local (array documentos)
     setDocumentos((docs) =>
@@ -214,10 +241,31 @@ export default function Page() {
   };
 
   const handleRejeitar = (id: string, motivo: string) => {
-    const result = processResults.find((r) => r.id === id);
+    const result = (dbResults.length ? dbResults : processResults).find((r) => r.id === id);
 
     // Atualiza no contexto de notificações
     updateProcessResultStatus(id, 'rejected', session?.user?.email || 'revisor@grupobrmed.com.br', motivo);
+
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+    if (session?.accessToken) {
+      headers.Authorization = `Bearer ${session.accessToken}`;
+    }
+
+    fetch(`${API_ENDPOINTS.DOCUMENTS}/${id}`, {
+      method: 'PATCH',
+      headers,
+      body: JSON.stringify({
+        validation_status: 'rejected',
+        result_payload: {
+          ...(result?.result || {}),
+          reviewed_by: session?.user?.email || 'revisor@grupobrmed.com.br',
+          reviewed_at: new Date().toISOString(),
+          rejectionReason: motivo,
+        }
+      })
+    }).catch(() => {});
 
     // Atualiza estado local
     setDocumentos((docs) =>
@@ -257,7 +305,7 @@ export default function Page() {
   };
 
   const handleViewDetails = (id: string) => {
-    const result = processResults.find((r) => r.id === id);
+    const result = (dbResults.length ? dbResults : processResults).find((r) => r.id === id);
     if (result) {
       setSelectedResult(result);
     }

@@ -9,6 +9,7 @@ from datetime import datetime
 import uuid
 from app.models.user import User, UserInDB, UserRole, UserUpdate
 from app.models.clinic import Clinic, ClinicCreate, ClinicUpdate
+from app.models.notification import Notification, NotificationCreate
 import logging
 
 logger = logging.getLogger(__name__)
@@ -23,9 +24,15 @@ class UserDatabaseProtocol(Protocol):
     def create_user(self, email: str, name: str, role: UserRole = UserRole.CHECKER) -> User: ...
     def update_user(self, user_id: str, update: UserUpdate) -> User: ...
     def delete_user(self, user_id: str) -> bool: ...
+    def create_notification(self, data: NotificationCreate) -> Notification: ...
+    def list_notifications(self, clinic_id: Optional[str] = None, limit: int = 100, include_read: bool = True) -> List[Notification]: ...
+    def mark_notification_read(self, notification_id: str) -> Optional[Notification]: ...
+    def mark_all_notifications_read(self, clinic_id: Optional[str] = None) -> int: ...
+    def clear_notifications(self, clinic_id: Optional[str] = None) -> int: ...
 
 # Caminho do arquivo de banco de dados
 DB_PATH = os.path.join(os.path.dirname(__file__), "../../data/users.json")
+NOTIFICATIONS_PATH = os.path.join(os.path.dirname(__file__), "../../data/notifications.json")
 
 
 class UserDatabase:
@@ -57,6 +64,10 @@ class UserDatabase:
             self._write_db(initial_data)
             logger.info("Banco de dados de usuários criado com admin padrão")
 
+        if not os.path.exists(NOTIFICATIONS_PATH):
+            with open(NOTIFICATIONS_PATH, 'w', encoding='utf-8') as f:
+                json.dump({"notifications": []}, f, indent=2, ensure_ascii=False)
+
     def _read_db(self) -> Dict:
         """Lê o banco de dados"""
         try:
@@ -77,6 +88,22 @@ class UserDatabase:
                 json.dump(data, f, indent=2, ensure_ascii=False)
         except Exception as e:
             logger.error(f"Erro ao escrever no banco de dados: {e}")
+            raise
+
+    def _read_notifications(self) -> Dict:
+        try:
+            with open(NOTIFICATIONS_PATH, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except Exception as e:
+            logger.error(f"Erro ao ler notificações: {e}")
+            return {"notifications": []}
+
+    def _write_notifications(self, data: Dict) -> None:
+        try:
+            with open(NOTIFICATIONS_PATH, 'w', encoding='utf-8') as f:
+                json.dump(data, f, indent=2, ensure_ascii=False)
+        except Exception as e:
+            logger.error(f"Erro ao escrever notificações: {e}")
             raise
 
     def get_user_by_email(self, email: str) -> Optional[UserInDB]:
@@ -266,6 +293,74 @@ class UserDatabase:
 
         logger.info(f"Clínica atualizada: {clinic_data['name']}")
         return Clinic(**clinic_data)
+
+    # =============== NOTIFICAÇÕES (JSON) ===============
+
+    def create_notification(self, data: NotificationCreate) -> Notification:
+        db = self._read_notifications()
+        notif_id = str(uuid.uuid4())
+        now = datetime.now().isoformat()
+        notif = {
+            "id": notif_id,
+            "clinic_id": data.clinic_id,
+            "document_id": data.document_id,
+            "type": data.type,
+            "title": data.title,
+            "message": data.message,
+            "variant": data.variant,
+            "action_url": data.action_url,
+            "action_label": data.action_label,
+            "metadata": data.metadata,
+            "read": False,
+            "created_at": now
+        }
+        db["notifications"].append(notif)
+        self._write_notifications(db)
+        return Notification(**notif)
+
+    def list_notifications(self, clinic_id: Optional[str] = None, limit: int = 100, include_read: bool = True) -> List[Notification]:
+        db = self._read_notifications()
+        items = db.get("notifications", [])
+        if clinic_id:
+            items = [n for n in items if n.get("clinic_id") == clinic_id]
+        if not include_read:
+            items = [n for n in items if not n.get("read", False)]
+        items = sorted(items, key=lambda n: n.get("created_at", ""), reverse=True)[:limit]
+        return [Notification(**n) for n in items]
+
+    def mark_notification_read(self, notification_id: str) -> Optional[Notification]:
+        db = self._read_notifications()
+        for n in db.get("notifications", []):
+            if n.get("id") == notification_id:
+                n["read"] = True
+                self._write_notifications(db)
+                return Notification(**n)
+        return None
+
+    def mark_all_notifications_read(self, clinic_id: Optional[str] = None) -> int:
+        db = self._read_notifications()
+        count = 0
+        for n in db.get("notifications", []):
+            if clinic_id and n.get("clinic_id") != clinic_id:
+                continue
+            if not n.get("read", False):
+                n["read"] = True
+                count += 1
+        self._write_notifications(db)
+        return count
+
+    def clear_notifications(self, clinic_id: Optional[str] = None) -> int:
+        # Preserve histórico: apenas marca como lidas
+        db = self._read_notifications()
+        count = 0
+        for n in db.get("notifications", []):
+            if clinic_id and n.get("clinic_id") != clinic_id:
+                continue
+            if not n.get("read", False):
+                n["read"] = True
+                count += 1
+        self._write_notifications(db)
+        return count
 
 
 def get_user_database() -> UserDatabaseProtocol:
