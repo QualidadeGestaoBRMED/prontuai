@@ -4,13 +4,14 @@ Migração futura do JSON file-based database.
 """
 import os
 from typing import List, Optional
-from datetime import datetime
-from sqlalchemy import create_engine, Column, String, Boolean, DateTime, Enum as SQLEnum, ForeignKey, Text, ARRAY
+from datetime import datetime, timezone
+from sqlalchemy import create_engine, Column, String, Boolean, DateTime, Enum as SQLEnum, ForeignKey, Text, ARRAY, Float, text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session, relationship
 from app.models.user import User, UserCreate, UserUpdate, UserRole
 from app.models.clinic import Clinic, ClinicCreate, ClinicUpdate
 from app.models.document import Document, DocumentCreate, DocumentUpdate
+from app.models.notification import Notification, NotificationCreate, NotificationUpdate
 
 Base = declarative_base()
 
@@ -57,8 +58,30 @@ class DocumentModel(Base):
     exams_found = Column(ARRAY(String), nullable=True)  # Array de strings
     validation_status = Column(String, nullable=False, default='pending')
     ocr_markdown = Column(Text, nullable=True)
+    run_id = Column(String, nullable=True)
+    result_payload = Column(Text, nullable=True)
+    confidence_score = Column(Float, nullable=True)
+    quality_score = Column(Float, nullable=True)
+    mandatory_coverage = Column(Float, nullable=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+class NotificationModel(Base):
+    """Modelo SQLAlchemy para tabela Notification."""
+    __tablename__ = "notifications"
+
+    id = Column(String, primary_key=True)
+    clinic_id = Column(String, ForeignKey('clinics.id'), nullable=True)
+    document_id = Column(String, ForeignKey('documents.id'), nullable=True)
+    type = Column(String, nullable=False)
+    title = Column(String, nullable=False)
+    message = Column(Text, nullable=False)
+    variant = Column(String, nullable=True)
+    action_url = Column(String, nullable=True)
+    action_label = Column(String, nullable=True)
+    metadata_json = Column(Text, nullable=True)
+    read = Column(Boolean, nullable=False, default=False)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
 
 
 class PostgresUserDatabase:
@@ -101,6 +124,8 @@ class PostgresUserDatabase:
 
         # Cria tabelas se não existirem
         Base.metadata.create_all(self.engine)
+        self._ensure_document_columns()
+        self._ensure_notification_columns()
 
         # Cria admin padrão se banco estiver vazio
         self._ensure_default_admin()
@@ -108,6 +133,121 @@ class PostgresUserDatabase:
     def _get_session(self) -> Session:
         """Obtém uma nova sessão do banco de dados."""
         return self.SessionLocal()
+
+    def _ensure_document_columns(self) -> None:
+        """Garante que colunas novas existam para documentos."""
+        with self.engine.begin() as connection:
+            connection.execute(text("ALTER TABLE documents ADD COLUMN IF NOT EXISTS run_id VARCHAR"))
+            connection.execute(text("ALTER TABLE documents ADD COLUMN IF NOT EXISTS result_payload TEXT"))
+            connection.execute(text("ALTER TABLE documents ADD COLUMN IF NOT EXISTS confidence_score DOUBLE PRECISION"))
+            connection.execute(text("ALTER TABLE documents ADD COLUMN IF NOT EXISTS quality_score DOUBLE PRECISION"))
+            connection.execute(text("ALTER TABLE documents ADD COLUMN IF NOT EXISTS mandatory_coverage DOUBLE PRECISION"))
+
+    def _ensure_notification_columns(self) -> None:
+        """Garante que colunas novas existam para notificações."""
+        with self.engine.begin() as connection:
+            connection.execute(text("ALTER TABLE notifications ADD COLUMN IF NOT EXISTS metadata_json TEXT"))
+
+    # =============== MÉTODOS DE NOTIFICAÇÃO ===============
+
+    def _model_to_notification(self, model: NotificationModel) -> Notification:
+        metadata = None
+        if model and model.metadata_json:
+            try:
+                import json
+                metadata = json.loads(model.metadata_json)
+            except Exception:
+                metadata = None
+        return Notification(
+            id=model.id,
+            clinic_id=model.clinic_id,
+            document_id=model.document_id,
+            type=model.type,
+            title=model.title,
+            message=model.message,
+            variant=model.variant,
+            action_url=model.action_url,
+            action_label=model.action_label,
+            metadata=metadata,
+            read=model.read,
+            created_at=model.created_at.isoformat()
+        )
+
+    def create_notification(self, data: NotificationCreate) -> Notification:
+        session = self._get_session()
+        try:
+            import uuid
+            import json
+            notification_model = NotificationModel(
+                id=str(uuid.uuid4()),
+                clinic_id=data.clinic_id,
+                document_id=data.document_id,
+                type=data.type,
+                title=data.title,
+                message=data.message,
+                variant=data.variant,
+                action_url=data.action_url,
+                action_label=data.action_label,
+            metadata_json=json.dumps(data.metadata, ensure_ascii=False) if data.metadata is not None else None,
+                read=False,
+                created_at=datetime.utcnow()
+            )
+            session.add(notification_model)
+            session.commit()
+            session.refresh(notification_model)
+            return self._model_to_notification(notification_model)
+        finally:
+            session.close()
+
+    def list_notifications(self, clinic_id: Optional[str] = None, limit: int = 100, include_read: bool = True) -> List[Notification]:
+        session = self._get_session()
+        try:
+            query = session.query(NotificationModel)
+            if clinic_id:
+                query = query.filter(NotificationModel.clinic_id == clinic_id)
+            if not include_read:
+                query = query.filter(NotificationModel.read == False)
+            models = query.order_by(NotificationModel.created_at.desc()).limit(limit).all()
+            return [self._model_to_notification(m) for m in models]
+        finally:
+            session.close()
+
+    def mark_notification_read(self, notification_id: str) -> Optional[Notification]:
+        session = self._get_session()
+        try:
+            model = session.query(NotificationModel).filter(NotificationModel.id == notification_id).first()
+            if not model:
+                return None
+            model.read = True
+            session.commit()
+            session.refresh(model)
+            return self._model_to_notification(model)
+        finally:
+            session.close()
+
+    def mark_all_notifications_read(self, clinic_id: Optional[str] = None) -> int:
+        session = self._get_session()
+        try:
+            query = session.query(NotificationModel)
+            if clinic_id:
+                query = query.filter(NotificationModel.clinic_id == clinic_id)
+            updated = query.update({NotificationModel.read: True})
+            session.commit()
+            return updated
+        finally:
+            session.close()
+
+    def clear_notifications(self, clinic_id: Optional[str] = None) -> int:
+        session = self._get_session()
+        try:
+            query = session.query(NotificationModel)
+            if clinic_id:
+                query = query.filter(NotificationModel.clinic_id == clinic_id)
+            updated = query.update({NotificationModel.read: True})
+            session.commit()
+            return updated
+        finally:
+            session.close()
 
     def _ensure_default_admin(self):
         """Cria usuário admin padrão se banco estiver vazio."""
@@ -391,18 +531,34 @@ class PostgresUserDatabase:
 
     def _model_to_document(self, model: DocumentModel) -> Document:
         """Converte modelo SQLAlchemy para Pydantic Document."""
+        result_payload = None
+        if model and model.result_payload:
+            try:
+                import json
+                result_payload = json.loads(model.result_payload)
+            except Exception:
+                result_payload = None
+        def _as_utc(value: Optional[datetime]) -> Optional[datetime]:
+            if not value:
+                return None
+            return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
         return Document(
             id=model.id,
             clinic_id=model.clinic_id,
             uploaded_by_user_id=model.uploaded_by_user_id,
             filename=model.filename,
             cpf=model.cpf,
-            uploaded_at=model.uploaded_at.isoformat(),
+            uploaded_at=_as_utc(model.uploaded_at),
             exams_found=model.exams_found,
             validation_status=model.validation_status,
             ocr_markdown=model.ocr_markdown,
-            created_at=model.created_at.isoformat(),
-            updated_at=model.updated_at.isoformat()
+            run_id=model.run_id,
+            result_payload=result_payload,
+            confidence_score=model.confidence_score,
+            quality_score=model.quality_score,
+            mandatory_coverage=model.mandatory_coverage,
+            created_at=_as_utc(model.created_at),
+            updated_at=_as_utc(model.updated_at)
         )
 
     def get_document_by_id(self, document_id: str) -> Optional[Document]:
@@ -440,12 +596,19 @@ class PostgresUserDatabase:
         cpf: Optional[str] = None,
         exams_found: Optional[List[str]] = None,
         validation_status: str = "pending",
-        ocr_markdown: Optional[str] = None
+        ocr_markdown: Optional[str] = None,
+        run_id: Optional[str] = None,
+        result_payload: Optional[dict] = None,
+        confidence_score: Optional[float] = None,
+        quality_score: Optional[float] = None,
+        mandatory_coverage: Optional[float] = None
     ) -> Document:
         """Cria um novo documento."""
         session = self._get_session()
         try:
             import uuid
+            import json
+            payload_json = json.dumps(result_payload, ensure_ascii=False) if result_payload is not None else None
             document_model = DocumentModel(
                 id=str(uuid.uuid4()),
                 clinic_id=clinic_id,
@@ -456,6 +619,11 @@ class PostgresUserDatabase:
                 exams_found=exams_found,
                 validation_status=validation_status,
                 ocr_markdown=ocr_markdown,
+                run_id=run_id,
+                result_payload=payload_json,
+                confidence_score=confidence_score,
+                quality_score=quality_score,
+                mandatory_coverage=mandatory_coverage,
                 created_at=datetime.utcnow(),
                 updated_at=datetime.utcnow()
             )
@@ -473,7 +641,12 @@ class PostgresUserDatabase:
         document_id: str,
         validation_status: Optional[str] = None,
         exams_found: Optional[List[str]] = None,
-        ocr_markdown: Optional[str] = None
+        ocr_markdown: Optional[str] = None,
+        run_id: Optional[str] = None,
+        result_payload: Optional[dict] = None,
+        confidence_score: Optional[float] = None,
+        quality_score: Optional[float] = None,
+        mandatory_coverage: Optional[float] = None
     ) -> Document:
         """Atualiza documento."""
         session = self._get_session()
@@ -489,6 +662,17 @@ class PostgresUserDatabase:
                 doc_model.exams_found = exams_found
             if ocr_markdown is not None:
                 doc_model.ocr_markdown = ocr_markdown
+            if run_id is not None:
+                doc_model.run_id = run_id
+            if result_payload is not None:
+                import json
+                doc_model.result_payload = json.dumps(result_payload, ensure_ascii=False)
+            if confidence_score is not None:
+                doc_model.confidence_score = confidence_score
+            if quality_score is not None:
+                doc_model.quality_score = quality_score
+            if mandatory_coverage is not None:
+                doc_model.mandatory_coverage = mandatory_coverage
 
             doc_model.updated_at = datetime.utcnow()
 

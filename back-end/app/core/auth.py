@@ -2,6 +2,7 @@
 Sistema de autenticação e autorização com JWT.
 """
 from datetime import datetime, timedelta
+import os
 from typing import Optional, List
 from jose import JWTError, jwt
 from fastapi import Depends, HTTPException, status
@@ -18,7 +19,7 @@ SECRET_KEY = settings.JWT_SECRET_KEY if hasattr(settings, 'JWT_SECRET_KEY') else
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 24 horas
 
-security = HTTPBearer()
+security = HTTPBearer(auto_error=False)
 
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
@@ -68,6 +69,63 @@ async def get_current_user(
     Dependency para obter usuário autenticado atual.
     Valida o token JWT e retorna o usuário.
     """
+    if credentials is None:
+        if os.getenv("DEV_AUTH_BYPASS", "false").lower() == "true":
+            dev_email = os.getenv("DEV_AUTH_EMAIL", "dev@grupobrmed.com.br")
+            dev_name = os.getenv("DEV_AUTH_NAME", "Dev Bypass")
+            dev_role_raw = os.getenv("DEV_AUTH_ROLE", "ADMIN")
+            dev_clinic_name = os.getenv("DEV_AUTH_CLINIC", "Clinica Dev")
+
+            try:
+                existing_user = user_db.get_user_by_email(dev_email)
+                if existing_user:
+                    return existing_user
+
+                # Garantir que exista ao menos uma clínica para associar ao usuário dev
+                clinic_id = None
+                try:
+                    clinics = user_db.get_all_clinics()
+                except Exception:
+                    clinics = []
+
+                if clinics:
+                    clinic_id = clinics[0].id
+                else:
+                    try:
+                        clinic = user_db.create_clinic(name=dev_clinic_name)
+                        clinic_id = clinic.id
+                    except Exception as clinic_error:
+                        logger.warning(f"Falha ao criar clínica dev: {clinic_error}")
+                        clinic_id = None
+
+                try:
+                    dev_role = UserRole(dev_role_raw)
+                except Exception:
+                    dev_role = UserRole.ADMIN
+
+                created_user = user_db.create_user(
+                    email=dev_email,
+                    name=dev_name,
+                    role=dev_role,
+                    clinic_id=clinic_id
+                )
+                return created_user
+            except Exception as e:
+                logger.warning(f"Falha ao montar usuário dev no banco: {e}")
+                return User(
+                    id="dev-bypass",
+                    email=dev_email,
+                    name=dev_name,
+                    role=UserRole.ADMIN,
+                    is_active=True,
+                    clinic_id=None
+                )
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token ausente",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
     token = credentials.credentials
     token_data = decode_token(token)
 

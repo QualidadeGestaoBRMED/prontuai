@@ -3,6 +3,7 @@
  */
 
 import { useState, useCallback, useRef, useEffect } from "react"
+import { useSession } from "next-auth/react"
 import { Job, CreateJobResponse, PollingOptions } from "@/types/job"
 import { API_ENDPOINTS } from "@/lib/config"
 import { DocumentProcessingResult } from "@/components/document-batch-processor"
@@ -45,26 +46,36 @@ interface UseAsyncJobReturn {
 }
 
 export function useAsyncJob(): UseAsyncJobReturn {
+  const { data: session } = useSession()
   const [currentJob, setCurrentJob] = useState<Job | null>(null)
   const [isPolling, setIsPolling] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null)
-  const pollingTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const pollingIntervalsRef = useRef<Map<string, NodeJS.Timeout>>(new Map())
+  const pollingTimeoutsRef = useRef<Map<string, NodeJS.Timeout>>(new Map())
 
   /**
    * Limpa timers de polling
    */
-  const clearPolling = useCallback(() => {
-    if (pollingIntervalRef.current) {
-      clearInterval(pollingIntervalRef.current)
-      pollingIntervalRef.current = null
+  const clearPolling = useCallback((jobId?: string) => {
+    if (jobId) {
+      const interval = pollingIntervalsRef.current.get(jobId)
+      if (interval) {
+        clearInterval(interval)
+        pollingIntervalsRef.current.delete(jobId)
+      }
+      const timeout = pollingTimeoutsRef.current.get(jobId)
+      if (timeout) {
+        clearTimeout(timeout)
+        pollingTimeoutsRef.current.delete(jobId)
+      }
+    } else {
+      pollingIntervalsRef.current.forEach((interval) => clearInterval(interval))
+      pollingIntervalsRef.current.clear()
+      pollingTimeoutsRef.current.forEach((timeout) => clearTimeout(timeout))
+      pollingTimeoutsRef.current.clear()
     }
-    if (pollingTimeoutRef.current) {
-      clearTimeout(pollingTimeoutRef.current)
-      pollingTimeoutRef.current = null
-    }
-    setIsPolling(false)
+    setIsPolling(pollingIntervalsRef.current.size > 0)
   }, [])
 
   /**
@@ -87,9 +98,15 @@ export function useAsyncJob(): UseAsyncJobReturn {
       formData.append("arquivo", file)
       formData.append("exames_obrigatorios", JSON.stringify(examesObrigatorios))
 
+      const headers: Record<string, string> = {}
+      if (session?.accessToken) {
+        headers.Authorization = `Bearer ${session.accessToken}`
+      }
+
       const response = await fetch(API_ENDPOINTS.PROCESS_DOCUMENT_ASYNC, {
         method: "POST",
         body: formData,
+        headers,
       })
 
       if (!response.ok) {
@@ -149,15 +166,29 @@ export function useAsyncJob(): UseAsyncJobReturn {
         setError(null)
 
         console.log(`[useAsyncJob] Iniciando polling para job: ${jobId}`)
+        let finished = false
+
+        const finish = (
+          result: { type: "resolve"; value: DocumentProcessingResult } | { type: "reject"; error: Error }
+        ) => {
+          if (finished) return
+          finished = true
+          clearPolling(jobId)
+          if (result.type === "resolve") {
+            resolve(result.value)
+          } else {
+            reject(result.error)
+          }
+        }
 
         // Timeout global
-        pollingTimeoutRef.current = setTimeout(() => {
-          clearPolling()
+        const timeoutHandle = setTimeout(() => {
           const timeoutError = "Timeout: Processamento demorou muito tempo"
           setError(timeoutError)
           onError?.(timeoutError)
-          reject(new Error(timeoutError))
+          finish({ type: "reject", error: new Error(timeoutError) })
         }, timeout)
+        pollingTimeoutsRef.current.set(jobId, timeoutHandle)
 
         // Função de polling
         const poll = async () => {
@@ -172,50 +203,46 @@ export function useAsyncJob(): UseAsyncJobReturn {
 
             // Verifica se completou
             if (job.status === "completed") {
-              clearPolling()
               console.log(`[useAsyncJob] Job completo!`)
 
               if (!job.result) {
                 const error = "Job completo mas sem resultado"
                 setError(error)
                 onError?.(error)
-                reject(new Error(error))
+                finish({ type: "reject", error: new Error(error) })
                 return
               }
 
               onComplete?.(job.result)
-              resolve(job.result)
+              finish({ type: "resolve", value: job.result })
               return
             }
 
             // Verifica se falhou
             if (job.status === "failed") {
-              clearPolling()
               const errorMsg = job.error || "Erro desconhecido no processamento"
               console.error(`[useAsyncJob] Job falhou: ${errorMsg}`)
               setError(errorMsg)
               onError?.(errorMsg)
-              reject(new Error(errorMsg))
+              finish({ type: "reject", error: new Error(errorMsg) })
               return
             }
 
             // Verifica se foi cancelado
             if (job.status === "cancelled") {
-              clearPolling()
               const cancelMsg = "Processamento cancelado"
               setError(cancelMsg)
               onError?.(cancelMsg)
-              reject(new Error(cancelMsg))
+              finish({ type: "reject", error: new Error(cancelMsg) })
               return
             }
 
             // Continua polling se ainda estiver em progresso ou pendente
           } catch (err) {
-            clearPolling()
             const errorMsg = err instanceof Error ? err.message : "Erro durante polling"
             setError(errorMsg)
             onError?.(errorMsg)
-            reject(err)
+            finish({ type: "reject", error: err instanceof Error ? err : new Error(errorMsg) })
           }
         }
 
@@ -223,7 +250,8 @@ export function useAsyncJob(): UseAsyncJobReturn {
         poll()
 
         // Continua polling em intervalo
-        pollingIntervalRef.current = setInterval(poll, interval)
+        const intervalHandle = setInterval(poll, interval)
+        pollingIntervalsRef.current.set(jobId, intervalHandle)
       })
     },
     [getJobStatus, clearPolling]
