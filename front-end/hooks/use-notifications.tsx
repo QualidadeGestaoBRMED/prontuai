@@ -1,6 +1,7 @@
 'use client'
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react'
+import { useSession } from 'next-auth/react'
 import {
   Notification,
   CreateNotificationInput,
@@ -12,6 +13,7 @@ import {
   ProgressBarState,
   CreateProcessInput
 } from '@/types/process'
+import { API_ENDPOINTS } from '@/lib/config'
 
 // Interface do contexto
 interface NotificationContextType {
@@ -106,6 +108,21 @@ function convertDatesToObjects(obj: any): any {
   return obj
 }
 
+function mapApiNotification(n: any): Notification {
+  return {
+    id: n.id,
+    type: n.type,
+    title: n.title,
+    message: n.message,
+    timestamp: new Date(n.created_at || n.timestamp || Date.now()),
+    read: Boolean(n.read),
+    actionUrl: n.action_url || n.actionUrl,
+    actionLabel: n.action_label || n.actionLabel,
+    metadata: n.metadata || undefined,
+    variant: n.variant,
+  }
+}
+
 // Limpa notificações antigas e remove duplicadas
 function cleanupOldNotifications(notifications: Notification[]): Notification[] {
   const cutoffDate = new Date()
@@ -142,6 +159,7 @@ function cleanupOldNotifications(notifications: Notification[]): Notification[] 
 
 // Componente Provider
 export function NotificationProvider({ children }: { children: React.ReactNode }) {
+  const { data: session } = useSession()
   // Estado
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [activeProcess, setActiveProcess] = useState<ProcessNotification | null>(null)
@@ -156,17 +174,26 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     autoMarkAsReadOnClick: true,
   })
 
-  // Carrega do localStorage na montagem
+  // Carrega do backend na montagem (fallback localStorage)
   useEffect(() => {
-    const loadedNotifications = loadFromStorage<Notification[]>(STORAGE_KEYS.NOTIFICATIONS, [])
-    const loadedProcess = loadFromStorage<ProcessNotification | null>(STORAGE_KEYS.ACTIVE_PROCESS, null)
-    const cleanedNotifications = cleanupOldNotifications(loadedNotifications).filter((notif) => {
-      if (notif.type !== 'process_started') return true
-      if (!loadedProcess?.id) return false
-      return notif.metadata?.processId === loadedProcess.id
-    })
-    setNotifications(cleanedNotifications)
+    const load = async () => {
+      try {
+        const headers: Record<string, string> = {}
+        if (session?.accessToken) {
+          headers.Authorization = `Bearer ${session.accessToken}`
+        }
+        const response = await fetch(API_ENDPOINTS.NOTIFICATIONS, { headers })
+        if (!response.ok) throw new Error('Erro ao carregar notificações')
+        const data = await response.json()
+        setNotifications(cleanupOldNotifications((data || []).map(mapApiNotification)))
+      } catch {
+        const loadedNotifications = loadFromStorage<Notification[]>(STORAGE_KEYS.NOTIFICATIONS, [])
+        setNotifications(cleanupOldNotifications(loadedNotifications))
+      }
+    }
+    load()
 
+    const loadedProcess = loadFromStorage<ProcessNotification | null>(STORAGE_KEYS.ACTIVE_PROCESS, null)
     setActiveProcess(loadedProcess)
 
     const loadedResults = loadFromStorage<ProcessResult[]>(STORAGE_KEYS.PROCESS_RESULTS, [])
@@ -183,7 +210,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       autoMarkAsReadOnClick: true,
     })
     setPreferences(loadedPrefs)
-  }, [])
+  }, [session?.accessToken])
 
   // Salva no localStorage quando o estado muda
   useEffect(() => {
@@ -241,22 +268,65 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       return cleanupOldNotifications([...prev, notification])
     })
 
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+    if (session?.accessToken) {
+      headers.Authorization = `Bearer ${session.accessToken}`
+    }
+    fetch(API_ENDPOINTS.NOTIFICATIONS, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        type: input.type,
+        title: input.title,
+        message: input.message,
+        variant: input.variant,
+        action_url: input.actionUrl,
+        action_label: input.actionLabel,
+        metadata: input.metadata,
+        document_id: input.metadata?.documentId,
+      }),
+    })
+      .then(async (res) => {
+        if (!res.ok) return
+        const created = mapApiNotification(await res.json())
+        setNotifications(prev => cleanupOldNotifications([
+          ...prev.filter(n => n.id !== notification.id),
+          created,
+        ]))
+      })
+      .catch(() => {})
+
     return notification.id
-  }, [])
+  }, [session?.accessToken])
 
   const markAsRead = useCallback((id: string) => {
     setNotifications(prev =>
       prev.map(n => n.id === id ? { ...n, read: true } : n)
     )
-  }, [])
+    const headers: Record<string, string> = {}
+    if (session?.accessToken) {
+      headers.Authorization = `Bearer ${session.accessToken}`
+    }
+    fetch(API_ENDPOINTS.NOTIFICATION_READ(id), { method: 'POST', headers }).catch(() => {})
+  }, [session?.accessToken])
 
   const markAllAsRead = useCallback(() => {
     setNotifications(prev => prev.map(n => ({ ...n, read: true })))
-  }, [])
+    const headers: Record<string, string> = {}
+    if (session?.accessToken) {
+      headers.Authorization = `Bearer ${session.accessToken}`
+    }
+    fetch(API_ENDPOINTS.NOTIFICATIONS_READ_ALL, { method: 'POST', headers }).catch(() => {})
+  }, [session?.accessToken])
 
   const clearHistory = useCallback(() => {
     setNotifications([])
-  }, [])
+    const headers: Record<string, string> = {}
+    if (session?.accessToken) {
+      headers.Authorization = `Bearer ${session.accessToken}`
+    }
+    fetch(API_ENDPOINTS.NOTIFICATIONS_READ_ALL, { method: 'POST', headers }).catch(() => {})
+  }, [session?.accessToken])
 
   const getNotificationById = useCallback((id: string) => {
     return notifications.find(n => n.id === id)

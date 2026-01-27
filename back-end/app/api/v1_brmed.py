@@ -51,20 +51,43 @@ async def processar_documento_completo_api(
         if current_user.clinic_id:
             try:
                 # Extrair informações do resultado
-                cpf = resultado.get('ocr', {}).get('cpf_extraido', None)
-                exams_found = resultado.get('ocr', {}).get('exames_encontrados', [])
-                ocr_markdown = resultado.get('ocr', {}).get('resultado_markdown', '')
-                validation_status = 'validated' if resultado.get('validacao', {}).get('todos_presentes', False) else 'pending'
+                cpf = resultado.get('cpf_processado') or resultado.get('cpf')
+                exams_found = resultado.get('exames_ocr', []) or resultado.get('ocr_result', {}).get('exames_extraidos', [])
+                ocr_markdown = resultado.get('ocr_result', {}).get('text', '')
+                validation_status = 'validated' if not resultado.get('validation_result', {}).get('exames_faltantes') and resultado.get('status') == 'success' else 'pending'
+                if resultado.get('status') == 'error':
+                    validation_status = 'rejected'
 
                 # Criar documento no banco
+                clinic_id = current_user.clinic_id
+                if not clinic_id:
+                    clinics = user_db.get_all_clinics()
+                    clinic_id = clinics[0].id if clinics else None
+                if not clinic_id:
+                    try:
+                        clinic = user_db.create_clinic(name="Clinica Dev")
+                        clinic_id = clinic.id
+                        logger.info("[DB] Clinica criada automaticamente para salvar documento (sync)")
+                    except Exception as clinic_error:
+                        logger.error(f"[DB] Falha ao criar clinica automaticamente (sync): {clinic_error}")
+                if not clinic_id:
+                    raise ValueError("clinic_id não encontrado para salvar documento")
+
+                confidence_score = resultado.get("confidence_score")
+                confidence_details = resultado.get("confidence_details", {})
                 document = user_db.create_document(
-                    clinic_id=current_user.clinic_id,
+                    clinic_id=clinic_id,
                     uploaded_by_user_id=current_user.id,
                     filename=arquivo.filename,
                     cpf=cpf,
                     exams_found=exams_found,
                     validation_status=validation_status,
-                    ocr_markdown=ocr_markdown
+                    ocr_markdown=ocr_markdown,
+                    run_id=resultado.get("run_id"),
+                    result_payload=resultado,
+                    confidence_score=confidence_score,
+                    quality_score=confidence_details.get("quality_score"),
+                    mandatory_coverage=confidence_details.get("mandatory_coverage")
                 )
 
                 logger.info(f"[DB] Documento salvo com ID: {document.id}")
@@ -158,7 +181,8 @@ async def processar_documento_stream_api(
 async def processar_documento_async_api(
     background_tasks: BackgroundTasks,
     arquivo: UploadFile = File(...),
-    exames_obrigatorios: str = Body(..., embed=True)
+    exames_obrigatorios: str = Body(..., embed=True),
+    current_user: User = Depends(require_sender)
 ):
     """
     Inicia processamento de documento em background e retorna job_id imediatamente.
@@ -224,7 +248,10 @@ async def processar_documento_async_api(
             job_id=job_id,
             file_path=temp_file_path,
             filename=arquivo.filename,
-            exames_obrigatorios=exames_obrigatorios_list
+            exames_obrigatorios=exames_obrigatorios_list,
+            uploaded_by_user_id=current_user.id,
+            clinic_id=current_user.clinic_id,
+            uploaded_by_user_email=current_user.email
         )
 
         logger.info(f"[JOB {job_id}] Task adicionada ao background")
@@ -255,7 +282,10 @@ async def process_document_background(
     job_id: str,
     file_path: str,
     filename: str,
-    exames_obrigatorios: list[str]
+    exames_obrigatorios: list[str],
+    uploaded_by_user_id: str,
+    clinic_id: str,
+    uploaded_by_user_email: str
 ):
     """
     Processa documento em background task.
@@ -294,6 +324,47 @@ async def process_document_background(
             exames_obrigatorios,
             progress_callback=progress_callback
         )
+
+        # Salvar documento no banco
+        try:
+            cpf = resultado.get('cpf_processado') or resultado.get('cpf')
+            exams_found = resultado.get('exames_ocr', []) or resultado.get('ocr_result', {}).get('exames_extraidos', [])
+            ocr_markdown = resultado.get('ocr_result', {}).get('text', '')
+            validation_status = 'validated' if not resultado.get('validation_result', {}).get('exames_faltantes') and resultado.get('status') == 'success' else 'pending'
+            if resultado.get('status') == 'error':
+                validation_status = 'rejected'
+
+            clinic_id_to_use = clinic_id
+            if not clinic_id_to_use:
+                clinics = user_db.get_all_clinics()
+                clinic_id_to_use = clinics[0].id if clinics else None
+            if not clinic_id_to_use:
+                try:
+                    clinic = user_db.create_clinic(name="Clinica Dev")
+                    clinic_id_to_use = clinic.id
+                    logger.info(f"[DB] Clinica criada automaticamente para salvar documento (job_id={job_id})")
+                except Exception as clinic_error:
+                    logger.error(f"[DB] Falha ao criar clinica automaticamente (job_id={job_id}): {clinic_error}")
+            if not clinic_id_to_use:
+                raise ValueError("clinic_id não encontrado para salvar documento")
+
+            document = user_db.create_document(
+                clinic_id=clinic_id_to_use,
+                uploaded_by_user_id=uploaded_by_user_id,
+                filename=filename,
+                cpf=cpf,
+                exams_found=exams_found,
+                validation_status=validation_status,
+                ocr_markdown=ocr_markdown,
+                run_id=resultado.get("run_id"),
+                result_payload=resultado,
+                confidence_score=resultado.get("confidence_score"),
+                quality_score=(resultado.get("confidence_details") or {}).get("quality_score"),
+                mandatory_coverage=(resultado.get("confidence_details") or {}).get("mandatory_coverage")
+            )
+            logger.info(f"[DB] Documento salvo via async com ID: {document.id} (job_id={job_id})")
+        except Exception as db_error:
+            logger.error(f"[DB] Erro ao salvar documento (job_id={job_id}): {db_error}")
 
         # Marcar job como completo
         await job_manager.complete_job(job_id, resultado)

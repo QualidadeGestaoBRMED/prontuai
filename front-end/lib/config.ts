@@ -27,6 +27,14 @@ export const API_ENDPOINTS = {
   // Documents (Async - recomendado)
   PROCESS_DOCUMENT_ASYNC: `${API_URL}/v1/processar-documento-async`,
 
+  // Documents list
+  DOCUMENTS: `${API_URL}/v1/documents`,
+
+  // Notifications
+  NOTIFICATIONS: `${API_URL}/v1/notifications`,
+  NOTIFICATION_READ: (id: string) => `${API_URL}/v1/notifications/${id}/read`,
+  NOTIFICATIONS_READ_ALL: `${API_URL}/v1/notifications/read-all`,
+
   // Jobs
   JOB_STATUS: (jobId: string) => `${API_URL}/v1/jobs/${jobId}`,
   JOBS_LIST: `${API_URL}/v1/jobs`,

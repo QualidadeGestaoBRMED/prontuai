@@ -12,6 +12,8 @@ import UserDropdown from "@/components/user-dropdown"
 import { NotificationBell } from "@/components/notification-bell"
 import { NotificationCenter } from "@/components/notification-center"
 import { useNotifications } from "@/hooks/use-notifications"
+import { useDocuments } from "@/hooks/use-documents"
+import { documentToProcessResult } from "@/lib/document-mapper"
 import { ProcessProgressBar } from "@/components/process-progress-bar"
 import { ResultsTable } from "@/components/results-table"
 import { DocumentDetailsModal } from "@/components/document-details-modal"
@@ -23,18 +25,21 @@ function HistoricoContent() {
   const [selectedResult, setSelectedResult] = useState<ProcessResult | null>(null)
   const [detailsModalOpen, setDetailsModalOpen] = useState(false)
   const { unreadCount, activeProcess, setNotificationCenterOpen, processResults } = useNotifications()
+  const { documents } = useDocuments()
+  const dbResults = documents.map(documentToProcessResult)
+  const resultsToShow = dbResults.length ? dbResults : processResults
 
   // Auto-abre modal se viewId for fornecido na URL
   useEffect(() => {
     const viewId = searchParams.get('viewId')
-    if (viewId && processResults.length > 0) {
-      const result = processResults.find(r => r.id === viewId)
+    if (viewId && resultsToShow.length > 0) {
+      const result = resultsToShow.find(r => r.id === viewId)
       if (result) {
         setSelectedResult(result)
         setDetailsModalOpen(true)
       }
     }
-  }, [searchParams, processResults])
+  }, [searchParams, resultsToShow])
 
   return (
     <SidebarProvider>
@@ -69,7 +74,7 @@ function HistoricoContent() {
               </div>
 
               <ResultsTable
-                results={processResults}
+                results={resultsToShow}
                 onViewDetails={(result) => {
                   console.log('[DEBUG] Opening modal for result:', result)
                   console.log('[DEBUG] Result exists?', !!result)

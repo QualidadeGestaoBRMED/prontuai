@@ -14,6 +14,12 @@ from app.core.clients import client
 
 logger = logging.getLogger(__name__)
 
+def _log_event(event: str, **payload: Any) -> None:
+    try:
+        logger.info("[VALIDACAO-EVENT] %s", json.dumps({"event": event, **payload}, ensure_ascii=False))
+    except Exception:
+        logger.info("[VALIDACAO-EVENT] %s | %s", event, payload)
+
 EXAM_SIMILARITY_INDEX_PATH = os.path.join(settings.BASE_DIR, "data", "exam_similarity_index.faiss")
 EXAM_SIMILARITY_DATA_PATH = os.path.join(settings.BASE_DIR, "data", "exam_similarity_data.pkl")
 
@@ -231,7 +237,7 @@ def salvar_auditoria(cpf: str, obrigatorios: List[str], enviados: List[str], res
         }, f, ensure_ascii=False, indent=4)
     return fn
 
-async def validar_exames(cpf: str, exames_obrigatorios: List[str], exames_enviados: List[str], exames_brnet: List[str]) -> Dict[str, Any]:
+async def validar_exames(cpf: str, exames_obrigatorios: List[str], exames_enviados: List[str], exames_brnet: List[str], run_id: Optional[str] = None) -> Dict[str, Any]:
     """Pipeline de validação: compara, salva auditoria e retorna resultado."""
     comparacao_final = await comparar_exames_com_rag(exames_enviados, exames_brnet)
 
@@ -261,6 +267,15 @@ async def validar_exames(cpf: str, exames_obrigatorios: List[str], exames_enviad
             "auditoria_salva_em": "",
             "erro": "formato_de_resposta_invalido"
         }
+
+    if run_id:
+        _log_event(
+            "comparacao_raw",
+            run_id=run_id,
+            cpf=cpf,
+            comparacao_raw=comparacao_list,
+            comparacao_raw_count=len(comparacao_list or []),
+        )
 
     brnet_norm_list = []
     brnet_norm_set = set()
@@ -324,6 +339,21 @@ async def validar_exames(cpf: str, exames_obrigatorios: List[str], exames_enviad
                 "justificativa": "Exame obrigatório não encontrado no OCR."
             })
         brnet_present_norms.add(normalizado)
+
+    if run_id:
+        status_counts = {"encontrado": 0, "faltante": 0, "extra_no_ocr": 0}
+        for item in comparacao_corrigida:
+            status = item.get("status")
+            if status in status_counts:
+                status_counts[status] += 1
+        _log_event(
+            "comparacao_corrigida",
+            run_id=run_id,
+            cpf=cpf,
+            status_counts=status_counts,
+            comparacao_corrigida=comparacao_corrigida,
+            comparacao_corrigida_count=len(comparacao_corrigida or []),
+        )
 
     # Processa o resultado da comparação para determinar o status final
     status_liberado = True
