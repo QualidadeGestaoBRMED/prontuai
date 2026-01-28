@@ -1,0 +1,113 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": "-- Grafana --",
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "iteration": 1710000000000,
+  "links": [],
+  "panels": [
+    {
+      "datasource": "Loki",
+      "gridPos": {
+        "h": 12,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1,
+      "options": {
+        "dedupStrategy": "none",
+        "enableLogDetails": true,
+        "prettifyLogMessage": true,
+        "showLabels": false,
+        "showTime": true,
+        "wrapLogMessage": true
+      },
+      "targets": [
+        {
+          "expr": "{job=\"prontuai-backend\"} | json | user_email=~\"$user_email\" | request_id=~\"$request_id\" | line_format \"{{.timestamp}} {{.level}} {{.user_email}} {{.method}} {{.path}} {{.status_code}} {{.duration_ms}}ms {{.message}}\"",
+          "refId": "A"
+        }
+      ],
+      "title": "Request Logs",
+      "type": "logs"
+    },
+    {
+      "datasource": "Loki",
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 12
+      },
+      "id": 2,
+      "options": {
+        "dedupStrategy": "none",
+        "enableLogDetails": true,
+        "prettifyLogMessage": true,
+        "showLabels": false,
+        "showTime": true,
+        "wrapLogMessage": true
+      },
+      "targets": [
+        {
+          "expr": "{job=\"prontuai-backend\"} | json | message=\"audit.created\" | user_email=~\"$user_email\" | request_id=~\"$request_id\" | line_format \"{{.timestamp}} {{.user_email}} {{.action}} {{.resource}}/{{.resource_id}} status={{.status_code}}\"",
+          "refId": "B"
+        }
+      ],
+      "title": "Audit Logs (por ação)",
+      "type": "logs"
+    }
+  ],
+  "refresh": "10s",
+  "schemaVersion": 39,
+  "style": "dark",
+  "tags": ["prontuai", "audit"],
+  "templating": {
+    "list": [
+      {
+        "label": "user_email",
+        "name": "user_email",
+        "type": "textbox",
+        "hide": 0,
+        "query": ".*",
+        "current": {
+          "text": ".*",
+          "value": ".*"
+        }
+      },
+      {
+        "label": "request_id",
+        "name": "request_id",
+        "type": "textbox",
+        "hide": 0,
+        "query": ".*",
+        "current": {
+          "text": ".*",
+          "value": ".*"
+        }
+      }
+    ]
+  },
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "ProntuAI - Logs & Auditoria",
+  "version": 1
+}

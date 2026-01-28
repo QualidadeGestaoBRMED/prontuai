@@ -13,6 +13,8 @@ class Document(BaseModel):
     cpf: Optional[str] = None  # CPF extraído do documento
     uploaded_at: Optional[datetime] = None
     exams_found: Optional[List[str]] = None  # Lista de exames encontrados
+    exams_ocr: Optional[List[str]] = None  # Lista de exames recebidos do OCR
+    exams_brnet: Optional[List[str]] = None  # Lista de exames obrigatórios do BRNET
     validation_status: Optional[str] = "pending"  # pending, validated, rejected
     ocr_markdown: Optional[str] = None  # Resultado do OCR em markdown
     run_id: Optional[str] = None
@@ -31,6 +33,8 @@ class Document(BaseModel):
                 "filename": "documento.pdf",
                 "cpf": "12345678901",
                 "exams_found": ["Hemograma", "Glicemia"],
+                "exams_ocr": ["Hemograma", "Glicemia"],
+                "exams_brnet": ["Hemograma", "Glicemia"],
                 "validation_status": "pending",
                 "run_id": "abc123",
             }
@@ -44,6 +48,8 @@ class DocumentCreate(BaseModel):
     filename: str
     cpf: Optional[str] = None
     exams_found: Optional[List[str]] = None
+    exams_ocr: Optional[List[str]] = None
+    exams_brnet: Optional[List[str]] = None
     validation_status: Optional[str] = "pending"
     ocr_markdown: Optional[str] = None
     run_id: Optional[str] = None
@@ -67,6 +73,8 @@ class DocumentUpdate(BaseModel):
     """Schema para atualização de documento"""
     validation_status: Optional[str] = None
     exams_found: Optional[List[str]] = None
+    exams_ocr: Optional[List[str]] = None
+    exams_brnet: Optional[List[str]] = None
     ocr_markdown: Optional[str] = None
     run_id: Optional[str] = None
     result_payload: Optional[Dict[str, Any]] = None

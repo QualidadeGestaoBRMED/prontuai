@@ -5,8 +5,23 @@ from playwright.async_api import async_playwright
 from typing import Dict, Any
 import logging
 import time
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
+from app.core.config import settings
 
 logger = logging.getLogger(__name__)
+
+# Pool dedicado para RPA (Playwright)
+_RPA_EXECUTOR: ThreadPoolExecutor | None = None
+if getattr(settings, "BRMED_RPA_WORKERS", 0) > 0:
+    _RPA_EXECUTOR = ThreadPoolExecutor(
+        max_workers=settings.BRMED_RPA_WORKERS,
+        thread_name_prefix="brmed-rpa"
+    )
+
+_RPA_SEMAPHORE = None
+if getattr(settings, "BRMED_RPA_CONCURRENCY", 0) > 0:
+    _RPA_SEMAPHORE = asyncio.Semaphore(settings.BRMED_RPA_CONCURRENCY)
 
 # Função para extrair nome e exames do conteúdo da página
 def extract_nome_e_exames(conteudo: str) -> Dict[str, Any]:
@@ -58,7 +73,7 @@ def extract_nome_e_exames(conteudo: str) -> Dict[str, Any]:
 
 # Função principal de automação RPA
 
-async def consultar_exames_brmed(cpf: str) -> Dict[str, Any]:
+async def _consultar_exames_brmed_async(cpf: str) -> Dict[str, Any]:
     """Executa automação Playwright para consultar exames obrigatórios na BRMED."""
     start_total = time.perf_counter()
     async with async_playwright() as p:
@@ -176,3 +191,25 @@ async def consultar_exames_brmed(cpf: str) -> Dict[str, Any]:
                 await browser.close()
                 logger.info("Navegador Playwright fechado.")
             logger.info(f"Consulta BRMED finalizada em {time.perf_counter() - start_total:.2f}s.")
+
+
+def _consultar_exames_brmed_thread(cpf: str) -> Dict[str, Any]:
+    """Executa o RPA em thread dedicada com loop próprio."""
+    return asyncio.run(_consultar_exames_brmed_async(cpf))
+
+
+async def consultar_exames_brmed(cpf: str) -> Dict[str, Any]:
+    """
+    Consulta BRMED isolando o RPA em pool de threads quando configurado.
+    Isso evita bloquear o event loop e melhora a capacidade de resposta.
+    """
+    async def _run() -> Dict[str, Any]:
+        if _RPA_EXECUTOR is None:
+            return await _consultar_exames_brmed_async(cpf)
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(_RPA_EXECUTOR, _consultar_exames_brmed_thread, cpf)
+
+    if _RPA_SEMAPHORE is None:
+        return await _run()
+    async with _RPA_SEMAPHORE:
+        return await _run()
