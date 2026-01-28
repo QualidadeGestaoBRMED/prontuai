@@ -1,10 +1,12 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
 from typing import Optional
 from app.core.auth import get_current_user
 from app.core.database import user_db
+from app.core.logging import set_audit_context
 from app.models.user import UserRole, User
 from app.models.notification import NotificationCreate, Notification
 import logging
+import time
 
 logger = logging.getLogger(__name__)
 
@@ -14,14 +16,31 @@ router = APIRouter(prefix="/notifications", tags=["Notificações"])
 async def list_notifications(
     include_read: bool = Query(True),
     limit: int = Query(100, ge=1, le=500),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    request: Request = None,
 ):
     try:
+        start_time = time.perf_counter()
         if current_user.role in [UserRole.CHECKER, UserRole.ADMIN]:
-            return user_db.list_notifications(clinic_id=None, limit=limit, include_read=include_read)
-        if not current_user.clinic_id:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Usuário sem clínica associada")
-        return user_db.list_notifications(clinic_id=current_user.clinic_id, limit=limit, include_read=include_read)
+            notifications = user_db.list_notifications(clinic_id=None, limit=limit, include_read=include_read)
+        else:
+            if not current_user.clinic_id:
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Usuário sem clínica associada")
+            notifications = user_db.list_notifications(clinic_id=current_user.clinic_id, limit=limit, include_read=include_read)
+        elapsed = time.perf_counter() - start_time
+        user_agent = request.headers.get("user-agent", "-") if request else "-"
+        referer = request.headers.get("referer", "-") if request else "-"
+        forwarded_for = request.headers.get("x-forwarded-for", "-") if request else "-"
+        logger.info(
+            "[NOTIFICATIONS] %s listou %s notificações em %.2fs | ua=%s | referer=%s | xff=%s",
+            current_user.email,
+            len(notifications),
+            elapsed,
+            user_agent,
+            referer,
+            forwarded_for,
+        )
+        return notifications
     except Exception as e:
         logger.exception(f"Erro ao listar notificações: {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Erro ao listar notificações")
@@ -56,6 +75,21 @@ async def create_notification(
             action_label=payload.action_label,
             metadata=payload.metadata
         ))
+        try:
+            set_audit_context(
+                {
+                    "action": "notifications.create",
+                    "resource": "notifications",
+                    "resource_id": notification.id,
+                    "metadata": {
+                        "type": payload.type,
+                        "document_id": payload.document_id,
+                        "clinic_id": clinic_id,
+                    },
+                }
+            )
+        except Exception:
+            pass
         return notification
     except HTTPException:
         raise
@@ -69,6 +103,20 @@ async def mark_notification_read(notification_id: str, current_user: User = Depe
         notification = user_db.mark_notification_read(notification_id)
         if not notification:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Notificação não encontrada")
+        try:
+            set_audit_context(
+                {
+                    "action": "notifications.read",
+                    "resource": "notifications",
+                    "resource_id": notification_id,
+                    "metadata": {
+                        "clinic_id": notification.clinic_id,
+                        "document_id": notification.document_id,
+                    },
+                }
+            )
+        except Exception:
+            pass
         return notification
     except HTTPException:
         raise
@@ -85,6 +133,19 @@ async def mark_all_read(current_user: User = Depends(get_current_user)):
             if not clinic_id:
                 raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Usuário sem clínica associada")
         updated = user_db.mark_all_notifications_read(clinic_id=clinic_id)
+        try:
+            set_audit_context(
+                {
+                    "action": "notifications.read_all",
+                    "resource": "notifications",
+                    "metadata": {
+                        "clinic_id": clinic_id,
+                        "updated": updated,
+                    },
+                }
+            )
+        except Exception:
+            pass
         return {"updated": updated}
     except HTTPException:
         raise
@@ -101,6 +162,19 @@ async def clear_notifications(current_user: User = Depends(get_current_user)):
             if not clinic_id:
                 raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Usuário sem clínica associada")
         deleted = user_db.clear_notifications(clinic_id=clinic_id)
+        try:
+            set_audit_context(
+                {
+                    "action": "notifications.clear",
+                    "resource": "notifications",
+                    "metadata": {
+                        "clinic_id": clinic_id,
+                        "deleted": deleted,
+                    },
+                }
+            )
+        except Exception:
+            pass
         return {"deleted": deleted}
     except HTTPException:
         raise

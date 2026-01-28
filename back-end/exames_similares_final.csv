@@ -224,6 +224,8 @@ glicose,glicemia basal
 hemograma completo com plaquetas,hemograma completo
 hemograma completo com plaquetas,hemograma com contagem de plaquetas
 hemograma completo com plaquetas,hemograma + plaquetas
+hemograma completo com plaquetas,hemograma
+hemograma completo com plaquetas,hemograma completo c/ plaquetas
 hepatograma,perfil hepatico
 hepatograma,provas de funcao hepatica
 hepatograma,painel hepatico
@@ -233,6 +235,7 @@ lipidograma (perfil lipidico),perfil lipidico
 lipidograma (perfil lipidico),painel lipidico
 lipidograma (perfil lipidico),"colesterol total + fracoes (hdl, ldl, vldl) e triglicerideos"
 lipidograma (perfil lipidico),"perfil lipidico, pl (interno), ct/hdl/ldl/tg"
+lipidograma (perfil lipidico),lipidograma completo
 lipoproteina a,lipoproteina(a)
 lipoproteina a,lp(a) serica
 machado guerreiro,reacao de machado-guerreiro

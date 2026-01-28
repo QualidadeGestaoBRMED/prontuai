@@ -5,6 +5,8 @@ from app.core.job_manager import job_manager
 from app.core.auth import require_sender, get_current_user
 from app.models.user import User, UserRole
 from app.core.database import user_db
+from app.core.logging import set_audit_context
+from app.models.audit_log import AuditLogCreate
 import logging
 import json
 import asyncio
@@ -52,7 +54,9 @@ async def processar_documento_completo_api(
             try:
                 # Extrair informações do resultado
                 cpf = resultado.get('cpf_processado') or resultado.get('cpf')
-                exams_found = resultado.get('exames_ocr', []) or resultado.get('ocr_result', {}).get('exames_extraidos', [])
+                exams_ocr = resultado.get('exames_ocr', []) or resultado.get('ocr_result', {}).get('exames_extraidos', [])
+                exams_brnet = resultado.get('exames_brnet', []) or resultado.get('brmed_result', {}).get('exames_obrigatorios', [])
+                exams_found = exams_ocr
                 ocr_markdown = resultado.get('ocr_result', {}).get('text', '')
                 validation_status = 'validated' if not resultado.get('validation_result', {}).get('exames_faltantes') and resultado.get('status') == 'success' else 'pending'
                 if resultado.get('status') == 'error':
@@ -81,6 +85,8 @@ async def processar_documento_completo_api(
                     filename=arquivo.filename,
                     cpf=cpf,
                     exams_found=exams_found,
+                    exams_ocr=exams_ocr,
+                    exams_brnet=exams_brnet,
                     validation_status=validation_status,
                     ocr_markdown=ocr_markdown,
                     run_id=resultado.get("run_id"),
@@ -92,6 +98,24 @@ async def processar_documento_completo_api(
 
                 logger.info(f"[DB] Documento salvo com ID: {document.id}")
                 resultado['document_id'] = document.id
+                try:
+                    set_audit_context(
+                        {
+                            "action": "documents.processed",
+                            "resource": "documents",
+                            "resource_id": document.id,
+                            "metadata": {
+                                "document_id": document.id,
+                                "cpf": cpf,
+                                "filename": arquivo.filename,
+                                "run_id": resultado.get("run_id"),
+                                "validation_status": validation_status,
+                                "async": False,
+                            },
+                        }
+                    )
+                except Exception:
+                    pass
             except Exception as db_error:
                 logger.error(f"[DB] Erro ao salvar documento: {db_error}")
                 # Não interromper o fluxo se falhar ao salvar no banco
@@ -328,7 +352,9 @@ async def process_document_background(
         # Salvar documento no banco
         try:
             cpf = resultado.get('cpf_processado') or resultado.get('cpf')
-            exams_found = resultado.get('exames_ocr', []) or resultado.get('ocr_result', {}).get('exames_extraidos', [])
+            exams_ocr = resultado.get('exames_ocr', []) or resultado.get('ocr_result', {}).get('exames_extraidos', [])
+            exams_brnet = resultado.get('exames_brnet', []) or resultado.get('brmed_result', {}).get('exames_obrigatorios', [])
+            exams_found = exams_ocr
             ocr_markdown = resultado.get('ocr_result', {}).get('text', '')
             validation_status = 'validated' if not resultado.get('validation_result', {}).get('exames_faltantes') and resultado.get('status') == 'success' else 'pending'
             if resultado.get('status') == 'error':
@@ -354,6 +380,8 @@ async def process_document_background(
                 filename=filename,
                 cpf=cpf,
                 exams_found=exams_found,
+                exams_ocr=exams_ocr,
+                exams_brnet=exams_brnet,
                 validation_status=validation_status,
                 ocr_markdown=ocr_markdown,
                 run_id=resultado.get("run_id"),
@@ -363,6 +391,39 @@ async def process_document_background(
                 mandatory_coverage=(resultado.get("confidence_details") or {}).get("mandatory_coverage")
             )
             logger.info(f"[DB] Documento salvo via async com ID: {document.id} (job_id={job_id})")
+            try:
+                user_role = None
+                try:
+                    audit_user = user_db.get_user_by_id(uploaded_by_user_id)
+                    if audit_user and getattr(audit_user, "role", None):
+                        user_role = audit_user.role.value if hasattr(audit_user.role, "value") else str(audit_user.role)
+                except Exception:
+                    user_role = None
+                user_db.create_audit_log(
+                    AuditLogCreate(
+                        user_id=uploaded_by_user_id,
+                        user_email=uploaded_by_user_email,
+                        user_role=user_role,
+                        action="documents.processed",
+                        resource="documents",
+                        resource_id=document.id,
+                        method="BACKGROUND",
+                        path="/v1/processar-documento-async",
+                        status_code=200,
+                        request_id=job_id,
+                        metadata={
+                            "document_id": document.id,
+                            "cpf": cpf,
+                            "filename": filename,
+                            "run_id": resultado.get("run_id"),
+                            "validation_status": validation_status,
+                            "async": True,
+                            "job_id": job_id,
+                        },
+                    )
+                )
+            except Exception as audit_error:
+                logger.warning(f"[AUDIT] Falha ao registrar processamento async (job_id={job_id}): {audit_error}")
         except Exception as db_error:
             logger.error(f"[DB] Erro ao salvar documento (job_id={job_id}): {db_error}")
 

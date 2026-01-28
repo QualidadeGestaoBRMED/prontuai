@@ -10,6 +10,10 @@ class Settings:
     BRMED_PASSWORD = os.getenv("BRMED_PASSWORD")
     MODELO_GPT = os.getenv("MODELO_GPT", "gpt-4o-mini")
     LOG_FILE = os.getenv("LOG_FILE", "logs/app.log")
+    LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
+    LOG_FORMAT = os.getenv("LOG_FORMAT", "plain")
+    AUDIT_LOG_ENABLED = os.getenv("AUDIT_LOG_ENABLED", "true").lower() == "true"
+    AUDIT_LOG_ALL_REQUESTS = os.getenv("AUDIT_LOG_ALL_REQUESTS", "false").lower() == "true"
     # Configurações do FAQ
     CAMINHO_INDEX_FAQ = os.getenv("CAMINHO_INDEX_FAQ", "data/faq_index.faiss")
     CAMINHO_DADOS_FAQ = os.getenv("CAMINHO_DADOS_FAQ", "data/faq_data.pkl")
@@ -45,6 +49,14 @@ class Settings:
 
     # Feature Toggle: OCR Engine Selection
     USE_TEXTRACT = os.getenv("USE_TEXTRACT", "false").lower() == "true"
+
+    # BRMED RPA (Playwright) worker pool
+    BRMED_RPA_WORKERS = int(os.getenv("BRMED_RPA_WORKERS", 2))
+    BRMED_RPA_CONCURRENCY = int(os.getenv("BRMED_RPA_CONCURRENCY", BRMED_RPA_WORKERS))
+
+    # Concurrency limits (0 = sem limite)
+    OCR_CONCURRENCY = int(os.getenv("OCR_CONCURRENCY", 2))
+    DOCUMENT_PROCESS_CONCURRENCY = int(os.getenv("DOCUMENT_PROCESS_CONCURRENCY", 2))
 
     # JWT Authentication
     JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "dev-secret-key-change-in-production-please")
