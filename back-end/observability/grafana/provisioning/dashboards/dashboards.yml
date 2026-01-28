@@ -1,0 +1,11 @@
+apiVersion: 1
+
+dashboards:
+  - name: prontuai
+    orgId: 1
+    folder: "ProntuAI"
+    type: file
+    disableDeletion: false
+    editable: true
+    options:
+      path: /var/lib/grafana/dashboards

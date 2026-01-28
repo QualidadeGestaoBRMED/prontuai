@@ -1,0 +1,11 @@
+logs:
+  - type: file
+    path: /var/log/prontuai/app.log
+    service: prontuai-backend
+    source: python
+    tags:
+      - env:${DD_ENV}
+    log_processing_rules:
+      - type: multi_line
+        name: python_traceback
+        pattern: '^\\s'

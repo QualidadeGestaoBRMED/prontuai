@@ -1,0 +1,18 @@
+version: "3.9"
+
+services:
+  datadog-agent:
+    image: gcr.io/datadog/agent:latest
+    environment:
+      - DD_API_KEY=${DD_API_KEY}
+      - DD_SITE=${DD_SITE:-datadoghq.com}
+      - DD_ENV=${DD_ENV:-production}
+      - DD_SERVICE=${DD_SERVICE:-prontuai-backend}
+      - DD_LOGS_ENABLED=true
+      - DD_LOGS_CONFIG_CONTAINER_COLLECT_ALL=false
+      - DD_DOGSTATSD_NON_LOCAL_TRAFFIC=true
+      - DD_APM_ENABLED=true
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ../logs:/var/log/prontuai:ro
+      - ./datadog/conf.d/prontuai.d:/conf.d/prontuai.d:ro

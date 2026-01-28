@@ -10,6 +10,7 @@ import uuid
 from app.models.user import User, UserInDB, UserRole, UserUpdate
 from app.models.clinic import Clinic, ClinicCreate, ClinicUpdate
 from app.models.notification import Notification, NotificationCreate
+from app.models.audit_log import AuditLog, AuditLogCreate
 import logging
 
 logger = logging.getLogger(__name__)
@@ -29,10 +30,21 @@ class UserDatabaseProtocol(Protocol):
     def mark_notification_read(self, notification_id: str) -> Optional[Notification]: ...
     def mark_all_notifications_read(self, clinic_id: Optional[str] = None) -> int: ...
     def clear_notifications(self, clinic_id: Optional[str] = None) -> int: ...
+    def create_audit_log(self, data: AuditLogCreate) -> AuditLog: ...
+    def list_audit_logs(
+        self,
+        limit: int = 200,
+        user_id: Optional[str] = None,
+        user_email: Optional[str] = None,
+        action: Optional[str] = None,
+        request_id: Optional[str] = None,
+        since: Optional[datetime] = None,
+    ) -> List[AuditLog]: ...
 
 # Caminho do arquivo de banco de dados
 DB_PATH = os.path.join(os.path.dirname(__file__), "../../data/users.json")
 NOTIFICATIONS_PATH = os.path.join(os.path.dirname(__file__), "../../data/notifications.json")
+AUDIT_LOGS_PATH = os.path.join(os.path.dirname(__file__), "../../data/audit_logs.json")
 
 
 class UserDatabase:
@@ -67,6 +79,9 @@ class UserDatabase:
         if not os.path.exists(NOTIFICATIONS_PATH):
             with open(NOTIFICATIONS_PATH, 'w', encoding='utf-8') as f:
                 json.dump({"notifications": []}, f, indent=2, ensure_ascii=False)
+        if not os.path.exists(AUDIT_LOGS_PATH):
+            with open(AUDIT_LOGS_PATH, 'w', encoding='utf-8') as f:
+                json.dump({"audit_logs": []}, f, indent=2, ensure_ascii=False)
 
     def _read_db(self) -> Dict:
         """Lê o banco de dados"""
@@ -104,6 +119,22 @@ class UserDatabase:
                 json.dump(data, f, indent=2, ensure_ascii=False)
         except Exception as e:
             logger.error(f"Erro ao escrever notificações: {e}")
+            raise
+
+    def _read_audit_logs(self) -> Dict:
+        try:
+            with open(AUDIT_LOGS_PATH, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except Exception as e:
+            logger.error(f"Erro ao ler audit logs: {e}")
+            return {"audit_logs": []}
+
+    def _write_audit_logs(self, data: Dict) -> None:
+        try:
+            with open(AUDIT_LOGS_PATH, 'w', encoding='utf-8') as f:
+                json.dump(data, f, indent=2, ensure_ascii=False)
+        except Exception as e:
+            logger.error(f"Erro ao escrever audit logs: {e}")
             raise
 
     def get_user_by_email(self, email: str) -> Optional[UserInDB]:
@@ -361,6 +392,73 @@ class UserDatabase:
                 count += 1
         self._write_notifications(db)
         return count
+
+    # =============== AUDIT LOG METHODS ===============
+
+    def create_audit_log(self, data: AuditLogCreate) -> AuditLog:
+        db = self._read_audit_logs()
+        now = datetime.now().isoformat()
+        entry = {
+            "id": str(uuid.uuid4()),
+            "user_id": data.user_id,
+            "user_email": data.user_email,
+            "user_role": data.user_role,
+            "action": data.action,
+            "resource": data.resource,
+            "resource_id": data.resource_id,
+            "method": data.method,
+            "path": data.path,
+            "status_code": data.status_code,
+            "ip": data.ip,
+            "user_agent": data.user_agent,
+            "request_id": data.request_id,
+            "metadata": data.metadata,
+            "created_at": now,
+        }
+        db["audit_logs"].append(entry)
+        self._write_audit_logs(db)
+        return AuditLog(**entry)
+
+    def list_audit_logs(
+        self,
+        limit: int = 200,
+        user_id: Optional[str] = None,
+        user_email: Optional[str] = None,
+        action: Optional[str] = None,
+        request_id: Optional[str] = None,
+        since: Optional[datetime] = None,
+    ) -> List[AuditLog]:
+        db = self._read_audit_logs()
+        logs = db.get("audit_logs", [])
+        filtered = []
+        normalized_email = user_email.strip().lower() if user_email else ""
+        normalized_action = action.strip().lower() if action else ""
+        normalized_request = request_id.strip().lower() if request_id else ""
+        for entry in logs:
+            if user_id and entry.get("user_id") != user_id:
+                continue
+            if normalized_email:
+                entry_email = (entry.get("user_email") or "").lower()
+                if normalized_email not in entry_email:
+                    continue
+            if normalized_action:
+                entry_action = (entry.get("action") or "").lower()
+                if normalized_action not in entry_action:
+                    continue
+            if normalized_request:
+                entry_request = (entry.get("request_id") or "").lower()
+                if normalized_request not in entry_request:
+                    continue
+            if since:
+                try:
+                    entry_dt = datetime.fromisoformat(entry.get("created_at"))
+                    if entry_dt < since:
+                        continue
+                except Exception:
+                    pass
+            filtered.append(entry)
+        filtered = list(reversed(filtered))[:limit]
+        return [AuditLog(**entry) for entry in filtered]
 
 
 def get_user_database() -> UserDatabaseProtocol:

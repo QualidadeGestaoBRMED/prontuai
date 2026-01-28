@@ -1,0 +1,33 @@
+{
+  "title": "ProntuAI Logs & Auditoria",
+  "description": "Dashboard inicial para rastrear requisições e ações por usuário.",
+  "layout_type": "ordered",
+  "template_variables": [
+    {
+      "name": "user_email",
+      "prefix": "@user_email",
+      "default": "*"
+    },
+    {
+      "name": "request_id",
+      "prefix": "@request_id",
+      "default": "*"
+    }
+  ],
+  "widgets": [
+    {
+      "definition": {
+        "type": "log_stream",
+        "title": "Request & Audit Logs",
+        "log_stream_query": {
+          "index": "main",
+          "query": "service:prontuai-backend $user_email $request_id",
+          "sort": {
+            "column": "timestamp",
+            "order": "desc"
+          }
+        }
+      }
+    }
+  ]
+}

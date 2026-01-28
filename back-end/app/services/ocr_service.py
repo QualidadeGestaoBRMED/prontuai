@@ -1,4 +1,5 @@
 import os
+import asyncio
 import time
 import tempfile
 import re
@@ -841,7 +842,12 @@ def extrair_cpf_regex(markdown: str) -> str:
         return re.sub(r'\D', '', generic_cpf_match.group(0))
     return None
 
-async def ocr_pipeline(file, salvar_markdown=True, progress_hook: Optional[Callable[[str], None]] = None) -> Dict[str, Any]:
+_OCR_SEMAPHORE = None
+if getattr(settings, "OCR_CONCURRENCY", 0) > 0:
+    _OCR_SEMAPHORE = asyncio.Semaphore(settings.OCR_CONCURRENCY)
+
+
+async def _ocr_pipeline_impl(file, salvar_markdown=True, progress_hook: Optional[Callable[[str], None]] = None) -> Dict[str, Any]:
     """
     Pipeline completo: processa arquivo, extrai info, aplica fallbacks, salva markdown.
 
@@ -871,11 +877,15 @@ async def ocr_pipeline(file, salvar_markdown=True, progress_hook: Optional[Calla
             file_size = os.path.getsize(temp_path)
             try:
                 if file_size <= 5 * 1024 * 1024:
-                    markdown = processar_arquivo_textract_sincrono(temp_path)
+                    markdown = await asyncio.to_thread(
+                        processar_arquivo_textract_sincrono,
+                        temp_path
+                    )
                 else:
-                    markdown = processar_arquivo_textract(
+                    markdown = await asyncio.to_thread(
+                        processar_arquivo_textract,
                         temp_path,
-                        progress_hook=progress_hook
+                        progress_hook
                     )
             except ClientError as e:
                 error_code = e.response.get('Error', {}).get('Code')
@@ -883,28 +893,36 @@ async def ocr_pipeline(file, salvar_markdown=True, progress_hook: Optional[Calla
                     logger.warning(
                         "[OCR] Documento nao suportado no modo sincrono, usando assincrono"
                     )
-                    markdown = processar_arquivo_textract(
+                    markdown = await asyncio.to_thread(
+                        processar_arquivo_textract,
                         temp_path,
-                        progress_hook=progress_hook
+                        progress_hook
                     )
                 else:
                     raise
             except ValueError as e:
                 logger.warning(f"[OCR] {e} Fallback para modo assincrono.")
-                markdown = processar_arquivo_textract(
+                markdown = await asyncio.to_thread(
+                    processar_arquivo_textract,
                     temp_path,
-                    progress_hook=progress_hook
+                    progress_hook
                 )
             except TimeoutError as e:
                 if settings.TEXTRACT_FALLBACK_TO_LOCAL:
                     logger.warning(f"[OCR] {e}. Fallback para OCR local (Docling).")
                     if progress_hook:
                         progress_hook("Fila Textract, usando OCR local.")
-                    markdown = processar_arquivo_docling(temp_path)
+                    markdown = await asyncio.to_thread(
+                        processar_arquivo_docling,
+                        temp_path
+                    )
                 else:
                     raise
         else:
-            markdown = processar_arquivo_docling(temp_path)
+            markdown = await asyncio.to_thread(
+                processar_arquivo_docling,
+                temp_path
+            )
 
         logger.info(f"[OCR] Conversão concluída. Markdown gerado: {len(markdown)} caracteres")
     finally:
@@ -932,7 +950,7 @@ async def ocr_pipeline(file, salvar_markdown=True, progress_hook: Optional[Calla
 
     # Extrair exames via IA
     logger.info("[OCR] Iniciando extração de exames via OpenAI GPT...")
-    exames_info = extrair_exames_ia(markdown)
+    exames_info = await asyncio.to_thread(extrair_exames_ia, markdown)
     exames_extraidos = exames_info.get("exames", [])
     logger.info(f"[OCR] Exames extraídos: {len(exames_extraidos)} encontrados - {exames_extraidos}")
 
@@ -956,6 +974,16 @@ async def ocr_pipeline(file, salvar_markdown=True, progress_hook: Optional[Calla
     logger.info(f"[OCR] Pipeline OCR concluído para: {file.filename}")
 
     return info
+
+
+async def ocr_pipeline(file, salvar_markdown=True, progress_hook: Optional[Callable[[str], None]] = None) -> Dict[str, Any]:
+    """
+    Wrapper com limite de concorrência para OCR.
+    """
+    if _OCR_SEMAPHORE is None:
+        return await _ocr_pipeline_impl(file, salvar_markdown=salvar_markdown, progress_hook=progress_hook)
+    async with _OCR_SEMAPHORE:
+        return await _ocr_pipeline_impl(file, salvar_markdown=salvar_markdown, progress_hook=progress_hook)
 
 PROMPT_EXTRAIR_TODOS_CPFS = """
 Você é um assistente de extração de dados altamente preciso.

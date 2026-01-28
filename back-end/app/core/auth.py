@@ -10,6 +10,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from app.models.user import User, TokenData, UserRole
 from app.core.database import user_db
 from app.core.config import settings
+from app.core.logging import set_user_context
 import logging
 
 logger = logging.getLogger(__name__)
@@ -109,10 +110,11 @@ async def get_current_user(
                     role=dev_role,
                     clinic_id=clinic_id
                 )
+                set_user_context(created_user)
                 return created_user
             except Exception as e:
                 logger.warning(f"Falha ao montar usuário dev no banco: {e}")
-                return User(
+                dev_user = User(
                     id="dev-bypass",
                     email=dev_email,
                     name=dev_name,
@@ -120,6 +122,8 @@ async def get_current_user(
                     is_active=True,
                     clinic_id=None
                 )
+                set_user_context(dev_user)
+                return dev_user
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token ausente",
@@ -145,6 +149,7 @@ async def get_current_user(
             detail="Usuário inativo"
         )
 
+    set_user_context(user)
     return user
 
 

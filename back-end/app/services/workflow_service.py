@@ -15,6 +15,7 @@ import numpy as np
 from tenacity import retry, wait_exponential, stop_after_attempt
 from datetime import datetime
 import uuid
+import csv
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +25,7 @@ from app.core.clients import client
 logger.info(f"DEBUG: settings.BASE_DIR is {settings.BASE_DIR}")
 EXAM_SIMILARITY_INDEX_PATH = os.path.join(settings.BASE_DIR, "data", "exam_similarity_index.faiss")
 EXAM_SIMILARITY_DATA_PATH = os.path.join(settings.BASE_DIR, "data", "exam_similarity_data.pkl")
+EXAM_SIMILARITY_CSV_PATH = os.path.join(settings.BASE_DIR, "exames_similares_final.csv")
 
 @retry(wait=wait_exponential(min=1, max=10), stop=stop_after_attempt(3))
 async def gerar_embedding(texto: str) -> np.ndarray:
@@ -53,6 +55,31 @@ except Exception as e:
     exam_similarity_index = None
     exam_similarity_data = None
 
+def _load_exam_similarity_csv() -> list[dict]:
+    if not os.path.exists(EXAM_SIMILARITY_CSV_PATH):
+        return []
+    try:
+        with open(EXAM_SIMILARITY_CSV_PATH, newline="", encoding="utf-8") as handle:
+            reader = csv.DictReader(handle)
+            items = []
+            for row in reader:
+                principal = (row.get("Exame") or row.get("exame") or "").strip()
+                similares_raw = (row.get("Similares") or row.get("similares") or "").strip()
+                if not principal and not similares_raw:
+                    continue
+                similares = [s.strip() for s in similares_raw.split(",") if s.strip()]
+                items.append({"exame_principal": principal, "similares": similares})
+            return items
+    except Exception as e:
+        logger.error(f"Erro ao carregar CSV de similares: {e}")
+        return []
+
+EXAM_SIMILARITY_CSV_DATA = _load_exam_similarity_csv()
+
+_PROCESSING_SEMAPHORE = None
+if getattr(settings, "DOCUMENT_PROCESS_CONCURRENCY", 0) > 0:
+    _PROCESSING_SEMAPHORE = asyncio.Semaphore(settings.DOCUMENT_PROCESS_CONCURRENCY)
+
 def _normalizar_busca(texto: str) -> str:
     normalizado = ocr_service.normalizar_texto(texto)
     normalizado = re.sub(r"[^A-Z0-9 ]+", " ", normalizado)
@@ -61,9 +88,14 @@ def _normalizar_busca(texto: str) -> str:
 
 def _build_master_exam_terms() -> set[str]:
     termos = set()
-    if not exam_similarity_data:
+    data_sources = []
+    if exam_similarity_data:
+        data_sources.extend(exam_similarity_data)
+    if EXAM_SIMILARITY_CSV_DATA:
+        data_sources.extend(EXAM_SIMILARITY_CSV_DATA)
+    if not data_sources:
         return termos
-    for item in exam_similarity_data:
+    for item in data_sources:
         principal = item.get("exame_principal")
         if principal:
             termos.add(_normalizar_busca(principal))
@@ -75,9 +107,14 @@ MASTER_EXAM_TERMS = _build_master_exam_terms()
 
 def _build_synonym_map() -> Dict[str, set[str]]:
     synonym_map: Dict[str, set[str]] = {}
-    if not exam_similarity_data:
+    data_sources = []
+    if exam_similarity_data:
+        data_sources.extend(exam_similarity_data)
+    if EXAM_SIMILARITY_CSV_DATA:
+        data_sources.extend(EXAM_SIMILARITY_CSV_DATA)
+    if not data_sources:
         return synonym_map
-    for item in exam_similarity_data:
+    for item in data_sources:
         principal = item.get("exame_principal")
         similares = item.get("similares") or []
         termos = [principal] + list(similares) if principal else list(similares)
@@ -137,7 +174,7 @@ def _avaliar_campos(
 
     cpf_regex = re.compile(r"\b\d{3}[.\s]?\d{3}[.\s]?\d{3}[-\s]?\d{2}\b|\b[A-Z]{2}/\d{11}\b")
     data_regex = re.compile(r"\b\d{2}[/-]\d{2}[/-]\d{2,4}\b")
-    crm_regex = re.compile(r"\bCRM\b")
+    crm_regex = re.compile(r"\bCRM\b|\bCRBM\b|\bCREMEC\b|\bCRO\b", re.IGNORECASE)
 
     evidencias_cpf = [linha for linha, _ in linhas if cpf_regex.search(linha)]
     evidencias_data = [linha for linha, _ in linhas if data_regex.search(linha)]
@@ -441,7 +478,7 @@ async def comparar_exames_openai(exames_ocr: list[str], exames_brnet: list[str])
 
 
 
-async def processar_documento_completo(
+async def _processar_documento_completo_impl(
     arquivo: UploadFile,
     exames_obrigatorios: list[str],
     progress_callback=None
@@ -476,9 +513,18 @@ async def processar_documento_completo(
     # 1. Processar documento com OCR e extrair informações iniciais
     await send_progress(10, "ocr", "Processando documento com OCR...")
     t_ocr = time.perf_counter()
+    loop = asyncio.get_running_loop()
+
     def ocr_progress_hook(message: str):
-        if progress_callback:
-            asyncio.create_task(send_progress(20, "ocr", message))
+        if not progress_callback:
+            return
+        try:
+            asyncio.run_coroutine_threadsafe(
+                send_progress(20, "ocr", message),
+                loop,
+            )
+        except RuntimeError:
+            logger.warning("[WORKFLOW] Não foi possível agendar progresso do OCR (loop ausente).")
 
     ocr_resultado = await ocr_service.ocr_pipeline(
         arquivo,
@@ -754,3 +800,22 @@ async def processar_documento_completo(
     )
 
     return resposta_final
+
+
+async def processar_documento_completo(
+    arquivo: UploadFile,
+    exames_obrigatorios: list[str],
+    progress_callback=None
+) -> Dict[str, Any]:
+    if _PROCESSING_SEMAPHORE is None:
+        return await _processar_documento_completo_impl(
+            arquivo,
+            exames_obrigatorios,
+            progress_callback=progress_callback,
+        )
+    async with _PROCESSING_SEMAPHORE:
+        return await _processar_documento_completo_impl(
+            arquivo,
+            exames_obrigatorios,
+            progress_callback=progress_callback,
+        )

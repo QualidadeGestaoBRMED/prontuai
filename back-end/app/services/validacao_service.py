@@ -11,6 +11,7 @@ import json
 import pickle
 from datetime import datetime
 from app.core.clients import client
+import csv
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +23,7 @@ def _log_event(event: str, **payload: Any) -> None:
 
 EXAM_SIMILARITY_INDEX_PATH = os.path.join(settings.BASE_DIR, "data", "exam_similarity_index.faiss")
 EXAM_SIMILARITY_DATA_PATH = os.path.join(settings.BASE_DIR, "data", "exam_similarity_data.pkl")
+EXAM_SIMILARITY_CSV_PATH = os.path.join(settings.BASE_DIR, "exames_similares_final.csv")
 
 @retry(wait=wait_exponential(min=1, max=10), stop=stop_after_attempt(3))
 async def gerar_embedding(texto: str) -> np.ndarray:
@@ -49,6 +51,27 @@ except Exception as e:
     logger.error(f"Erro ao carregar o índice de similaridade de exames: {e}")
     exam_similarity_index = None
     exam_similarity_data = None
+
+def _load_exam_similarity_csv() -> list[dict]:
+    if not os.path.exists(EXAM_SIMILARITY_CSV_PATH):
+        return []
+    try:
+        with open(EXAM_SIMILARITY_CSV_PATH, newline="", encoding="utf-8") as handle:
+            reader = csv.DictReader(handle)
+            items = []
+            for row in reader:
+                principal = (row.get("Exame") or row.get("exame") or "").strip()
+                similares_raw = (row.get("Similares") or row.get("similares") or "").strip()
+                if not principal and not similares_raw:
+                    continue
+                similares = [s.strip() for s in similares_raw.split(",") if s.strip()]
+                items.append({"exame_principal": principal, "similares": similares})
+            return items
+    except Exception as e:
+        logger.error(f"Erro ao carregar CSV de similares: {e}")
+        return []
+
+EXAM_SIMILARITY_CSV_DATA = _load_exam_similarity_csv()
 
 def _normalizar_exame(texto: str) -> str:
     texto_normalizado = unicodedata.normalize("NFKD", texto or "")
@@ -86,9 +109,14 @@ def _token_overlap_match(a: str, b: str) -> bool:
 
 def _build_synonym_map() -> Dict[str, set[str]]:
     synonym_map: Dict[str, set[str]] = {}
-    if not exam_similarity_data:
+    data_sources = []
+    if exam_similarity_data:
+        data_sources.extend(exam_similarity_data)
+    if EXAM_SIMILARITY_CSV_DATA:
+        data_sources.extend(EXAM_SIMILARITY_CSV_DATA)
+    if not data_sources:
         return synonym_map
-    for item in exam_similarity_data:
+    for item in data_sources:
         principal = item.get("exame_principal")
         similares = item.get("similares") or []
         sinonimos = item.get("sinonimos") or []
