@@ -1,10 +1,12 @@
 import os
 import re
 from datetime import datetime
-from playwright.async_api import async_playwright
+from playwright.async_api import async_playwright, TimeoutError as PlaywrightTimeoutError
 from typing import Dict, Any
 import logging
 import time
+import fcntl
+from contextlib import contextmanager
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 from app.core.config import settings
@@ -22,6 +24,20 @@ if getattr(settings, "BRMED_RPA_WORKERS", 0) > 0:
 _RPA_SEMAPHORE = None
 if getattr(settings, "BRMED_RPA_CONCURRENCY", 0) > 0:
     _RPA_SEMAPHORE = asyncio.Semaphore(settings.BRMED_RPA_CONCURRENCY)
+
+_RPA_LOCK_FILE = os.getenv("BRMED_RPA_LOCK_FILE", "/tmp/brmed_rpa.lock")
+
+@contextmanager
+def _global_rpa_lock() -> Any:
+    fd = os.open(_RPA_LOCK_FILE, os.O_CREAT | os.O_RDWR, 0o666)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX)
+        yield
+    finally:
+        try:
+            fcntl.flock(fd, fcntl.LOCK_UN)
+        finally:
+            os.close(fd)
 
 # Função para extrair nome e exames do conteúdo da página
 def extract_nome_e_exames(conteudo: str) -> Dict[str, Any]:
@@ -109,8 +125,19 @@ async def _consultar_exames_brmed_async(cpf: str) -> Dict[str, Any]:
             await page.wait_for_load_state("networkidle", timeout=30000)
             await page.reload()
             await page.wait_for_timeout(2000)
-            await page.evaluate("document.querySelector('#radio_cpf').click()")
-            await page.wait_for_timeout(1000)
+            await page.wait_for_selector("#radio_cpf", timeout=30000)
+            try:
+                await page.check("#radio_cpf", force=True)
+            except Exception:
+                await page.click("#radio_cpf", force=True)
+            # Garantir que o radio de CPF foi selecionado
+            try:
+                await page.wait_for_function(
+                    "document.querySelector('#radio_cpf') && document.querySelector('#radio_cpf').checked === true",
+                    timeout=10000,
+                )
+            except PlaywrightTimeoutError:
+                logger.warning("Radio CPF não ficou selecionado; seguindo mesmo assim.")
             logger.info(f"Autenticação e seleção de CPF concluídos em {time.perf_counter() - t_login:.2f}s.")
 
             # --- consulta pelo CPF ---
@@ -122,14 +149,33 @@ async def _consultar_exames_brmed_async(cpf: str) -> Dict[str, Any]:
             t_consulta = time.perf_counter()
 
             # Limpar o campo antes de digitar
-            await page.click("input[type='text']")
-            await page.fill("input[type='text']", "")  # Limpar campo
-            await page.type("input[type='text']", cpf_formatado, delay=50)
+            await page.click("#search_field")
+            await page.fill("#search_field", "")  # Limpar campo
+            await page.type("#search_field", cpf_formatado, delay=50)
 
-            await page.locator("input[type='submit'].button-bold")\
-                .scroll_into_view_if_needed()
-            await page.click("input[type='submit'].button-bold", force=True)
-            await page.wait_for_load_state("networkidle", timeout=30000)
+            # Garantir radio CPF + submit via JS (evita reset para "Nome")
+            await page.evaluate(
+                """(cpf) => {
+                    const cpfRadio = document.querySelector('#radio_cpf');
+                    const nomeRadio = document.querySelector('#radio_nome');
+                    if (cpfRadio) cpfRadio.checked = true;
+                    if (nomeRadio) nomeRadio.checked = false;
+                    const field = document.querySelector('#search_field');
+                    if (field) {
+                        field.value = cpf;
+                        field.dispatchEvent(new Event('input', { bubbles: true }));
+                    }
+                    const form = document.querySelector('form[action="/busca"]');
+                    if (form) form.submit();
+                }""",
+                cpf_formatado,
+            )
+            await page.wait_for_load_state("networkidle", timeout=60000)
+            await page.wait_for_timeout(1500)
+            try:
+                await page.wait_for_selector("table.tabledata", timeout=60000)
+            except PlaywrightTimeoutError:
+                logger.warning("Tabela de resultados não apareceu em até 60s. Seguindo com debug da página.")
             logger.info(f"Consulta de CPF realizada em {time.perf_counter() - t_consulta:.2f}s.")
 
             # Debug: verificar se a tabela com resultados existe
@@ -145,11 +191,31 @@ async def _consultar_exames_brmed_async(cpf: str) -> Dict[str, Any]:
                     # Capturar HTML da tabela para debug
                     table_html = await page.locator("table.tabledata").inner_html()
                     logger.warning(f"Nenhum link de paciente encontrado. HTML da tabela: {table_html[:500]}")
+                    try:
+                        os.makedirs("resultados", exist_ok=True)
+                        debug_html = f"resultados/debug_table_{cpf}_{ts}.html"
+                        with open(debug_html, "w", encoding="utf-8") as f:
+                            f.write(await page.content())
+                        debug_png = f"resultados/debug_table_{cpf}_{ts}.png"
+                        await page.screenshot(path=debug_png, full_page=True)
+                        logger.info(f"HTML/screenshot salvos para debug: {debug_html}, {debug_png}")
+                    except Exception as debug_err:
+                        logger.warning(f"Falha ao salvar debug da tabela vazia: {debug_err}")
                     raise RuntimeError(f"CPF {cpf} consultado mas nenhum paciente encontrado na tabela. Possível CPF inválido ou sem cadastro.")
             else:
                 # Capturar conteúdo da página para debug
                 page_content = await page.content()
                 logger.warning(f"Tabela de resultados não encontrada. Possível mensagem de erro. Conteúdo: {page_content[:1000]}")
+                try:
+                    os.makedirs("resultados", exist_ok=True)
+                    debug_html = f"resultados/debug_page_{cpf}_{ts}.html"
+                    with open(debug_html, "w", encoding="utf-8") as f:
+                        f.write(page_content)
+                    debug_png = f"resultados/debug_page_{cpf}_{ts}.png"
+                    await page.screenshot(path=debug_png, full_page=True)
+                    logger.info(f"HTML/screenshot salvos para debug: {debug_html}, {debug_png}")
+                except Exception as debug_err:
+                    logger.warning(f"Falha ao salvar debug da página sem tabela: {debug_err}")
                 raise RuntimeError(f"CPF {cpf}: tabela de resultados não encontrada. Verifique se o CPF existe no sistema.")
 
             await page.click("table.tabledata a[href*='/paciente/']")
@@ -195,7 +261,8 @@ async def _consultar_exames_brmed_async(cpf: str) -> Dict[str, Any]:
 
 def _consultar_exames_brmed_thread(cpf: str) -> Dict[str, Any]:
     """Executa o RPA em thread dedicada com loop próprio."""
-    return asyncio.run(_consultar_exames_brmed_async(cpf))
+    with _global_rpa_lock():
+        return asyncio.run(_consultar_exames_brmed_async(cpf))
 
 
 async def consultar_exames_brmed(cpf: str) -> Dict[str, Any]:
