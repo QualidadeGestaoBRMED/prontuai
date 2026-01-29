@@ -27,9 +27,9 @@ function HistoricoContent() {
   const { unreadCount, activeProcess, setNotificationCenterOpen, processResults } = useNotifications()
   const { documents, loading, refreshing, hasLoaded, lastUpdatedAt } = useDocuments()
   const dbResults = documents.map(documentToProcessResult)
-  const resultsToShow = hasLoaded ? dbResults : (loading ? [] : processResults)
   const sortedResults = useMemo(() => {
-    const list = [...resultsToShow]
+    const baseResults = hasLoaded ? dbResults : (loading ? [] : processResults)
+    const list = [...baseResults]
     const toTime = (value: unknown) => {
       if (!value) return 0
       if (value instanceof Date) return value.getTime()
@@ -38,7 +38,7 @@ function HistoricoContent() {
     }
     list.sort((a, b) => toTime(b.uploadedAt) - toTime(a.uploadedAt))
     return list
-  }, [resultsToShow])
+  }, [hasLoaded, dbResults, loading, processResults])
   const showRefreshing = refreshing && hasLoaded
 
   // Auto-abre modal se viewId for fornecido na URL

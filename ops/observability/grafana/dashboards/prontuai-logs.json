@@ -1,0 +1,125 @@
+{
+  "uid": "prontuai-logs",
+  "title": "ProntuAI - Logs",
+  "timezone": "browser",
+  "schemaVersion": 38,
+  "version": 2,
+  "refresh": "10s",
+  "templating": {
+    "list": [
+      {
+        "name": "user_email",
+        "type": "query",
+        "datasource": { "type": "loki", "uid": "loki" },
+        "query": "label_values({job=\"prontuai-backend\"}, user_email)",
+        "includeAll": true,
+        "allValue": ".*",
+        "refresh": 2,
+        "current": { "text": "All", "value": ".*" }
+      },
+      {
+        "name": "cpf",
+        "type": "query",
+        "datasource": { "type": "loki", "uid": "loki" },
+        "query": "label_values({job=\"prontuai-backend\"}, cpf)",
+        "includeAll": true,
+        "allValue": ".*",
+        "refresh": 2,
+        "current": { "text": "All", "value": ".*" }
+      },
+      {
+        "name": "document_id",
+        "type": "query",
+        "datasource": { "type": "loki", "uid": "loki" },
+        "query": "label_values({job=\"prontuai-backend\"}, document_id)",
+        "includeAll": true,
+        "allValue": ".*",
+        "refresh": 2,
+        "current": { "text": "All", "value": ".*" }
+      },
+      {
+        "name": "request_id",
+        "type": "textbox",
+        "query": "",
+        "current": { "text": "", "value": "" }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "type": "stat",
+      "title": "Requests (req/s - 5m)",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "x": 0, "y": 0, "w": 8, "h": 6 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate({job=\"prontuai-backend\"} |= \"request.completed\" [5m]))"
+        }
+      ],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "" } }
+    },
+    {
+      "type": "stat",
+      "title": "Errors (req/s - 5m)",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "x": 8, "y": 0, "w": 8, "h": 6 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate({job=\"prontuai-backend\", level=\"ERROR\"}[5m]))"
+        }
+      ],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "" } }
+    },
+    {
+      "type": "stat",
+      "title": "RPA failures (req/s - 5m)",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "x": 16, "y": 0, "w": 8, "h": 6 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate({job=\"prontuai-backend\"} |= \"brmed_failed\" [5m]))"
+        }
+      ],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "" } }
+    },
+    {
+      "type": "logs",
+      "title": "Logs (filtrados)",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "x": 0, "y": 6, "w": 24, "h": 12 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "{job=\"prontuai-backend\", user_email=~\"$user_email\", cpf=~\"$cpf\", document_id=~\"$document_id\", request_id=~\"${request_id:regex}\"}"
+        }
+      ],
+      "options": {
+        "showTime": true,
+        "showLabels": true,
+        "wrapLogMessage": true,
+        "enableLogDetails": true
+      }
+    },
+    {
+      "type": "logs",
+      "title": "Logs (raw)",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "x": 0, "y": 18, "w": 24, "h": 10 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "{job=\"prontuai-backend\"}"
+        }
+      ],
+      "options": {
+        "showTime": true,
+        "showLabels": false,
+        "wrapLogMessage": true,
+        "enableLogDetails": true
+      }
+    }
+  ]
+}
