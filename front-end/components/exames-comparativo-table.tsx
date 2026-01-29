@@ -112,3 +112,5 @@ export default function ExamesComparativoTable({ tabela = [] }: ExamesComparativ
     </TooltipProvider>
   )
 }
+
+export type { TabelaComparacaoItem } from "@/types/process";
