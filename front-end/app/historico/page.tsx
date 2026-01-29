@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, Suspense } from "react"
+import { useState, useEffect, Suspense, useMemo } from "react"
 import { useSearchParams } from "next/navigation"
 import { AppSidebar } from "@/components/app-sidebar"
 import {
@@ -18,28 +18,40 @@ import { ProcessProgressBar } from "@/components/process-progress-bar"
 import { ResultsTable } from "@/components/results-table"
 import { DocumentDetailsModal } from "@/components/document-details-modal"
 import { ProcessResult } from "@/types/process"
-import { History } from "lucide-react"
+import { History, Loader2 } from "lucide-react"
 
 function HistoricoContent() {
   const searchParams = useSearchParams()
   const [selectedResult, setSelectedResult] = useState<ProcessResult | null>(null)
   const [detailsModalOpen, setDetailsModalOpen] = useState(false)
   const { unreadCount, activeProcess, setNotificationCenterOpen, processResults } = useNotifications()
-  const { documents } = useDocuments()
+  const { documents, loading, refreshing, hasLoaded, lastUpdatedAt } = useDocuments()
   const dbResults = documents.map(documentToProcessResult)
-  const resultsToShow = dbResults.length ? dbResults : processResults
+  const resultsToShow = hasLoaded ? dbResults : (loading ? [] : processResults)
+  const sortedResults = useMemo(() => {
+    const list = [...resultsToShow]
+    const toTime = (value: unknown) => {
+      if (!value) return 0
+      if (value instanceof Date) return value.getTime()
+      const parsed = new Date(String(value))
+      return Number.isNaN(parsed.getTime()) ? 0 : parsed.getTime()
+    }
+    list.sort((a, b) => toTime(b.uploadedAt) - toTime(a.uploadedAt))
+    return list
+  }, [resultsToShow])
+  const showRefreshing = refreshing && hasLoaded
 
   // Auto-abre modal se viewId for fornecido na URL
   useEffect(() => {
     const viewId = searchParams.get('viewId')
-    if (viewId && resultsToShow.length > 0) {
-      const result = resultsToShow.find(r => r.id === viewId)
+    if (viewId && sortedResults.length > 0) {
+      const result = sortedResults.find(r => r.id === viewId)
       if (result) {
         setSelectedResult(result)
         setDetailsModalOpen(true)
       }
     }
-  }, [searchParams, resultsToShow])
+  }, [searchParams, sortedResults])
 
   return (
     <SidebarProvider>
@@ -73,20 +85,39 @@ function HistoricoContent() {
                 </p>
               </div>
 
-              <ResultsTable
-                results={resultsToShow}
-                onViewDetails={(result) => {
-                  console.log('[DEBUG] Opening modal for result:', result)
-                  console.log('[DEBUG] Result exists?', !!result)
-                  setSelectedResult(result)
-                  setDetailsModalOpen(true)
-                  console.log('[DEBUG] Modal state set to open')
-                }}
-                onDownloadPDF={(result) => {
-                  // TODO: Implementar download de PDF
-                  console.log("Download PDF:", result)
-                }}
-              />
+              {showRefreshing && (
+                <div className="border rounded-lg bg-white p-3 flex items-center gap-2 text-muted-foreground">
+                  <Loader2 className="size-4 animate-spin" />
+                  <span>Atualizando documentos do banco...</span>
+                  {lastUpdatedAt && (
+                    <span className="text-xs text-muted-foreground/70">
+                      Última atualização: {lastUpdatedAt.toLocaleTimeString("pt-BR")}
+                    </span>
+                  )}
+                </div>
+              )}
+
+              {loading && !hasLoaded ? (
+                <div className="border rounded-lg bg-white p-6 flex items-center gap-3 text-muted-foreground">
+                  <Loader2 className="size-4 animate-spin" />
+                  <span>Sincronizando documentos com o banco...</span>
+                </div>
+              ) : (
+                <ResultsTable
+                  results={sortedResults}
+                  onViewDetails={(result) => {
+                    console.log('[DEBUG] Opening modal for result:', result)
+                    console.log('[DEBUG] Result exists?', !!result)
+                    setSelectedResult(result)
+                    setDetailsModalOpen(true)
+                    console.log('[DEBUG] Modal state set to open')
+                  }}
+                  onDownloadPDF={(result) => {
+                    // TODO: Implementar download de PDF
+                    console.log("Download PDF:", result)
+                  }}
+                />
+              )}
             </div>
           </div>
         </div>

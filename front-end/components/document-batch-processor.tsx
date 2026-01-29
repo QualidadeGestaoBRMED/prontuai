@@ -449,6 +449,14 @@ export function DocumentBatchProcessor({
         const examesExtras = tabelaComparacao.filter(
           (e) => e.status === 'extra_no_ocr'
         ).length
+        const analysisDetails = doc.result?.analysis_details
+        const normalizedAnalysisDetails = analysisDetails?.quality && analysisDetails?.field_checks && analysisDetails?.match_confidence
+          ? {
+              quality: analysisDetails.quality,
+              field_checks: analysisDetails.field_checks,
+              match_confidence: analysisDetails.match_confidence,
+            }
+          : undefined
 
         return {
           id: doc.id,
@@ -476,7 +484,7 @@ export function DocumentBatchProcessor({
               exames_obrigatorios: doc.result?.exames_brnet || [],
             },
             tabela_comparacao: doc.result?.tabela_comparacao || [],
-            analysis_details: doc.result?.analysis_details,
+            analysis_details: normalizedAnalysisDetails,
             validation_result: {
               exames_faltantes: tabelaComparacao.filter(
                 e => e.status === 'faltante'

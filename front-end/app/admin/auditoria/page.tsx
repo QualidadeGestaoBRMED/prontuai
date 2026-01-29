@@ -1,0 +1,375 @@
+"use client";
+
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
+import { useSession } from "next-auth/react";
+import { AppSidebar } from "@/components/app-sidebar";
+import {
+  SidebarInset,
+  SidebarProvider,
+  SidebarTrigger,
+} from "@/components/ui/sidebar";
+import { RequireRole } from "@/components/require-role";
+import UserDropdown from "@/components/user-dropdown";
+import { API_ENDPOINTS } from "@/lib/config";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { Loader2, ShieldCheck } from "lucide-react";
+import { toast } from "sonner";
+
+type AuditLog = {
+  id?: string | null;
+  user_id?: string | null;
+  user_email?: string | null;
+  user_role?: string | null;
+  action: string;
+  resource?: string | null;
+  resource_id?: string | null;
+  method?: string | null;
+  path?: string | null;
+  status_code?: number | null;
+  ip?: string | null;
+  user_agent?: string | null;
+  request_id?: string | null;
+  metadata?: Record<string, unknown> | null;
+  created_at?: string | null;
+};
+
+function formatDateTime(value?: string | null) {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+  return date.toLocaleString("pt-BR");
+}
+
+function statusBadge(status?: number | null) {
+  if (!status) return <span className="text-muted-foreground">-</span>;
+  if (status >= 500) {
+    return (
+      <Badge className="bg-rose-500 text-white border-transparent">
+        {status}
+      </Badge>
+    );
+  }
+  if (status >= 400) {
+    return (
+      <Badge className="bg-amber-500 text-white border-transparent">
+        {status}
+      </Badge>
+    );
+  }
+  if (status >= 300) {
+    return <Badge variant="secondary">{status}</Badge>;
+  }
+  return (
+    <Badge className="bg-emerald-500 text-white border-transparent">
+      {status}
+    </Badge>
+  );
+}
+
+function methodBadge(method?: string | null) {
+  if (!method) return <span className="text-muted-foreground">-</span>;
+  const normalized = method.toUpperCase();
+  const colors: Record<string, string> = {
+    POST: "bg-indigo-500 text-white border-transparent",
+    PUT: "bg-sky-500 text-white border-transparent",
+    PATCH: "bg-amber-500 text-white border-transparent",
+    DELETE: "bg-rose-500 text-white border-transparent",
+  };
+  const className = colors[normalized] ?? "bg-slate-200 text-slate-700 border-transparent";
+  return <Badge className={className}>{normalized}</Badge>;
+}
+
+export default function AuditoriaPage() {
+  const { data: session } = useSession();
+  const [logs, setLogs] = useState<AuditLog[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
+
+  const [userEmail, setUserEmail] = useState("");
+  const [action, setAction] = useState("");
+  const [requestId, setRequestId] = useState("");
+  const [since, setSince] = useState("");
+  const [limit, setLimit] = useState("200");
+  const [expandedLogId, setExpandedLogId] = useState<string | null>(null);
+
+  const queryParams = useMemo(() => {
+    const params = new URLSearchParams();
+    params.set("limit", limit || "200");
+    if (userEmail.trim()) params.set("user_email", userEmail.trim());
+    if (action.trim()) params.set("action", action.trim());
+    if (requestId.trim()) params.set("request_id", requestId.trim());
+    if (since) {
+      const date = new Date(since);
+      if (!Number.isNaN(date.getTime())) {
+        params.set("since", date.toISOString());
+      }
+    }
+    return params.toString();
+  }, [userEmail, action, requestId, since, limit]);
+
+  const formatMetadata = (metadata?: Record<string, unknown> | null) => {
+    if (!metadata || Object.keys(metadata).length === 0) return null;
+    try {
+      return JSON.stringify(metadata, null, 2);
+    } catch {
+      return null;
+    }
+  };
+
+  const fetchLogs = useCallback(async () => {
+    if (!session?.accessToken) return;
+    setLoading(true);
+    try {
+      const response = await fetch(
+        `${API_ENDPOINTS.AUDIT_LOGS}?${queryParams}`,
+        {
+          headers: {
+            Authorization: `Bearer ${session.accessToken}`,
+          },
+        },
+      );
+
+      if (!response.ok) {
+        throw new Error("Erro ao carregar logs de auditoria");
+      }
+
+      const data = (await response.json()) as AuditLog[];
+      setLogs(data);
+      setLastUpdatedAt(new Date());
+    } catch (error) {
+      console.error("Erro:", error);
+      toast.error("Erro ao carregar logs de auditoria");
+    } finally {
+      setLoading(false);
+    }
+  }, [session?.accessToken, queryParams]);
+
+  useEffect(() => {
+    fetchLogs();
+  }, [fetchLogs]);
+
+  return (
+    <RequireRole role="ADMIN">
+      <SidebarProvider>
+        <AppSidebar />
+        <SidebarInset className="bg-sidebar group/sidebar-inset">
+          <header className="flex h-16 shrink-0 items-center gap-2 px-4 md:px-6 lg:px-8 bg-sidebar text-sidebar-foreground relative before:absolute before:inset-y-3 before:-left-px before:w-px before:bg-gradient-to-b before:from-white/5 before:via-white/15 before:to-white/5 before:z-50">
+            <SidebarTrigger className="-ms-2 text-sidebar-foreground hover:text-sidebar-foreground/70" />
+            <div className="flex items-center gap-2">
+              <ShieldCheck className="size-5" />
+              <h1 className="text-lg font-semibold">Auditoria</h1>
+            </div>
+            <div className="ml-auto flex items-center gap-2">
+              <UserDropdown />
+            </div>
+          </header>
+
+          <div className="flex-1 overflow-auto bg-[hsl(240_5%_92.16%)] md:rounded-s-3xl md:group-peer-data-[state=collapsed]/sidebar-inset:rounded-s-none transition-all ease-in-out duration-300">
+            <div className="p-6 md:p-8 lg:p-12 space-y-6">
+              <div className="space-y-1">
+                <p className="text-sm text-muted-foreground">
+                  Acompanhe ações sensíveis feitas no sistema (POST/PUT/PATCH/DELETE).
+                </p>
+                {lastUpdatedAt && (
+                  <p className="text-xs text-muted-foreground/70">
+                    Última atualização: {lastUpdatedAt.toLocaleTimeString("pt-BR")}
+                  </p>
+                )}
+              </div>
+
+              <div className="rounded-lg border bg-white p-4 space-y-4">
+                <div className="grid gap-4 md:grid-cols-4">
+                  <div className="space-y-1">
+                    <Label htmlFor="audit-user-email">Usuário</Label>
+                    <Input
+                      id="audit-user-email"
+                      placeholder="email@dominio.com"
+                      value={userEmail}
+                      onChange={(event) => setUserEmail(event.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="audit-action">Ação</Label>
+                    <Input
+                      id="audit-action"
+                      placeholder="patch:/v1/documents/..."
+                      value={action}
+                      onChange={(event) => setAction(event.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="audit-request-id">Request ID</Label>
+                    <Input
+                      id="audit-request-id"
+                      placeholder="fa38-48b4..."
+                      value={requestId}
+                      onChange={(event) => setRequestId(event.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="audit-since">Desde</Label>
+                    <Input
+                      id="audit-since"
+                      type="datetime-local"
+                      value={since}
+                      onChange={(event) => setSince(event.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="audit-limit">Limite</Label>
+                    <Input
+                      id="audit-limit"
+                      type="number"
+                      min={1}
+                      max={1000}
+                      value={limit}
+                      onChange={(event) => setLimit(event.target.value)}
+                    />
+                  </div>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button onClick={fetchLogs} disabled={loading}>
+                    {loading && <Loader2 className="mr-2 size-4 animate-spin" />}
+                    Atualizar
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setUserEmail("");
+                      setAction("");
+                      setRequestId("");
+                      setSince("");
+                      setLimit("200");
+                    }}
+                  >
+                    Limpar filtros
+                  </Button>
+                </div>
+              </div>
+
+              <div className="rounded-lg border bg-white">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Data</TableHead>
+                      <TableHead>Usuário</TableHead>
+                      <TableHead>Ação</TableHead>
+                      <TableHead>Recurso</TableHead>
+                      <TableHead>Método</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>IP</TableHead>
+                      <TableHead>Request ID</TableHead>
+                      <TableHead>Detalhes</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {loading ? (
+                      <TableRow>
+                        <TableCell colSpan={9} className="py-10 text-center text-muted-foreground">
+                          <div className="inline-flex items-center gap-2">
+                            <Loader2 className="size-4 animate-spin" />
+                            <span>Carregando logs...</span>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ) : logs.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={9} className="py-10 text-center text-muted-foreground">
+                          Nenhum log encontrado com os filtros atuais.
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      logs.map((log) => (
+                        <Fragment key={log.id ?? `${log.request_id}-${log.created_at}`}>
+                          <TableRow>
+                            <TableCell className="text-sm text-muted-foreground">
+                              {formatDateTime(log.created_at)}
+                            </TableCell>
+                            <TableCell className="text-sm">
+                              <div className="font-medium">
+                                {log.user_email ?? "Sistema/Automação"}
+                              </div>
+                              <div className="text-xs text-muted-foreground">
+                                {log.user_role ?? "-"}
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-sm">
+                              <div className="font-medium">{log.action}</div>
+                              <div className="text-xs text-muted-foreground">
+                                {log.path ?? "-"}
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-sm">
+                              <div className="font-medium">{log.resource ?? "-"}</div>
+                              <div className="text-xs text-muted-foreground">
+                                {log.resource_id ?? "-"}
+                              </div>
+                            </TableCell>
+                            <TableCell>{methodBadge(log.method)}</TableCell>
+                            <TableCell>{statusBadge(log.status_code)}</TableCell>
+                            <TableCell className="text-sm text-muted-foreground">
+                              {log.ip ?? "-"}
+                            </TableCell>
+                            <TableCell className="text-xs text-muted-foreground">
+                              {log.request_id ?? "-"}
+                            </TableCell>
+                            <TableCell>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() =>
+                                  setExpandedLogId((prev) =>
+                                    prev === (log.id ?? log.request_id ?? "") ? null : (log.id ?? log.request_id ?? "")
+                                  )
+                                }
+                              >
+                                {expandedLogId === (log.id ?? log.request_id ?? "") ? "Ocultar" : "Ver"}
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                          {expandedLogId === (log.id ?? log.request_id ?? "") && (
+                            <TableRow>
+                              <TableCell colSpan={9} className="bg-slate-50">
+                                <div className="grid gap-3 md:grid-cols-3 text-xs text-slate-600">
+                                  <div>
+                                    <div className="font-semibold text-slate-700">User Agent</div>
+                                    <div className="break-words">{log.user_agent ?? "-"}</div>
+                                  </div>
+                                  <div>
+                                    <div className="font-semibold text-slate-700">Path</div>
+                                    <div className="break-words">{log.path ?? "-"}</div>
+                                  </div>
+                                  <div>
+                                    <div className="font-semibold text-slate-700">Metadata</div>
+                                    <pre className="whitespace-pre-wrap break-words rounded bg-white p-2 border">
+                                      {formatMetadata(log.metadata) ?? "-"}
+                                    </pre>
+                                  </div>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          )}
+                        </Fragment>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+          </div>
+        </SidebarInset>
+      </SidebarProvider>
+    </RequireRole>
+  );
+}

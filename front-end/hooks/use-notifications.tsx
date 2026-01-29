@@ -108,13 +108,27 @@ function convertDatesToObjects(obj: any): any {
   return obj
 }
 
+function parseApiTimestamp(value: any): Date {
+  if (!value) return new Date()
+  if (value instanceof Date) return value
+  if (typeof value === 'number') return new Date(value)
+  if (typeof value === 'string') {
+    const trimmed = value.trim()
+    if (!trimmed) return new Date()
+    const hasTimezone = /[zZ]|[+-]\d{2}:?\d{2}$/.test(trimmed)
+    const normalized = trimmed.replace(' ', 'T')
+    return new Date(hasTimezone ? normalized : `${normalized}Z`)
+  }
+  return new Date(value)
+}
+
 function mapApiNotification(n: any): Notification {
   return {
     id: n.id,
     type: n.type,
     title: n.title,
     message: n.message,
-    timestamp: new Date(n.created_at || n.timestamp || Date.now()),
+    timestamp: parseApiTimestamp(n.created_at || n.timestamp || Date.now()),
     read: Boolean(n.read),
     actionUrl: n.action_url || n.actionUrl,
     actionLabel: n.action_label || n.actionLabel,
@@ -272,29 +286,31 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     if (session?.accessToken) {
       headers.Authorization = `Bearer ${session.accessToken}`
     }
-    fetch(API_ENDPOINTS.NOTIFICATIONS, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        type: input.type,
-        title: input.title,
-        message: input.message,
-        variant: input.variant,
-        action_url: input.actionUrl,
-        action_label: input.actionLabel,
-        metadata: input.metadata,
-        document_id: input.metadata?.documentId,
-      }),
-    })
-      .then(async (res) => {
-        if (!res.ok) return
-        const created = mapApiNotification(await res.json())
-        setNotifications(prev => cleanupOldNotifications([
-          ...prev.filter(n => n.id !== notification.id),
-          created,
-        ]))
+    if (session?.accessToken) {
+      fetch(API_ENDPOINTS.NOTIFICATIONS, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          type: input.type,
+          title: input.title,
+          message: input.message,
+          variant: input.variant,
+          action_url: input.actionUrl,
+          action_label: input.actionLabel,
+          metadata: input.metadata,
+          document_id: input.metadata?.documentId,
+        }),
       })
-      .catch(() => {})
+        .then(async (res) => {
+          if (!res.ok) return
+          const created = mapApiNotification(await res.json())
+          setNotifications(prev => cleanupOldNotifications([
+            ...prev.filter(n => n.id !== notification.id),
+            created,
+          ]))
+        })
+        .catch(() => {})
+    }
 
     return notification.id
   }, [session?.accessToken])
@@ -307,7 +323,9 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     if (session?.accessToken) {
       headers.Authorization = `Bearer ${session.accessToken}`
     }
-    fetch(API_ENDPOINTS.NOTIFICATION_READ(id), { method: 'POST', headers }).catch(() => {})
+    if (session?.accessToken) {
+      fetch(API_ENDPOINTS.NOTIFICATION_READ(id), { method: 'POST', headers }).catch(() => {})
+    }
   }, [session?.accessToken])
 
   const markAllAsRead = useCallback(() => {
@@ -316,7 +334,9 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     if (session?.accessToken) {
       headers.Authorization = `Bearer ${session.accessToken}`
     }
-    fetch(API_ENDPOINTS.NOTIFICATIONS_READ_ALL, { method: 'POST', headers }).catch(() => {})
+    if (session?.accessToken) {
+      fetch(API_ENDPOINTS.NOTIFICATIONS_READ_ALL, { method: 'POST', headers }).catch(() => {})
+    }
   }, [session?.accessToken])
 
   const clearHistory = useCallback(() => {
@@ -325,7 +345,9 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     if (session?.accessToken) {
       headers.Authorization = `Bearer ${session.accessToken}`
     }
-    fetch(API_ENDPOINTS.NOTIFICATIONS_READ_ALL, { method: 'POST', headers }).catch(() => {})
+    if (session?.accessToken) {
+      fetch(API_ENDPOINTS.NOTIFICATIONS_READ_ALL, { method: 'POST', headers }).catch(() => {})
+    }
   }, [session?.accessToken])
 
   const getNotificationById = useCallback((id: string) => {
