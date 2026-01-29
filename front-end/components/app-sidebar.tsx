@@ -22,6 +22,7 @@ import {
   RiHistoryLine,
   RiUserSettingsLine,
   RiHospitalLine,
+  RiShieldCheckLine,
 } from "@remixicon/react";
 import { CentroAjudaDialog } from "@/components/centro-ajuda-dialog";
 import { TourGuiado } from "@/components/tour-guiado";
@@ -70,6 +71,16 @@ const data = {
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const { isAdmin } = usePermissions();
+  const documentsRoutes = new Set(["/pendentes", "/checagem"]);
+  const handleDocumentsRefresh = (url?: string) => {
+    if (!url || !documentsRoutes.has(url)) return;
+    if (typeof window === "undefined") return;
+    window.dispatchEvent(
+      new CustomEvent("documents:refresh", {
+        detail: { silent: true, showIndicator: true },
+      })
+    );
+  };
 
   return (
     <Sidebar {...props} className="dark !border-none" data-tour="sidebar-completa">
@@ -101,6 +112,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                     <a
                       href={item.url}
                       data-tour={item.title.toLowerCase()}
+                      onClick={() => handleDocumentsRefresh(item.url)}
                     >
                       {item.icon && (
                         <item.icon
@@ -138,6 +150,21 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                         aria-hidden="true"
                       />
                       <span>Gerenciar Usuários</span>
+                    </a>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    asChild
+                    className="group/menu-button font-medium gap-3 h-9 rounded-md data-[active=true]:hover:bg-transparent data-[active=true]:bg-gradient-to-b data-[active=true]:from-sidebar-primary data-[active=true]:to-sidebar-primary/70 data-[active=true]:shadow-[0_1px_2px_0_rgb(0_0_0/.05),inset_0_1px_0_0_rgb(255_255_255/.12)] [&>svg]:size-auto"
+                  >
+                    <a href="/admin/auditoria">
+                      <RiShieldCheckLine
+                        className="text-sidebar-foreground/50 group-data-[active=true]/menu-button:text-sidebar-foreground"
+                        size={22}
+                        aria-hidden="true"
+                      />
+                      <span>Auditoria</span>
                     </a>
                   </SidebarMenuButton>
                 </SidebarMenuItem>

@@ -72,10 +72,29 @@ const authOptions: AuthOptions = {
     async jwt({ token, profile }) {
       // Primeiro login: adicionar dados do back-end ao token
       const extendedProfile = profile as ExtendedProfile;
+      const profilePicture =
+        (profile as { picture?: string; image?: string } | null)?.picture ||
+        (profile as { picture?: string; image?: string } | null)?.image;
+      if (profilePicture) {
+        (token as { picture?: string }).picture = profilePicture;
+      }
       if (extendedProfile?.backendData) {
         const backendData = extendedProfile.backendData;
         token.accessToken = backendData.access_token;
-        token.user = backendData.user;
+        token.user = {
+          ...backendData.user,
+          image: profilePicture ?? token.user?.image ?? (token as { picture?: string }).picture,
+        };
+      } else if (profilePicture && token.user) {
+        token.user = {
+          ...token.user,
+          image: profilePicture,
+        };
+      } else if (token.user && (token as { picture?: string }).picture && !token.user.image) {
+        token.user = {
+          ...token.user,
+          image: (token as { picture?: string }).picture,
+        };
       }
       return token;
     },
@@ -86,7 +105,13 @@ const authOptions: AuthOptions = {
         session.accessToken = token.accessToken as string;
       }
       if (token.user) {
-        session.user = token.user as BackendAuthData['user'];
+        const tokenUser = token.user as BackendAuthData['user'] & { image?: string };
+        const tokenPicture = (token as { picture?: string }).picture;
+        session.user = {
+          ...session.user,
+          ...tokenUser,
+          image: tokenUser.image ?? tokenPicture ?? session.user?.image,
+        };
       }
       return session;
     }

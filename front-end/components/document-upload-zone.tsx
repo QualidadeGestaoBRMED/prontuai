@@ -66,7 +66,7 @@ interface DocumentUploadZoneProps {
 export function DocumentUploadZone({
   onProcessFiles,
   maxSize = 5 * 1024 * 1024,
-  maxFiles = 10,
+  maxFiles = 3,
   autoOpen = false,
 }: DocumentUploadZoneProps) {
   const hasAutoOpened = useRef(false)

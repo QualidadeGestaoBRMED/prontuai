@@ -39,4 +39,7 @@ export const API_ENDPOINTS = {
   JOB_STATUS: (jobId: string) => `${API_URL}/v1/jobs/${jobId}`,
   JOBS_LIST: `${API_URL}/v1/jobs`,
   CANCEL_JOB: (jobId: string) => `${API_URL}/v1/jobs/${jobId}`,
+
+  // Audit Logs
+  AUDIT_LOGS: `${API_URL}/v1/audit-logs`,
 } as const;

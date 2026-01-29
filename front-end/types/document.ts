@@ -7,6 +7,8 @@ export type DocumentApi = {
   cpf?: string | null
   uploaded_at?: string | null
   exams_found?: string[] | null
+  exams_ocr?: string[] | null
+  exams_brnet?: string[] | null
   validation_status?: "pending" | "validated" | "rejected" | string
   ocr_markdown?: string | null
   run_id?: string | null
