@@ -1,0 +1,7 @@
+tunnel: 83000be2-edf2-4446-a62e-93d2101d853b
+credentials-file: /etc/cloudflared/83000be2-edf2-4446-a62e-93d2101d853b.json
+
+ingress:
+  - hostname: api.prontuai.cloud
+    service: http://prontuai-backend:80
+  - service: http_status:404

@@ -19,6 +19,7 @@ from app.core.telemetry import setup_telemetry
 import logging
 import os
 import time
+import asyncio
 from uuid import uuid4
 
 logger = logging.getLogger(__name__)
@@ -161,6 +162,13 @@ async def startup_event():
         threading.Thread(target=documents_api.warm_documents_cache, daemon=True).start()
     except Exception as e:
         logger.warning(f"Warmup de cache de documentos falhou: {e}")
+
+    # Watchdog de jobs para encerrar processamentos travados
+    try:
+        from app.core.job_watchdog import job_watchdog_loop
+        asyncio.create_task(job_watchdog_loop())
+    except Exception as e:
+        logger.warning(f"Job watchdog falhou ao iniciar: {e}")
 
 # Configuração de CORS usando variáveis de ambiente
 # Permite configurar origens dinamicamente para diferentes ambientes (dev, staging, prod)

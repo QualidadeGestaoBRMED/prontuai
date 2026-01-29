@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   prontuai-backend:
     build:
@@ -42,3 +40,14 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: prontuai-cloudflared
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    user: "0:0"
+    depends_on:
+      - prontuai-backend
+    volumes:
+      - ./cloudflared:/etc/cloudflared:ro

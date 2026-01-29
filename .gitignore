@@ -45,3 +45,5 @@ RESUMO_PROJETO.md
 **/*cpython-*.pyc
 
 miniconda.sh
+
+ops/observability/promtail-positions/

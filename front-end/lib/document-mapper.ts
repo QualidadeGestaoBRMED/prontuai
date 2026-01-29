@@ -16,16 +16,19 @@ const mapStatus = (validationStatus?: string | null): ProcessResult["status"] =>
 export const documentToProcessResult = (doc: DocumentApi): ProcessResult => {
   const payload = doc.result_payload || {}
   const validation = payload.validation_result || {}
+  const tabelaComparacao = Array.isArray(payload.tabela_comparacao)
+    ? (payload.tabela_comparacao as Array<{ status?: string }>)
+    : []
   const examesFaltantes = Array.isArray(validation.exames_faltantes)
     ? validation.exames_faltantes.length
-    : Array.isArray(payload.tabela_comparacao)
-      ? payload.tabela_comparacao.filter((e: any) => e.status === "faltante").length
+    : tabelaComparacao.length > 0
+      ? tabelaComparacao.filter((e) => e.status === "faltante").length
       : 0
 
   const examesExtras = Array.isArray(validation.exames_extras)
     ? validation.exames_extras.length
-    : Array.isArray(payload.tabela_comparacao)
-      ? payload.tabela_comparacao.filter((e: any) => e.status === "extra_no_ocr").length
+    : tabelaComparacao.length > 0
+      ? tabelaComparacao.filter((e) => e.status === "extra_no_ocr").length
       : 0
 
   return {

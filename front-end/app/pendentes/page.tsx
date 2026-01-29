@@ -28,7 +28,7 @@ function PendentesContent() {
   const [detailsModalOpen, setDetailsModalOpen] = useState(false)
   const { unreadCount, activeProcess, setNotificationCenterOpen, processResults } = useNotifications()
   const { documents, loading, refreshing, hasLoaded, lastUpdatedAt } = useDocuments()
-  const { user, isSender } = usePermissions()
+  const { user } = usePermissions()
   const isStrictSender = user?.role === "SENDER"
   const senderId = user?.id
   const senderEmail = user?.email
