@@ -18,17 +18,33 @@ import { ProcessProgressBar } from "@/components/process-progress-bar"
 import { ResultsTable } from "@/components/results-table"
 import { DocumentDetailsModal } from "@/components/document-details-modal"
 import { ProcessResult } from "@/types/process"
-import { History } from "lucide-react"
+import { History, Loader2 } from "lucide-react"
 import { RequireRole } from "@/components/require-role"
+import { usePermissions } from "@/hooks/usePermissions"
 
 function PendentesContent() {
   const searchParams = useSearchParams()
   const [selectedResult, setSelectedResult] = useState<ProcessResult | null>(null)
   const [detailsModalOpen, setDetailsModalOpen] = useState(false)
   const { unreadCount, activeProcess, setNotificationCenterOpen, processResults } = useNotifications()
-  const { documents } = useDocuments()
-  const dbResults = documents.map(documentToProcessResult)
-  const resultsToShow = dbResults.length ? dbResults : processResults
+  const { documents, loading, refreshing, hasLoaded, lastUpdatedAt } = useDocuments()
+  const { user, isSender } = usePermissions()
+  const isStrictSender = user?.role === "SENDER"
+  const senderId = user?.id
+  const senderEmail = user?.email
+  const filteredDocuments = isStrictSender
+    ? documents.filter((doc) => {
+        if (senderId && doc.uploaded_by_user_id === senderId) return true
+        if (senderEmail && doc.uploaded_by_user_email === senderEmail) return true
+        return false
+      })
+    : documents
+  const dbResults = filteredDocuments.map(documentToProcessResult)
+  const baseResults = hasLoaded ? dbResults : (loading ? [] : processResults)
+  const resultsToShow = isStrictSender && senderEmail
+    ? baseResults.filter((result) => result.submittedBy === senderEmail)
+    : baseResults
+  const showRefreshing = refreshing && hasLoaded
 
   // Abre modal automaticamente se viewId for fornecido na URL
   useEffect(() => {
@@ -73,22 +89,46 @@ function PendentesContent() {
                   <p className="text-sm text-muted-foreground">
                     Visualize e gerencie todos os documentos processados
                   </p>
+                  {lastUpdatedAt && (
+                    <p className="text-xs text-muted-foreground/70 mt-1">
+                      Última atualização: {lastUpdatedAt.toLocaleTimeString("pt-BR")}
+                    </p>
+                  )}
                 </div>
 
-                <ResultsTable
-                  results={resultsToShow.filter(result => result.status !== 'approved')}
-                  onViewDetails={(result) => {
-                    console.log('[DEBUG] Opening modal for result:', result)
-                    console.log('[DEBUG] Result exists?', !!result)
-                    setSelectedResult(result)
-                    setDetailsModalOpen(true)
-                    console.log('[DEBUG] Modal state set to open')
-                  }}
-                  onDownloadPDF={(result) => {
-                    // TODO: Implementar download de PDF
-                    console.log("Download PDF:", result)
-                  }}
-                />
+                {showRefreshing && (
+                  <div className="border rounded-lg bg-white p-3 flex items-center gap-2 text-muted-foreground">
+                    <Loader2 className="size-4 animate-spin" />
+                    <span>Atualizando documentos do banco...</span>
+                    {lastUpdatedAt && (
+                      <span className="text-xs text-muted-foreground/70">
+                        Última atualização: {lastUpdatedAt.toLocaleTimeString("pt-BR")}
+                      </span>
+                    )}
+                  </div>
+                )}
+
+                {loading ? (
+                  <div className="border rounded-lg bg-white p-6 flex items-center gap-3 text-muted-foreground">
+                    <Loader2 className="size-4 animate-spin" />
+                    <span>Sincronizando documentos com o banco...</span>
+                  </div>
+                ) : (
+                  <ResultsTable
+                    results={resultsToShow.filter(result => result.status !== 'approved')}
+                    onViewDetails={(result) => {
+                      console.log('[DEBUG] Opening modal for result:', result)
+                      console.log('[DEBUG] Result exists?', !!result)
+                      setSelectedResult(result)
+                      setDetailsModalOpen(true)
+                      console.log('[DEBUG] Modal state set to open')
+                    }}
+                    onDownloadPDF={(result) => {
+                      // TODO: Implementar download de PDF
+                      console.log("Download PDF:", result)
+                    }}
+                  />
+                )}
               </div>
             </div>
           </div>

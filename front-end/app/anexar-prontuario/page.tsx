@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useMemo, useState } from "react"
 import { useSearchParams } from "next/navigation"
 import { useSession } from "next-auth/react"
 import { AppSidebar } from "@/components/app-sidebar"
@@ -39,6 +39,30 @@ export default function Page() {
   const [detailsModalOpen, setDetailsModalOpen] = useState(false)
   const { unreadCount, activeProcess, setNotificationCenterOpen, processResults, progressBarMinimized, showProgressBar } = useNotifications()
   const { data: session } = useSession()
+  const userEmail = session?.user?.email?.toLowerCase()
+
+  const filteredResults = useMemo(() => {
+    if (!userEmail) return processResults
+    return processResults.filter((result) =>
+      (result.submittedBy || "").toLowerCase() === userEmail
+    )
+  }, [processResults, userEmail])
+
+  const sortedResults = useMemo(() => {
+    const list = [...filteredResults]
+    const toTime = (value: unknown) => {
+      if (!value) return 0
+      if (value instanceof Date) return value.getTime()
+      const parsed = new Date(String(value))
+      return Number.isNaN(parsed.getTime()) ? 0 : parsed.getTime()
+    }
+    list.sort((a, b) => {
+      const timeA = toTime(a.processedAt) || toTime(a.uploadedAt)
+      const timeB = toTime(b.processedAt) || toTime(b.uploadedAt)
+      return timeB - timeA
+    })
+    return list
+  }, [filteredResults])
 
   // Don't auto-navigate to results - let user control the state
 
@@ -157,7 +181,7 @@ export default function Page() {
                     <div>
                       <h2 className="text-2xl font-bold">Resultados de Processamento</h2>
                       <p className="text-sm text-muted-foreground mt-1">
-                        {processResults.length} {processResults.length === 1 ? "documento processado" : "documentos processados"}
+                        {sortedResults.length} {sortedResults.length === 1 ? "documento processado" : "documentos processados"}
                       </p>
                     </div>
                     <Button onClick={handleStartOver} variant="outline" className="gap-2">
@@ -173,7 +197,7 @@ export default function Page() {
                         <div>
                           <div className="text-xs font-medium text-green-700 uppercase tracking-wide">Aprovados</div>
                           <div className="text-3xl font-bold text-green-600 mt-1">
-                            {processResults.filter((r) => r.status === "approved" && r.reviewedBy).length}
+                            {sortedResults.filter((r) => r.status === "approved" && r.reviewedBy).length}
                           </div>
                         </div>
                         <div className="size-12 rounded-full bg-green-200 flex items-center justify-center">
@@ -189,7 +213,7 @@ export default function Page() {
                         <div>
                           <div className="text-xs font-medium text-amber-700 uppercase tracking-wide">Aguardando Revisão</div>
                           <div className="text-3xl font-bold text-amber-600 mt-1">
-                            {processResults.filter((r) => (r.status === "approved" || r.status === "pending_review") && !r.reviewedBy).length}
+                            {sortedResults.filter((r) => (r.status === "approved" || r.status === "pending_review") && !r.reviewedBy).length}
                           </div>
                         </div>
                         <div className="size-12 rounded-full bg-amber-200 flex items-center justify-center">
@@ -205,7 +229,7 @@ export default function Page() {
                         <div>
                           <div className="text-xs font-medium text-red-700 uppercase tracking-wide">Rejeitados</div>
                           <div className="text-3xl font-bold text-red-600 mt-1">
-                            {processResults.filter((r) => r.status === "rejected" && r.reviewedBy).length}
+                            {sortedResults.filter((r) => r.status === "rejected" && r.reviewedBy).length}
                           </div>
                         </div>
                         <div className="size-12 rounded-full bg-red-200 flex items-center justify-center">
@@ -218,7 +242,7 @@ export default function Page() {
                   </div>
 
                   <ResultsTable
-                    results={processResults}
+                    results={sortedResults}
                     onViewDetails={(result) => {
                       setSelectedResult(result)
                       setDetailsModalOpen(true)

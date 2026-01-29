@@ -33,6 +33,7 @@ declare module "next-auth/jwt" {
       id: string;
       email: string;
       name: string;
+      image?: string;
       role: "ADMIN" | "CHECKER" | "SENDER";
       is_active: boolean;
     };

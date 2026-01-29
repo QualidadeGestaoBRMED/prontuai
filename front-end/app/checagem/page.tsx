@@ -22,6 +22,7 @@ import { RequireRole } from "@/components/require-role";
 import { useDocuments } from "@/hooks/use-documents";
 import { documentToProcessResult } from "@/lib/document-mapper";
 import { API_ENDPOINTS } from "@/lib/config";
+import { Loader2 } from "lucide-react";
 
 // Mock data - fallback se não houver dados do localStorage
 const mockDocumentos: DocumentoChecagem[] = [
@@ -126,15 +127,29 @@ export default function Page() {
   const [documentos, setDocumentos] = useState<DocumentoChecagem[]>([]);
   const [selectedResult, setSelectedResult] = useState<ProcessResult | null>(null);
   const { processResults, updateProcessResultStatus, addNotification, unreadCount, activeProcess, setNotificationCenterOpen } = useNotifications();
-  const { documents } = useDocuments();
+  const { documents, loading, refreshing, hasLoaded, lastUpdatedAt } = useDocuments();
   const sessionData = useSession();
   const session = sessionData?.data || null;
   const dbResults = documents.map(documentToProcessResult);
+  const showRefreshing = refreshing && hasLoaded;
+
+  const getChecagemPriority = (result: ProcessResult) => {
+    if (result.status === 'pending_review') return 0;
+    if (result.status === 'rejected' && !result.reviewedBy) return 0;
+    if (result.status === 'approved' && !result.reviewedBy) return 1;
+    return 2;
+  };
+
+  const getChecagemTimestamp = (result: ProcessResult) => {
+    const dateValue = result.reviewedAt ?? result.processedAt ?? result.uploadedAt;
+    return new Date(dateValue).getTime();
+  };
 
   // Carrega documentos de processResults que precisam de revisão
   useEffect(() => {
+    if (loading && !hasLoaded) return;
     const dbResults = documents.map(documentToProcessResult);
-    const source = dbResults.length ? dbResults : processResults;
+    const source = hasLoaded ? dbResults : processResults;
     // Converte ProcessResult para formato DocumentoChecagem
     // Inclui: aprovados pela IA (precisam de validação humana), pending_review (rejeitados pela IA), e rejeitados pela IA mas ainda não revisados por humano
     const pendingDocs: DocumentoChecagem[] = source
@@ -143,6 +158,11 @@ export default function Page() {
         result.status === 'pending_review' ||
         (result.status === 'rejected' && !result.reviewedBy)
       )
+      .sort((a, b) => {
+        const priorityDiff = getChecagemPriority(a) - getChecagemPriority(b);
+        if (priorityDiff !== 0) return priorityDiff;
+        return getChecagemTimestamp(b) - getChecagemTimestamp(a);
+      })
       .map(result => ({
         id: result.id,
         cpf: result.cpf,
@@ -161,10 +181,11 @@ export default function Page() {
       }));
 
     setDocumentos(pendingDocs);
-  }, [processResults, documents]);
+  }, [processResults, documents, loading, hasLoaded]);
 
   const handleAprovar = (id: string, approvalReason: string) => {
-    const result = (dbResults.length ? dbResults : processResults).find((r) => r.id === id);
+    const sourceResults = hasLoaded ? dbResults : processResults;
+    const result = sourceResults.find((r) => r.id === id);
     const approvalReasonValue = approvalReason?.trim() || "";
     const approvalReasonNormalized = approvalReasonValue.length ? approvalReasonValue : undefined;
 
@@ -331,6 +352,11 @@ export default function Page() {
 
         <div className="flex flex-col h-[calc(100svh-4rem)] bg-[hsl(240_5%_92.16%)] md:rounded-s-3xl md:group-peer-data-[state=collapsed]/sidebar-inset:rounded-s-none transition-all ease-in-out duration-300">
           <div className="flex-1 flex flex-col p-4 md:p-6 lg:p-8 overflow-hidden">
+            {lastUpdatedAt && (
+              <p className="text-xs text-muted-foreground/70 mb-2">
+                Última atualização: {lastUpdatedAt.toLocaleTimeString("pt-BR")}
+              </p>
+            )}
             {/* Estatísticas compactas */}
             <div className="grid grid-cols-3 gap-4 mb-4">
               <div className="bg-gradient-to-br from-yellow-50 to-yellow-100 border border-yellow-200 rounded-lg p-4 shadow-sm">
@@ -382,14 +408,33 @@ export default function Page() {
               </div>
             </div>
 
+            {showRefreshing && (
+              <div className="mb-4 border rounded-lg bg-white p-3 flex items-center gap-2 text-muted-foreground">
+                <Loader2 className="size-4 animate-spin" />
+                <span>Atualizando documentos do banco...</span>
+                {lastUpdatedAt && (
+                  <span className="text-xs text-muted-foreground/70">
+                    Última atualização: {lastUpdatedAt.toLocaleTimeString("pt-BR")}
+                  </span>
+                )}
+              </div>
+            )}
+
             {/* Tabela de checagem - ocupando todo espaço disponível */}
             <div className="flex-1 bg-white rounded-lg p-6 shadow-sm overflow-hidden flex flex-col">
-              <CheckagemTable
-                documentos={documentos}
-                onAprovar={handleAprovar}
-                onRejeitar={handleRejeitar}
-                onViewDetails={handleViewDetails}
-              />
+              {loading && !hasLoaded ? (
+                <div className="flex-1 flex items-center justify-center text-muted-foreground gap-3">
+                  <Loader2 className="size-4 animate-spin" />
+                  <span>Sincronizando documentos com o banco...</span>
+                </div>
+              ) : (
+                <CheckagemTable
+                  documentos={documentos}
+                  onAprovar={handleAprovar}
+                  onRejeitar={handleRejeitar}
+                  onViewDetails={handleViewDetails}
+                />
+              )}
             </div>
           </div>
         </div>
