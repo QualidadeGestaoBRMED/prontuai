@@ -21,6 +21,7 @@ services:
       - K_VIZINHOS_FAQ=${K_VIZINHOS_FAQ:-2}
       - MAX_DISTANCIA_FAQ=${MAX_DISTANCIA_FAQ:-1.0}
       - WORKERS=${WORKERS:-4}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS}
     volumes:
       # Persistir logs e resultados
       - ./logs:/app/logs
