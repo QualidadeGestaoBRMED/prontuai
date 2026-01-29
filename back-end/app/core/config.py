@@ -51,8 +51,8 @@ class Settings:
     USE_TEXTRACT = os.getenv("USE_TEXTRACT", "false").lower() == "true"
 
     # BRMED RPA (Playwright) worker pool
-    BRMED_RPA_WORKERS = int(os.getenv("BRMED_RPA_WORKERS", 2))
-    BRMED_RPA_CONCURRENCY = int(os.getenv("BRMED_RPA_CONCURRENCY", BRMED_RPA_WORKERS))
+    BRMED_RPA_WORKERS = int(os.getenv("BRMED_RPA_WORKERS", 1))
+    BRMED_RPA_CONCURRENCY = int(os.getenv("BRMED_RPA_CONCURRENCY", 1))
 
     # Concurrency limits (0 = sem limite)
     OCR_CONCURRENCY = int(os.getenv("OCR_CONCURRENCY", 2))
