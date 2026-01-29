@@ -29,6 +29,7 @@ class Job:
         self.job_type = job_type
         self.status = JobStatus.PENDING
         self.created_at = datetime.utcnow()
+        self.updated_at = self.created_at
         self.started_at: Optional[datetime] = None
         self.completed_at: Optional[datetime] = None
         self.progress = 0  # 0-100
@@ -48,6 +49,7 @@ class Job:
             "current_step": self.current_step,
             "message": self.message,
             "created_at": self.created_at.isoformat(),
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
             "started_at": self.started_at.isoformat() if self.started_at else None,
             "completed_at": self.completed_at.isoformat() if self.completed_at else None,
             "result": self.result,
@@ -60,18 +62,21 @@ class Job:
         self.progress = progress
         self.current_step = step
         self.message = message
+        self.updated_at = datetime.utcnow()
         logger.debug(f"[JOB {self.job_id}] {progress}% - {step}: {message}")
 
     def start(self):
         """Marca o job como iniciado."""
         self.status = JobStatus.IN_PROGRESS
         self.started_at = datetime.utcnow()
+        self.updated_at = self.started_at
         logger.info(f"[JOB {self.job_id}] Iniciado")
 
     def complete(self, result: Dict[str, Any]):
         """Marca o job como completo."""
         self.status = JobStatus.COMPLETED
         self.completed_at = datetime.utcnow()
+        self.updated_at = self.completed_at
         self.progress = 100
         self.result = result
         logger.info(f"[JOB {self.job_id}] Concluído com sucesso")
@@ -80,6 +85,7 @@ class Job:
         """Marca o job como falho."""
         self.status = JobStatus.FAILED
         self.completed_at = datetime.utcnow()
+        self.updated_at = self.completed_at
         self.error = error
         logger.error(f"[JOB {self.job_id}] Falhou: {error}")
 
@@ -181,6 +187,27 @@ class JobManager:
             jobs.sort(key=lambda j: j.created_at, reverse=True)
 
             return [job.to_dict() for job in jobs[:limit]]
+
+    async def collect_stale_jobs(self, stale_after: timedelta) -> list[Job]:
+        """
+        Marca jobs "travados" como FAILED e retorna a lista para notificação.
+
+        Args:
+            stale_after: Tempo máximo sem atualização.
+        """
+        now = datetime.utcnow()
+        cutoff_time = now - stale_after
+        stale_jobs: list[Job] = []
+        async with self._lock:
+            for job in self._jobs.values():
+                if job.status not in [JobStatus.PENDING, JobStatus.IN_PROGRESS]:
+                    continue
+                last_update = job.updated_at or job.created_at
+                if last_update and last_update < cutoff_time:
+                    elapsed = int((now - last_update).total_seconds())
+                    job.fail(f"Job sem atualização há {elapsed}s")
+                    stale_jobs.append(job)
+        return stale_jobs
 
     async def _cleanup_old_jobs(self):
         """Remove jobs antigos e completos da memória."""

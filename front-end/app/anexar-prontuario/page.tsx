@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/sidebar"
 import UserDropdown from "@/components/user-dropdown"
 import { DocumentUploadZone } from "@/components/document-upload-zone"
-import { DocumentBatchProcessor, DocumentProcessingResult } from "@/components/document-batch-processor"
+import { DocumentBatchProcessor } from "@/components/document-batch-processor"
 // import { ChatSidebar } from "@/components/chat-sidebar"
 import { FileWithPreview } from "@/hooks/use-file-upload"
 import { Button } from "@/components/ui/button"
@@ -90,10 +90,10 @@ function PageContent() {
     // )
   }
 
-  const handleProcessingComplete = (completedResults: DocumentProcessingResult[]) => {
+  const handleProcessingComplete = () => {
     setPageState("completed")
     // setChatInitialMessage(
-    //   `Processamento concluído! ${completedResults.length} ${completedResults.length === 1 ? "documento processado" : "documentos processados"}.`
+    //   `Processamento concluído!`
     // )
   }
 

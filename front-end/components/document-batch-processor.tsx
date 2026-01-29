@@ -503,7 +503,7 @@ export function DocumentBatchProcessor({
       completeProcess(processId, processResults)
       onComplete?.(results)
     }
-  }, [documents, isProcessing, onComplete, processId, completeProcess])
+  }, [documents, isProcessing, onComplete, processId, completeProcess, submittedBy])
 
   if (documents.length === 0) {
     return null

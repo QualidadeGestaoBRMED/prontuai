@@ -251,7 +251,10 @@ async def processar_documento_async_api(
         metadata={
             "filename": arquivo.filename,
             "file_size": file_size,
-            "num_exames_obrigatorios": len(exames_obrigatorios_list)
+            "num_exames_obrigatorios": len(exames_obrigatorios_list),
+            "uploaded_by_user_id": current_user.id,
+            "uploaded_by_user_email": current_user.email,
+            "clinic_id": current_user.clinic_id,
         }
     )
 
