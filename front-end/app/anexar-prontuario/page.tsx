@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { Suspense, useMemo, useState } from "react"
 import { useSearchParams } from "next/navigation"
 import { useSession } from "next-auth/react"
 import { AppSidebar } from "@/components/app-sidebar"
@@ -30,6 +30,22 @@ import { generateResultPDF } from "@/lib/pdf-generator"
 type PageState = "upload" | "processing" | "completed"
 
 export default function Page() {
+  return (
+    <Suspense fallback={<PageLoading />}>
+      <PageContent />
+    </Suspense>
+  )
+}
+
+function PageLoading() {
+  return (
+    <div className="flex items-center justify-center h-screen bg-sidebar">
+      <div className="animate-pulse text-sidebar-foreground">Carregando...</div>
+    </div>
+  )
+}
+
+function PageContent() {
   const searchParams = useSearchParams()
   const autoOpenUpload = searchParams.get("reenviar") === "1"
   const [pageState, setPageState] = useState<PageState>("upload")

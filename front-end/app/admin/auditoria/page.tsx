@@ -160,7 +160,7 @@ export default function AuditoriaPage() {
   }, [fetchLogs]);
 
   return (
-    <RequireRole role="ADMIN">
+    <RequireRole allowedRoles={["ADMIN"]}>
       <SidebarProvider>
         <AppSidebar />
         <SidebarInset className="bg-sidebar group/sidebar-inset">
