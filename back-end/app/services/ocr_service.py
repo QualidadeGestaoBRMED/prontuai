@@ -831,15 +831,41 @@ def extrair_exames_ia(markdown: str) -> Dict[str, Any]:
         return {"exames": [], "erro": f"Ocorreu um erro inesperado: {e}"}
 
 def extrair_cpf_regex(markdown: str) -> str:
-    # Tenta encontrar o padrão UF/CPF primeiro (ex: CE/12345678900)
-    uf_cpf_match = re.search(r'\b[A-Z]{2}/(\d{11})\b', markdown)
-    if uf_cpf_match:
-        return uf_cpf_match.group(1)
+    if not markdown:
+        return None
 
-    # Fallback: tenta encontrar qualquer CPF de 11 dígitos
-    generic_cpf_match = re.search(r'\b\d{3}[.\s]?\d{3}[.\s]?\d{3}[-\s]?\d{2}\b', markdown)
+    def _digits_only(value: str) -> str:
+        return re.sub(r"\D", "", value or "")
+
+    # 1) Padrão UF/CPF (ex: CE/12345678900) com tolerância a espaços/pontuação
+    uf_cpf_match = re.search(r"\b[A-Z]{2}\s*/\s*([0-9.\-\s]{11,20})\b", markdown)
+    if uf_cpf_match:
+        digits = _digits_only(uf_cpf_match.group(1))
+        if len(digits) == 11:
+            return digits
+
+    # 2) Linhas contendo "CPF" com tolerância a separadores variados
+    cpf_label_match = re.search(r"CPF[^0-9]{0,10}([0-9.\-\s]{11,20})", markdown, flags=re.IGNORECASE)
+    if cpf_label_match:
+        digits = _digits_only(cpf_label_match.group(1))
+        if len(digits) == 11:
+            return digits
+
+    # 3) Padrão genérico (com tolerância a múltiplos separadores)
+    generic_cpf_match = re.search(r"\b\d{3}[\.\s-]{0,5}\d{3}[\.\s-]{0,5}\d{3}[\.\s-]{0,5}\d{2}\b", markdown)
     if generic_cpf_match:
-        return re.sub(r'\D', '', generic_cpf_match.group(0))
+        digits = _digits_only(generic_cpf_match.group(0))
+        if len(digits) == 11:
+            return digits
+
+    # 4) Fallback por linha: pega 11 dígitos em linhas que citam CPF
+    for line in markdown.splitlines():
+        if "CPF" not in line.upper():
+            continue
+        digits = _digits_only(line)
+        if len(digits) == 11:
+            return digits
+
     return None
 
 _OCR_SEMAPHORE = None
@@ -946,6 +972,12 @@ async def _ocr_pipeline_impl(file, salvar_markdown=True, progress_hook: Optional
     # Extrair CPF localmente
     logger.info("[OCR] Extraindo CPF via regex...")
     cpf_extraido = extrair_cpf_regex(markdown)
+    if not cpf_extraido and markdown:
+        logger.info("[OCR] CPF não encontrado via regex. Tentando extração via IA...")
+        try:
+            cpf_extraido = await asyncio.to_thread(extrair_cpf_ia, markdown)
+        except Exception as e:
+            logger.warning(f"[OCR] Falha ao extrair CPF via IA: {e}")
     logger.info(f"[OCR] CPF extraído: {cpf_extraido if cpf_extraido else 'Nenhum CPF encontrado'}")
 
     # Extrair exames via IA

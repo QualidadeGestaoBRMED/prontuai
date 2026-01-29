@@ -648,10 +648,11 @@ async def _processar_documento_completo_impl(
         logger.error("[WORKFLOW] Não foi possível encontrar um CPF válido para consulta BRMED.")
         _log_event("workflow_failed", run_id=run_id, reason="cpf_nao_encontrado")
         await send_progress(-1, "erro", "Não foi possível extrair um CPF válido")
+        cpf_fallback = cpf_inicial or "Não encontrado"
         return {
             "status": "error",
-            "cpf": "Não encontrado",
-            "cpf_processado": "Não encontrado",
+            "cpf": cpf_fallback,
+            "cpf_processado": cpf_fallback,
             "patient_name": patient_name,
             "mensagem": "Não foi possível extrair um CPF válido ou consultar exames obrigatórios.",
             "decisao_final": "Erro no processamento",
