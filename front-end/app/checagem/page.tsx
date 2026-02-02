@@ -26,6 +26,8 @@ import { Loader2 } from "lucide-react";
 export default function Page() {
   const [documentos, setDocumentos] = useState<DocumentoChecagem[]>([]);
   const [selectedResult, setSelectedResult] = useState<ProcessResult | null>(null);
+  const [documentPreviewUrl, setDocumentPreviewUrl] = useState<string | null>(null);
+  const [documentPreviewLoading, setDocumentPreviewLoading] = useState(false);
   const { processResults, updateProcessResultStatus, addNotification, unreadCount, activeProcess, setNotificationCenterOpen } = useNotifications();
   const { documents, loading, refreshing, hasLoaded, lastUpdatedAt } = useDocuments();
   const sessionData = useSession();
@@ -46,6 +48,8 @@ export default function Page() {
   };
 
   const handleViewDocument = async (result: ProcessResult) => {
+    if (documentPreviewLoading) return;
+    setDocumentPreviewLoading(true);
     try {
       const headers: Record<string, string> = {};
       if (session?.accessToken) {
@@ -54,14 +58,19 @@ export default function Page() {
       const response = await fetch(API_ENDPOINTS.DOCUMENT_VIEW(result.id), { headers });
       if (!response.ok) {
         toast.error("Não foi possível abrir o documento.");
+        setDocumentPreviewLoading(false);
         return;
       }
       const blob = await response.blob();
       const url = URL.createObjectURL(blob);
-      window.open(url, "_blank", "noopener,noreferrer");
-      window.setTimeout(() => URL.revokeObjectURL(url), 60000);
+      setDocumentPreviewUrl((prev) => {
+        if (prev) URL.revokeObjectURL(prev);
+        return url;
+      });
     } catch (error) {
       toast.error("Falha ao carregar o documento.");
+    } finally {
+      setDocumentPreviewLoading(false);
     }
   };
 
@@ -262,6 +271,10 @@ export default function Page() {
   const handleViewDetails = (id: string) => {
     const result = (dbResults.length ? dbResults : processResults).find((r) => r.id === id);
     if (result) {
+      setDocumentPreviewUrl((prev) => {
+        if (prev) URL.revokeObjectURL(prev);
+        return null;
+      });
       setSelectedResult(result);
     }
   };
@@ -376,11 +389,21 @@ export default function Page() {
       <NotificationCenter />
       <DocumentDetailsModalChecagem
         open={!!selectedResult}
-        onOpenChange={(open) => !open && setSelectedResult(null)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setSelectedResult(null);
+            setDocumentPreviewUrl((prev) => {
+              if (prev) URL.revokeObjectURL(prev);
+              return null;
+            });
+          }
+        }}
         result={selectedResult}
         onAprovar={handleAprovar}
         onRejeitar={handleRejeitar}
         onViewDocument={selectedResult ? () => handleViewDocument(selectedResult) : undefined}
+        documentUrl={documentPreviewUrl}
+        documentLoading={documentPreviewLoading}
       />
       </SidebarProvider>
     </RequireRole>

@@ -2,7 +2,7 @@
 
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
-import { CheckIcon, XIcon, Download } from "lucide-react"
+import { CheckIcon, XIcon, Download, Loader2 } from "lucide-react"
 import { useState } from "react"
 import {
   Dialog,
@@ -37,6 +37,8 @@ interface DocumentDetailsModalChecagemProps {
   onAprovar: (id: string, approvalReason: string) => void
   onRejeitar: (id: string, motivo: string) => void
   onViewDocument?: () => void
+  documentUrl?: string | null
+  documentLoading?: boolean
 }
 
 export function DocumentDetailsModalChecagem({
@@ -46,6 +48,8 @@ export function DocumentDetailsModalChecagem({
   onAprovar,
   onRejeitar,
   onViewDocument,
+  documentUrl,
+  documentLoading,
 }: DocumentDetailsModalChecagemProps) {
   const [motivo, setMotivo] = useState("")
   const [showRejectDialog, setShowRejectDialog] = useState(false)
@@ -128,8 +132,9 @@ export function DocumentDetailsModalChecagem({
             </div>
           </DialogHeader>
 
-          <ScrollArea className="max-h-[calc(90vh-12rem)] pr-2">
-            <div className="space-y-6">
+          <div className="flex flex-col gap-4 lg:grid lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
+            <ScrollArea className="h-[70vh] pr-2">
+              <div className="space-y-6">
               {/* Basic Information */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -288,17 +293,50 @@ export function DocumentDetailsModalChecagem({
                   </div>
                 )}
               </div>
+              </div>
+            </ScrollArea>
+
+            <div className="flex flex-col gap-3">
+              <div className="flex items-center justify-between">
+                <h4 className="font-semibold">Documento</h4>
+                {documentUrl && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => window.open(documentUrl, "_blank", "noopener,noreferrer")}
+                  >
+                    Abrir em nova aba
+                  </Button>
+                )}
+              </div>
+              <div className="h-[70vh] rounded-lg border bg-muted/20 overflow-hidden">
+                {documentUrl ? (
+                  <iframe
+                    title={`Documento ${result.filename}`}
+                    src={documentUrl}
+                    className="h-full w-full"
+                  />
+                ) : (
+                  <div className="h-full flex items-center justify-center text-sm text-muted-foreground px-6 text-center">
+                    Clique em &quot;Visualizar documento&quot; para carregar o PDF aqui ao lado.
+                  </div>
+                )}
+              </div>
             </div>
-          </ScrollArea>
+          </div>
 
           {/* Footer Actions */}
           <div className="flex items-center justify-between pt-4 border-t">
             {onViewDocument && (
               <div className="flex gap-2">
                 {onViewDocument && (
-                  <Button variant="outline" size="sm" onClick={onViewDocument}>
-                    <Download className="size-4 mr-2" />
-                    Visualizar documento
+                  <Button variant="outline" size="sm" onClick={onViewDocument} disabled={documentLoading}>
+                    {documentLoading ? (
+                      <Loader2 className="size-4 mr-2 animate-spin" />
+                    ) : (
+                      <Download className="size-4 mr-2" />
+                    )}
+                    {documentUrl ? "Recarregar documento" : "Visualizar documento"}
                   </Button>
                 )}
               </div>
