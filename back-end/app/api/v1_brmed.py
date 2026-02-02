@@ -7,14 +7,45 @@ from app.models.user import User, UserRole
 from app.core.database import user_db
 from app.core.logging import set_audit_context
 from app.models.audit_log import AuditLogCreate
+from app.core.config import settings
 import logging
 import json
 import asyncio
 import tempfile
 import shutil
+import os
+import re
+from pathlib import Path
+from uuid import uuid4
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+def _safe_filename(filename: str) -> str:
+    base = os.path.basename(filename or "documento")
+    safe = re.sub(r"[^A-Za-z0-9._-]", "_", base)
+    return safe or "documento"
+
+def _store_upload_bytes(content: bytes, original_name: str, prefix: str | None) -> str:
+    storage_dir = Path(settings.DOCUMENT_STORAGE_DIR)
+    storage_dir.mkdir(parents=True, exist_ok=True)
+    safe_name = _safe_filename(original_name)
+    if prefix:
+        safe_name = f"{prefix}_{safe_name}"
+    dest_path = storage_dir / safe_name
+    with open(dest_path, "wb") as f:
+        f.write(content)
+    return str(dest_path)
+
+def _store_upload_file(file_path: str, original_name: str, prefix: str | None) -> str:
+    storage_dir = Path(settings.DOCUMENT_STORAGE_DIR)
+    storage_dir.mkdir(parents=True, exist_ok=True)
+    safe_name = _safe_filename(original_name)
+    if prefix:
+        safe_name = f"{prefix}_{safe_name}"
+    dest_path = storage_dir / safe_name
+    shutil.copyfile(file_path, dest_path)
+    return str(dest_path)
 
 @router.post("/processar-documento", summary="Processar documento completo com OCR, BRMED e Validação")
 async def processar_documento_completo_api(
@@ -28,9 +59,14 @@ async def processar_documento_completo_api(
 
 # Log de entrada da requisição
     file_size = "desconhecido"
+    stored_path = None
     try:
         content = await arquivo.read()
         file_size = f"{len(content) / 1024 / 1024:.2f}MB"
+        try:
+            stored_path = _store_upload_bytes(content, arquivo.filename, str(uuid4()))
+        except Exception as store_error:
+            logger.warning(f"[REQUEST] Falha ao salvar arquivo para visualização: {store_error}")
         await arquivo.seek(0)  # Volta ao início para o workflow poder ler
     except:
         pass
@@ -83,6 +119,7 @@ async def processar_documento_completo_api(
                     clinic_id=clinic_id,
                     uploaded_by_user_id=current_user.id,
                     filename=arquivo.filename,
+                    file_path=stored_path,
                     cpf=cpf,
                     exams_found=exams_found,
                     exams_ocr=exams_ocr,
@@ -260,6 +297,7 @@ async def processar_documento_async_api(
 
     # Salvar arquivo temporariamente (UploadFile não pode ser passado para background task)
     temp_file_path = None
+    stored_path = None
     try:
         # Criar arquivo temporário
         with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as temp_file:
@@ -268,12 +306,18 @@ async def processar_documento_async_api(
             temp_file.write(content)
 
         logger.info(f"[JOB {job_id}] Arquivo salvo temporariamente: {temp_file_path}")
+        try:
+            stored_path = _store_upload_file(temp_file_path, arquivo.filename, job_id)
+            logger.info(f"[JOB {job_id}] Arquivo salvo para visualização: {stored_path}")
+        except Exception as store_error:
+            logger.warning(f"[JOB {job_id}] Falha ao salvar arquivo para visualização: {store_error}")
 
         # Adicionar task em background
         background_tasks.add_task(
             process_document_background,
             job_id=job_id,
             file_path=temp_file_path,
+            stored_path=stored_path,
             filename=arquivo.filename,
             exames_obrigatorios=exames_obrigatorios_list,
             uploaded_by_user_id=current_user.id,
@@ -308,6 +352,7 @@ async def processar_documento_async_api(
 async def process_document_background(
     job_id: str,
     file_path: str,
+    stored_path: str | None,
     filename: str,
     exames_obrigatorios: list[str],
     uploaded_by_user_id: str,
@@ -381,6 +426,7 @@ async def process_document_background(
                 clinic_id=clinic_id_to_use,
                 uploaded_by_user_id=uploaded_by_user_id,
                 filename=filename,
+                file_path=stored_path,
                 cpf=cpf,
                 exams_found=exams_found,
                 exams_ocr=exams_ocr,
@@ -391,7 +437,7 @@ async def process_document_background(
                 result_payload=resultado,
                 confidence_score=resultado.get("confidence_score"),
                 quality_score=(resultado.get("confidence_details") or {}).get("quality_score"),
-                mandatory_coverage=(resultado.get("confidence_details") or {}).get("mandatory_coverage")
+                mandatory_coverage=(resultado.get("confidence_details") or {}).get("mandatory_coverage"),
             )
             logger.info(f"[DB] Documento salvo via async com ID: {document.id} (job_id={job_id})")
             try:

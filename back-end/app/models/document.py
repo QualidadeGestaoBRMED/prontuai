@@ -9,6 +9,7 @@ class Document(BaseModel):
     clinic_id: str  # Chave estrangeira para Clinic
     uploaded_by_user_id: str  # Chave estrangeira para User
     uploaded_by_user_email: Optional[str] = None
+    file_path: Optional[str] = Field(default=None, exclude=True)
     filename: str
     cpf: Optional[str] = None  # CPF extraído do documento
     uploaded_at: Optional[datetime] = None
@@ -26,6 +27,7 @@ class Document(BaseModel):
     updated_at: Optional[datetime] = None
 
     class Config:
+        fields = {"file_path": {"exclude": True}}
         json_schema_extra = {
             "example": {
                 "clinic_id": "uuid-clinica",

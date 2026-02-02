@@ -36,7 +36,7 @@ interface DocumentDetailsModalChecagemProps {
   result: ProcessResult | null
   onAprovar: (id: string, approvalReason: string) => void
   onRejeitar: (id: string, motivo: string) => void
-  onDownloadPDF?: () => void
+  onViewDocument?: () => void
 }
 
 export function DocumentDetailsModalChecagem({
@@ -45,7 +45,7 @@ export function DocumentDetailsModalChecagem({
   result,
   onAprovar,
   onRejeitar,
-  onDownloadPDF,
+  onViewDocument,
 }: DocumentDetailsModalChecagemProps) {
   const [motivo, setMotivo] = useState("")
   const [showRejectDialog, setShowRejectDialog] = useState(false)
@@ -293,12 +293,12 @@ export function DocumentDetailsModalChecagem({
 
           {/* Footer Actions */}
           <div className="flex items-center justify-between pt-4 border-t">
-            {onDownloadPDF && (
+            {onViewDocument && (
               <div className="flex gap-2">
-                {onDownloadPDF && (
-                  <Button variant="outline" size="sm" onClick={onDownloadPDF}>
+                {onViewDocument && (
+                  <Button variant="outline" size="sm" onClick={onViewDocument}>
                     <Download className="size-4 mr-2" />
-                    Download PDF
+                    Visualizar documento
                   </Button>
                 )}
               </div>

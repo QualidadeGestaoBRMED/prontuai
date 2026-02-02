@@ -57,6 +57,7 @@ class DocumentModel(Base):
     clinic_id = Column(String, ForeignKey('clinics.id'), nullable=False)
     uploaded_by_user_id = Column(String, ForeignKey('users.id'), nullable=False)
     filename = Column(String, nullable=False)
+    file_path = Column(String, nullable=True)
     cpf = Column(String, nullable=True)
     uploaded_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     exams_found = Column(ARRAY(String), nullable=True)  # Array de strings
@@ -165,6 +166,7 @@ class PostgresUserDatabase:
     def _ensure_document_columns(self) -> None:
         """Garante que colunas novas existam para documentos."""
         with self.engine.begin() as connection:
+            connection.execute(text("ALTER TABLE documents ADD COLUMN IF NOT EXISTS file_path VARCHAR"))
             connection.execute(text("ALTER TABLE documents ADD COLUMN IF NOT EXISTS run_id VARCHAR"))
             connection.execute(text("ALTER TABLE documents ADD COLUMN IF NOT EXISTS result_payload TEXT"))
             connection.execute(text("ALTER TABLE documents ADD COLUMN IF NOT EXISTS result_payload_compact TEXT"))
@@ -710,6 +712,7 @@ class PostgresUserDatabase:
             id=model.id,
             clinic_id=model.clinic_id,
             uploaded_by_user_id=model.uploaded_by_user_id,
+            file_path=getattr(model, "file_path", None),
             filename=model.filename,
             cpf=model.cpf,
             uploaded_at=_as_utc(model.uploaded_at),
@@ -814,6 +817,7 @@ class PostgresUserDatabase:
         clinic_id: str,
         uploaded_by_user_id: str,
         filename: str,
+        file_path: Optional[str] = None,
         cpf: Optional[str] = None,
         exams_found: Optional[List[str]] = None,
         exams_ocr: Optional[List[str]] = None,
@@ -839,6 +843,7 @@ class PostgresUserDatabase:
                 clinic_id=clinic_id,
                 uploaded_by_user_id=uploaded_by_user_id,
                 filename=filename,
+                file_path=file_path,
                 cpf=cpf,
                 uploaded_at=datetime.utcnow(),
                 exams_found=exams_found,
@@ -876,7 +881,8 @@ class PostgresUserDatabase:
         result_payload: Optional[dict] = None,
         confidence_score: Optional[float] = None,
         quality_score: Optional[float] = None,
-        mandatory_coverage: Optional[float] = None
+        mandatory_coverage: Optional[float] = None,
+        file_path: Optional[str] = None
     ) -> Document:
         """Atualiza documento."""
         session = self._get_session()
@@ -898,6 +904,8 @@ class PostgresUserDatabase:
                 doc_model.ocr_markdown = ocr_markdown
             if run_id is not None:
                 doc_model.run_id = run_id
+            if file_path is not None:
+                doc_model.file_path = file_path
             if result_payload is not None:
                 import json
                 doc_model.result_payload = json.dumps(result_payload, ensure_ascii=False)

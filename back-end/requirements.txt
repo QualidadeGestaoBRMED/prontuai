@@ -30,6 +30,9 @@ python-jose[cryptography]>=3.3.0  # JWT tokens para autenticação
 passlib[bcrypt]>=1.7.4  # Hashing de senhas (futuro)
 email-validator>=2.0.0  # Validação de email no Pydantic
 sentry-sdk>=1.40.0  # Observabilidade e alertas
+google-api-python-client>=2.120.0  # Google Drive API
+google-auth>=2.29.0  # Autenticação Google
+google-auth-httplib2>=0.2.0  # Transporte HTTP para Google APIs
 
 # Database
 sqlalchemy>=2.0.0  # ORM para PostgreSQL
