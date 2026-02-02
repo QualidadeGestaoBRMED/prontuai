@@ -20,7 +20,8 @@ services:
       - MODELO_EMBEDDING=${MODELO_EMBEDDING:-text-embedding-3-large}
       - K_VIZINHOS_FAQ=${K_VIZINHOS_FAQ:-2}
       - MAX_DISTANCIA_FAQ=${MAX_DISTANCIA_FAQ:-1.0}
-      - WORKERS=${WORKERS:-4}
+      # JobManager está em memória; múltiplos workers causam 404 em /v1/jobs
+      - WORKERS=${WORKERS:-1}
       - ALLOWED_ORIGINS=${ALLOWED_ORIGINS}
     volumes:
       # Persistir logs e resultados

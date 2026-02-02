@@ -1,7 +1,13 @@
 tunnel: 83000be2-edf2-4446-a62e-93d2101d853b
 credentials-file: /etc/cloudflared/83000be2-edf2-4446-a62e-93d2101d853b.json
+protocol: quic
+ha-connections: 1
+
 
 ingress:
   - hostname: api.prontuai.cloud
     service: http://prontuai-backend:80
+    originRequest:
+      connectTimeout: 30s
+      noTLSVerify: true
   - service: http_status:404

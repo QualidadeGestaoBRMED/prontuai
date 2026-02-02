@@ -7,6 +7,7 @@
 /__pycache__/
 /venv/
 /logs/
+/data/uploads/
 /api/
 
 /.claude/
@@ -44,3 +45,6 @@ scratch.md
 **/*cpython-*.pyc
 
 miniconda.sh
+script-sheets-qeg-cf49d0e4845c.json
+drive.json
+.secrets
