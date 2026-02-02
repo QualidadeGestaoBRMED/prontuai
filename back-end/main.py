@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from app.api import api_router
 from app.core.logging import (
@@ -45,6 +45,22 @@ app = FastAPI(title="API BR MED - Exames e Validação")
 setup_telemetry(app=app, engine=getattr(user_db, "engine", None))
 
 @app.middleware("http")
+async def cors_preflight_middleware(request: Request, call_next):
+    if request.method == "OPTIONS":
+        origin = request.headers.get("origin")
+        response = Response(status_code=200)
+        if origin and origin in settings.ALLOWED_ORIGINS:
+            response.headers["access-control-allow-origin"] = origin
+            response.headers["access-control-allow-credentials"] = "true"
+            response.headers["access-control-allow-methods"] = "DELETE, GET, HEAD, OPTIONS, PATCH, POST, PUT"
+            req_headers = request.headers.get("access-control-request-headers")
+            if req_headers:
+                response.headers["access-control-allow-headers"] = req_headers
+            response.headers["vary"] = "Origin"
+        return response
+    return await call_next(request)
+
+@app.middleware("http")
 async def request_logging_middleware(request: Request, call_next):
     request_id = request.headers.get("x-request-id") or str(uuid4())
     set_request_context(request_id)
@@ -74,17 +90,18 @@ async def request_logging_middleware(request: Request, call_next):
         )
         clear_context()
         raise error
-    logger.info(
-        "request.completed",
-        extra={
-            "method": request.method,
-            "path": request.url.path,
-            "status_code": status_code,
-            "duration_ms": round(elapsed_ms, 2),
-            "ip": request.client.host if request.client else None,
-            "user_agent": request.headers.get("user-agent"),
-        },
-    )
+    if os.getenv("REQUEST_LOGGING", "true").lower() == "true":
+        logger.info(
+            "request.completed",
+            extra={
+                "method": request.method,
+                "path": request.url.path,
+                "status_code": status_code,
+                "duration_ms": round(elapsed_ms, 2),
+                "ip": request.client.host if request.client else None,
+                "user_agent": request.headers.get("user-agent"),
+            },
+        )
     audit_enabled = os.getenv("AUDIT_LOG_ENABLED", "true").lower() == "true"
     audit_all = os.getenv("AUDIT_LOG_ALL_REQUESTS", "false").lower() == "true"
     if audit_enabled and not was_audit_logged() and (audit_all or request.method not in {"GET", "HEAD", "OPTIONS"}):

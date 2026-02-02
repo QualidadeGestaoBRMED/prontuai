@@ -1,7 +1,8 @@
 """
 Endpoints para gerenciamento de documentos.
 """
-from fastapi import APIRouter, HTTPException, status, Depends, Query, Request
+from fastapi import APIRouter, HTTPException, status, Depends, Query, Request, BackgroundTasks
+from fastapi.responses import FileResponse
 from typing import List
 from app.core.auth import get_current_user, require_admin
 from app.core.database import user_db
@@ -9,10 +10,14 @@ from app.models.user import User, UserRole
 from app.models.document import Document
 from app.models.document import DocumentUpdate
 from app.core.logging import set_audit_context
+from app.core.config import settings
+from app.services import drive_service
 import logging
 import time
 import json
 import threading
+import mimetypes
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -63,7 +68,7 @@ def _load_documents(
 ) -> List[Document]:
     if role in [UserRole.CHECKER, UserRole.ADMIN]:
         documents = user_db.get_all_documents(use_compact_payload=compact)
-        logger.info(f"[DOCUMENTS] {role.value} listou {len(documents)} documentos (todas clínicas)")
+        logger.debug(f"[DOCUMENTS] {role.value} listou {len(documents)} documentos (todas clínicas)")
     else:
         if not clinic_id:
             raise HTTPException(
@@ -73,14 +78,14 @@ def _load_documents(
         documents = user_db.get_documents_by_clinic(clinic_id, use_compact_payload=compact)
         if user_id:
             documents = [doc for doc in documents if doc.uploaded_by_user_id == user_id]
-            logger.info(
+            logger.debug(
                 "[DOCUMENTS] SENDER listou %d documentos (clinic_id: %s, user_id: %s)",
                 len(documents),
                 clinic_id,
                 user_id,
             )
         else:
-            logger.info(
+            logger.debug(
                 "[DOCUMENTS] SENDER listou %d documentos (clinic_id: %s)",
                 len(documents),
                 clinic_id,
@@ -114,7 +119,7 @@ def _refresh_cache_async(
         try:
             documents = _load_documents(role, clinic_id, compact, user_id=user_id)
             _set_cache_entry(cache_key, documents)
-            logger.info("[DOCUMENTS] Cache refresh concluído key=%s rows=%d", cache_key, len(documents))
+            logger.debug("[DOCUMENTS] Cache refresh concluído key=%s rows=%d", cache_key, len(documents))
         except Exception as exc:
             logger.warning("[DOCUMENTS] Cache refresh falhou key=%s erro=%s", cache_key, exc)
         finally:
@@ -127,7 +132,7 @@ def warm_documents_cache() -> None:
     try:
         documents = _load_documents(UserRole.ADMIN, None, True)
         _set_cache_entry("ADMIN:all:True", documents)
-        logger.info("[DOCUMENTS] Cache warmup concluído key=ADMIN:all:True rows=%d", len(documents))
+        logger.debug("[DOCUMENTS] Cache warmup concluído key=ADMIN:all:True rows=%d", len(documents))
     except Exception as exc:
         logger.warning("[DOCUMENTS] Cache warmup falhou: %s", exc)
 
@@ -149,7 +154,7 @@ async def list_documents(
         client_ip = request.headers.get("x-forwarded-for") or (request.client.host if request.client else "unknown")
         user_agent = request.headers.get("user-agent") or "unknown"
         referer = request.headers.get("referer") or "unknown"
-        logger.info(
+        logger.debug(
             "[DOCUMENTS] request user=%s ip=%s ua=%s referer=%s",
             current_user.email,
             client_ip,
@@ -168,7 +173,7 @@ async def list_documents(
                 cached_docs = cached["documents"]
                 age = now - cached_at
                 if age <= cache_seconds:
-                    logger.info("[DOCUMENTS] Cache hit (fresh %.0fs) key=%s rows=%d", age, cache_key, len(cached_docs))
+                    logger.debug("[DOCUMENTS] Cache hit (fresh %.0fs) key=%s rows=%d", age, cache_key, len(cached_docs))
                     return cached_docs
                 if stale_seconds > 0 and age <= stale_seconds:
                     if not cached.get("refreshing"):
@@ -180,7 +185,7 @@ async def list_documents(
                             compact,
                             current_user.id if current_user.role == UserRole.SENDER else None,
                         )
-                    logger.info("[DOCUMENTS] Cache hit (stale %.0fs) key=%s rows=%d", age, cache_key, len(cached_docs))
+                    logger.debug("[DOCUMENTS] Cache hit (stale %.0fs) key=%s rows=%d", age, cache_key, len(cached_docs))
                     return cached_docs
 
         start_time = time.perf_counter()
@@ -197,9 +202,9 @@ async def list_documents(
         elapsed = time.perf_counter() - start_time
         try:
             payload_size = len(json.dumps([doc.dict() for doc in documents], default=str).encode("utf-8"))
-            logger.info(f"[DOCUMENTS] Listagem concluída em {elapsed:.2f}s | payload ~{payload_size / 1024:.1f} KB | compact={compact}")
+            logger.debug(f"[DOCUMENTS] Listagem concluída em {elapsed:.2f}s | payload ~{payload_size / 1024:.1f} KB | compact={compact}")
         except Exception:
-            logger.info(f"[DOCUMENTS] Listagem concluída em {elapsed:.2f}s | compact={compact}")
+            logger.debug(f"[DOCUMENTS] Listagem concluída em {elapsed:.2f}s | compact={compact}")
 
         return documents
     except Exception as e:
@@ -240,7 +245,7 @@ async def get_document(document_id: str, current_user: User = Depends(get_curren
                     detail="Você não tem permissão para acessar este documento"
                 )
 
-        logger.info(f"[DOCUMENTS] {current_user.email} acessou documento {document_id}")
+        logger.debug(f"[DOCUMENTS] {current_user.email} acessou documento {document_id}")
         return document
 
     except HTTPException:
@@ -253,10 +258,75 @@ async def get_document(document_id: str, current_user: User = Depends(get_curren
         )
 
 
+@router.get("/{document_id}/view")
+async def view_document(document_id: str, current_user: User = Depends(get_current_user)):
+    """
+    Retorna o arquivo original do documento para visualização.
+
+    - SENDER: apenas documentos próprios
+    - CHECKER/ADMIN: qualquer documento
+    """
+    try:
+        document = user_db.get_document_by_id(document_id)
+
+        if not document:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Documento não encontrado"
+            )
+
+        if current_user.role == UserRole.SENDER:
+            if document.uploaded_by_user_id != current_user.id:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Você não tem permissão para acessar este documento"
+                )
+
+        file_path = getattr(document, "file_path", None)
+        if not file_path:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Arquivo do documento não disponível"
+            )
+
+        abs_path = os.path.abspath(file_path)
+        base_dir = os.path.abspath(settings.DOCUMENT_STORAGE_DIR)
+        if not abs_path.startswith(base_dir + os.sep):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Caminho do documento inválido"
+            )
+
+        if not os.path.exists(abs_path):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Arquivo do documento não encontrado"
+            )
+
+        media_type, _ = mimetypes.guess_type(document.filename)
+        response = FileResponse(
+            abs_path,
+            media_type=media_type or "application/octet-stream",
+            filename=document.filename,
+        )
+        response.headers["Content-Disposition"] = f'inline; filename="{document.filename}"'
+        return response
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"Erro ao visualizar documento {document_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erro ao visualizar documento: {str(e)}"
+        )
+
+
 @router.patch("/{document_id}", response_model=Document)
 async def update_document(
     document_id: str,
     payload: DocumentUpdate,
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user)
 ):
     """
@@ -287,6 +357,18 @@ async def update_document(
             run_id=payload.run_id,
             result_payload=payload.result_payload,
         )
+        should_upload = (
+            payload.validation_status == "validated"
+            and isinstance(payload.result_payload, dict)
+            and payload.result_payload.get("reviewed_by")
+        )
+        if should_upload and background_tasks is not None:
+            logger.info(
+                "[DRIVE] Agendando upload doc_id=%s reviewer=%s",
+                document_id,
+                payload.result_payload.get("reviewed_by") if isinstance(payload.result_payload, dict) else None,
+            )
+            background_tasks.add_task(drive_service.upload_document_to_drive, updated)
         try:
             set_audit_context(
                 {

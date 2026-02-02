@@ -29,6 +29,7 @@ export const API_ENDPOINTS = {
 
   // Documents list
   DOCUMENTS: `${API_URL}/v1/documents`,
+  DOCUMENT_VIEW: (id: string) => `${API_URL}/v1/documents/${id}/view`,
 
   // Notifications
   NOTIFICATIONS: `${API_URL}/v1/notifications`,

@@ -65,9 +65,26 @@ class Settings:
 
     # CORS Configuration
     # Aceita múltiplas origens separadas por vírgula na variável de ambiente
-    ALLOWED_ORIGINS = os.getenv(
-        "ALLOWED_ORIGINS",
-        "http://localhost,http://localhost:3000,https://prontuai.grupobrmed.com.br"
-    ).split(",")
+    ALLOWED_ORIGINS = [
+        origin.strip()
+        for origin in os.getenv(
+            "ALLOWED_ORIGINS",
+            "http://localhost,http://localhost:3000,https://prontuai.grupobrmed.com.br",
+        ).split(",")
+        if origin.strip()
+    ]
+
+    # Storage de documentos (para visualização local)
+    DOCUMENT_STORAGE_DIR = os.getenv(
+        "DOCUMENT_STORAGE_DIR",
+        os.path.join(BASE_DIR, "data", "uploads"),
+    )
+
+    # Google Drive (upload após aprovação)
+    GOOGLE_DRIVE_ENABLED = os.getenv("GOOGLE_DRIVE_ENABLED", "true").lower() == "true"
+    GOOGLE_DRIVE_FOLDER_ID = os.getenv("GOOGLE_DRIVE_FOLDER_ID")
+    GOOGLE_DRIVE_CREDENTIALS_FILE = os.getenv("GOOGLE_DRIVE_CREDENTIALS_FILE")
+    GOOGLE_DRIVE_CREDENTIALS_JSON = os.getenv("GOOGLE_DRIVE_CREDENTIALS_JSON")
+    GOOGLE_DRIVE_SUPPORTS_ALL_DRIVES = os.getenv("GOOGLE_DRIVE_SUPPORTS_ALL_DRIVES", "true").lower() == "true"
 
 settings = Settings() 

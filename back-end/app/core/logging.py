@@ -109,6 +109,10 @@ def setup_logging(log_file: str = "logs/app.log"):
     os.makedirs(os.path.dirname(log_file), exist_ok=True)
     log_level = os.getenv("LOG_LEVEL", "INFO").upper()
     log_format = os.getenv("LOG_FORMAT", "plain").lower()
+    no_timestamp = os.getenv("LOG_NO_TIMESTAMP", "false").lower() == "true"
+    quiet_loggers = [
+        name.strip() for name in os.getenv("QUIET_LOGGERS", "").split(",") if name.strip()
+    ]
     handlers = [
         logging.FileHandler(log_file, encoding="utf-8"),
         logging.StreamHandler()
@@ -119,11 +123,18 @@ def setup_logging(log_file: str = "logs/app.log"):
             handler.setFormatter(formatter)
         logging.basicConfig(level=log_level, handlers=handlers)
     else:
+        if log_format == "bare" or no_timestamp:
+            fmt = "%(levelname)s %(name)s: %(message)s"
+        else:
+            fmt = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
         logging.basicConfig(
             level=log_level,
-            format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+            format=fmt,
             handlers=handlers,
         )
+
+    for logger_name in quiet_loggers:
+        logging.getLogger(logger_name).setLevel(logging.WARNING)
 
 # Exemplo de uso:
 # from app.core.logging import setup_logging

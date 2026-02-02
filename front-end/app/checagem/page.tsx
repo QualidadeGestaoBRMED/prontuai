@@ -16,7 +16,6 @@ import { NotificationBell } from "@/components/notification-bell";
 import { NotificationCenter } from "@/components/notification-center";
 import { useSession } from "next-auth/react";
 import { ProcessResult } from "@/types/process";
-import { generateResultPDF } from "@/lib/pdf-generator";
 import { DocumentDetailsModalChecagem } from "@/components/document-details-modal-checagem";
 import { RequireRole } from "@/components/require-role";
 import { useDocuments } from "@/hooks/use-documents";
@@ -44,6 +43,26 @@ export default function Page() {
   const getChecagemTimestamp = (result: ProcessResult) => {
     const dateValue = result.reviewedAt ?? result.processedAt ?? result.uploadedAt;
     return new Date(dateValue).getTime();
+  };
+
+  const handleViewDocument = async (result: ProcessResult) => {
+    try {
+      const headers: Record<string, string> = {};
+      if (session?.accessToken) {
+        headers.Authorization = `Bearer ${session.accessToken}`;
+      }
+      const response = await fetch(API_ENDPOINTS.DOCUMENT_VIEW(result.id), { headers });
+      if (!response.ok) {
+        toast.error("Não foi possível abrir o documento.");
+        return;
+      }
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      window.open(url, "_blank", "noopener,noreferrer");
+      window.setTimeout(() => URL.revokeObjectURL(url), 60000);
+    } catch (error) {
+      toast.error("Falha ao carregar o documento.");
+    }
   };
 
   // Carrega documentos de processResults que precisam de revisão
@@ -84,7 +103,7 @@ export default function Page() {
     setDocumentos(pendingDocs);
   }, [processResults, documents, loading, hasLoaded]);
 
-  const handleAprovar = (id: string, approvalReason: string) => {
+  const handleAprovar = async (id: string, approvalReason: string) => {
     const sourceResults = hasLoaded ? dbResults : processResults;
     const result = sourceResults.find((r) => r.id === id);
     const approvalReasonValue = approvalReason?.trim() || "";
@@ -106,19 +125,26 @@ export default function Page() {
       headers.Authorization = `Bearer ${session.accessToken}`;
     }
 
-    fetch(`${API_ENDPOINTS.DOCUMENTS}/${id}`, {
-      method: 'PATCH',
-      headers,
-      body: JSON.stringify({
-        validation_status: 'validated',
-        result_payload: {
-          ...(result?.result || {}),
-          reviewed_by: session?.user?.email || 'revisor@grupobrmed.com.br',
-          reviewed_at: new Date().toISOString(),
-          approvalReason: approvalReasonNormalized,
-        }
-      })
-    }).catch(() => {});
+    try {
+      console.info("[CHECAGEM] Aprovando documento", { id, approvalReason: approvalReasonNormalized });
+      const response = await fetch(`${API_ENDPOINTS.DOCUMENTS}/${id}`, {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify({
+          validation_status: 'validated',
+          result_payload: {
+            ...(result?.result || {}),
+            reviewed_by: session?.user?.email || 'revisor@grupobrmed.com.br',
+            reviewed_at: new Date().toISOString(),
+            approvalReason: approvalReasonNormalized,
+          }
+        })
+      });
+      const text = await response.text().catch(() => "");
+      console.info("[CHECAGEM] Resposta aprovação", { status: response.status, ok: response.ok, body: text });
+    } catch (error) {
+      console.error("[CHECAGEM] Falha ao aprovar documento", error);
+    }
 
     // Atualiza estado local (array documentos)
     setDocumentos((docs) =>
@@ -162,7 +188,7 @@ export default function Page() {
     });
   };
 
-  const handleRejeitar = (id: string, motivo: string) => {
+  const handleRejeitar = async (id: string, motivo: string) => {
     const result = (dbResults.length ? dbResults : processResults).find((r) => r.id === id);
 
     // Atualiza no contexto de notificações
@@ -175,19 +201,26 @@ export default function Page() {
       headers.Authorization = `Bearer ${session.accessToken}`;
     }
 
-    fetch(`${API_ENDPOINTS.DOCUMENTS}/${id}`, {
-      method: 'PATCH',
-      headers,
-      body: JSON.stringify({
-        validation_status: 'rejected',
-        result_payload: {
-          ...(result?.result || {}),
-          reviewed_by: session?.user?.email || 'revisor@grupobrmed.com.br',
-          reviewed_at: new Date().toISOString(),
-          rejectionReason: motivo,
-        }
-      })
-    }).catch(() => {});
+    try {
+      console.info("[CHECAGEM] Rejeitando documento", { id, motivo });
+      const response = await fetch(`${API_ENDPOINTS.DOCUMENTS}/${id}`, {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify({
+          validation_status: 'rejected',
+          result_payload: {
+            ...(result?.result || {}),
+            reviewed_by: session?.user?.email || 'revisor@grupobrmed.com.br',
+            reviewed_at: new Date().toISOString(),
+            rejectionReason: motivo,
+          }
+        })
+      });
+      const text = await response.text().catch(() => "");
+      console.info("[CHECAGEM] Resposta rejeição", { status: response.status, ok: response.ok, body: text });
+    } catch (error) {
+      console.error("[CHECAGEM] Falha ao rejeitar documento", error);
+    }
 
     // Atualiza estado local
     setDocumentos((docs) =>
@@ -347,9 +380,7 @@ export default function Page() {
         result={selectedResult}
         onAprovar={handleAprovar}
         onRejeitar={handleRejeitar}
-        onDownloadPDF={selectedResult ? () => {
-          generateResultPDF(selectedResult)
-        } : undefined}
+        onViewDocument={selectedResult ? () => handleViewDocument(selectedResult) : undefined}
       />
       </SidebarProvider>
     </RequireRole>
