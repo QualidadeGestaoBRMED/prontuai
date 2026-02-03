@@ -13,6 +13,8 @@ export type DocumentApi = {
   ocr_markdown?: string | null
   run_id?: string | null
   result_payload?: any
+  approval_reason?: string | null
+  rejection_reason?: string | null
   confidence_score?: number | null
   quality_score?: number | null
   mandatory_coverage?: number | null

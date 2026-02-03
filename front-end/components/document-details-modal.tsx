@@ -78,6 +78,23 @@ export function DocumentDetailsModal({
   }
 
   const canResend = result.status === "pending_review" || result.status === "rejected"
+  const highlightLiberacao = (text?: string | null) => {
+    if (!text) return null
+    const phrase = "Liberação concedida"
+    const lower = text.toLowerCase()
+    const idx = lower.indexOf(phrase.toLowerCase())
+    if (idx === -1) return text
+    const before = text.slice(0, idx)
+    const match = text.slice(idx, idx + phrase.length)
+    const after = text.slice(idx + phrase.length)
+    return (
+      <>
+        {before}
+        <span className="font-semibold text-emerald-700">{match}</span>
+        {after}
+      </>
+    )
+  }
 
   const handleReenviar = () => {
     router.push(`/anexar-prontuario?reenviar=1&cpf=${encodeURIComponent(result.cpf)}`)
@@ -195,7 +212,7 @@ export function DocumentDetailsModal({
                 <div>
                   <h4 className="font-semibold mb-3">Análise de Validação</h4>
                   <p className="text-sm text-muted-foreground leading-relaxed">
-                    {result.result.validation_result?.analysis}
+                    {highlightLiberacao(result.result.validation_result?.analysis)}
                   </p>
                 </div>
               </>
