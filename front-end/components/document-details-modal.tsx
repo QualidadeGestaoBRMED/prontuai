@@ -284,7 +284,7 @@ export function DocumentDetailsModal({
                 onClick={handleReenviar}
                 className="bg-primary text-primary-foreground hover:bg-primary/90"
               >
-                Reenviar documento
+                Reenviar ASO completo novamente
               </Button>
             )}
           </div>
