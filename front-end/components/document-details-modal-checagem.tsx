@@ -63,6 +63,23 @@ export function DocumentDetailsModalChecagem({
         ? `${documentUrl}&toolbar=0&navpanes=0&scrollbar=0`
         : `${documentUrl}#toolbar=0&navpanes=0&scrollbar=0`)
     : ""
+  const highlightLiberacao = (text?: string | null) => {
+    if (!text) return null
+    const phrase = "Liberação concedida"
+    const lower = text.toLowerCase()
+    const idx = lower.indexOf(phrase.toLowerCase())
+    if (idx === -1) return text
+    const before = text.slice(0, idx)
+    const match = text.slice(idx, idx + phrase.length)
+    const after = text.slice(idx + phrase.length)
+    return (
+      <>
+        {before}
+        <span className="font-semibold text-emerald-700">{match}</span>
+        {after}
+      </>
+    )
+  }
 
   const getStatusBadge = (result: ProcessResult) => {
     const { status, reviewedBy } = result
@@ -244,7 +261,7 @@ export function DocumentDetailsModalChecagem({
                   <div>
                     <h4 className="font-semibold mb-3">Análise de Validação</h4>
                     <p className="text-sm text-muted-foreground leading-relaxed">
-                      {result.result.validation_result?.analysis}
+                      {highlightLiberacao(result.result.validation_result?.analysis)}
                     </p>
                   </div>
                 </>
@@ -436,14 +453,14 @@ export function DocumentDetailsModalChecagem({
                 {result.result.validation_result?.analysis && (
                   <>
                     <Separator />
-                    <div>
-                      <h4 className="font-semibold mb-3">Análise de Validação</h4>
-                      <p className="text-sm text-muted-foreground leading-relaxed">
-                        {result.result.validation_result?.analysis}
-                      </p>
-                    </div>
-                  </>
-                )}
+                      <div>
+                        <h4 className="font-semibold mb-3">Análise de Validação</h4>
+                        <p className="text-sm text-muted-foreground leading-relaxed">
+                          {highlightLiberacao(result.result.validation_result?.analysis)}
+                        </p>
+                      </div>
+                    </>
+                  )}
 
                 {/* Checklist de Campos */}
                 {result.result.analysis_details?.field_checks?.length ? (

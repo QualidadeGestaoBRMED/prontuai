@@ -347,6 +347,13 @@ async def update_document(
             if document.clinic_id != current_user.clinic_id:
                 raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Você não tem permissão para atualizar este documento")
 
+        approval_reason = payload.approval_reason
+        rejection_reason = payload.rejection_reason
+        if isinstance(payload.result_payload, dict):
+            if approval_reason is None:
+                approval_reason = payload.result_payload.get("approvalReason")
+            if rejection_reason is None:
+                rejection_reason = payload.result_payload.get("rejectionReason")
         updated = user_db.update_document(
             document_id=document_id,
             validation_status=payload.validation_status,
@@ -356,6 +363,8 @@ async def update_document(
             ocr_markdown=payload.ocr_markdown,
             run_id=payload.run_id,
             result_payload=payload.result_payload,
+            approval_reason=approval_reason,
+            rejection_reason=rejection_reason,
         )
         should_upload = (
             payload.validation_status == "validated"
@@ -378,6 +387,13 @@ async def update_document(
                     "metadata": {
                         "before_status": document.validation_status,
                         "after_status": payload.validation_status,
+                        "approval_reason": approval_reason,
+                        "rejection_reason": rejection_reason,
+                        "validation_message": (
+                            payload.result_payload.get("validation_result", {}).get("analysis")
+                            if isinstance(payload.result_payload, dict)
+                            else None
+                        ),
                     },
                 }
             )

@@ -20,6 +20,8 @@ class Document(BaseModel):
     ocr_markdown: Optional[str] = None  # Resultado do OCR em markdown
     run_id: Optional[str] = None
     result_payload: Optional[Dict[str, Any]] = None
+    approval_reason: Optional[str] = None
+    rejection_reason: Optional[str] = None
     confidence_score: Optional[float] = None
     quality_score: Optional[float] = None
     mandatory_coverage: Optional[float] = None
@@ -56,6 +58,8 @@ class DocumentCreate(BaseModel):
     ocr_markdown: Optional[str] = None
     run_id: Optional[str] = None
     result_payload: Optional[Dict[str, Any]] = None
+    approval_reason: Optional[str] = None
+    rejection_reason: Optional[str] = None
     confidence_score: Optional[float] = None
     quality_score: Optional[float] = None
     mandatory_coverage: Optional[float] = None
@@ -80,6 +84,8 @@ class DocumentUpdate(BaseModel):
     ocr_markdown: Optional[str] = None
     run_id: Optional[str] = None
     result_payload: Optional[Dict[str, Any]] = None
+    approval_reason: Optional[str] = None
+    rejection_reason: Optional[str] = None
     confidence_score: Optional[float] = None
     quality_score: Optional[float] = None
     mandatory_coverage: Optional[float] = None
