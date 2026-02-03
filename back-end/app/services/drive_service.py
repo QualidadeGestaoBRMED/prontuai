@@ -115,12 +115,25 @@ def upload_document_to_drive(document) -> None:
     try:
         upload_date = _get_upload_date(getattr(document, "uploaded_at", None))
         year = upload_date.strftime("%Y")
-        month = upload_date.strftime("%m")
-        week = f"semana-{upload_date.isocalendar().week:02d}"
-        day = upload_date.strftime("%Y-%m-%d")
+        month_names = {
+            1: "janeiro",
+            2: "fevereiro",
+            3: "marco",
+            4: "abril",
+            5: "maio",
+            6: "junho",
+            7: "julho",
+            8: "agosto",
+            9: "setembro",
+            10: "outubro",
+            11: "novembro",
+            12: "dezembro",
+        }
+        month = month_names[upload_date.month]
+        day = upload_date.strftime("%d-%m")
 
         parent_id = settings.GOOGLE_DRIVE_FOLDER_ID
-        for folder_name in (year, month, week, day):
+        for folder_name in (year, month, day):
             parent_id = _ensure_folder(service, folder_name, parent_id)
 
         media_type, _ = mimetypes.guess_type(getattr(document, "filename", "documento.pdf"))
