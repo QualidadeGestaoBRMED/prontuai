@@ -61,7 +61,7 @@ export default function LoginPage() {
               Prontu<span className="font-bold text-cyan-800">AI</span>
               <br /> 
             </h1>
-            <span className="font-medium text-">A Inteligência Artifical da <span className="font-semibold" >BR MED</span>.</span>
+            <span className="font-medium text-">A Inteligência Artificial da <span className="font-semibold" >BR MED</span>.</span>
             <p className="text-sm text-muted-foreground mt-4">
               Faça login com sua conta Google Corporativa para continuar.
             </p>
