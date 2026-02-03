@@ -109,6 +109,7 @@ export default function AuditoriaPage() {
   const [requestId, setRequestId] = useState("");
   const [since, setSince] = useState("");
   const [limit, setLimit] = useState("200");
+  const [hideNotifications, setHideNotifications] = useState(true);
 
   const queryParams = useMemo(() => {
     const params = new URLSearchParams();
@@ -185,7 +186,19 @@ export default function AuditoriaPage() {
       }
 
       const data = (await response.json()) as AuditLog[];
-      setLogs(data);
+      const filtered = hideNotifications
+        ? data.filter((log) => {
+            const actionText = (log.action || "").toLowerCase();
+            const resourceText = (log.resource || "").toLowerCase();
+            const pathText = (log.path || "").toLowerCase();
+            return (
+              !actionText.includes("notifications") &&
+              resourceText !== "notifications" &&
+              !pathText.includes("/v1/notifications")
+            );
+          })
+        : data;
+      setLogs(filtered);
       setLastUpdatedAt(new Date());
     } catch (error) {
       console.error("Erro:", error);
@@ -193,7 +206,7 @@ export default function AuditoriaPage() {
     } finally {
       setLoading(false);
     }
-  }, [session?.accessToken, queryParams]);
+  }, [session?.accessToken, queryParams, hideNotifications]);
 
   useEffect(() => {
     fetchLogs();
@@ -216,7 +229,7 @@ export default function AuditoriaPage() {
           </header>
 
           <div className="flex-1 overflow-auto bg-[hsl(240_5%_92.16%)] md:rounded-s-3xl md:group-peer-data-[state=collapsed]/sidebar-inset:rounded-s-none transition-all ease-in-out duration-300">
-            <div className="p-6 md:p-8 lg:p-12 space-y-6">
+            <div className="p-6 md:p-8 lg:p-12 space-y-6 mx-auto w-full max-w-7xl">
               <div className="space-y-1">
                 <p className="text-sm text-muted-foreground">
                   Acompanhe ações sensíveis feitas no sistema (POST/PUT/PATCH/DELETE).
@@ -284,6 +297,12 @@ export default function AuditoriaPage() {
                     Atualizar
                   </Button>
                   <Button
+                    variant={hideNotifications ? "secondary" : "outline"}
+                    onClick={() => setHideNotifications((prev) => !prev)}
+                  >
+                    {hideNotifications ? "Mostrando: sem notificações" : "Mostrando: com notificações"}
+                  </Button>
+                  <Button
                     variant="outline"
                     onClick={() => {
                       setUserEmail("");
@@ -291,6 +310,7 @@ export default function AuditoriaPage() {
                       setRequestId("");
                       setSince("");
                       setLimit("200");
+                      setHideNotifications(true);
                     }}
                   >
                     Limpar filtros
@@ -298,8 +318,8 @@ export default function AuditoriaPage() {
                 </div>
               </div>
 
-              <div className="rounded-lg border bg-white">
-                <Table>
+              <div className="rounded-lg border bg-white overflow-x-auto">
+                <Table className="w-full table-fixed">
                   <TableHeader>
                     <TableRow>
                       <TableHead>Data</TableHead>
@@ -333,10 +353,10 @@ export default function AuditoriaPage() {
                       logs.map((log) => (
                         <Fragment key={log.id ?? `${log.request_id}-${log.created_at}`}>
                           <TableRow>
-                            <TableCell className="text-sm text-muted-foreground">
+                            <TableCell className="text-sm text-muted-foreground w-[150px]">
                               {formatDateTime(log.created_at)}
                             </TableCell>
-                            <TableCell className="text-sm">
+                            <TableCell className="text-sm w-[200px]">
                               <div className="font-medium">
                                 {log.user_email ?? "Sistema/Automação"}
                               </div>
@@ -344,27 +364,27 @@ export default function AuditoriaPage() {
                                 {log.user_role ?? "-"}
                               </div>
                             </TableCell>
-                            <TableCell className="text-sm">
-                              <div className="font-medium">{log.action}</div>
-                              <div className="text-xs text-muted-foreground">
+                            <TableCell className="text-sm w-[220px]">
+                              <div className="font-medium break-words">{log.action}</div>
+                              <div className="text-xs text-muted-foreground break-words">
                                 {log.path ?? "-"}
                               </div>
                             </TableCell>
-                            <TableCell className="text-sm">
-                              <div className="font-medium">{log.resource ?? "-"}</div>
-                              <div className="text-xs text-muted-foreground">
+                            <TableCell className="text-sm w-[160px]">
+                              <div className="font-medium break-words">{log.resource ?? "-"}</div>
+                              <div className="text-xs text-muted-foreground break-words">
                                 {log.resource_id ?? "-"}
                               </div>
                             </TableCell>
-                            <TableCell>{methodBadge(log.method)}</TableCell>
-                            <TableCell>{statusBadge(log.status_code)}</TableCell>
-                            <TableCell className="text-sm text-muted-foreground">
+                            <TableCell className="w-[90px]">{methodBadge(log.method)}</TableCell>
+                            <TableCell className="w-[90px]">{statusBadge(log.status_code)}</TableCell>
+                            <TableCell className="text-sm text-muted-foreground w-[120px]">
                               {log.ip ?? "-"}
                             </TableCell>
-                            <TableCell className="text-xs text-muted-foreground">
+                            <TableCell className="text-xs text-muted-foreground w-[160px]">
                               {log.request_id ?? "-"}
                             </TableCell>
-                            <TableCell>
+                            <TableCell className="w-[90px]">
                               <Button
                                 variant="ghost"
                                 size="sm"
