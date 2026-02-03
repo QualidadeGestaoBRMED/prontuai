@@ -296,7 +296,7 @@ export function DocumentBatchProcessor({
         // Faz polling do job com callbacks de progresso
         await pollJob(jobId, {
           interval: 2000, // 2 segundos
-          timeout: 300000, // 5 minutos
+          timeout: 0, // desabilita timeout para aguardar até finalizar
           onProgress: (job: Job) => {
             console.log(`[FRONTEND-ASYNC] Progresso: ${job.progress}% - ${job.message}`)
 

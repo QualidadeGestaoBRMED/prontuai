@@ -181,14 +181,16 @@ export function useAsyncJob(): UseAsyncJobReturn {
           }
         }
 
-        // Timeout global
-        const timeoutHandle = setTimeout(() => {
-          const timeoutError = "Timeout: Processamento demorou muito tempo"
-          setError(timeoutError)
-          onError?.(timeoutError)
-          finish({ type: "reject", error: new Error(timeoutError) })
-        }, timeout)
-        pollingTimeoutsRef.current.set(jobId, timeoutHandle)
+        // Timeout global (se <= 0, desabilita)
+        if (timeout && timeout > 0) {
+          const timeoutHandle = setTimeout(() => {
+            const timeoutError = "Timeout: Processamento demorou muito tempo"
+            setError(timeoutError)
+            onError?.(timeoutError)
+            finish({ type: "reject", error: new Error(timeoutError) })
+          }, timeout)
+          pollingTimeoutsRef.current.set(jobId, timeoutHandle)
+        }
 
         // Função de polling
         const poll = async () => {

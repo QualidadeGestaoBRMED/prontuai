@@ -36,10 +36,10 @@ export default function Page() {
   const showRefreshing = refreshing && hasLoaded;
 
   const getChecagemPriority = (result: ProcessResult) => {
-    if (result.status === 'pending_review') return 0;
-    if (result.status === 'rejected' && !result.reviewedBy) return 0;
-    if (result.status === 'approved' && !result.reviewedBy) return 1;
-    return 2;
+    if (result.reviewedBy) return 2; // já revisado por humano vai pro final
+    if (result.status === 'pending_review' || result.status === 'rejected') return 0; // rejeitado pela IA
+    if (result.status === 'approved') return 1; // aprovado pela IA
+    return 3;
   };
 
   const getChecagemTimestamp = (result: ProcessResult) => {

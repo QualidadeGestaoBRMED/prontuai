@@ -7,6 +7,7 @@ import {
   ColumnFiltersState,
   flexRender,
   getCoreRowModel,
+  getPaginationRowModel,
   getFacetedMinMaxValues,
   getFacetedRowModel,
   getFacetedUniqueValues,
@@ -64,12 +65,8 @@ export function CheckagemTable({
   onViewDetails,
 }: CheckagemTableProps) {
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
-  const [sorting, setSorting] = useState<SortingState>([
-    {
-      id: "dataUpload",
-      desc: true,
-    },
-  ]);
+  const [sorting, setSorting] = useState<SortingState>([]);
+  const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 10 });
 
   const columns = useMemo<ColumnDef<DocumentoChecagem>[]>(
     () => [
@@ -204,11 +201,14 @@ export function CheckagemTable({
     state: {
       sorting,
       columnFilters,
+      pagination,
     },
+    onPaginationChange: setPagination,
     onColumnFiltersChange: setColumnFilters,
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     getSortedRowModel: getSortedRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
     getFacetedRowModel: getFacetedRowModel(),
     getFacetedUniqueValues: getFacetedUniqueValues(),
     getFacetedMinMaxValues: getFacetedMinMaxValues(),
@@ -334,6 +334,46 @@ export function CheckagemTable({
             )}
           </TableBody>
         </Table>
+      </div>
+
+      {/* Paginação */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="text-sm text-muted-foreground">
+          Página {table.getState().pagination.pageIndex + 1} de {table.getPageCount() || 1}
+        </div>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => table.previousPage()}
+            disabled={!table.getCanPreviousPage()}
+          >
+            Anterior
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => table.nextPage()}
+            disabled={!table.getCanNextPage()}
+          >
+            Próxima
+          </Button>
+          <Select
+            value={String(table.getState().pagination.pageSize)}
+            onValueChange={(value) => table.setPageSize(Number(value))}
+          >
+            <SelectTrigger className="h-8 w-[120px]">
+              <SelectValue placeholder="Itens" />
+            </SelectTrigger>
+            <SelectContent>
+              {[10, 20, 30, 50].map((size) => (
+                <SelectItem key={size} value={String(size)}>
+                  {size} / pág.
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
     </div>
   );
