@@ -471,7 +471,17 @@ class PostgresUserDatabase:
             # Verifica se usuário já existe
             existing = session.query(UserModel).filter(UserModel.email == email).first()
             if existing:
-                raise ValueError(f"User with email {email} already exists")
+                if existing.is_active:
+                    raise ValueError(f"User with email {email} already exists")
+                # Reativa usuário inativo
+                existing.name = name
+                existing.role = role
+                existing.is_active = True
+                existing.clinic_id = clinic_id
+                existing.updated_at = datetime.utcnow()
+                session.commit()
+                session.refresh(existing)
+                return self._model_to_user(existing)
 
             # Cria novo usuário
             import uuid
