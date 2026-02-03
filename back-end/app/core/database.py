@@ -171,7 +171,22 @@ class UserDatabase:
         db = self._read_db()
 
         # Verificar se email já existe
-        if self.get_user_by_email(email):
+        existing = self.get_user_by_email(email)
+        if existing:
+            if getattr(existing, "is_active", True):
+                raise ValueError(f"Usuário com email {email} já existe")
+            # Reativa usuário inativo
+            for user_id, user_data in db.get("users", {}).items():
+                if user_data.get("email") == email:
+                    now = datetime.now().isoformat()
+                    user_data["name"] = name
+                    user_data["role"] = role.value
+                    user_data["is_active"] = True
+                    user_data["updated_at"] = now
+                    db["users"][user_id] = user_data
+                    self._write_db(db)
+                    logger.info(f"Usuário reativado: {email} com role {role.value}")
+                    return User(**user_data)
             raise ValueError(f"Usuário com email {email} já existe")
 
         user_id = str(uuid.uuid4())

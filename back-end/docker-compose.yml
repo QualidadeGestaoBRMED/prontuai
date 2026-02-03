@@ -29,6 +29,8 @@ services:
       - ./resultados:/app/resultados
       - ./ocr_resultados:/app/ocr_resultados
       - ./auditoria_validacao:/app/auditoria_validacao
+      # Uploads para visualização (leitura/escrita)
+      - ./uploads:/app/data/uploads
       # Dados FAISS (apenas leitura)
       - ./data:/app/data:ro
     healthcheck:
