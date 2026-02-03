@@ -26,10 +26,10 @@ class UserDatabaseProtocol(Protocol):
     def update_user(self, user_id: str, update: UserUpdate) -> User: ...
     def delete_user(self, user_id: str) -> bool: ...
     def create_notification(self, data: NotificationCreate) -> Notification: ...
-    def list_notifications(self, clinic_id: Optional[str] = None, limit: int = 100, include_read: bool = True) -> List[Notification]: ...
-    def mark_notification_read(self, notification_id: str) -> Optional[Notification]: ...
-    def mark_all_notifications_read(self, clinic_id: Optional[str] = None) -> int: ...
-    def clear_notifications(self, clinic_id: Optional[str] = None) -> int: ...
+    def list_notifications(self, clinic_id: Optional[str] = None, user_id: Optional[str] = None, limit: int = 100, include_read: bool = True) -> List[Notification]: ...
+    def mark_notification_read(self, notification_id: str, user_id: Optional[str] = None) -> Optional[Notification]: ...
+    def mark_all_notifications_read(self, clinic_id: Optional[str] = None, user_id: Optional[str] = None) -> int: ...
+    def clear_notifications(self, clinic_id: Optional[str] = None, user_id: Optional[str] = None) -> int: ...
     def create_audit_log(self, data: AuditLogCreate) -> AuditLog: ...
     def list_audit_logs(
         self,
@@ -348,6 +348,8 @@ class UserDatabase:
         now = datetime.now().isoformat()
         notif = {
             "id": notif_id,
+            "user_id": data.user_id,
+            "user_email": data.user_email,
             "clinic_id": data.clinic_id,
             "document_id": data.document_id,
             "type": data.type,
@@ -364,9 +366,11 @@ class UserDatabase:
         self._write_notifications(db)
         return Notification(**notif)
 
-    def list_notifications(self, clinic_id: Optional[str] = None, limit: int = 100, include_read: bool = True) -> List[Notification]:
+    def list_notifications(self, clinic_id: Optional[str] = None, user_id: Optional[str] = None, limit: int = 100, include_read: bool = True) -> List[Notification]:
         db = self._read_notifications()
         items = db.get("notifications", [])
+        if user_id:
+            items = [n for n in items if n.get("user_id") == user_id]
         if clinic_id:
             items = [n for n in items if n.get("clinic_id") == clinic_id]
         if not include_read:
@@ -374,19 +378,23 @@ class UserDatabase:
         items = sorted(items, key=lambda n: n.get("created_at", ""), reverse=True)[:limit]
         return [Notification(**n) for n in items]
 
-    def mark_notification_read(self, notification_id: str) -> Optional[Notification]:
+    def mark_notification_read(self, notification_id: str, user_id: Optional[str] = None) -> Optional[Notification]:
         db = self._read_notifications()
         for n in db.get("notifications", []):
             if n.get("id") == notification_id:
+                if user_id and n.get("user_id") and n.get("user_id") != user_id:
+                    return None
                 n["read"] = True
                 self._write_notifications(db)
                 return Notification(**n)
         return None
 
-    def mark_all_notifications_read(self, clinic_id: Optional[str] = None) -> int:
+    def mark_all_notifications_read(self, clinic_id: Optional[str] = None, user_id: Optional[str] = None) -> int:
         db = self._read_notifications()
         count = 0
         for n in db.get("notifications", []):
+            if user_id and n.get("user_id") != user_id:
+                continue
             if clinic_id and n.get("clinic_id") != clinic_id:
                 continue
             if not n.get("read", False):
@@ -395,11 +403,13 @@ class UserDatabase:
         self._write_notifications(db)
         return count
 
-    def clear_notifications(self, clinic_id: Optional[str] = None) -> int:
+    def clear_notifications(self, clinic_id: Optional[str] = None, user_id: Optional[str] = None) -> int:
         # Preserve histórico: apenas marca como lidas
         db = self._read_notifications()
         count = 0
         for n in db.get("notifications", []):
+            if user_id and n.get("user_id") != user_id:
+                continue
             if clinic_id and n.get("clinic_id") != clinic_id:
                 continue
             if not n.get("read", False):

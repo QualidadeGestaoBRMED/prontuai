@@ -43,18 +43,36 @@ async def job_watchdog_loop():
                 filename = metadata.get("filename") or "Documento"
                 clinic_id = metadata.get("clinic_id")
                 document_id = metadata.get("document_id")
+                uploaded_by_user_id = metadata.get("uploaded_by_user_id")
                 uploaded_by_email = metadata.get("uploaded_by_user_email")
+                if uploaded_by_user_id and not uploaded_by_email:
+                    try:
+                        user = user_db.get_user_by_id(uploaded_by_user_id)
+                        if user and getattr(user, "email", None):
+                            uploaded_by_email = user.email
+                    except Exception:
+                        pass
+                if uploaded_by_email and not uploaded_by_user_id:
+                    try:
+                        user = user_db.get_user_by_email(uploaded_by_email)
+                        if user and getattr(user, "id", None):
+                            uploaded_by_user_id = user.id
+                    except Exception:
+                        pass
                 metadata.update(
                     {
                         "job_id": job.job_id,
                         "job_type": job.job_type,
                         "stale_seconds": stale_seconds,
                         "uploaded_by_user_email": uploaded_by_email,
+                        "uploaded_by_user_id": uploaded_by_user_id,
                     }
                 )
                 try:
                     user_db.create_notification(
                         NotificationCreate(
+                            user_id=uploaded_by_user_id,
+                            user_email=uploaded_by_email,
                             clinic_id=clinic_id,
                             document_id=document_id,
                             type="process_error",
