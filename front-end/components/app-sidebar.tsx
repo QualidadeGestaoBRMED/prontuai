@@ -180,7 +180,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                         size={22}
                         aria-hidden="true"
                       />
-                      <span>Análises de Validação</span>
+                      <span>Revisões</span>
                     </a>
                   </SidebarMenuButton>
                 </SidebarMenuItem>

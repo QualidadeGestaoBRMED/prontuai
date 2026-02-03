@@ -430,7 +430,7 @@ export default function AuditoriaPage() {
 
                       {validationMessage && (
                         <div className="rounded-lg border bg-slate-50 p-3">
-                          <div className="text-xs uppercase text-muted-foreground mb-1">Análise de Validação</div>
+                          <div className="text-xs uppercase text-muted-foreground mb-1">Análise da Revisão</div>
                           <p className="text-sm text-slate-700">
                             {highlightLiberacao(validationMessage)}
                           </p>
