@@ -68,6 +68,8 @@ class DocumentModel(Base):
     run_id = Column(String, nullable=True)
     result_payload = Column(Text, nullable=True)
     result_payload_compact = Column(Text, nullable=True)
+    approval_reason = Column(Text, nullable=True)
+    rejection_reason = Column(Text, nullable=True)
     confidence_score = Column(Float, nullable=True)
     quality_score = Column(Float, nullable=True)
     mandatory_coverage = Column(Float, nullable=True)
@@ -170,6 +172,8 @@ class PostgresUserDatabase:
             connection.execute(text("ALTER TABLE documents ADD COLUMN IF NOT EXISTS run_id VARCHAR"))
             connection.execute(text("ALTER TABLE documents ADD COLUMN IF NOT EXISTS result_payload TEXT"))
             connection.execute(text("ALTER TABLE documents ADD COLUMN IF NOT EXISTS result_payload_compact TEXT"))
+            connection.execute(text("ALTER TABLE documents ADD COLUMN IF NOT EXISTS approval_reason TEXT"))
+            connection.execute(text("ALTER TABLE documents ADD COLUMN IF NOT EXISTS rejection_reason TEXT"))
             connection.execute(text("ALTER TABLE documents ADD COLUMN IF NOT EXISTS confidence_score DOUBLE PRECISION"))
             connection.execute(text("ALTER TABLE documents ADD COLUMN IF NOT EXISTS quality_score DOUBLE PRECISION"))
             connection.execute(text("ALTER TABLE documents ADD COLUMN IF NOT EXISTS mandatory_coverage DOUBLE PRECISION"))
@@ -733,6 +737,8 @@ class PostgresUserDatabase:
             ocr_markdown=model.ocr_markdown if include_ocr_markdown else None,
             run_id=model.run_id,
             result_payload=result_payload,
+            approval_reason=getattr(model, "approval_reason", None),
+            rejection_reason=getattr(model, "rejection_reason", None),
             confidence_score=model.confidence_score,
             quality_score=model.quality_score,
             mandatory_coverage=model.mandatory_coverage,
@@ -836,6 +842,8 @@ class PostgresUserDatabase:
         ocr_markdown: Optional[str] = None,
         run_id: Optional[str] = None,
         result_payload: Optional[dict] = None,
+        approval_reason: Optional[str] = None,
+        rejection_reason: Optional[str] = None,
         confidence_score: Optional[float] = None,
         quality_score: Optional[float] = None,
         mandatory_coverage: Optional[float] = None
@@ -864,6 +872,8 @@ class PostgresUserDatabase:
                 run_id=run_id,
                 result_payload=payload_json,
                 result_payload_compact=compact_payload_json,
+                approval_reason=approval_reason,
+                rejection_reason=rejection_reason,
                 confidence_score=confidence_score,
                 quality_score=quality_score,
                 mandatory_coverage=mandatory_coverage,
@@ -889,6 +899,8 @@ class PostgresUserDatabase:
         ocr_markdown: Optional[str] = None,
         run_id: Optional[str] = None,
         result_payload: Optional[dict] = None,
+        approval_reason: Optional[str] = None,
+        rejection_reason: Optional[str] = None,
         confidence_score: Optional[float] = None,
         quality_score: Optional[float] = None,
         mandatory_coverage: Optional[float] = None,
@@ -921,6 +933,10 @@ class PostgresUserDatabase:
                 doc_model.result_payload = json.dumps(result_payload, ensure_ascii=False)
                 compact_payload = self._compact_payload_for_storage(result_payload)
                 doc_model.result_payload_compact = json.dumps(compact_payload, ensure_ascii=False) if compact_payload is not None else None
+            if approval_reason is not None:
+                doc_model.approval_reason = approval_reason
+            if rejection_reason is not None:
+                doc_model.rejection_reason = rejection_reason
             if confidence_score is not None:
                 doc_model.confidence_score = confidence_score
             if quality_score is not None:

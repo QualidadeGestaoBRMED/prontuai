@@ -15,6 +15,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   Table,
   TableBody,
   TableCell,
@@ -95,13 +101,14 @@ export default function AuditoriaPage() {
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [selectedLog, setSelectedLog] = useState<AuditLog | null>(null);
 
   const [userEmail, setUserEmail] = useState("");
   const [action, setAction] = useState("");
   const [requestId, setRequestId] = useState("");
   const [since, setSince] = useState("");
   const [limit, setLimit] = useState("200");
-  const [expandedLogId, setExpandedLogId] = useState<string | null>(null);
 
   const queryParams = useMemo(() => {
     const params = new URLSearchParams();
@@ -125,6 +132,27 @@ export default function AuditoriaPage() {
     } catch {
       return null;
     }
+  };
+  const highlightLiberacao = (text?: string | null) => {
+    if (!text) return null;
+    const phrase = "Liberação concedida";
+    const lower = text.toLowerCase();
+    const idx = lower.indexOf(phrase.toLowerCase());
+    if (idx === -1) return text;
+    const before = text.slice(0, idx);
+    const match = text.slice(idx, idx + phrase.length);
+    const after = text.slice(idx + phrase.length);
+    return (
+      <>
+        {before}
+        <span className="font-semibold text-emerald-700">{match}</span>
+        {after}
+      </>
+    );
+  };
+  const openDetails = (log: AuditLog) => {
+    setSelectedLog(log);
+    setDetailsOpen(true);
   };
 
   const fetchLogs = useCallback(async () => {
@@ -328,44 +356,96 @@ export default function AuditoriaPage() {
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                onClick={() =>
-                                  setExpandedLogId((prev) =>
-                                    prev === (log.id ?? log.request_id ?? "") ? null : (log.id ?? log.request_id ?? "")
-                                  )
-                                }
+                                onClick={() => openDetails(log)}
                               >
-                                {expandedLogId === (log.id ?? log.request_id ?? "") ? "Ocultar" : "Ver"}
+                                Ver
                               </Button>
                             </TableCell>
                           </TableRow>
-                          {expandedLogId === (log.id ?? log.request_id ?? "") && (
-                            <TableRow>
-                              <TableCell colSpan={9} className="bg-slate-50">
-                                <div className="grid gap-3 md:grid-cols-3 text-xs text-slate-600">
-                                  <div>
-                                    <div className="font-semibold text-slate-700">User Agent</div>
-                                    <div className="break-words">{log.user_agent ?? "-"}</div>
-                                  </div>
-                                  <div>
-                                    <div className="font-semibold text-slate-700">Path</div>
-                                    <div className="break-words">{log.path ?? "-"}</div>
-                                  </div>
-                                  <div>
-                                    <div className="font-semibold text-slate-700">Metadata</div>
-                                    <pre className="whitespace-pre-wrap break-words rounded bg-white p-2 border">
-                                      {formatMetadata(log.metadata) ?? "-"}
-                                    </pre>
-                                  </div>
-                                </div>
-                              </TableCell>
-                            </TableRow>
-                          )}
                         </Fragment>
                       ))
                     )}
                   </TableBody>
                 </Table>
               </div>
+              <Dialog open={detailsOpen} onOpenChange={setDetailsOpen}>
+                <DialogContent className="max-w-3xl">
+                  <DialogHeader>
+                    <DialogTitle>Detalhes da auditoria</DialogTitle>
+                  </DialogHeader>
+                  {selectedLog ? (
+                    <div className="space-y-4 text-sm text-slate-700">
+                      <div className="grid gap-2 md:grid-cols-2">
+                        <div>
+                          <div className="text-xs uppercase text-muted-foreground">Usuário</div>
+                          <div className="font-medium">{selectedLog.user_email ?? "Sistema/Automação"}</div>
+                          <div className="text-xs text-muted-foreground">{selectedLog.user_role ?? "-"}</div>
+                        </div>
+                        <div>
+                          <div className="text-xs uppercase text-muted-foreground">Ação</div>
+                          <div className="font-medium">{selectedLog.action}</div>
+                          <div className="text-xs text-muted-foreground">{selectedLog.path ?? "-"}</div>
+                        </div>
+                        <div>
+                          <div className="text-xs uppercase text-muted-foreground">Status</div>
+                          <div>{statusBadge(selectedLog.status_code)}</div>
+                        </div>
+                        <div>
+                          <div className="text-xs uppercase text-muted-foreground">Request ID</div>
+                          <div className="text-xs text-muted-foreground">{selectedLog.request_id ?? "-"}</div>
+                        </div>
+                      </div>
+
+                      {selectedLog.metadata?.validation_message && (
+                        <div className="rounded-lg border bg-slate-50 p-3">
+                          <div className="text-xs uppercase text-muted-foreground mb-1">Análise de Validação</div>
+                          <p className="text-sm text-slate-700">
+                            {highlightLiberacao(
+                              String(selectedLog.metadata?.validation_message ?? "")
+                            )}
+                          </p>
+                        </div>
+                      )}
+
+                      {(selectedLog.metadata?.approval_reason || selectedLog.metadata?.rejection_reason) && (
+                        <div className="grid gap-3 md:grid-cols-2">
+                          {selectedLog.metadata?.approval_reason && (
+                            <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3">
+                              <div className="text-xs uppercase text-emerald-700 mb-1">Justificativa de aprovação</div>
+                              <p className="text-sm text-emerald-800">
+                                {String(selectedLog.metadata?.approval_reason)}
+                              </p>
+                            </div>
+                          )}
+                          {selectedLog.metadata?.rejection_reason && (
+                            <div className="rounded-lg border border-rose-200 bg-rose-50 p-3">
+                              <div className="text-xs uppercase text-rose-700 mb-1">Justificativa de rejeição</div>
+                              <p className="text-sm text-rose-800">
+                                {String(selectedLog.metadata?.rejection_reason)}
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      <div>
+                        <div className="text-xs uppercase text-muted-foreground mb-1">Metadata</div>
+                        <pre className="whitespace-pre-wrap break-words rounded bg-white p-3 border text-xs">
+                          {formatMetadata(selectedLog.metadata) ?? "-"}
+                        </pre>
+                      </div>
+                      <div>
+                        <div className="text-xs uppercase text-muted-foreground mb-1">User Agent</div>
+                        <div className="text-xs text-muted-foreground break-words">
+                          {selectedLog.user_agent ?? "-"}
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-sm text-muted-foreground">Nenhum log selecionado.</div>
+                  )}
+                </DialogContent>
+              </Dialog>
             </div>
           </div>
         </SidebarInset>
