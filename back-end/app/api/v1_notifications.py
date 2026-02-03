@@ -21,12 +21,11 @@ async def list_notifications(
 ):
     try:
         start_time = time.perf_counter()
-        if current_user.role in [UserRole.CHECKER, UserRole.ADMIN]:
-            notifications = user_db.list_notifications(clinic_id=None, limit=limit, include_read=include_read)
-        else:
-            if not current_user.clinic_id:
-                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Usuário sem clínica associada")
-            notifications = user_db.list_notifications(clinic_id=current_user.clinic_id, limit=limit, include_read=include_read)
+        notifications = user_db.list_notifications(
+            user_id=current_user.id,
+            limit=limit,
+            include_read=include_read,
+        )
         elapsed = time.perf_counter() - start_time
         user_agent = request.headers.get("user-agent", "-") if request else "-"
         referer = request.headers.get("referer", "-") if request else "-"
@@ -52,19 +51,41 @@ async def create_notification(
 ):
     try:
         clinic_id = payload.clinic_id
-        # SENDER sempre usa sua própria clínica
-        if current_user.role == UserRole.SENDER:
-            clinic_id = current_user.clinic_id
-            if not clinic_id:
-                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Usuário sem clínica associada")
-        # CHECKER/ADMIN: se veio document_id, inferir clínica
-        if current_user.role in [UserRole.CHECKER, UserRole.ADMIN] and payload.document_id:
+        recipient_user_id = payload.user_id
+        recipient_user_email = payload.user_email
+        doc = None
+
+        if payload.document_id:
             doc = user_db.get_document_by_id(payload.document_id)
             if not doc:
                 raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Documento não encontrado")
-            clinic_id = doc.clinic_id
+            clinic_id = doc.clinic_id or clinic_id
+            if not recipient_user_id:
+                recipient_user_id = doc.uploaded_by_user_id
+            if not recipient_user_email:
+                recipient_user_email = doc.uploaded_by_user_email
+
+        if current_user.role == UserRole.SENDER:
+            recipient_user_id = current_user.id
+            recipient_user_email = current_user.email
+            clinic_id = current_user.clinic_id or clinic_id
+
+        if recipient_user_id and not recipient_user_email:
+            try:
+                recipient_user = user_db.get_user_by_id(recipient_user_id)
+                if recipient_user and getattr(recipient_user, "email", None):
+                    recipient_user_email = recipient_user.email
+            except Exception:
+                pass
+
+        if not recipient_user_id:
+            recipient_user_id = current_user.id
+        if not recipient_user_email:
+            recipient_user_email = current_user.email
 
         notification = user_db.create_notification(NotificationCreate(
+            user_id=recipient_user_id,
+            user_email=recipient_user_email,
             clinic_id=clinic_id,
             document_id=payload.document_id,
             type=payload.type,
@@ -100,7 +121,7 @@ async def create_notification(
 @router.post("/{notification_id}/read", response_model=Notification)
 async def mark_notification_read(notification_id: str, current_user: User = Depends(get_current_user)):
     try:
-        notification = user_db.mark_notification_read(notification_id)
+        notification = user_db.mark_notification_read(notification_id, user_id=current_user.id)
         if not notification:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Notificação não encontrada")
         try:
@@ -127,19 +148,14 @@ async def mark_notification_read(notification_id: str, current_user: User = Depe
 @router.post("/read-all")
 async def mark_all_read(current_user: User = Depends(get_current_user)):
     try:
-        clinic_id = None
-        if current_user.role == UserRole.SENDER:
-            clinic_id = current_user.clinic_id
-            if not clinic_id:
-                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Usuário sem clínica associada")
-        updated = user_db.mark_all_notifications_read(clinic_id=clinic_id)
+        updated = user_db.mark_all_notifications_read(user_id=current_user.id)
         try:
             set_audit_context(
                 {
                     "action": "notifications.read_all",
                     "resource": "notifications",
                     "metadata": {
-                        "clinic_id": clinic_id,
+                        "user_id": current_user.id,
                         "updated": updated,
                     },
                 }
@@ -156,19 +172,14 @@ async def mark_all_read(current_user: User = Depends(get_current_user)):
 @router.delete("")
 async def clear_notifications(current_user: User = Depends(get_current_user)):
     try:
-        clinic_id = None
-        if current_user.role == UserRole.SENDER:
-            clinic_id = current_user.clinic_id
-            if not clinic_id:
-                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Usuário sem clínica associada")
-        deleted = user_db.clear_notifications(clinic_id=clinic_id)
+        deleted = user_db.clear_notifications(user_id=current_user.id)
         try:
             set_audit_context(
                 {
                     "action": "notifications.clear",
                     "resource": "notifications",
                     "metadata": {
-                        "clinic_id": clinic_id,
+                        "user_id": current_user.id,
                         "deleted": deleted,
                     },
                 }

@@ -4,6 +4,8 @@ from datetime import datetime
 
 class Notification(BaseModel):
     id: Optional[str] = None
+    user_id: Optional[str] = None
+    user_email: Optional[str] = None
     clinic_id: Optional[str] = None
     document_id: Optional[str] = None
     type: str
@@ -17,6 +19,8 @@ class Notification(BaseModel):
     created_at: Optional[datetime] = None
 
 class NotificationCreate(BaseModel):
+    user_id: Optional[str] = None
+    user_email: Optional[str] = None
     clinic_id: Optional[str] = None
     document_id: Optional[str] = None
     type: str

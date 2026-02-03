@@ -81,6 +81,8 @@ class NotificationModel(Base):
     __tablename__ = "notifications"
 
     id = Column(String, primary_key=True)
+    user_id = Column(String, ForeignKey('users.id'), nullable=True, index=True)
+    user_email = Column(String, nullable=True, index=True)
     clinic_id = Column(String, ForeignKey('clinics.id'), nullable=True)
     document_id = Column(String, ForeignKey('documents.id'), nullable=True)
     type = Column(String, nullable=False)
@@ -184,6 +186,8 @@ class PostgresUserDatabase:
         """Garante que colunas novas existam para notificações."""
         with self.engine.begin() as connection:
             connection.execute(text("ALTER TABLE notifications ADD COLUMN IF NOT EXISTS metadata_json TEXT"))
+            connection.execute(text("ALTER TABLE notifications ADD COLUMN IF NOT EXISTS user_id VARCHAR"))
+            connection.execute(text("ALTER TABLE notifications ADD COLUMN IF NOT EXISTS user_email VARCHAR"))
 
     def _ensure_audit_log_table(self) -> None:
         """Garante índices úteis para auditoria."""
@@ -204,6 +208,8 @@ class PostgresUserDatabase:
                 metadata = None
         return Notification(
             id=model.id,
+            user_id=model.user_id,
+            user_email=model.user_email,
             clinic_id=model.clinic_id,
             document_id=model.document_id,
             type=model.type,
@@ -224,6 +230,8 @@ class PostgresUserDatabase:
             import json
             notification_model = NotificationModel(
                 id=str(uuid.uuid4()),
+                user_id=data.user_id,
+                user_email=data.user_email,
                 clinic_id=data.clinic_id,
                 document_id=data.document_id,
                 type=data.type,
@@ -333,10 +341,12 @@ class PostgresUserDatabase:
         finally:
             session.close()
 
-    def list_notifications(self, clinic_id: Optional[str] = None, limit: int = 100, include_read: bool = True) -> List[Notification]:
+    def list_notifications(self, clinic_id: Optional[str] = None, user_id: Optional[str] = None, limit: int = 100, include_read: bool = True) -> List[Notification]:
         session = self._get_session()
         try:
             query = session.query(NotificationModel)
+            if user_id:
+                query = query.filter(NotificationModel.user_id == user_id)
             if clinic_id:
                 query = query.filter(NotificationModel.clinic_id == clinic_id)
             if not include_read:
@@ -346,10 +356,13 @@ class PostgresUserDatabase:
         finally:
             session.close()
 
-    def mark_notification_read(self, notification_id: str) -> Optional[Notification]:
+    def mark_notification_read(self, notification_id: str, user_id: Optional[str] = None) -> Optional[Notification]:
         session = self._get_session()
         try:
-            model = session.query(NotificationModel).filter(NotificationModel.id == notification_id).first()
+            query = session.query(NotificationModel).filter(NotificationModel.id == notification_id)
+            if user_id:
+                query = query.filter(NotificationModel.user_id == user_id)
+            model = query.first()
             if not model:
                 return None
             model.read = True
@@ -359,10 +372,12 @@ class PostgresUserDatabase:
         finally:
             session.close()
 
-    def mark_all_notifications_read(self, clinic_id: Optional[str] = None) -> int:
+    def mark_all_notifications_read(self, clinic_id: Optional[str] = None, user_id: Optional[str] = None) -> int:
         session = self._get_session()
         try:
             query = session.query(NotificationModel)
+            if user_id:
+                query = query.filter(NotificationModel.user_id == user_id)
             if clinic_id:
                 query = query.filter(NotificationModel.clinic_id == clinic_id)
             updated = query.update({NotificationModel.read: True})
@@ -371,10 +386,12 @@ class PostgresUserDatabase:
         finally:
             session.close()
 
-    def clear_notifications(self, clinic_id: Optional[str] = None) -> int:
+    def clear_notifications(self, clinic_id: Optional[str] = None, user_id: Optional[str] = None) -> int:
         session = self._get_session()
         try:
             query = session.query(NotificationModel)
+            if user_id:
+                query = query.filter(NotificationModel.user_id == user_id)
             if clinic_id:
                 query = query.filter(NotificationModel.clinic_id == clinic_id)
             updated = query.update({NotificationModel.read: True})
