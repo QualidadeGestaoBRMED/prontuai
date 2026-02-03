@@ -68,6 +68,7 @@ export default function Page() {
         return url;
       });
     } catch (error) {
+      console.error("[CHECAGEM] Falha ao carregar o documento", error);
       toast.error("Falha ao carregar o documento.");
     } finally {
       setDocumentPreviewLoading(false);
