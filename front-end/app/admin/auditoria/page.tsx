@@ -154,6 +154,18 @@ export default function AuditoriaPage() {
     setSelectedLog(log);
     setDetailsOpen(true);
   };
+  const validationMessage =
+    typeof selectedLog?.metadata?.validation_message === "string"
+      ? selectedLog.metadata.validation_message
+      : null;
+  const approvalReason =
+    typeof selectedLog?.metadata?.approval_reason === "string"
+      ? selectedLog.metadata.approval_reason
+      : null;
+  const rejectionReason =
+    typeof selectedLog?.metadata?.rejection_reason === "string"
+      ? selectedLog.metadata.rejection_reason
+      : null;
 
   const fetchLogs = useCallback(async () => {
     if (!session?.accessToken) return;
@@ -396,32 +408,30 @@ export default function AuditoriaPage() {
                         </div>
                       </div>
 
-                      {selectedLog.metadata?.validation_message && (
+                      {validationMessage && (
                         <div className="rounded-lg border bg-slate-50 p-3">
                           <div className="text-xs uppercase text-muted-foreground mb-1">Análise de Validação</div>
                           <p className="text-sm text-slate-700">
-                            {highlightLiberacao(
-                              String(selectedLog.metadata?.validation_message ?? "")
-                            )}
+                            {highlightLiberacao(validationMessage)}
                           </p>
                         </div>
                       )}
 
-                      {(selectedLog.metadata?.approval_reason || selectedLog.metadata?.rejection_reason) && (
+                      {(approvalReason || rejectionReason) && (
                         <div className="grid gap-3 md:grid-cols-2">
-                          {selectedLog.metadata?.approval_reason && (
+                          {approvalReason && (
                             <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3">
                               <div className="text-xs uppercase text-emerald-700 mb-1">Justificativa de aprovação</div>
                               <p className="text-sm text-emerald-800">
-                                {String(selectedLog.metadata?.approval_reason)}
+                                {approvalReason}
                               </p>
                             </div>
                           )}
-                          {selectedLog.metadata?.rejection_reason && (
+                          {rejectionReason && (
                             <div className="rounded-lg border border-rose-200 bg-rose-50 p-3">
                               <div className="text-xs uppercase text-rose-700 mb-1">Justificativa de rejeição</div>
                               <p className="text-sm text-rose-800">
-                                {String(selectedLog.metadata?.rejection_reason)}
+                                {rejectionReason}
                               </p>
                             </div>
                           )}
