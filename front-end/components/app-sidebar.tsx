@@ -23,6 +23,7 @@ import {
   RiUserSettingsLine,
   RiHospitalLine,
   RiShieldCheckLine,
+  RiFileSearchLine,
 } from "@remixicon/react";
 import { CentroAjudaDialog } from "@/components/centro-ajuda-dialog";
 import { TourGuiado } from "@/components/tour-guiado";
@@ -165,6 +166,21 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                         aria-hidden="true"
                       />
                       <span>Auditoria</span>
+                    </a>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    asChild
+                    className="group/menu-button font-medium gap-3 h-9 rounded-md data-[active=true]:hover:bg-transparent data-[active=true]:bg-gradient-to-b data-[active=true]:from-sidebar-primary data-[active=true]:to-sidebar-primary/70 data-[active=true]:shadow-[0_1px_2px_0_rgb(0_0_0/.05),inset_0_1px_0_0_rgb(255_255_255/.12)] [&>svg]:size-auto"
+                  >
+                    <a href="/admin/validacoes">
+                      <RiFileSearchLine
+                        className="text-sidebar-foreground/50 group-data-[active=true]/menu-button:text-sidebar-foreground"
+                        size={22}
+                        aria-hidden="true"
+                      />
+                      <span>Análises de Validação</span>
                     </a>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
