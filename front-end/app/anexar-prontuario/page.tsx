@@ -26,6 +26,7 @@ import { ResultsTable } from "@/components/results-table"
 import { DocumentDetailsModal } from "@/components/document-details-modal"
 import { ProcessResult } from "@/types/process"
 import { generateResultPDF } from "@/lib/pdf-generator"
+import { RequireRole } from "@/components/require-role"
 
 type PageState = "upload" | "processing" | "completed"
 
@@ -104,6 +105,7 @@ function PageContent() {
   }
 
   return (
+    <RequireRole allowedRoles={["SENDER", "ADMIN"]}>
     <SidebarProvider>
       {activeProcess && (
         <ProcessProgressBar
@@ -288,5 +290,6 @@ function PageContent() {
         } : undefined}
       />
     </SidebarProvider>
+    </RequireRole>
   )
 }
