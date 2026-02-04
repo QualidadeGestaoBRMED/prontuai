@@ -1,7 +1,8 @@
 "use client"
 
-import { useState, useEffect, Suspense, useMemo } from "react"
+import { useState, useEffect, Suspense, useMemo, useCallback } from "react"
 import { useSearchParams } from "next/navigation"
+import { useSession } from "next-auth/react"
 import { AppSidebar } from "@/components/app-sidebar"
 import {
   SidebarInset,
@@ -19,8 +20,10 @@ import { ResultsTable } from "@/components/results-table"
 import { DocumentDetailsModal } from "@/components/document-details-modal"
 import { ProcessResult } from "@/types/process"
 import { History, Loader2 } from "lucide-react"
+import { downloadDocumentPdf } from "@/lib/document-download"
 
 function HistoricoContent() {
+  const { data: session } = useSession()
   const searchParams = useSearchParams()
   const [selectedResult, setSelectedResult] = useState<ProcessResult | null>(null)
   const [detailsModalOpen, setDetailsModalOpen] = useState(false)
@@ -52,6 +55,19 @@ function HistoricoContent() {
       }
     }
   }, [searchParams, sortedResults])
+
+  const handleDownloadPDF = useCallback(async (result: ProcessResult) => {
+    if (!result?.id) return
+    try {
+      await downloadDocumentPdf({
+        id: result.id,
+        filename: result.filename,
+        accessToken: session?.accessToken,
+      })
+    } catch (error) {
+      console.error("Falha ao baixar PDF:", error)
+    }
+  }, [session?.accessToken])
 
   return (
     <SidebarProvider>
@@ -102,22 +118,21 @@ function HistoricoContent() {
                   <Loader2 className="size-4 animate-spin" />
                   <span>Sincronizando documentos com o banco...</span>
                 </div>
-              ) : (
-                <ResultsTable
-                  results={sortedResults}
+                ) : (
+                  <ResultsTable
+                    results={sortedResults}
                   onViewDetails={(result) => {
                     console.log('[DEBUG] Opening modal for result:', result)
                     console.log('[DEBUG] Result exists?', !!result)
                     setSelectedResult(result)
                     setDetailsModalOpen(true)
                     console.log('[DEBUG] Modal state set to open')
-                  }}
-                  onDownloadPDF={(result) => {
-                    // TODO: Implementar download de PDF
-                    console.log("Download PDF:", result)
-                  }}
-                />
-              )}
+                    }}
+                    onDownloadPDF={(result) => {
+                      handleDownloadPDF(result)
+                    }}
+                  />
+                )}
             </div>
           </div>
         </div>
@@ -129,8 +144,7 @@ function HistoricoContent() {
         onOpenChange={setDetailsModalOpen}
         result={selectedResult}
         onDownloadPDF={selectedResult ? () => {
-          // TODO: Implementar download de PDF
-          console.log("Download PDF:", selectedResult)
+          handleDownloadPDF(selectedResult)
         } : undefined}
       />
     </SidebarProvider>
