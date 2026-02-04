@@ -26,6 +26,7 @@ import { ResultsTable } from "@/components/results-table"
 import { DocumentDetailsModal } from "@/components/document-details-modal"
 import { ProcessResult } from "@/types/process"
 import { generateResultPDF } from "@/lib/pdf-generator"
+import { downloadDocumentPdf } from "@/lib/document-download"
 import { RequireRole } from "@/components/require-role"
 
 type PageState = "upload" | "processing" | "completed"
@@ -102,6 +103,24 @@ function PageContent() {
     setPageState("upload")
     setFilesToProcess([])
     // setChatInitialMessage(undefined)
+  }
+
+  const handleDownloadPDF = async (result: ProcessResult) => {
+    if (!result) return
+    if (!result.id) {
+      generateResultPDF(result)
+      return
+    }
+    try {
+      await downloadDocumentPdf({
+        id: result.id,
+        filename: result.filename,
+        accessToken: session?.accessToken,
+      })
+    } catch (error) {
+      console.error("Falha ao baixar PDF original, usando PDF gerado:", error)
+      generateResultPDF(result)
+    }
   }
 
   return (
@@ -265,9 +284,7 @@ function PageContent() {
                       setSelectedResult(result)
                       setDetailsModalOpen(true)
                     }}
-                    onDownloadPDF={(result) => {
-                      generateResultPDF(result)
-                    }}
+                    onDownloadPDF={handleDownloadPDF}
                   />
                 </div>
               )}
@@ -285,9 +302,7 @@ function PageContent() {
         open={detailsModalOpen}
         onOpenChange={setDetailsModalOpen}
         result={selectedResult}
-        onDownloadPDF={selectedResult ? () => {
-          generateResultPDF(selectedResult)
-        } : undefined}
+        onDownloadPDF={selectedResult ? () => handleDownloadPDF(selectedResult) : undefined}
       />
     </SidebarProvider>
     </RequireRole>

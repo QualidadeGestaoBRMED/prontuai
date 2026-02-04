@@ -1,6 +1,6 @@
 'use client'
 
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react'
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react'
 import { useSession } from 'next-auth/react'
 import {
   Notification,
@@ -137,6 +137,15 @@ function mapApiNotification(n: any): Notification {
   }
 }
 
+function applyClearFilter(notifications: Notification[], lastClearedAt: Date | null): Notification[] {
+  if (!lastClearedAt) return notifications
+  const cutoff = lastClearedAt.getTime()
+  return notifications.filter(n => {
+    const ts = n.timestamp instanceof Date ? n.timestamp.getTime() : new Date(n.timestamp).getTime()
+    return Number.isNaN(ts) ? true : ts > cutoff
+  })
+}
+
 // Limpa notificações antigas e remove duplicadas
 function cleanupOldNotifications(notifications: Notification[]): Notification[] {
   const cutoffDate = new Date()
@@ -186,10 +195,20 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   const [preferences, setPreferences] = useState<NotificationPreferences>({
     lastOpenedAt: null,
     autoMarkAsReadOnClick: true,
+    lastClearedAt: null,
   })
+  const lastClearedAtRef = useRef<Date | null>(null)
 
   // Carrega do backend na montagem (fallback localStorage)
   useEffect(() => {
+    const loadedPrefs = loadFromStorage<NotificationPreferences>(STORAGE_KEYS.PREFERENCES, {
+      lastOpenedAt: null,
+      autoMarkAsReadOnClick: true,
+      lastClearedAt: null,
+    })
+    lastClearedAtRef.current = loadedPrefs.lastClearedAt ?? null
+    setPreferences(loadedPrefs)
+
     const load = async () => {
       try {
         const headers: Record<string, string> = {}
@@ -199,10 +218,13 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         const response = await fetch(API_ENDPOINTS.NOTIFICATIONS, { headers })
         if (!response.ok) throw new Error('Erro ao carregar notificações')
         const data = await response.json()
-        setNotifications(cleanupOldNotifications((data || []).map(mapApiNotification)))
+        const mapped = (data || []).map(mapApiNotification)
+        const filtered = applyClearFilter(mapped, lastClearedAtRef.current)
+        setNotifications(cleanupOldNotifications(filtered))
       } catch {
         const loadedNotifications = loadFromStorage<Notification[]>(STORAGE_KEYS.NOTIFICATIONS, [])
-        setNotifications(cleanupOldNotifications(loadedNotifications))
+        const filtered = applyClearFilter(loadedNotifications, lastClearedAtRef.current)
+        setNotifications(cleanupOldNotifications(filtered))
       }
     }
     load()
@@ -219,11 +241,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     })
     setProgressBarState(loadedBarState)
 
-    const loadedPrefs = loadFromStorage<NotificationPreferences>(STORAGE_KEYS.PREFERENCES, {
-      lastOpenedAt: null,
-      autoMarkAsReadOnClick: true,
-    })
-    setPreferences(loadedPrefs)
+    // preferences already loaded above
   }, [session?.accessToken])
 
   // Salva no localStorage quando o estado muda
@@ -340,7 +358,10 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   }, [session?.accessToken])
 
   const clearHistory = useCallback(() => {
+    const clearedAt = new Date()
+    lastClearedAtRef.current = clearedAt
     setNotifications([])
+    setPreferences(prev => ({ ...prev, lastClearedAt: clearedAt }))
     const headers: Record<string, string> = {}
     if (session?.accessToken) {
       headers.Authorization = `Bearer ${session.accessToken}`
@@ -563,7 +584,13 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
 
   // Funções de preferências
   const updatePreferences = useCallback((prefs: Partial<NotificationPreferences>) => {
-    setPreferences(prev => ({ ...prev, ...prefs }))
+    setPreferences(prev => {
+      const next = { ...prev, ...prefs }
+      if (prefs.lastClearedAt) {
+        lastClearedAtRef.current = prefs.lastClearedAt
+      }
+      return next
+    })
   }, [])
 
   // Atualiza última abertura quando o centro de notificações abre
@@ -572,6 +599,45 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       updatePreferences({ lastOpenedAt: new Date() })
     }
   }, [notificationCenterOpen, updatePreferences])
+
+  useEffect(() => {
+    if (!session?.accessToken) return
+    let cancelled = false
+
+    const fetchNotifications = async () => {
+      const headers: Record<string, string> = { Authorization: `Bearer ${session.accessToken}` }
+      try {
+        const response = await fetch(API_ENDPOINTS.NOTIFICATIONS, { headers })
+        if (!response.ok) return
+        const data = await response.json()
+        const incoming = (data || []).map(mapApiNotification)
+        const filteredIncoming = applyClearFilter(incoming, lastClearedAtRef.current)
+        setNotifications(prev => {
+          const byId = new Map<string, Notification>()
+          prev.forEach(n => byId.set(n.id, n))
+          filteredIncoming.forEach(n => {
+            const existing = byId.get(n.id)
+            byId.set(n.id, {
+              ...existing,
+              ...n,
+              read: existing?.read || n.read,
+            })
+          })
+          const merged = Array.from(byId.values())
+          return cleanupOldNotifications(merged)
+        })
+      } catch {
+        if (cancelled) return
+      }
+    }
+
+    fetchNotifications()
+    const interval = setInterval(fetchNotifications, 10000)
+    return () => {
+      cancelled = true
+      clearInterval(interval)
+    }
+  }, [session?.accessToken])
 
   const value: NotificationContextType = {
     notifications,
