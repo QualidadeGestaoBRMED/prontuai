@@ -1,7 +1,8 @@
 "use client"
 
-import { useState, useEffect, Suspense } from "react"
+import { useState, useEffect, Suspense, useCallback } from "react"
 import { useSearchParams } from "next/navigation"
+import { useSession } from "next-auth/react"
 import { AppSidebar } from "@/components/app-sidebar"
 import {
   SidebarInset,
@@ -21,8 +22,10 @@ import { ProcessResult } from "@/types/process"
 import { History, Loader2 } from "lucide-react"
 import { RequireRole } from "@/components/require-role"
 import { usePermissions } from "@/hooks/usePermissions"
+import { downloadDocumentPdf } from "@/lib/document-download"
 
 function PendentesContent() {
+  const { data: session } = useSession()
   const searchParams = useSearchParams()
   const [selectedResult, setSelectedResult] = useState<ProcessResult | null>(null)
   const [detailsModalOpen, setDetailsModalOpen] = useState(false)
@@ -57,6 +60,19 @@ function PendentesContent() {
       }
     }
   }, [searchParams, resultsToShow])
+
+  const handleDownloadPDF = useCallback(async (result: ProcessResult) => {
+    if (!result?.id) return
+    try {
+      await downloadDocumentPdf({
+        id: result.id,
+        filename: result.filename,
+        accessToken: session?.accessToken,
+      })
+    } catch (error) {
+      console.error("Falha ao baixar PDF:", error)
+    }
+  }, [session?.accessToken])
 
   return (
     <>
@@ -124,8 +140,7 @@ function PendentesContent() {
                       console.log('[DEBUG] Modal state set to open')
                     }}
                     onDownloadPDF={(result) => {
-                      // TODO: Implementar download de PDF
-                      console.log("Download PDF:", result)
+                      handleDownloadPDF(result)
                     }}
                   />
                 )}
@@ -140,8 +155,7 @@ function PendentesContent() {
           onOpenChange={setDetailsModalOpen}
           result={selectedResult}
           onDownloadPDF={selectedResult ? () => {
-            // TODO: Implementar download de PDF
-            console.log("Download PDF:", selectedResult)
+            handleDownloadPDF(selectedResult)
           } : undefined}
         />
       </SidebarProvider>
