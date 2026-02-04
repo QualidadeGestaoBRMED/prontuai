@@ -54,16 +54,19 @@ const data = {
           url: "/anexar-prontuario",
           icon: RiUploadLine,
           isActive: false,
+          roles: ["ADMIN", "SENDER"],
         },
         {
           title: "Pendentes",
           url: "/pendentes",
           icon: RiHistoryLine,
+          roles: ["ADMIN", "SENDER"],
         },
         {
           title: "Checagem",
           url: "/checagem",
           icon: RiCheckDoubleLine,
+          roles: ["ADMIN", "CHECKER"],
         },
       ],
     },
@@ -71,7 +74,7 @@ const data = {
 };
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
-  const { isAdmin, canValidateExams } = usePermissions();
+  const { isAdmin, role } = usePermissions();
   const documentsRoutes = new Set(["/pendentes", "/checagem"]);
   const handleDocumentsRefresh = (url?: string) => {
     if (!url || !documentsRoutes.has(url)) return;
@@ -82,6 +85,12 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       })
     );
   };
+  const visibleItems = data.navMain[0]?.items.filter((item) => {
+    if (isAdmin) return true;
+    if (!role) return false;
+    if (!item.roles || item.roles.length === 0) return true;
+    return item.roles.includes(role);
+  });
 
   return (
     <Sidebar {...props} className="dark !border-none" data-tour="sidebar-completa">
@@ -97,43 +106,41 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         </div>
       </SidebarHeader>
       <SidebarContent>
-        <SidebarGroup>
-          <SidebarGroupLabel className="uppercase text-sidebar-foreground/50">
-            {data.navMain[0]?.title}
-          </SidebarGroupLabel>
-          <SidebarGroupContent className="px-2">
-            <SidebarMenu>
-              {data.navMain[0]?.items.map((item) => {
-                if (item.url === "/checagem" && !canValidateExams) {
-                  return null;
-                }
-                return (
-                <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton
-                    asChild
-                    className="group/menu-button font-medium gap-3 h-9 rounded-md data-[active=true]:hover:bg-transparent data-[active=true]:bg-gradient-to-b data-[active=true]:from-sidebar-primary data-[active=true]:to-sidebar-primary/70 data-[active=true]:shadow-[0_1px_2px_0_rgb(0_0_0/.05),inset_0_1px_0_0_rgb(255_255_255/.12)] [&>svg]:size-auto"
-                    isActive={item.isActive}
-                  >
-                    <a
-                      href={item.url}
-                      data-tour={item.title.toLowerCase()}
-                      onClick={() => handleDocumentsRefresh(item.url)}
+        {visibleItems && visibleItems.length > 0 && (
+          <SidebarGroup>
+            <SidebarGroupLabel className="uppercase text-sidebar-foreground/50">
+              {data.navMain[0]?.title}
+            </SidebarGroupLabel>
+            <SidebarGroupContent className="px-2">
+              <SidebarMenu>
+                {visibleItems.map((item) => (
+                  <SidebarMenuItem key={item.title}>
+                    <SidebarMenuButton
+                      asChild
+                      className="group/menu-button font-medium gap-3 h-9 rounded-md data-[active=true]:hover:bg-transparent data-[active=true]:bg-gradient-to-b data-[active=true]:from-sidebar-primary data-[active=true]:to-sidebar-primary/70 data-[active=true]:shadow-[0_1px_2px_0_rgb(0_0_0/.05),inset_0_1px_0_0_rgb(255_255_255/.12)] [&>svg]:size-auto"
+                      isActive={item.isActive}
                     >
-                      {item.icon && (
-                        <item.icon
-                          className="text-sidebar-foreground/50 group-data-[active=true]/menu-button:text-sidebar-foreground"
-                          size={22}
-                          aria-hidden="true"
-                        />
-                      )}
-                      <span>{item.title}</span>
-                    </a>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              )})}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+                      <a
+                        href={item.url}
+                        data-tour={item.title.toLowerCase()}
+                        onClick={() => handleDocumentsRefresh(item.url)}
+                      >
+                        {item.icon && (
+                          <item.icon
+                            className="text-sidebar-foreground/50 group-data-[active=true]/menu-button:text-sidebar-foreground"
+                            size={22}
+                            aria-hidden="true"
+                          />
+                        )}
+                        <span>{item.title}</span>
+                      </a>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
 
         {/* Admin Section - Apenas para administradores */}
         {isAdmin && (
