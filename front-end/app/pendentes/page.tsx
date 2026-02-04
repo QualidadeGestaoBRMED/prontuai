@@ -19,7 +19,7 @@ import { ProcessProgressBar } from "@/components/process-progress-bar"
 import { ResultsTable } from "@/components/results-table"
 import { DocumentDetailsModal } from "@/components/document-details-modal"
 import { ProcessResult } from "@/types/process"
-import { History, Loader2 } from "lucide-react"
+import { Clock, History, Loader2 } from "lucide-react"
 import { RequireRole } from "@/components/require-role"
 import { usePermissions } from "@/hooks/usePermissions"
 import { downloadDocumentPdf } from "@/lib/document-download"
@@ -48,6 +48,9 @@ function PendentesContent() {
     ? baseResults.filter((result) => result.submittedBy === senderEmail)
     : baseResults
   const showRefreshing = refreshing && hasLoaded
+  const totalPendentes = baseResults.filter((result) => result.status === "pending_review").length
+  const totalAprovados = baseResults.filter((result) => result.status === "approved").length
+  const totalRejeitados = baseResults.filter((result) => result.status === "rejected").length
 
   // Abre modal automaticamente se viewId for fornecido na URL
   useEffect(() => {
@@ -98,22 +101,61 @@ function PendentesContent() {
             </div>
           </header>
 
-          <div className="flex-1 overflow-auto bg-[hsl(240_5%_92.16%)] md:rounded-s-3xl md:group-peer-data-[state=collapsed]/sidebar-inset:rounded-s-none transition-all ease-in-out duration-300">
-            <div className="p-6 md:p-8 lg:p-12">
-              <div className="space-y-4">
-                <div>
-                  <p className="text-sm text-muted-foreground">
-                    Visualize e gerencie todos os documentos processados
-                  </p>
-                  {lastUpdatedAt && (
-                    <p className="text-xs text-muted-foreground/70 mt-1">
-                      Última atualização: {lastUpdatedAt.toLocaleTimeString("pt-BR")}
-                    </p>
-                  )}
+          <div className="flex flex-col h-[calc(100svh-4rem)] bg-[hsl(240_5%_92.16%)] md:rounded-s-3xl md:group-peer-data-[state=collapsed]/sidebar-inset:rounded-s-none transition-all ease-in-out duration-300">
+            <div className="flex-1 flex flex-col p-4 md:p-6 lg:p-8 overflow-hidden">
+              {lastUpdatedAt && (
+                <p className="text-xs text-muted-foreground/70 mb-2">
+                  Última atualização: {lastUpdatedAt.toLocaleTimeString("pt-BR")}
+                </p>
+              )}
+              <div className="grid grid-cols-3 gap-4 mb-4">
+                <div className="bg-gradient-to-br from-yellow-50 to-yellow-100 border border-yellow-200 rounded-lg p-4 shadow-sm">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="text-xs font-medium text-yellow-700 uppercase tracking-wide">Pendentes</div>
+                      <div className="text-3xl font-bold text-yellow-600 mt-1">
+                        {totalPendentes}
+                      </div>
+                    </div>
+                    <div className="size-12 rounded-full bg-yellow-200 flex items-center justify-center">
+                      <Clock className="size-6 text-yellow-600" />
+                    </div>
+                  </div>
                 </div>
 
+                <div className="bg-gradient-to-br from-green-50 to-green-100 border border-green-200 rounded-lg p-4 shadow-sm">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="text-xs font-medium text-green-700 uppercase tracking-wide">Aprovados</div>
+                      <div className="text-3xl font-bold text-green-600 mt-1">
+                        {totalAprovados}
+                      </div>
+                    </div>
+                    <div className="size-12 rounded-full bg-green-200 flex items-center justify-center">
+                      <History className="size-6 text-green-600" />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-gradient-to-br from-red-50 to-red-100 border border-red-200 rounded-lg p-4 shadow-sm">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="text-xs font-medium text-red-700 uppercase tracking-wide">Rejeitados</div>
+                      <div className="text-3xl font-bold text-red-600 mt-1">
+                        {totalRejeitados}
+                      </div>
+                    </div>
+                    <div className="size-12 rounded-full bg-red-200 flex items-center justify-center">
+                      <svg className="size-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
                 {showRefreshing && (
-                  <div className="border rounded-lg bg-white p-3 flex items-center gap-2 text-muted-foreground">
+                  <div className="mb-4 border rounded-lg bg-white p-3 flex items-center gap-2 text-muted-foreground">
                     <Loader2 className="size-4 animate-spin" />
                     <span>Atualizando documentos do banco...</span>
                     {lastUpdatedAt && (
@@ -124,8 +166,9 @@ function PendentesContent() {
                   </div>
                 )}
 
+              <div className="flex-1 bg-white rounded-lg p-6 shadow-sm overflow-hidden flex flex-col">
                 {loading ? (
-                  <div className="border rounded-lg bg-white p-6 flex items-center gap-3 text-muted-foreground">
+                  <div className="flex-1 flex items-center justify-center text-muted-foreground gap-3">
                     <Loader2 className="size-4 animate-spin" />
                     <span>Sincronizando documentos com o banco...</span>
                   </div>
