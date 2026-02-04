@@ -63,6 +63,12 @@ export function RequireRole({
 
   // Not authorized
   if (!userRole || !allowedRoles.includes(userRole)) {
+    if (userRole === "CHECKER") {
+      redirect("/checagem");
+    }
+    if (userRole === "SENDER") {
+      redirect("/anexar-prontuario");
+    }
     if (fallback) {
       return <>{fallback}</>;
     }
