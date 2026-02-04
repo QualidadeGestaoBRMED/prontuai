@@ -1,20 +1,33 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { signIn } from "next-auth/react";
+import { signIn, useSession } from "next-auth/react";
 import Image from "next/image";
 import { RiGoogleFill } from "@remixicon/react";
 import Link from "next/link";
 import { Loader2 } from "lucide-react";
+import { useRouter } from "next/navigation";
 
 export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
+  const { data: session, status } = useSession();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (status !== "authenticated") return;
+    const role = session?.user?.role;
+    if (role === "CHECKER") {
+      router.replace("/checagem");
+    } else {
+      router.replace("/anexar-prontuario");
+    }
+  }, [session, status, router]);
 
   const handleSignIn = async () => {
     setIsLoading(true);
     try {
-      await signIn("google", { callbackUrl: "/anexar-prontuario" });
+      await signIn("google", { callbackUrl: "/login" });
     } catch (error) {
       console.error("Login error:", error);
       setIsLoading(false);
