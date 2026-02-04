@@ -39,4 +39,5 @@ export type CreateNotificationInput = Omit<Notification, 'id' | 'timestamp'>
 export interface NotificationPreferences {
   lastOpenedAt: Date | null
   autoMarkAsReadOnClick: boolean
+  lastClearedAt: Date | null
 }
