@@ -214,6 +214,7 @@ export function CheckagemTable({
     getFacetedMinMaxValues: getFacetedMinMaxValues(),
     onSortingChange: setSorting,
     enableSortingRemoval: false,
+    autoResetPageIndex: false,
   });
 
   return (
@@ -358,21 +359,6 @@ export function CheckagemTable({
           >
             Próxima
           </Button>
-          <Select
-            value={String(table.getState().pagination.pageSize)}
-            onValueChange={(value) => table.setPageSize(Number(value))}
-          >
-            <SelectTrigger className="h-8 w-[120px]">
-              <SelectValue placeholder="Itens" />
-            </SelectTrigger>
-            <SelectContent>
-              {[10, 20, 30, 50].map((size) => (
-                <SelectItem key={size} value={String(size)}>
-                  {size} / pág.
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
         </div>
       </div>
     </div>

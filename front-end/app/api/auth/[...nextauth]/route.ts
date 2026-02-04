@@ -32,9 +32,8 @@ const authOptions: AuthOptions = {
   },
   callbacks: {
     async signIn({ profile, account }) {
-      // Validar domínio
-      if (!profile?.email?.endsWith("@grupobrmed.com.br")) {
-        console.error("Email não é @grupobrmed.com.br");
+      if (!profile?.email) {
+        console.error("Email não encontrado no profile do Google");
         return false;
       }
 
