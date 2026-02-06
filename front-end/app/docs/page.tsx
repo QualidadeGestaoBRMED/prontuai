@@ -1,707 +1,1110 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+"use client"
+
 import { Badge } from "@/components/ui/badge"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
+import Image from "next/image"
+import { useEffect, useRef, useState } from "react"
 import {
-  CheckCircle2,
-  XCircle,
   AlertCircle,
-  ArrowDown,
   ArrowRight,
-  Users,
   Bell,
-  Shield,
-  Zap,
-  Target,
-  TrendingDown,
-  TrendingUp,
+  BookOpen,
+  CheckCircle2,
   FileCheck,
-  Clock
+  Shield,
+  Target,
+  UploadCloud,
+  Users,
+  XCircle,
 } from "lucide-react"
 
-export default function DocsPage() {
+const flowSteps = [
+  {
+    step: "01",
+    title: "Upload seguro",
+    description: "Anexe prontuários completos e inicie o processamento do lote.",
+    details:
+      "Entrada: PDFs com exames e laudos completos. Saída: lote criado com protocolo de rastreio. Checklist: páginas legíveis e sem cortes. Responsável: clínica.",
+    icon: UploadCloud,
+  },
+  {
+    step: "02",
+    title: "OCR + BRNET",
+    description: "Extração automática e comparação com a grade obrigatória.",
+    details:
+      "Entrada: imagens e textos do PDF. Processo: OCR e comparação com a grade BRNET. Saída: checklist de campos encontrados e ausentes. Responsável: processamento IA.",
+    icon: Target,
+  },
+  {
+    step: "03",
+    title: "Resultado guiado",
+    description: "Status claros com justificativas por item encontrado ou ausente.",
+    details:
+      "Entrada: checklist com evidências. Saída: aprovado, pendente ou rejeitado. Justificativas: itens faltantes e divergências. Responsável: IA + regras do sistema.",
+    icon: CheckCircle2,
+  },
+  {
+    step: "04",
+    title: "Checagem humana",
+    description: "Revisor aprova ou rejeita e o sistema registra a decisão final.",
+    details:
+      "Entrada: status e justificativas da IA. Processo: revisão humana e validação. Saída: decisão final registrada. Responsável: time interno BR MED.",
+    icon: Shield,
+  },
+]
+
+type FlowStep = (typeof flowSteps)[number]
+
+const roleCards = [
+  {
+    title: "Clínica (Enviador)",
+    description: "Responsável por enviar documentos.",
+    icon: Users,
+    access: ["Anexar Prontuário", "Pendentes"],
+    points: [
+      "Faz upload de PDFs médicos e acompanha o processamento e validação.",
+      "Enviador só vê rejeições finais do revisor que precisa corrigir.",
+    ],
+    important:
+      "Em /pendentes aparecem apenas documentos rejeitados (pela IA ou revisor). Documentos aprovados não aparecem.",
+  },
+  {
+    title: "Time interno BR MED (Revisor)",
+    description: "Valida documentos processados.",
+    icon: Shield,
+    access: ["Checagem"],
+    points: ["Analisa documentos e toma decisões de aprovar ou rejeitar com justificativa."],
+    actions: [
+      "Aprovar: documento validado e liberado.",
+      "Rejeitar: documento retorna ao enviador com motivo.",
+    ],
+  },
+  {
+    title: "Administrador (ADMIN)",
+    description: "Gestão e auditoria do fluxo.",
+    icon: FileCheck,
+    access: ["Anexar Prontuário", "Pendentes", "Checagem", "Histórico", "Insights"],
+    points: ["Acesso total a funcionalidades, analytics e configurações."],
+  },
+]
+
+const statusItems = [
+  {
+    title: "Aprovado pela IA",
+    description: "Documento segue para revisão humana.",
+    icon: CheckCircle2,
+    color: "text-emerald-600",
+    bg: "bg-emerald-50",
+  },
+  {
+    title: "Pendente de revisão",
+    description: "IA encontrou pendências e requer conferência.",
+    icon: AlertCircle,
+    color: "text-amber-600",
+    bg: "bg-amber-50",
+  },
+  {
+    title: "Rejeitado",
+    description: "Revisor solicitou reenvio com justificativa.",
+    icon: XCircle,
+    color: "text-rose-600",
+    bg: "bg-rose-50",
+  },
+]
+
+const statusFlow = [
+  "A IA valida o documento e aponta o que falta ou está conforme.",
+  "O status indica aprovado, pendente ou rejeitado com justificativas.",
+  "A decisão final sempre passa por um revisor humano.",
+]
+
+const navPrimary = [
+  { label: "Visão", href: "#visao" },
+  { label: "Objetivo", href: "#objetivo" },
+  { label: "Público", href: "#publico" },
+  { label: "Valor", href: "#valor" },
+  { label: "Fluxo", href: "#fluxo" },
+  { label: "Papéis", href: "#papeis" },
+  { label: "Fluxo completo", href: "#fluxo-completo" },
+  { label: "Comunicação", href: "#comunicacao" },
+]
+
+const navSecondary = [
+  { label: "Status", href: "#status" },
+  { label: "Notificações", href: "#notificacoes" },
+  { label: "KPIs", href: "#kpis" },
+  { label: "Segurança", href: "#seguranca" },
+  { label: "Futuro", href: "#futuro" },
+  { label: "Resumo", href: "#resumo" },
+  { label: "Boas práticas", href: "#boas-praticas" },
+]
+
+const publicoPrincipal = [
+  "Equipe administrativa (conferência inicial).",
+  "Médicos validadores (revisão clínica).",
+  "Clínicas terceirizadas (emissão de ASOs).",
+  "Coordenação de Saúde Ocupacional.",
+]
+
+const clienteFinal = [
+  "Área de RH das empresas clientes que aguardam o ASO liberado.",
+  "Admissões.",
+  "Periódicos.",
+  "Retornos.",
+  "Mudanças de função.",
+  "Demissões.",
+]
+
+const valorGerado = [
+  {
+    title: "Processamento automático",
+    description:
+      "OCR avançado extrai texto e identifica exames médicos automaticamente, eliminando digitação manual.",
+  },
+  {
+    title: "Conformidade legal",
+    description:
+      "Garante aderência à NR-7 e PCMSO, com rastreabilidade completa e segurança jurídica.",
+  },
+  {
+    title: "Revisão humana",
+    description:
+      "Validadores revisam casos críticos com suporte de IA, mantendo controle médico final.",
+  },
+]
+
+const resultadosEsperados = [
+  "Sistema unificado com automação inteligente.",
+  "Redução de 50% no tempo de liberação.",
+  "Redução de 70% em devoluções às clínicas.",
+  "Visibilidade completa do status de cada ASO.",
+  "Padronização de informações recebidas.",
+]
+
+const areasEnvolvidas = [
+  "Coordenação Médica: responsável pelo processo.",
+  "Administrativo: conferência inicial.",
+  "Médico: validação clínica.",
+  "TI: integração e automação.",
+]
+
+const fluxoCompleto = [
+  {
+    step: "1",
+    title: "Envio do documento",
+    details: ['Enviador faz upload de PDF na página "Anexar Prontuário".'],
+  },
+  {
+    step: "2",
+    title: "Processamento automático",
+    details: [
+      "OCR extrai texto e identifica CPF, exames e assinaturas.",
+      "BRNET consulta exames obrigatórios para o CPF.",
+      "IA compara exames encontrados vs. obrigatórios.",
+    ],
+  },
+  {
+    step: "3",
+    title: "Decisão da IA",
+    details: [
+      "A IA sugere aprovação ou rejeição com justificativas.",
+      "Aprovado pela IA: todos os exames obrigatórios encontrados.",
+      "Rejeitado pela IA: faltam exames ou há discrepâncias.",
+      "Importante: todos os documentos vão para checagem.",
+    ],
+  },
+  {
+    step: "4",
+    title: "Todos vão para checagem",
+    details: [
+      "Todos os documentos processados ficam disponíveis em /checagem.",
+      "Todos estão sujeitos à validação do revisor, mesmo os aprovados pela IA.",
+    ],
+  },
+  {
+    step: "5",
+    title: "Validação humana (revisor)",
+    details: [
+      "Revisor acessa /checagem, vê a decisão da IA e decide o resultado final.",
+      "Aprovar: documento validado definitivamente e arquivado.",
+      "Rejeitar: documento volta para /pendentes com motivo.",
+    ],
+  },
+]
+
+const comunicacoes = [
+  {
+    title: "Anexar Prontuário → Checagem",
+    details: [
+      "Enviador faz upload em /anexar-prontuario.",
+      "Sistema processa (OCR + BRNET + IA).",
+      "Documento aparece em /checagem.",
+      "Revisor recebe notificação de novo documento.",
+    ],
+    notifications: [
+      'Enviador: "Processamento iniciado".',
+      'Enviador: "Concluído".',
+      'Revisor: "Novos documentos".',
+    ],
+  },
+  {
+    title: "Checagem → Pendentes (quando rejeita)",
+    details: [
+      "Revisor rejeita documento em /checagem e informa o motivo.",
+      "Documento some de /checagem e aparece em /pendentes do enviador.",
+      "Enviador pode corrigir e reenviar.",
+    ],
+    notifications: ['Enviador: "Documento rejeitado: [motivo]".', "Revisor não é notificado."],
+  },
+  {
+    title: "Checagem → Histórico (quando aprova)",
+    details: [
+      "Revisor aprova documento em /checagem.",
+      "Documento sai de /checagem e vai para /historico.",
+      "Enviador não vê nada em /pendentes.",
+    ],
+    notifications: ["Aprovação é silenciosa para o enviador."],
+  },
+  {
+    title: "Pendentes → Anexar Prontuário (reenvio)",
+    details: [
+      "Enviador vê documento em /pendentes, lê o motivo e corrige.",
+      "Reenvia via /anexar-prontuario e o ciclo recomeça.",
+    ],
+    notifications: [
+      'Enviador: "Processamento iniciado".',
+      'Revisor: "Novos documentos".',
+      "Sistema detecta duplicata e notifica quando aplicável.",
+    ],
+  },
+]
+
+const ecossistema = [
+  {
+    title: "/anexar-prontuario",
+    subtitle: "Ponto de entrada de documentos.",
+    receives: "Nenhum (input do usuário da clínica).",
+    feeds: "Checagem, Pendentes (se resultado negativo da IA).",
+  },
+  {
+    title: "/checagem",
+    subtitle: "Centro de decisão.",
+    receives: "Envio de documentos processados.",
+    feeds: "Histórico (aprova) ou Pendentes (rejeita).",
+  },
+  {
+    title: "/pendentes",
+    subtitle: "Fila de correções.",
+    receives: "Envio negativo da IA ou rejeição do revisor.",
+    feeds: "Reenvio para Anexar Prontuário.",
+  },
+]
+
+
+const futuroScore = [
+  "Cada revisão, aprovação e fluxo completo gera um score de confiabilidade.",
+  "Com histórico suficiente, documentos com score acima de 90 tendem à aprovação automática.",
+  "A tendência é reduzir a passagem humana para casos de alto score, mantendo auditoria e amostragem.",
+  "Isso libera o time clínico para exceções e decisões complexas, sem perder governança.",
+]
+
+const problemasDocumentais = [
+  "Falta de padrão: clínicas enviam documentos com formatos diferentes.",
+  "Dados incompletos: ausência de nome, CPF, data ou assinaturas.",
+  "Assinaturas ilegíveis: carimbos e assinaturas de baixa qualidade.",
+  "Versões incorretas: exames desatualizados enviados por engano.",
+  "Terminologia inconsistente: termos diferentes para o mesmo exame.",
+]
+
+const gargalosOperacionais = [
+  "Conferência manual morosa e sujeita a erros humanos.",
+  "Falta de integração e retrabalho entre sistemas.",
+  "Validação dupla de campos pelo administrativo e médico.",
+  "Devoluções frequentes e alto índice de correções.",
+  "Arquivos não padronizados dificultando busca e indexação.",
+]
+
+const mudas = [
+  {
+    tipo: "Espera",
+    exemplo: "Tempo entre envio da clínica e conferência.",
+    solucao: "Processamento automático imediato.",
+  },
+  {
+    tipo: "Movimentação",
+    exemplo: "Troca manual de arquivos entre e-mails e pastas.",
+    solucao: "Sistema centralizado com workflow.",
+  },
+  {
+    tipo: "Superprocessamento",
+    exemplo: "Conferência dupla dos mesmos campos.",
+    solucao: "IA valida e revisor confirma casos críticos.",
+  },
+  {
+    tipo: "Defeitos",
+    exemplo: "Documentos ilegíveis e dados incorretos.",
+    solucao: "Validação automática com checklist obrigatório.",
+  },
+  {
+    tipo: "Estoque",
+    exemplo: "Acúmulo de exames aguardando correção.",
+    solucao: "Notificações imediatas e fila priorizada.",
+  },
+  {
+    tipo: "Talento",
+    exemplo: "Médicos gastando tempo com checagem manual.",
+    solucao: "Foco em decisões clínicas complexas.",
+  },
+]
+
+const riscosCriticos = [
+  "Não conformidade legal: ASO sem assinatura válida invalida laudo.",
+  "Liberação incorreta: erro pode liberar colaborador inapto.",
+  "Segurança da informação: documentos sensíveis sem controle.",
+  "Retrabalho em massa: ausência de rastreabilidade.",
+]
+
+const mitigacoes = [
+  "Validação automática com checklist obrigatório de campos críticos.",
+  "Dupla validação: IA sugere e revisor decide.",
+  "Controle de acesso com perfis específicos e logs de auditoria.",
+  "Deduplicação por hash único para prevenir duplicatas.",
+]
+
+const kpis = [
+  {
+    indicador: "Tempo médio de liberação (Lead Time)",
+    formula: "Data liberação - Data recebimento",
+    meta: "Reduzir 50%",
+  },
+  {
+    indicador: "Taxa de devoluções às clínicas",
+    formula: "(Devolvidos / Recebidos) × 100",
+    meta: "Reduzir 70%",
+  },
+  {
+    indicador: "Taxa de ASOs aprovados sem pendência",
+    formula: "(Aprovados direto / Total) × 100",
+    meta: "Aumentar 40%",
+  },
+  {
+    indicador: "Tempo médio de resposta da clínica",
+    formula: "Data reenvio - Data devolução",
+    meta: "Reduzir 60%",
+  },
+  {
+    indicador: "Percentual de automação de checagem",
+    formula: "(Processados via OCR / Total) × 100",
+    meta: "80% até fase 2",
+  },
+]
+
+const lgpd = [
+  "Anonimização parcial com uso estritamente funcional.",
+  "Minimização de dados: coleta apenas informações necessárias.",
+  "Consentimento com documentação clara de autorização.",
+  "Retenção legal com backup automático por no mínimo 5 anos.",
+]
+
+const controleAcesso = [
+  "Perfis diferenciados: Enviador, Revisor, Admin.",
+  "Autenticação corporativa com Google OAuth restrito a @grupobrmed.com.br.",
+  "Acesso granular por documento e ação.",
+  "Gestão de identidade com IAM e MFA (planejado).",
+]
+
+const segurancaTecnica = [
+  "Criptografia em trânsito (HTTPS/TLS).",
+  "Criptografia em repouso (AES-256).",
+  "Ambientes segregados: desenvolvimento, homologação e produção.",
+  "Storage seguro com controle de acesso e versionamento.",
+]
+
+const logsAuditoria = [
+  "Trilha de auditoria: quem aprovou, quando e qual ação.",
+  "Logs automáticos com timestamp de todas as operações.",
+  "Versionamento com histórico completo de alterações.",
+  "Backup diário com retenção mínima de 5 anos.",
+]
+
+
+function useInView(threshold = 0.2) {
+  const ref = useRef<HTMLDivElement | null>(null)
+  const [inView, setInView] = useState(false)
+
+  useEffect(() => {
+    const node = ref.current
+    if (!node) return
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setInView(true)
+          observer.unobserve(entry.target)
+        }
+      },
+      { threshold }
+    )
+
+    observer.observe(node)
+
+    return () => observer.disconnect()
+  }, [threshold])
+
+  return { ref, inView }
+}
+
+function FlowStepCard({ step, index }: { step: FlowStep; index: number }) {
+  const { ref, inView } = useInView(0.2)
+
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100">
-      {/* Header */}
-      <header className="border-b bg-white/50 backdrop-blur-sm sticky top-0 z-50">
-        <div className="container mx-auto px-6 py-4">
-          <div className="flex items-center gap-3">
-           
-            <div>
-              <h1 className="text-2xl font-bold">ProntuAI</h1>
-              <p className="text-sm text-muted-foreground">Documentação do Sistema</p>
-            </div>
-          </div>
+    <div
+      ref={ref}
+      className={`transition-all duration-500 ease-out hover:-translate-y-1 hover:shadow-lg ${
+        inView ? "opacity-100 translate-y-0" : "opacity-0 translate-y-6"
+      }`}
+      style={{ transitionDelay: `${index * 120}ms` }}
+    >
+      <Card className="relative overflow-hidden border border-primary/15 bg-card/90 transition-colors hover:border-secondary/40">
+        <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-primary via-secondary to-primary" />
+        <CardContent className="space-y-3">
+          <p className="text-base font-semibold text-foreground">
+            Passo {step.step}: {step.title}
+          </p>
+          <p className="text-sm text-muted-foreground">{step.description}</p>
+          <p className="text-sm text-muted-foreground">{step.details}</p>
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
+export default function DocsPage() {
+  const fluxoCompletoRef = useRef<HTMLDivElement | null>(null)
+
+  const scrollFluxoCompleto = () => {
+    if (!fluxoCompletoRef.current) return
+    fluxoCompletoRef.current.scrollBy({
+      left: 320,
+      behavior: "smooth",
+    })
+  }
+
+  return (
+    <div className="min-h-screen bg-background text-foreground">
+      <div className="relative overflow-hidden">
+        <div className="pointer-events-none absolute inset-0">
+          <div className="absolute -right-36 -top-36 h-96 w-96 rounded-full bg-[radial-gradient(circle_at_center,rgba(0,120,145,0.28),transparent_65%)]" />
+          <div className="absolute -left-24 top-28 h-80 w-80 rounded-full bg-[radial-gradient(circle_at_center,rgba(25,59,79,0.2),transparent_65%)]" />
+          <div className="absolute inset-0 bg-[linear-gradient(120deg,rgba(0,120,145,0.08),rgba(25,59,79,0.08),rgba(0,120,145,0.04))]" />
         </div>
-      </header>
 
-      <div className="container mx-auto px-6 py-12 max-w-6xl">
-        {/* Visão Geral */}
-        <section className="mb-16">
-          <div className="mb-8">
-            <h2 className="text-3xl font-bold mb-2">Visão Geral</h2>
-            <p className="text-lg text-muted-foreground mb-6">
-              ProntuAI é uma plataforma de validação automatizada de documentos médicos para a BR MED.
-              O sistema utiliza OCR e Inteligência Artificial para extrair informações de exames médicos,
-              validá-los contra requisitos obrigatórios do sistema BRNET, e fornecer comparação inteligente.
-            </p>
+        <header className="relative border-b border-primary/10 bg-gradient-to-r from-primary via-[#0f566f] to-secondary text-white">
+          <div className="mx-auto flex w-full max-w-7xl items-center justify-between px-6 py-8">
+            <div className="flex items-center gap-5">
+              <div className="relative h-12 w-36">
+                <Image src="/logo.png" alt="ProntuAI" fill className="object-contain" priority />
+              </div>
+              <Badge className="ml-1 border border-white/30 bg-white/10 text-white">Guia de uso</Badge>
+            </div>
+            <a
+              href="/login"
+              className="inline-flex items-center gap-2 rounded-md bg-white/15 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-white/25"
+            >
+              Acessar sistema
+              <ArrowRight className="size-4" />
+            </a>
+          </div>
+        </header>
+      </div>
 
-            <Card className="border-l-4 border-l-blue-500 mb-6">
-              <CardContent className="pt-6">
-                <div className="flex items-start gap-3">
-                  <Target className="h-6 w-6 text-blue-600 shrink-0 mt-1" />
-                  <div>
-                    <h3 className="font-semibold mb-2">Objetivo Central</h3>
-                    <p className="text-sm text-muted-foreground mb-3">
-                      Digitalizar, automatizar e integrar o processo de conferência, validação e liberação de ASOs,
-                      reduzindo o tempo de ciclo e aumentando a confiabilidade operacional e jurídica.
-                    </p>
-                    <div className="grid md:grid-cols-2 gap-3 text-sm">
-                      <div>
-                        <p className="font-semibold mb-1">Gatilho de Início:</p>
-                        <p className="text-muted-foreground">Recebimento de documentos médicos (ASO, exames complementares)</p>
-                      </div>
-                      <div>
-                        <p className="font-semibold mb-1">Conclusão:</p>
-                        <p className="text-muted-foreground">Liberação final do ASO + comunicação automática</p>
-                      </div>
-                    </div>
-                  </div>
+      <main className="mx-auto w-full max-w-7xl px-6 py-12">
+        <div className="grid items-start gap-10 lg:gap-12 lg:grid-cols-[minmax(0,220px)_minmax(0,1fr)]">
+          <aside className="min-w-0 space-y-4 lg:sticky lg:top-24 lg:h-fit lg:-ml-10">
+            <div className="rounded-xl border border-primary/15 bg-card/90 p-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-foreground/70">
+                Seções principais
+              </p>
+              <nav className="mt-3 flex flex-col gap-2 text-sm">
+                {navPrimary.map((item) => (
+                  <a
+                    key={item.href}
+                    href={item.href}
+                    className="rounded-lg border border-transparent px-2 py-1 text-muted-foreground transition-colors hover:border-primary/20 hover:bg-primary/5 hover:text-foreground"
+                  >
+                    {item.label}
+                  </a>
+                ))}
+              </nav>
+            </div>
+            <div className="rounded-xl border border-primary/15 bg-card/90 p-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-foreground/70">
+                Qualidade e governança
+              </p>
+              <nav className="mt-3 flex flex-col gap-2 text-sm">
+                {navSecondary.map((item) => (
+                  <a
+                    key={item.href}
+                    href={item.href}
+                    className="rounded-lg border border-transparent px-2 py-1 text-muted-foreground transition-colors hover:border-primary/20 hover:bg-primary/5 hover:text-foreground"
+                  >
+                    {item.label}
+                  </a>
+                ))}
+              </nav>
+            </div>
+            <div className="rounded-xl border border-primary/15 bg-card/90 p-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-foreground/70">
+                Documentação técnica
+              </p>
+              <a
+                href="/docs-tecnica"
+                className="mt-3 flex w-full items-start justify-between gap-2 rounded-lg border border-primary/20 bg-primary/5 px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-primary/10"
+              >
+                <span className="break-words text-left">Acessar documentação técnica</span>
+                <ArrowRight className="size-4 shrink-0 text-secondary" />
+              </a>
+            </div>
+          </aside>
+
+          <div className="min-w-0 flex flex-col gap-12">
+            <section className="grid gap-10 lg:grid-cols-[1.1fr_0.9fr] lg:gap-12">
+              <div className="space-y-5">
+                <Badge variant="secondary" className="w-fit bg-secondary/15 text-secondary">
+                  Guia padrão QEG
+                </Badge>
+                <div className="space-y-3">
+                  <h1 className="text-3xl font-semibold text-foreground md:text-4xl">
+                    Guia de Uso ProntuAI
+                  </h1>
+                  <p className="text-sm text-muted-foreground md:text-base">
+                    Este guia tem o objetivo de explicar o sistema, seu fluxo e como cada área
+                    participa do processo de validação dos documentos médicos.
+                  </p>
                 </div>
+                <div className="flex flex-wrap gap-3">
+                  <span className="inline-flex items-center gap-2 rounded-full border border-primary/15 bg-primary/5 px-3 py-1 text-xs font-medium text-primary">
+                    OCR + comparação BRNET
+                  </span>
+                  <span className="inline-flex items-center gap-2 rounded-full border border-primary/15 bg-primary/5 px-3 py-1 text-xs font-medium text-primary">
+                    Status rastreáveis
+                  </span>
+                  <span className="inline-flex items-center gap-2 rounded-full border border-primary/15 bg-primary/5 px-3 py-1 text-xs font-medium text-primary">
+                    Checagem humana
+                  </span>
+                </div>
+              </div>
+
+              <Card className="relative overflow-hidden border border-primary/15 bg-card/90 shadow-[0_16px_40px_-32px_rgba(15,86,111,0.7)]">
+                <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-secondary via-primary to-secondary" />
+                <CardHeader className="pb-3">
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <BookOpen className="size-4 text-secondary" />
+                    Início rápido
+                  </CardTitle>
+                  <CardDescription>
+                    Visão geral para times operacionais e auditoria.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3 text-sm text-muted-foreground">
+                  <div className="rounded-lg border border-primary/10 bg-primary/5 p-3">
+                    <p className="text-xs font-semibold text-foreground">Entrada</p>
+                    <p className="text-xs text-muted-foreground">Upload de prontuários e anexos</p>
+                  </div>
+                  <div className="rounded-lg border border-primary/10 bg-primary/5 p-3">
+                    <p className="text-xs font-semibold text-foreground">Saída</p>
+                    <p className="text-xs text-muted-foreground">Status, detalhes e decisão final</p>
+                  </div>
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <ArrowRight className="size-4 text-secondary" />
+                    Atualizado para OCR, comparação BRNET e checagem humana.
+                  </div>
+                </CardContent>
+              </Card>
+            </section>
+
+            <Separator className="bg-primary/10" />
+
+            <section id="visao" className="space-y-6">
+          <div className="space-y-4">
+            <Badge variant="outline" className="text-xs uppercase tracking-[0.2em] text-secondary">
+              Visão geral
+            </Badge>
+            <h2 className="text-2xl font-semibold text-foreground">ProntuAI em contexto</h2>
+          </div>
+          <Card className="relative overflow-hidden border border-primary/15 bg-card/90">
+            <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-primary via-secondary to-primary" />
+            <CardContent className="space-y-3 text-sm text-muted-foreground">
+              <p>
+                ProntuAI é uma plataforma de validação automatizada de documentos médicos para a BR
+                MED. O sistema utiliza OCR e Inteligência Artificial para extrair informações de
+                exames médicos, validá-los contra requisitos obrigatórios do sistema BRNET, e
+                fornecer comparação inteligente.
+              </p>
+            </CardContent>
+          </Card>
+        </section>
+
+        <Separator className="bg-primary/10" />
+
+        <section id="objetivo" className="space-y-6">
+          <div className="space-y-4">
+            <Badge variant="outline" className="text-xs uppercase tracking-[0.2em] text-secondary">
+              Objetivo central
+            </Badge>
+            <h2 className="text-2xl font-semibold text-foreground">Digitalização e confiabilidade</h2>
+          </div>
+          <div className="grid gap-6 lg:grid-cols-3">
+            <Card className="relative overflow-hidden border border-primary/15 bg-card/90">
+              <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-primary via-secondary to-primary" />
+              <CardHeader>
+                <CardTitle className="text-base">Objetivo central</CardTitle>
+              </CardHeader>
+              <CardContent className="text-sm text-muted-foreground">
+                Digitalizar, automatizar e integrar o processo de conferência, validação e
+                liberação de ASOs, reduzindo o tempo de ciclo e aumentando a confiabilidade
+                operacional e jurídica.
               </CardContent>
             </Card>
-
-            <Card className="mb-6">
+            <Card className="relative overflow-hidden border border-primary/15 bg-card/90">
+              <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-secondary via-primary to-secondary" />
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Users className="h-5 w-5" />
-                  Público-Alvo e Stakeholders
-                </CardTitle>
+                <CardTitle className="text-base">Gatilho de início</CardTitle>
               </CardHeader>
-              <CardContent>
-                <div className="grid md:grid-cols-2 gap-4">
-                  <div>
-                    <h4 className="font-semibold text-sm mb-2">Público Principal:</h4>
-                    <ul className="text-sm text-muted-foreground space-y-1">
-                      <li>• Equipe administrativa (conferência inicial)</li>
-                      <li>• Médicos validadores (revisão clínica)</li>
-                      <li>• Clínicas terceirizadas (emissão de ASOs)</li>
-                      <li>• Coordenação de Saúde Ocupacional</li>
-                    </ul>
-                  </div>
-                  <div>
-                    <h4 className="font-semibold text-sm mb-2">Cliente Final:</h4>
-                    <p className="text-sm text-muted-foreground mb-2">
-                      Área de RH das empresas clientes, que aguardam o ASO liberado para efetivar:
-                    </p>
-                    <div className="flex flex-wrap gap-1">
-                      <Badge variant="outline" className="text-xs">Admissões</Badge>
-                      <Badge variant="outline" className="text-xs">Periódicos</Badge>
-                      <Badge variant="outline" className="text-xs">Retornos</Badge>
-                      <Badge variant="outline" className="text-xs">Mudanças de Função</Badge>
-                      <Badge variant="outline" className="text-xs">Demissões</Badge>
-                    </div>
-                  </div>
-                </div>
+              <CardContent className="text-sm text-muted-foreground">
+                Recebimento de documentos médicos (ASO, exames complementares).
+              </CardContent>
+            </Card>
+            <Card className="relative overflow-hidden border border-primary/15 bg-card/90">
+              <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-primary via-secondary to-primary" />
+              <CardHeader>
+                <CardTitle className="text-base">Conclusão</CardTitle>
+              </CardHeader>
+              <CardContent className="text-sm text-muted-foreground">
+                Liberação final do ASO com comunicação automática.
               </CardContent>
             </Card>
           </div>
+        </section>
 
-          <div className="mb-6">
-            <h3 className="text-xl font-bold mb-4">Valor Gerado pelo Sistema</h3>
-            <div className="grid md:grid-cols-3 gap-4">
-              <Card>
-                <CardHeader>
-                  <Zap className="h-8 w-8 mb-2" />
-                  <CardTitle>Processamento Automático</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-sm text-muted-foreground">
-                    OCR avançado extrai texto e identifica exames médicos automaticamente,
-                    eliminando digitação manual
-                  </p>
-                </CardContent>
-              </Card>
+        <Separator className="bg-primary/10" />
 
-              <Card>
-                <CardHeader>
-                  <Shield className="h-8 w-8 mb-2" />
-                  <CardTitle>Conformidade Legal</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-sm text-muted-foreground">
-                    Garante aderência à NR-7 e PCMSO, com rastreabilidade completa e
-                    segurança jurídica
-                  </p>
-                </CardContent>
-              </Card>
+        <section id="publico" className="space-y-6">
+          <div className="space-y-4">
+            <Badge variant="outline" className="text-xs uppercase tracking-[0.2em] text-secondary">
+              Público-alvo e stakeholders
+            </Badge>
+            <h2 className="text-2xl font-semibold text-foreground">Quem participa do fluxo</h2>
+          </div>
+          <div className="grid gap-6 lg:grid-cols-2">
+            <Card className="relative overflow-hidden border border-primary/15 bg-card/90">
+              <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-primary via-secondary to-primary" />
+              <CardHeader>
+                <CardTitle className="text-base">Público principal</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2 text-sm text-muted-foreground">
+                {publicoPrincipal.map((item) => (
+                  <p key={item}>{item}</p>
+                ))}
+              </CardContent>
+            </Card>
+            <Card className="relative overflow-hidden border border-primary/15 bg-card/90">
+              <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-secondary via-primary to-secondary" />
+              <CardHeader>
+                <CardTitle className="text-base">Cliente final</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2 text-sm text-muted-foreground">
+                {clienteFinal.map((item) => (
+                  <p key={item}>{item}</p>
+                ))}
+              </CardContent>
+            </Card>
+          </div>
+        </section>
 
-              <Card>
+        <Separator className="bg-primary/10" />
+
+        <section id="valor" className="space-y-6">
+          <div className="space-y-4">
+            <Badge variant="outline" className="text-xs uppercase tracking-[0.2em] text-secondary">
+              Valor gerado
+            </Badge>
+            <h2 className="text-2xl font-semibold text-foreground">Benefícios operacionais</h2>
+          </div>
+          <div className="grid gap-6 lg:grid-cols-3">
+            {valorGerado.map((item) => (
+              <Card key={item.title} className="relative overflow-hidden border border-primary/15 bg-card/90">
+                <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-primary via-secondary to-primary" />
                 <CardHeader>
-                  <Users className="h-8 w-8 mb-2" />
-                  <CardTitle>Revisão Humana</CardTitle>
+                  <CardTitle className="text-base">{item.title}</CardTitle>
                 </CardHeader>
-                <CardContent>
-                  <p className="text-sm text-muted-foreground">
-                    Validadores revisam casos críticos com suporte de IA, mantendo
-                    controle médico final
-                  </p>
-                </CardContent>
+                <CardContent className="text-sm text-muted-foreground">{item.description}</CardContent>
               </Card>
+            ))}
+          </div>
+          <Card className="relative overflow-hidden border border-primary/15 bg-card/90">
+            <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-secondary via-primary to-secondary" />
+            <CardHeader>
+              <CardTitle className="text-base">Resultados esperados</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2 text-sm text-muted-foreground">
+              {resultadosEsperados.map((item) => (
+                <p key={item}>{item}</p>
+              ))}
+            </CardContent>
+          </Card>
+        </section>
+
+        <Separator className="bg-primary/10" />
+
+        <section id="areas" className="space-y-6">
+          <div className="space-y-4">
+            <Badge variant="outline" className="text-xs uppercase tracking-[0.2em] text-secondary">
+              Áreas envolvidas
+            </Badge>
+            <h2 className="text-2xl font-semibold text-foreground">Responsabilidades internas</h2>
+          </div>
+          <Card className="relative overflow-hidden border border-primary/15 bg-card/90">
+            <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-primary via-secondary to-primary" />
+            <CardContent className="space-y-2 text-sm text-muted-foreground">
+              {areasEnvolvidas.map((item) => (
+                <p key={item}>{item}</p>
+              ))}
+            </CardContent>
+          </Card>
+        </section>
+
+        <Separator className="bg-primary/10" />
+
+        <section id="fluxo" className="space-y-8">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="space-y-4">
+              <Badge variant="outline" className="text-xs uppercase tracking-[0.2em] text-secondary">
+                Fluxo end-to-end
+              </Badge>
+              <h2 className="text-2xl font-semibold text-foreground">Fluxo principal</h2>
+            </div>
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <Target className="size-4 text-secondary" />
+              OCR, comparação automática e revisão humana em um único ciclo.
             </div>
           </div>
-
-          <div className="grid md:grid-cols-2 gap-4">
-            <Card className="border-l-4 border-l-green-500">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <TrendingUp className="h-5 w-5 text-green-600" />
-                  Resultados Esperados
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <ul className="text-sm text-muted-foreground space-y-2">
-                  <li>✅ Sistema unificado com automação inteligente</li>
-                  <li>✅ Redução de 50% no tempo de liberação</li>
-                  <li>✅ Redução de 70% em devoluções às clínicas</li>
-                  <li>✅ Visibilidade completa do status de cada ASO</li>
-                  <li>✅ Padronização de informações recebidas</li>
-                </ul>
-              </CardContent>
-            </Card>
-
-            <Card className="border-l-4 border-l-amber-500">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <FileCheck className="h-5 w-5 text-amber-600" />
-                  Áreas Envolvidas
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <ul className="text-sm text-muted-foreground space-y-2">
-                  <li>• <strong>Coordenação Médica:</strong> responsável pelo processo</li>
-                  <li>• <strong>Administrativo:</strong> conferência inicial</li>
-                  <li>• <strong>Médico:</strong> validação clínica</li>
-                  <li>• <strong>TI:</strong> integração e automação</li>
-                </ul>
-              </CardContent>
-            </Card>
-          </div>
-        </section>
-
-        <Separator className="my-12" />
-
-        {/* Papéis de Usuário */}
-        <section className="mb-16">
-          <h2 className="text-3xl font-bold mb-8">Papéis de Usuário</h2>
-
-          <div className="space-y-6">
-            {/* Enviador */}
-            <Card className="border-l-4 border-l-blue-500">
-              <CardHeader>
-                <div className="flex items-center gap-2">
-                  <Badge className="bg-blue-500">Enviador</Badge>
-                  <CardTitle>Responsável por enviar documentos</CardTitle>
-                </div>
-                <CardDescription>
-                  Faz upload de PDFs médicos e acompanha o processamento e validação
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div>
-                    <h4 className="font-semibold mb-2">Acesso às páginas:</h4>
-                    <div className="flex flex-wrap gap-2">
-                      <Badge variant="outline">Anexar Prontuário</Badge>
-                      <Badge variant="outline">Pendentes</Badge>
-                    </div>
-                  </div>
-
-                  <div className="border-l-4 border-l-yellow-500 rounded-lg p-4 bg-muted/30">
-                    <div className="flex gap-2 items-start">
-                      <AlertCircle className="h-5 w-5 shrink-0 mt-0.5" />
-                      <div>
-                        <h5 className="font-semibold mb-1">Importante sobre /pendentes</h5>
-                        <ul className="text-sm text-muted-foreground space-y-1">
-                          <li>✅ <strong>APARECEM:</strong> Apenas documentos rejeitados (pela IA ou Revisor) </li>
-                          <li>❌ <strong>NÃO APARECEM:</strong> Documentos aprovados (pela IA ou Revisor)</li>
-                          <li>💡 <strong>Resumo:</strong> Enviador só vê rejeições finais do Revisor que precisa corrigir</li>
-                        </ul>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Revisor */}
-            <Card className="border-l-4 border-l-green-500">
-              <CardHeader>
-                <div className="flex items-center gap-2">
-                  <Badge className="bg-green-500">Revisor</Badge>
-                  <CardTitle>Valida documentos processados</CardTitle>
-                </div>
-                <CardDescription>
-                  Analisa documentos e toma decisões de aprovar ou rejeitar com justificativas
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div>
-                    <h4 className="font-semibold mb-2">Acesso às páginas:</h4>
-                    <div className="flex flex-wrap gap-2">
-                      <Badge variant="outline">Checagem</Badge>
-                    </div>
-                  </div>
-
-                  <div>
-                    <h4 className="font-semibold mb-2">Ações disponíveis:</h4>
-                    <div className="grid gap-2">
-                      <div className="flex items-center gap-2 text-sm">
-                        <CheckCircle2 className="h-4 w-4 text-green-600" />
-                        <span><strong>Aprovar:</strong> Documento validado e liberado</span>
-                      </div>
-                      <div className="flex items-center gap-2 text-sm">
-                        <XCircle className="h-4 w-4 text-red-600" />
-                        <span><strong>Rejeitar:</strong> Documento retorna ao enviador com motivo</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Admin */}
-            <Card className="border-l-4 border-l-purple-500">
-              <CardHeader>
-                <div className="flex items-center gap-2">
-                  <Badge className="bg-purple-500">Admin</Badge>
-                  <CardTitle>Gestão completa do sistema</CardTitle>
-                </div>
-                <CardDescription>
-                  Acesso total a todas as funcionalidades incluindo analytics e configurações
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div>
-                  <h4 className="font-semibold mb-2">Acesso às páginas:</h4>
-                  <div className="flex flex-wrap gap-2">
-                    <Badge variant="outline">Anexar Prontuário</Badge>
-                    <Badge variant="outline">Pendentes</Badge>
-                    <Badge variant="outline">Checagem</Badge>
-                    <Badge variant="outline">Histórico</Badge>
-                    <Badge variant="outline">Insights</Badge>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        </section>
-
-        <Separator className="my-12" />
-
-        {/* Fluxo Completo */}
-        <section className="mb-16">
-          <h2 className="text-3xl font-bold mb-8">Fluxo Completo de um Documento</h2>
 
           <div className="space-y-4">
-            {/* Passo 1 */}
-            <Card className="border-l-4 border-l-blue-500">
-              <CardHeader>
-                <div className="flex items-center gap-2">
-                  <div className="h-8 w-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-bold">1</div>
-                  <CardTitle>Envio do Documento</CardTitle>
-                </div>
-              </CardHeader>
-              <CardContent className="pt-4">
-                <p className="text-sm text-muted-foreground">
-                  <strong>Enviador</strong> faz upload de PDF na página &ldquo;Anexar Prontuário&rdquo;
-                </p>
-              </CardContent>
-            </Card>
-
-            <div className="flex justify-center">
-              <ArrowDown className="h-6 w-6 text-muted-foreground" />
-            </div>
-
-            {/* Passo 2 */}
-            <Card className="border-l-4 border-l-purple-500">
-              <CardHeader>
-                <div className="flex items-center gap-2">
-                  <div className="h-8 w-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-bold">2</div>
-                  <CardTitle>Processamento Automático</CardTitle>
-                </div>
-              </CardHeader>
-              <CardContent className="pt-4">
-                <div className="space-y-2 text-sm">
-                  <div className="flex items-center gap-2">
-                    <Badge variant="secondary">OCR</Badge>
-                    <span>Extrai texto e identifica CPF, exames e assinaturas</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Badge variant="secondary">BRNET</Badge>
-                    <span>Consulta exames obrigatórios para o CPF</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Badge variant="secondary">Validação IA</Badge>
-                    <span>Compara exames encontrados vs. obrigatórios</span>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <div className="flex justify-center">
-              <ArrowDown className="h-6 w-6 text-muted-foreground" />
-            </div>
-
-            {/* Passo 3 - Decisão da IA */}
-            <Card className="border-l-4 border-l-amber-500">
-              <CardHeader>
-                <div className="flex items-center gap-2">
-                  <div className="h-8 w-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-bold">3</div>
-                  <CardTitle>Decisão da IA</CardTitle>
-                </div>
-              </CardHeader>
-              <CardContent className="pt-4">
-                <p className="text-sm text-muted-foreground mb-4">
-                  A IA analisa e sugere aprovação ou rejeição, mas TODOS os documentos vão para Checagem
-                </p>
-                <div className="grid md:grid-cols-2 gap-4">
-                  <div className="border-l-4 border-l-green-500 rounded-lg p-3 bg-muted/30">
-                    <div className="flex items-center gap-2 mb-2">
-                      <CheckCircle2 className="h-5 w-5 text-green-600" />
-                      <h4 className="font-semibold text-sm">Aprovado pela IA</h4>
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      Todos os exames obrigatórios encontrados
-                    </p>
-                  </div>
-                  <div className="border-l-4 border-l-yellow-500 rounded-lg p-3 bg-muted/30">
-                    <div className="flex items-center gap-2 mb-2">
-                      <AlertCircle className="h-5 w-5 text-yellow-600" />
-                      <h4 className="font-semibold text-sm">Rejeitado pela IA</h4>
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      Faltam exames ou há discrepâncias
-                    </p>
-                  </div>
-                </div>
-                <div className="mt-4 border-l-4 border-l-blue-500 rounded-lg p-3 bg-muted/30">
-                  <p className="text-sm font-semibold mb-1">⚠️ Importante:</p>
-                  <p className="text-xs text-muted-foreground">
-                    AMBOS os tipos (aprovados E rejeitados pela IA) seguem para /checagem.
-                    A decisão final é do Revisor.
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-
-            <div className="flex justify-center">
-              <ArrowDown className="h-6 w-6 text-muted-foreground" />
-            </div>
-
-            {/* Passo 4 */}
-            <Card className="border-l-4 border-l-purple-500">
-              <CardHeader>
-                <div className="flex items-center gap-2">
-                  <div className="h-8 w-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-bold">4</div>
-                  <CardTitle>TODOS vão para Checagem</CardTitle>
-                </div>
-              </CardHeader>
-              <CardContent className="pt-4">
-                <p className="text-sm text-muted-foreground mb-3">
-                  Todos os documentos processados ficam disponíveis em /checagem
-                </p>
-                <div className="border-l-4 border-l-yellow-500 rounded-lg p-3 bg-muted/30">
-                  <p className="text-xs text-muted-foreground">
-                    📌 Todos os documentos estão sujeitos a validação do Revisor, mesmo que alguns não necessitem de ação (Como os aprovados pela IA).
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-
-            <div className="flex justify-center">
-              <ArrowDown className="h-6 w-6 text-muted-foreground" />
-            </div>
-
-            {/* Passo 5 */}
-            <Card className="border-l-4 border-l-green-500">
-              <CardHeader>
-                <div className="flex items-center gap-2">
-                  <div className="h-8 w-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-bold">5</div>
-                  <CardTitle>Validação Humana (Revisor)</CardTitle>
-                </div>
-              </CardHeader>
-              <CardContent className="pt-4">
-                <p className="text-sm text-muted-foreground mb-4">
-                  <strong>Revisor</strong> acessa /checagem, vê a decisão da IA como referência, e toma a decisão final
-                </p>
-
-                <div className="grid md:grid-cols-2 gap-4">
-                  <div className="border-l-4 border-l-green-500 rounded-lg p-3 bg-muted/30">
-                    <div className="flex items-center gap-2 mb-2">
-                      <CheckCircle2 className="h-4 w-4 text-green-600" />
-                      <h5 className="font-semibold text-sm">Aprovar</h5>
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      ✅ Documento validado definitivamente<br />
-                      ⚪ Enviador NÃO é notificado<br />
-                      📊 Documento arquivado (fim do fluxo)
-                    </p>
-                  </div>
-
-                  <div className="border-l-4 border-l-red-500 rounded-lg p-3 bg-muted/30">
-                    <div className="flex items-center gap-2 mb-2">
-                      <XCircle className="h-4 w-4 text-red-600" />
-                      <h5 className="font-semibold text-sm">Rejeitar (com motivo)</h5>
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      🔄 Documento vai para /pendentes<br />
-                      🔔 Enviador recebe notificação com motivo<br />
-                      ♻️ Enviador pode corrigir e reenviar
-                    </p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+            {flowSteps.map((step, index) => {
+              return (
+                <FlowStepCard key={step.step} step={step} index={index} />
+              )
+            })}
           </div>
         </section>
 
-        <Separator className="my-12" />
+        <Separator className="bg-primary/10" />
 
-        {/* Interações Entre Páginas */}
-        <section className="mb-16">
-          <h2 className="text-3xl font-bold mb-8">Como as Páginas se Comunicam</h2>
-          <p className="text-muted-foreground mb-8">
-            Entenda como as ações em uma página impactam outras telas e como o sistema de notificações acompanha tudo em paralelo.
-          </p>
+        <section id="fluxo-completo" className="space-y-6">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="space-y-4">
+              <Badge variant="outline" className="text-xs uppercase tracking-[0.2em] text-secondary">
+                Fluxo completo de um documento
+              </Badge>
+              <h2 className="text-2xl font-semibold text-foreground">Do envio à liberação final</h2>
+            </div>
+            <button
+              type="button"
+              onClick={scrollFluxoCompleto}
+              className="inline-flex items-center gap-2 rounded-full border border-primary/15 bg-primary/5 px-3 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
+            >
+              Ver próximo
+              <ArrowRight className="size-4" />
+            </button>
+          </div>
+          <div
+            ref={fluxoCompletoRef}
+            className="flex gap-4 overflow-x-auto pb-2 snap-x snap-mandatory [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          >
+            {fluxoCompleto.map((item) => (
+              <Card
+                key={item.step}
+                className="relative min-w-[260px] max-w-[320px] flex-1 snap-start overflow-hidden border border-primary/15 bg-card/90"
+              >
+                <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-primary via-secondary to-primary" />
+                <CardHeader>
+                  <CardTitle className="text-base">
+                    Passo {item.step}: {item.title}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2 text-sm text-muted-foreground">
+                  {item.details.map((detail) => (
+                    <p key={detail}>{detail}</p>
+                  ))}
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </section>
 
-          <div className="space-y-6">
-            {/* Enviar → Checagem */}
-            <Card className="border-l-4 border-l-blue-500">
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <CardTitle className="flex items-center gap-2">
-                      <Badge className="bg-blue-500">Anexar Prontuário</Badge>
-                      <ArrowRight className="h-5 w-5" />
-                      <Badge className="bg-green-500">Checagem</Badge>
+        <Separator className="bg-primary/10" />
+
+        <section id="papeis" className="space-y-6">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h2 className="text-2xl font-semibold">Papéis e acessos</h2>
+            <Badge variant="outline" className="text-xs">
+              ADMIN · TIME INTERNO · CLÍNICA
+            </Badge>
+          </div>
+
+          <div className="grid gap-6 lg:grid-cols-3">
+            {roleCards.map((role) => {
+              const Icon = role.icon
+              return (
+                <Card
+                  key={role.title}
+                  className="relative overflow-hidden border border-primary/15 bg-card/90"
+                >
+                  <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-secondary via-primary to-secondary" />
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-base">
+                      <Icon className="size-5 text-secondary" />
+                      {role.title}
                     </CardTitle>
-                    <CardDescription className="mt-2">
-                      Todo documento enviado é processado e vai para Checagem
-                    </CardDescription>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent className="pt-4">
-                <div className="grid md:grid-cols-2 gap-4">
-                  <div>
-                    <h5 className="font-semibold text-sm mb-2">O que acontece:</h5>
-                    <ul className="text-sm text-muted-foreground space-y-1">
-                      <li>• Enviador faz upload em /anexar-prontuario</li>
-                      <li>• Sistema processa (OCR + BRNET + IA)</li>
-                      <li>• Documento aparece em /checagem</li>
-                      <li>• Revisor recebe notificação de novo documento</li>
-                    </ul>
-                  </div>
-                  <div className="border-l-4 border-l-blue-500 rounded-lg p-3 bg-muted/30">
-                    <div className="flex items-start gap-2">
-                      <Bell className="h-4 w-4 mt-0.5 shrink-0" />
-                      <div className="text-xs">
-                        <p className="font-semibold mb-1">Notificações paralelas:</p>
-                        <p className="text-muted-foreground">→ Enviador: &ldquo;Processamento iniciado&rdquo;</p>
-                        <p className="text-muted-foreground">→ Enviador: &ldquo;Concluído&rdquo;</p>
-                        <p className="text-muted-foreground">→ Revisor: &ldquo;Novos documentos&rdquo;</p>
-                      </div>
+                    <CardDescription>{role.description}</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-2 text-sm text-muted-foreground">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-foreground/80">
+                      Acesso às páginas
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {role.access.map((badge) => (
+                        <Badge key={badge} variant="outline" className="border-primary/20 text-foreground">
+                          {badge}
+                        </Badge>
+                      ))}
                     </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Checagem → Pendentes (Rejeição) */}
-            <Card className="border-l-4 border-l-red-500">
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <CardTitle className="flex items-center gap-2">
-                      <Badge className="bg-green-500">Checagem</Badge>
-                      <ArrowRight className="h-5 w-5" />
-                      <Badge className="bg-blue-500">Pendentes</Badge>
-                      <span className="text-sm font-normal text-muted-foreground">(Quando REJEITA)</span>
-                    </CardTitle>
-                    <CardDescription className="mt-2">
-                      Revisor rejeita documento → Volta para o Enviador em /pendentes
-                    </CardDescription>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent className="pt-4">
-                <div className="grid md:grid-cols-2 gap-4">
-                  <div>
-                    <h5 className="font-semibold text-sm mb-2">O que acontece:</h5>
-                    <ul className="text-sm text-muted-foreground space-y-1">
-                      <li>• Revisor clica &ldquo;Rejeitar&rdquo; em /checagem</li>
-                      <li>• Deve informar o motivo da rejeição</li>
-                      <li>• Documento some de /checagem</li>
-                      <li>• Documento aparece em /pendentes do Enviador</li>
-                      <li>• Enviador pode corrigir e reenviar</li>
-                    </ul>
-                  </div>
-                  <div className="border-l-4 border-l-red-500 rounded-lg p-3 bg-muted/30">
-                    <div className="flex items-start gap-2">
-                      <Bell className="h-4 w-4 text-red-600 mt-0.5 shrink-0" />
-                      <div className="text-xs">
-                        <p className="font-semibold mb-1">Notificações paralelas:</p>
-                        <p className="text-muted-foreground">→ Enviador: &ldquo;Documento rejeitado: [motivo]&rdquo;</p>
-                        <p className="text-muted-foreground text-xs mt-2 italic">
-                          ⚠️ Revisor NÃO recebe notificação (ele fez a ação)
+                    <div className="space-y-1 text-xs text-muted-foreground">
+                      {role.points.map((item) => (
+                        <p key={item}>{item}</p>
+                      ))}
+                    </div>
+                    {role.actions ? (
+                      <div className="space-y-1 text-xs text-muted-foreground">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-foreground/80">
+                          Ações disponíveis
                         </p>
+                        {role.actions.map((item) => (
+                          <p key={item}>{item}</p>
+                        ))}
                       </div>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+                    ) : null}
+                    {role.important ? (
+                      <div className="rounded-lg border border-primary/10 bg-primary/5 p-3 text-xs text-muted-foreground">
+                        {role.important}
+                      </div>
+                    ) : null}
+                  </CardContent>
+                </Card>
+              )
+            })}
+          </div>
+        </section>
 
-            {/* Checagem → Arquivo (Aprovação) */}
-            <Card className="border-l-4 border-l-green-500">
+        <Separator className="bg-primary/10" />
+
+        <section id="status" className="space-y-6">
+          <div className="flex items-center justify-between gap-3">
+            <div className="space-y-4">
+              <Badge variant="outline" className="text-xs uppercase tracking-[0.2em] text-secondary">
+                Status do documento
+              </Badge>
+              <h2 className="text-2xl font-semibold text-foreground">Decisão guiada e revisão humana</h2>
+            </div>
+          </div>
+
+          <div className="grid gap-6 lg:grid-cols-2">
+            <Card className="relative overflow-hidden border border-primary/15 bg-card/90">
+              <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-primary via-secondary to-primary" />
               <CardHeader>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <CardTitle className="flex items-center gap-2">
-                      <Badge className="bg-green-500">Checagem</Badge>
-                      <ArrowRight className="h-5 w-5" />
-                      <Badge variant="outline">Histórico</Badge>
-                      <span className="text-sm font-normal text-muted-foreground">(Quando APROVA)</span>
-                    </CardTitle>
-                    <CardDescription className="mt-2">
-                      Revisor aprova documento → Arquivado (fim do fluxo)
-                    </CardDescription>
-                  </div>
-                </div>
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <AlertCircle className="size-5 text-secondary" />
+                  Interpretação padrão dos resultados
+                </CardTitle>
+                <CardDescription>IA indica, humano decide.</CardDescription>
               </CardHeader>
-              <CardContent className="pt-4">
-                <div className="grid md:grid-cols-2 gap-4">
-                  <div>
-                    <h5 className="font-semibold text-sm mb-2">O que acontece:</h5>
-                    <ul className="text-sm text-muted-foreground space-y-1">
-                      <li>• Revisor clica &ldquo;Aprovar&rdquo; em /checagem</li>
-                      <li>• Documento some de /checagem</li>
-                      <li>• Documento vai para /historico (arquivo)</li>
-                      <li>• Enviador NÃO vê nada em /pendentes</li>
-                      <li>• Fluxo encerrado com sucesso</li>
-                    </ul>
-                  </div>
-                  <div className="border-l-4 border-l-green-500 rounded-lg p-3 bg-muted/30">
-                    <div className="flex items-start gap-2">
-                      <Bell className="h-4 w-4 text-green-600 mt-0.5 shrink-0" />
-                      <div className="text-xs">
-                        <p className="font-semibold mb-1">Notificações paralelas:</p>
-                        <p className="text-muted-foreground">→ NINGUÉM é notificado</p>
-                        <p className="text-muted-foreground text-xs mt-2 italic">
-                          ⚪ Aprovação é silenciosa para o Enviador
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Pendentes → Enviar (Reenvio) */}
-            <Card className="border-l-4 border-l-purple-500">
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <CardTitle className="flex items-center gap-2">
-                      <Badge className="bg-blue-500">Pendentes</Badge>
-                      <ArrowRight className="h-5 w-5" />
-                      <Badge className="bg-blue-500">Anexar Prontuário</Badge>
-                    </CardTitle>
-                    <CardDescription className="mt-2">
-                      Enviador corrige e reenvia documento rejeitado
-                    </CardDescription>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent className="pt-4">
-                <div className="grid md:grid-cols-2 gap-4">
-                  <div>
-                    <h5 className="font-semibold text-sm mb-2">O que acontece:</h5>
-                    <ul className="text-sm text-muted-foreground space-y-1">
-                      <li>• Enviador vê documento em /pendentes</li>
-                      <li>• Lê o motivo da rejeição</li>
-                      <li>• Corrige o documento</li>
-                      <li>• Reenvia via /anexar-prontuario</li>
-                      <li>• Ciclo recomeça (OCR → Checagem)</li>
-                    </ul>
-                  </div>
-                  <div className="border-l-4 border-l-purple-500 rounded-lg p-3 bg-muted/30">
-                    <div className="flex items-start gap-2">
-                      <Bell className="h-4 w-4 mt-0.5 shrink-0" />
-                      <div className="text-xs">
-                        <p className="font-semibold mb-1">Notificações paralelas:</p>
-                        <p className="text-muted-foreground">→ Enviador: &ldquo;Processamento iniciado&rdquo;</p>
-                        <p className="text-muted-foreground">→ Revisor: &ldquo;Novos documentos&rdquo;</p>
-                        <p className="text-muted-foreground text-xs mt-2 italic">
-                          🔄 Sistema detecta duplicata? Bloqueia e notifica
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Visão Geral das Interações */}
-            <Card className="bg-slate-50">
-              <CardHeader>
-                <CardTitle>Resumo Visual do Ecossistema</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div className="grid md:grid-cols-3 gap-4">
-                    <div className="bg-white rounded-lg p-4 border-2 border-blue-200">
-                      <h5 className="font-semibold text-sm mb-2 text-blue-900">📤 /anexar-prontuario</h5>
-                      <p className="text-xs text-muted-foreground mb-2">Ponto de entrada de documentos</p>
-                      <div className="text-xs space-y-1">
-                        <p>← Recebe de: <Badge variant="outline" className="text-xs">Nenhum</Badge> (input do usuário enviador da clínica)</p>
-                        <p>→ Alimenta: <Badge variant="outline" className="text-xs">Checagem</Badge></p>
-                        <p>→ Alimenta: <Badge variant="outline" className="text-xs">Pendentes</Badge> (se resultado negativo pela IA)</p>
-                      </div>
-                    </div>
-
-                    <div className="bg-white rounded-lg p-4 border-2 border-green-200">
-                      <h5 className="font-semibold text-sm mb-2 text-green-900">✅ /checagem</h5>
-                      <p className="text-xs text-muted-foreground mb-2">Centro de decisão</p>
-                      <div className="text-xs space-y-1">
-                        <p>← Recebe de: <Badge variant="outline" className="text-xs">Enviar</Badge></p>
-                        <p>→ Aprova para: <Badge variant="outline" className="text-xs">Histórico</Badge></p>
-                        <p>→ Rejeita para: <Badge variant="outline" className="text-xs">Pendentes</Badge></p>
-                      </div>
-                    </div>
-
-                    <div className="bg-white rounded-lg p-4 border-2 border-amber-200">
-                      <h5 className="font-semibold text-sm mb-2 text-amber-900">⏳ /pendentes</h5>
-                      <p className="text-xs text-muted-foreground mb-2">Fila de correções</p>
-                      <div className="text-xs space-y-1">
-                        <p>← Recebe de: <Badge variant="outline" className="text-xs">Enviar</Badge> (negativo pela IA) ou <Badge variant="outline" className="text-xs">Checagem</Badge> (rejeitado)</p>
-                        <p>→ Alimenta: <Badge variant="outline" className="text-xs">Histórico</Badge></p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                    <div className="flex items-start gap-2">
-                      <Bell className="h-5 w-5 text-blue-600 shrink-0 mt-0.5" />
+              <CardContent className="space-y-3 text-sm text-muted-foreground">
+                {statusItems.map((item) => {
+                  const Icon = item.icon
+                  return (
+                    <div
+                      key={item.title}
+                      className={`flex items-start gap-3 rounded-lg border border-primary/10 ${item.bg} p-3`}
+                    >
+                      <Icon className={`mt-0.5 size-4 ${item.color}`} />
                       <div>
-                        <h5 className="font-semibold text-blue-900 mb-2">Sistema de Notificações em Paralelo</h5>
-                        <p className="text-sm text-blue-800">
-                          Enquanto os documentos transitam entre as páginas, o sistema de notificações
-                          informa Enviadores e Revisores sobre cada mudança de estado em tempo real.
-                        </p>
+                        <p className="text-xs font-semibold text-foreground">{item.title}</p>
+                        <p className="text-xs text-muted-foreground">{item.description}</p>
                       </div>
                     </div>
+                  )
+                })}
+              </CardContent>
+            </Card>
+
+            <Card className="relative overflow-hidden border border-primary/15 bg-card/90">
+              <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-secondary via-primary to-secondary" />
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <CheckCircle2 className="size-5 text-secondary" />
+                  Fluxo de decisão
+                </CardTitle>
+                <CardDescription>Transparente para auditoria e operação.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-2 text-sm text-muted-foreground">
+                {statusFlow.map((item) => (
+                  <div key={item} className="flex items-start gap-2">
+                    <ArrowRight className="mt-0.5 size-4 text-secondary" />
+                    <p className="text-sm text-muted-foreground">{item}</p>
+                  </div>
+                ))}
+                <div className="rounded-lg border border-primary/10 bg-primary/5 p-3 text-xs text-muted-foreground">
+                  As justificativas ficam registradas para consulta e revisão posterior.
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </section>
+
+        <Separator className="bg-primary/10" />
+
+        <section id="comunicacao" className="space-y-8">
+          <div className="space-y-4">
+            <Badge variant="outline" className="text-xs uppercase tracking-[0.2em] text-secondary">
+              Comunicação entre páginas
+            </Badge>
+            <h2 className="text-2xl font-semibold text-foreground">
+              Como as telas se conectam
+            </h2>
+          </div>
+          <div className="grid gap-6 lg:grid-cols-2">
+            {comunicacoes.map((item) => (
+              <Card key={item.title} className="relative overflow-hidden border border-primary/15 bg-card/90">
+                <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-primary via-secondary to-primary" />
+                <CardHeader>
+                  <CardTitle className="text-base">{item.title}</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3 text-sm text-muted-foreground">
+                  <div className="space-y-1">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-foreground/80">
+                      O que acontece
+                    </p>
+                    {item.details.map((detail) => (
+                      <p key={detail}>{detail}</p>
+                    ))}
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-foreground/80">
+                      Notificações paralelas
+                    </p>
+                    {item.notifications.map((note) => (
+                      <p key={note}>{note}</p>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+          <div className="space-y-4">
+            <h3 className="text-lg font-semibold text-foreground">Resumo visual do ecossistema</h3>
+            <div className="grid gap-6 lg:grid-cols-3">
+              {ecossistema.map((item) => (
+                <Card key={item.title} className="relative overflow-hidden border border-primary/15 bg-card/90">
+                  <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-secondary via-primary to-secondary" />
+                  <CardHeader>
+                    <CardTitle className="text-base">{item.title}</CardTitle>
+                    <CardDescription>{item.subtitle}</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-2 text-sm text-muted-foreground">
+                    <p>
+                      <span className="font-semibold text-foreground/80">Recebe de:</span>{" "}
+                      {item.receives}
+                    </p>
+                    <p>
+                      <span className="font-semibold text-foreground/80">Alimenta:</span>{" "}
+                      {item.feeds}
+                    </p>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <Separator className="bg-primary/10" />
+
+        <section id="notificacoes" className="space-y-6">
+          <div className="flex items-center justify-between gap-3">
+            <div className="space-y-4">
+              <Badge variant="outline" className="text-xs uppercase tracking-[0.2em] text-secondary">
+                Notificações
+              </Badge>
+              <h2 className="text-2xl font-semibold text-foreground">Acompanhamento em tempo real</h2>
+            </div>
+          </div>
+          <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
+            <Card className="relative overflow-hidden border border-primary/15 bg-card/90">
+              <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-secondary via-primary to-secondary" />
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <Bell className="size-5 text-secondary" />
+                  Central única de avisos
+                </CardTitle>
+                <CardDescription>Processamento, revisões e conclusões.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3 text-sm text-muted-foreground">
+                <p>
+                  O sino de notificações concentra avisos de processamento, revisões e conclusões. O
+                  progresso dos lotes aparece no topo enquanto o processamento está ativo.
+                </p>
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <ArrowRight className="size-4 text-secondary" />
+                  Clique nas notificações para abrir detalhes e ir direto ao documento.
+                </div>
+                <div className="rounded-lg border border-primary/10 bg-primary/5 p-3 text-xs text-muted-foreground">
+                  Regra prática: cada mudança de estado gera uma notificação com data, origem e
+                  destino do documento.
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="relative overflow-hidden border border-primary/15 bg-card/90">
+              <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-primary via-secondary to-primary" />
+              <CardHeader>
+                <CardTitle className="text-base">Exemplos visuais</CardTitle>
+                <CardDescription>Formato padrão das mensagens.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3 text-sm text-muted-foreground">
+                <div className="rounded-lg border border-primary/10 bg-primary/5 p-3">
+                  <p className="text-xs font-semibold text-foreground">Enviador</p>
+                  <div className="mt-2 space-y-2 text-xs text-muted-foreground">
+                    <p className="rounded-md border border-primary/10 bg-white/80 px-3 py-2">
+                      Processamento iniciado · 3 documentos
+                    </p>
+                    <p className="rounded-md border border-primary/10 bg-white/80 px-3 py-2">
+                      Concluído · 2 aprovados, 1 com pendências (todos enviados para revisão)
+                    </p>
+                    <p className="rounded-md border border-primary/10 bg-white/80 px-3 py-2">
+                      Documento rejeitado · Motivo: exame ilegível
+                    </p>
+                  </div>
+                </div>
+                <div className="rounded-lg border border-primary/10 bg-primary/5 p-3">
+                  <p className="text-xs font-semibold text-foreground">Revisor</p>
+                  <div className="mt-2 space-y-2 text-xs text-muted-foreground">
+                    <p className="rounded-md border border-primary/10 bg-white/80 px-3 py-2">
+                      Novos documentos aguardando revisão
+                    </p>
+                    <p className="rounded-md border border-primary/10 bg-white/80 px-3 py-2">
+                      Lote atualizado · 5 documentos em checagem
+                    </p>
                   </div>
                 </div>
               </CardContent>
@@ -709,743 +1112,261 @@ export default function DocsPage() {
           </div>
         </section>
 
-        <Separator className="my-12" />
+        <Separator className="bg-primary/10" />
 
-        {/* Dores e Gargalos */}
-        <section className="mb-16">
-          <h2 className="text-3xl font-bold mb-8">Dores, Gargalos e Pontos de Risco</h2>
-          <p className="text-muted-foreground mb-8">
-            Problemas identificados no processo manual que o ProntuAI resolve através de automação e padronização.
-          </p>
-
-          <div className="grid md:grid-cols-2 gap-6 mb-6">
-            {/* Problemas Documentais */}
-            <Card className="border-l-4 border-l-red-500">
+        <section id="riscos" className="space-y-6">
+          <div className="space-y-4">
+            <Badge variant="outline" className="text-xs uppercase tracking-[0.2em] text-secondary">
+              Dores e gargalos
+            </Badge>
+            <h2 className="text-2xl font-semibold text-foreground">
+              Problemas resolvidos pelo ProntuAI
+            </h2>
+          </div>
+          <div className="grid gap-6 lg:grid-cols-2">
+            <Card className="relative overflow-hidden border border-primary/15 bg-card/90">
+              <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-primary via-secondary to-primary" />
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <XCircle className="h-5 w-5 text-red-600" />
-                  Problemas Documentais
-                </CardTitle>
+                <CardTitle className="text-base">Problemas documentais</CardTitle>
               </CardHeader>
-              <CardContent className="pt-4">
-                <ul className="text-sm space-y-2">
-                  <li className="flex items-start gap-2">
-                    <span className="text-red-600 shrink-0">•</span>
-                    <span><strong>Falta de padrão:</strong> clínicas enviam documentos com formatos diferentes</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="text-red-600 shrink-0">•</span>
-                    <span><strong>Dados incompletos:</strong> ausência de nome, CPF, data ou assinaturas</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="text-red-600 shrink-0">•</span>
-                    <span><strong>Assinaturas ilegíveis:</strong> carimbos e assinaturas médicas de baixa qualidade</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="text-red-600 shrink-0">•</span>
-                    <span><strong>Versões incorretas:</strong> exames desatualizados enviados por engano</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="text-red-600 shrink-0">•</span>
-                    <span><strong>Terminologia inconsistente:</strong> termos diferentes para o mesmo tipo de exame</span>
-                  </li>
-                </ul>
+              <CardContent className="space-y-2 text-sm text-muted-foreground">
+                {problemasDocumentais.map((item) => (
+                  <p key={item}>{item}</p>
+                ))}
               </CardContent>
             </Card>
-
-            {/* Gargalos Operacionais */}
-            <Card className="border-l-4 border-l-orange-500">
+            <Card className="relative overflow-hidden border border-primary/15 bg-card/90">
+              <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-secondary via-primary to-secondary" />
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Clock className="h-5 w-5 text-orange-600" />
-                  Gargalos Operacionais
-                </CardTitle>
+                <CardTitle className="text-base">Gargalos operacionais</CardTitle>
               </CardHeader>
-              <CardContent className="pt-4">
-                <ul className="text-sm space-y-2">
-                  <li className="flex items-start gap-2">
-                    <span className="text-orange-600 shrink-0">•</span>
-                    <span><strong>Conferência manual:</strong> processo moroso e sujeito a erros humanos</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="text-orange-600 shrink-0">•</span>
-                    <span><strong>Falta de integração:</strong> sistemas isolados exigem retrabalho</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="text-orange-600 shrink-0">•</span>
-                    <span><strong>Validação dupla:</strong> administrativo e médico conferem os mesmos campos</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="text-orange-600 shrink-0">•</span>
-                    <span><strong>Devoluções frequentes:</strong> alto índice de correções necessárias</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="text-orange-600 shrink-0">•</span>
-                    <span><strong>Arquivos não padronizados:</strong> dificuldade em busca e indexação</span>
-                  </li>
-                </ul>
+              <CardContent className="space-y-2 text-sm text-muted-foreground">
+                {gargalosOperacionais.map((item) => (
+                  <p key={item}>{item}</p>
+                ))}
               </CardContent>
             </Card>
           </div>
-
-          {/* Desperdícios Lean */}
-          <Card className="mb-6">
+          <Card className="relative overflow-hidden border border-primary/15 bg-card/90">
+            <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-primary via-secondary to-primary" />
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <TrendingDown className="h-5 w-5" />
-                Desperdícios Identificados (MUDAs - Lean)
-              </CardTitle>
-              <CardDescription>
-                Tipos de desperdício que o sistema elimina ou minimiza
-              </CardDescription>
+              <CardTitle className="text-base">Desperdícios identificados (MUDAs)</CardTitle>
             </CardHeader>
-            <CardContent>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b">
-                      <th className="text-left p-3 font-semibold">Tipo de MUDA</th>
-                      <th className="text-left p-3 font-semibold">Exemplo no Processo Manual</th>
-                      <th className="text-left p-3 font-semibold">Solução ProntuAI</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr className="border-b hover:bg-slate-50">
-                      <td className="p-3 font-medium">Espera</td>
-                      <td className="p-3 text-muted-foreground">Tempo entre envio da clínica e conferência</td>
-                      <td className="p-3 text-green-700">Processamento automático imediato</td>
-                    </tr>
-                    <tr className="border-b hover:bg-slate-50">
-                      <td className="p-3 font-medium">Movimentação</td>
-                      <td className="p-3 text-muted-foreground">Troca manual de arquivos entre e-mails e pastas</td>
-                      <td className="p-3 text-green-700">Sistema centralizado com workflow</td>
-                    </tr>
-                    <tr className="border-b hover:bg-slate-50">
-                      <td className="p-3 font-medium">Superprocessamento</td>
-                      <td className="p-3 text-muted-foreground">Conferência dupla dos mesmos campos</td>
-                      <td className="p-3 text-green-700">IA valida + Revisor confirma casos críticos</td>
-                    </tr>
-                    <tr className="border-b hover:bg-slate-50">
-                      <td className="p-3 font-medium">Defeitos</td>
-                      <td className="p-3 text-muted-foreground">Documentos ilegíveis, dados incorretos</td>
-                      <td className="p-3 text-green-700">Validação automática com checklist obrigatório</td>
-                    </tr>
-                    <tr className="border-b hover:bg-slate-50">
-                      <td className="p-3 font-medium">Estoque</td>
-                      <td className="p-3 text-muted-foreground">Acúmulo de exames aguardando correção</td>
-                      <td className="p-3 text-green-700">Notificações imediatas + fila priorizada</td>
-                    </tr>
-                    <tr className="border-b hover:bg-slate-50">
-                      <td className="p-3 font-medium">Talento</td>
-                      <td className="p-3 text-muted-foreground">Médicos gastando tempo com checagem manual</td>
-                      <td className="p-3 text-green-700">Foco em decisões clínicas complexas</td>
-                    </tr>
-                  </tbody>
-                </table>
+            <CardContent className="space-y-3 text-sm text-muted-foreground">
+              <div className="hidden grid-cols-[0.9fr_1.5fr_1.5fr] gap-3 text-xs font-semibold uppercase tracking-wide text-foreground/70 md:grid">
+                <span>Tipo</span>
+                <span>Exemplo</span>
+                <span>Solução ProntuAI</span>
+              </div>
+              <div className="space-y-3">
+                {mudas.map((item) => (
+                  <div
+                    key={item.tipo}
+                    className="grid gap-2 rounded-lg border border-primary/10 bg-primary/5 p-3 md:grid-cols-[0.9fr_1.5fr_1.5fr]"
+                  >
+                    <p className="text-sm font-semibold text-foreground">{item.tipo}</p>
+                    <p className="text-sm text-muted-foreground">{item.exemplo}</p>
+                    <p className="text-sm text-muted-foreground">{item.solucao}</p>
+                  </div>
+                ))}
               </div>
             </CardContent>
           </Card>
-
-          {/* Riscos */}
-          <div className="grid md:grid-cols-2 gap-6">
-            <Card className="border-l-4 border-l-red-500">
+          <div className="grid gap-6 lg:grid-cols-2">
+            <Card className="relative overflow-hidden border border-primary/15 bg-card/90">
+              <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-secondary via-primary to-secondary" />
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <AlertCircle className="h-5 w-5 text-red-600" />
-                  Pontos de Risco Críticos
-                </CardTitle>
+                <CardTitle className="text-base">Pontos de risco críticos</CardTitle>
               </CardHeader>
-              <CardContent>
-                <ul className="text-sm text-muted-foreground space-y-2">
-                  <li className="flex items-start gap-2">
-                    <span className="shrink-0">⚠️</span>
-                    <span><strong>Não conformidade legal:</strong> ASO sem assinatura válida invalida laudo</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="shrink-0">⚠️</span>
-                    <span><strong>Liberação incorreta:</strong> erro pode liberar colaborador inapto</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="shrink-0">⚠️</span>
-                    <span><strong>Segurança da informação:</strong> documentos sensíveis sem controle</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="shrink-0">⚠️</span>
-                    <span><strong>Retrabalho em massa:</strong> ausência de rastreabilidade</span>
-                  </li>
-                </ul>
+              <CardContent className="space-y-2 text-sm text-muted-foreground">
+                {riscosCriticos.map((item) => (
+                  <p key={item}>{item}</p>
+                ))}
               </CardContent>
             </Card>
-
-            <Card className="border-l-4 border-l-green-500">
+            <Card className="relative overflow-hidden border border-primary/15 bg-card/90">
+              <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-primary via-secondary to-primary" />
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Shield className="h-5 w-5 text-green-600" />
-                  Mitigações Implementadas
-                </CardTitle>
+                <CardTitle className="text-base">Mitigações implementadas</CardTitle>
               </CardHeader>
-              <CardContent>
-                <ul className="text-sm text-muted-foreground space-y-2">
-                  <li className="flex items-start gap-2">
-                    <span className="shrink-0">✅</span>
-                    <span><strong>Validação automática:</strong> checklist obrigatório de campos críticos</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="shrink-0">✅</span>
-                    <span><strong>Dupla validação:</strong> IA sugere + Revisor decide</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="shrink-0">✅</span>
-                    <span><strong>Controle de acesso:</strong> perfis específicos + logs de auditoria</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="shrink-0">✅</span>
-                    <span><strong>Deduplicação:</strong> hash único por documento previne duplicatas</span>
-                  </li>
-                </ul>
+              <CardContent className="space-y-2 text-sm text-muted-foreground">
+                {mitigacoes.map((item) => (
+                  <p key={item}>{item}</p>
+                ))}
               </CardContent>
             </Card>
           </div>
         </section>
 
-        <Separator className="my-12" />
+        <Separator className="bg-primary/10" />
 
-        {/* Sistema de Notificações */}
-        <section className="mb-16">
-          <h2 className="text-3xl font-bold mb-8">Sistema de Notificações</h2>
-
-          <Card>
-            <CardHeader>
-              <div className="flex items-center gap-2">
-                <Bell className="h-6 w-6" />
-                <CardTitle>Notificações em Tempo Real</CardTitle>
-              </div>
-              <CardDescription>
-                Sistema mantém todos os usuários informados sobre o andamento dos documentos
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-6">
-                {/* Enviador recebe */}
-                <div>
-                  <h4 className="font-semibold mb-3 flex items-center gap-2">
-                    <Badge className="bg-blue-500">Enviador</Badge>
-                    <span>recebe:</span>
-                  </h4>
-                  <div className="grid gap-2">
-                    <div className="flex items-start gap-2 text-sm p-2 rounded bg-muted/30">
-                      <Badge variant="outline" className="shrink-0">Início</Badge>
-                      <span>&ldquo;Iniciando processamento de 3 documento(s)&rdquo;</span>
-                    </div>
-                    <div className="flex items-start gap-2 text-sm p-2 rounded border-l-2 border-l-green-500 bg-muted/30">
-                      <Badge variant="outline" className="shrink-0">Concluído (limpo)</Badge>
-                      <span>&ldquo;Processamento concluído - 3 documentos enviados para revisão&rdquo;</span>
-                    </div>
-                    <div className="flex items-start gap-2 text-sm p-2 rounded border-l-2 border-l-amber-500 bg-muted/30">
-                      <Badge variant="outline" className="shrink-0">Concluído (pendências)</Badge>
-                      <span>&ldquo;Processamento concluído - 2 aprovados, 1 com pendências pela IA (todos enviados para revisão)&rdquo;</span>
-                    </div>
-                    <div className="flex items-start gap-2 text-sm p-2 rounded border-l-2 border-l-red-500 bg-muted/30">
-                      <Badge variant="outline" className="shrink-0">Erro</Badge>
-                      <span>&ldquo;Erro ao processar documento: timeout OCR&rdquo;</span>
-                    </div>
-                    <div className="flex items-start gap-2 text-sm p-2 rounded border-l-2 border-l-blue-500 bg-muted/30">
-                      <Badge variant="outline" className="shrink-0">Duplicata</Badge>
-                      <span>&ldquo;Documento já foi enviado anteriormente em 15/12/2024&rdquo;</span>
-                    </div>
-                    <div className="flex items-start gap-2 text-sm p-2 rounded border-l-2 border-l-red-500 bg-muted/30">
-                      <Badge variant="outline" className="shrink-0">Rejeição Revisor</Badge>
-                      <span>&ldquo;Seu documento de João Silva foi rejeitado: Documento ilegível&rdquo;</span>
-                    </div>
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-2 italic">
-                    ⚠️ Enviadores NÃO recebem notificação quando o Revisor aprova (fluxo transparente)
-                  </p>
-                </div>
-
-                {/* Revisor recebe */}
-                <div>
-                  <h4 className="font-semibold mb-3 flex items-center gap-2">
-                    <Badge className="bg-green-500">Revisor</Badge>
-                    <span>recebe:</span>
-                  </h4>
-                  <div className="grid gap-2">
-                    <div className="flex items-start gap-2 text-sm p-2 rounded bg-muted/30">
-                      <Badge variant="outline" className="shrink-0">Novo</Badge>
-                      <span>&ldquo;3 novos documentos aguardando revisão&rdquo;</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </section>
-
-        <Separator className="my-12" />
-
-        {/* Páginas do Sistema */}
-        <section className="mb-16">
-          <h2 className="text-3xl font-bold mb-8">Páginas do Sistema</h2>
-
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b">
-                  <th className="text-left p-3 font-semibold">Página</th>
-                  <th className="text-left p-3 font-semibold">Rota</th>
-                  <th className="text-left p-3 font-semibold">Acesso</th>
-                  <th className="text-left p-3 font-semibold">Descrição</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr className="border-b hover:bg-slate-50">
-                  <td className="p-3 font-medium">Login</td>
-                  <td className="p-3"><code className="text-sm bg-slate-100 px-2 py-1 rounded">/login</code></td>
-                  <td className="p-3"><Badge variant="outline">Público</Badge></td>
-                  <td className="p-3 text-sm text-muted-foreground">Autenticação via Google OAuth</td>
-                </tr>
-                <tr className="border-b hover:bg-slate-50">
-                  <td className="p-3 font-medium">Anexar Prontuário</td>
-                  <td className="p-3"><code className="text-sm bg-slate-100 px-2 py-1 rounded">/anexar-prontuario</code></td>
-                  <td className="p-3">
-                    <div className="flex gap-1 flex-wrap">
-                      <Badge className="bg-blue-500 text-xs">Enviador</Badge>
-                      <Badge className="bg-purple-500 text-xs">Admin</Badge>
-                    </div>
-                  </td>
-                  <td className="p-3 text-sm text-muted-foreground">Upload e processamento de documentos</td>
-                </tr>
-                <tr className="border-b hover:bg-slate-50">
-                  <td className="p-3 font-medium">Pendentes</td>
-                  <td className="p-3"><code className="text-sm bg-slate-100 px-2 py-1 rounded">/pendentes</code></td>
-                  <td className="p-3">
-                    <div className="flex gap-1 flex-wrap">
-                      <Badge className="bg-blue-500 text-xs">Enviador</Badge>
-                      <Badge className="bg-purple-500 text-xs">Admin</Badge>
-                    </div>
-                  </td>
-                  <td className="p-3 text-sm text-muted-foreground">Documentos rejeitados que precisam de ação</td>
-                </tr>
-                <tr className="border-b hover:bg-slate-50">
-                  <td className="p-3 font-medium">Checagem</td>
-                  <td className="p-3"><code className="text-sm bg-slate-100 px-2 py-1 rounded">/checagem</code></td>
-                  <td className="p-3">
-                    <div className="flex gap-1 flex-wrap">
-                      <Badge className="bg-green-500 text-xs">Revisor</Badge>
-                      <Badge className="bg-purple-500 text-xs">Admin</Badge>
-                    </div>
-                  </td>
-                  <td className="p-3 text-sm text-muted-foreground">Validação manual com aprovação/rejeição</td>
-                </tr>
-                <tr className="border-b hover:bg-slate-50">
-                  <td className="p-3 font-medium">Histórico</td>
-                  <td className="p-3"><code className="text-sm bg-slate-100 px-2 py-1 rounded">/historico</code></td>
-                  <td className="p-3">
-                    <Badge className="bg-purple-500 text-xs">Admin</Badge>
-                  </td>
-                  <td className="p-3 text-sm text-muted-foreground">Arquivo completo de processamentos</td>
-                </tr>
-              </tbody>
-            </table>
+        <section id="kpis" className="space-y-6">
+            <div className="space-y-4">
+            <Badge variant="outline" className="text-xs uppercase tracking-[0.2em] text-secondary">
+              KPIs e indicadores
+            </Badge>
+            <h2 className="text-2xl font-semibold text-foreground">Métricas de sucesso</h2>
           </div>
-        </section>
-
-        <Separator className="my-12" />
-
-        {/* KPIs e Indicadores */}
-        <section className="mb-16">
-          <h2 className="text-3xl font-bold mb-8">KPIs e Indicadores de Sucesso</h2>
-          <p className="text-muted-foreground mb-8">
-            Métricas para acompanhamento de performance e qualidade do processo automatizado.
-          </p>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <TrendingUp className="h-5 w-5" />
-                Indicadores Principais
-              </CardTitle>
-              <CardDescription>
-                Fórmulas de cálculo e metas de melhoria para cada indicador
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b">
-                      <th className="text-left p-3 font-semibold">Indicador</th>
-                      <th className="text-left p-3 font-semibold">Fórmula / Fonte</th>
-                      <th className="text-left p-3 font-semibold">Meta</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr className="border-b hover:bg-slate-50">
-                      <td className="p-3 font-medium">Tempo médio de liberação (Lead Time)</td>
-                      <td className="p-3 text-muted-foreground"><code className="text-xs bg-slate-100 px-2 py-1 rounded">Data liberação - Data recebimento</code></td>
-                      <td className="p-3">
-                        <div className="flex items-center gap-2">
-                          <TrendingDown className="h-4 w-4 text-green-600" />
-                          <span className="text-green-700 font-semibold">↓ Reduzir 50%</span>
-                        </div>
-                      </td>
-                    </tr>
-                    <tr className="border-b hover:bg-slate-50">
-                      <td className="p-3 font-medium">Taxa de devoluções às clínicas</td>
-                      <td className="p-3 text-muted-foreground"><code className="text-xs bg-slate-100 px-2 py-1 rounded">(Devolvidos / Recebidos) × 100</code></td>
-                      <td className="p-3">
-                        <div className="flex items-center gap-2">
-                          <TrendingDown className="h-4 w-4 text-green-600" />
-                          <span className="text-green-700 font-semibold">↓ Reduzir 70%</span>
-                        </div>
-                      </td>
-                    </tr>
-                    <tr className="border-b hover:bg-slate-50">
-                      <td className="p-3 font-medium">Taxa de ASOs aprovados sem pendência</td>
-                      <td className="p-3 text-muted-foreground"><code className="text-xs bg-slate-100 px-2 py-1 rounded">(Aprovados direto / Total) × 100</code></td>
-                      <td className="p-3">
-                        <div className="flex items-center gap-2">
-                          <TrendingUp className="h-4 w-4 text-blue-600" />
-                          <span className="text-blue-700 font-semibold">↑ Aumentar 40%</span>
-                        </div>
-                      </td>
-                    </tr>
-                    <tr className="border-b hover:bg-slate-50">
-                      <td className="p-3 font-medium">Tempo médio de resposta da clínica</td>
-                      <td className="p-3 text-muted-foreground"><code className="text-xs bg-slate-100 px-2 py-1 rounded">Data reenvio - Data devolução</code></td>
-                      <td className="p-3">
-                        <div className="flex items-center gap-2">
-                          <TrendingDown className="h-4 w-4 text-green-600" />
-                          <span className="text-green-700 font-semibold">↓ Reduzir 60%</span>
-                        </div>
-                      </td>
-                    </tr>
-                    <tr className="border-b hover:bg-slate-50">
-                      <td className="p-3 font-medium">Percentual de automação de checagem</td>
-                      <td className="p-3 text-muted-foreground"><code className="text-xs bg-slate-100 px-2 py-1 rounded">(Processados via OCR / Total) × 100</code></td>
-                      <td className="p-3">
-                        <div className="flex items-center gap-2">
-                          <TrendingUp className="h-4 w-4 text-blue-600" />
-                          <span className="text-blue-700 font-semibold">↑ 80% até Fase 2</span>
-                        </div>
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
+          <Card className="relative overflow-hidden border border-primary/15 bg-card/90">
+            <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-primary via-secondary to-primary" />
+            <CardContent className="space-y-3 text-sm text-muted-foreground">
+              <div className="hidden grid-cols-[1.4fr_1.2fr_0.6fr] gap-3 text-xs font-semibold uppercase tracking-wide text-foreground/70 md:grid">
+                <span>Indicador</span>
+                <span>Fórmula / Fonte</span>
+                <span>Meta</span>
+              </div>
+              <div className="space-y-3">
+                {kpis.map((item) => (
+                  <div
+                    key={item.indicador}
+                    className="grid gap-2 rounded-lg border border-primary/10 bg-primary/5 p-3 md:grid-cols-[1.4fr_1.2fr_0.6fr]"
+                  >
+                    <p className="text-sm font-semibold text-foreground">{item.indicador}</p>
+                    <p className="text-sm text-muted-foreground">{item.formula}</p>
+                    <p className="text-sm text-muted-foreground">{item.meta}</p>
+                  </div>
+                ))}
               </div>
             </CardContent>
           </Card>
         </section>
 
-        <Separator className="my-12" />
+        <Separator className="bg-primary/10" />
 
-        {/* Governança e LGPD */}
-        <section className="mb-16">
-          <h2 className="text-3xl font-bold mb-8">Segurança, LGPD e Governança</h2>
-          <p className="text-muted-foreground mb-8">
-            Práticas de segurança da informação e conformidade com a Lei Geral de Proteção de Dados.
-          </p>
-
-          <div className="grid md:grid-cols-2 gap-6 mb-6">
-            {/* LGPD */}
-            <Card className="border-l-4 border-l-blue-500">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Shield className="h-5 w-5" />
-                  Conformidade LGPD
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="pt-4">
-                <ul className="text-sm text-muted-foreground space-y-2">
-                  <li className="flex items-start gap-2">
-                    <span className="shrink-0">✓</span>
-                    <span><strong>Anonimização parcial:</strong> dados médicos com uso estritamente funcional</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="shrink-0">✓</span>
-                    <span><strong>Minimização de dados:</strong> coleta apenas informações necessárias</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="shrink-0">✓</span>
-                    <span><strong>Consentimento:</strong> documentação clara de autorização para processamento</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="shrink-0">✓</span>
-                    <span><strong>Retenção legal:</strong> backup automático com retenção mínima de 5 anos</span>
-                  </li>
-                </ul>
-              </CardContent>
-            </Card>
-
-            {/* Controle de Acesso */}
-            <Card className="border-l-4 border-l-green-500">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Users className="h-5 w-5" />
-                  Controle de Acesso
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="pt-4">
-                <ul className="text-sm text-muted-foreground space-y-2">
-                  <li className="flex items-start gap-2">
-                    <span className="shrink-0">✓</span>
-                    <span><strong>Perfis diferenciados:</strong> Enviador, Revisor, Admin com permissões específicas</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="shrink-0">✓</span>
-                    <span><strong>Autenticação corporativa:</strong> Google OAuth restrito a @grupobrmed.com.br</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="shrink-0">✓</span>
-                    <span><strong>Acesso granular:</strong> permissões específicas por documento e ação</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="shrink-0">✓</span>
-                    <span><strong>Gestão de identidade:</strong> IAM + autenticação MFA (planejado)</span>
-                  </li>
-                </ul>
-              </CardContent>
-            </Card>
+        <section id="seguranca" className="space-y-6">
+          <div className="space-y-4">
+            <Badge variant="outline" className="text-xs uppercase tracking-[0.2em] text-secondary">
+              Segurança, LGPD e governança
+            </Badge>
+            <h2 className="text-2xl font-semibold text-foreground">Conformidade e proteção</h2>
           </div>
-
-          <div className="grid md:grid-cols-2 gap-6">
-            {/* Segurança Técnica */}
-            <Card className="border-l-4 border-l-purple-500">
+          <div className="grid gap-6 lg:grid-cols-2">
+            <Card className="relative overflow-hidden border border-primary/15 bg-card/90">
+              <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-primary via-secondary to-primary" />
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Shield className="h-5 w-5" />
-                  Segurança Técnica
-                </CardTitle>
+                <CardTitle className="text-base">Conformidade LGPD</CardTitle>
               </CardHeader>
-              <CardContent className="pt-4">
-                <ul className="text-sm text-muted-foreground space-y-2">
-                  <li className="flex items-start gap-2">
-                    <span className="shrink-0">✓</span>
-                    <span><strong>Criptografia em trânsito:</strong> HTTPS/TLS para todas as comunicações</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="shrink-0">✓</span>
-                    <span><strong>Criptografia em repouso:</strong> AES-256 para dados armazenados</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="shrink-0">✓</span>
-                    <span><strong>Ambientes segregados:</strong> desenvolvimento, homologação e produção separados</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="shrink-0">✓</span>
-                    <span><strong>Storage seguro:</strong> cloud com controle de acesso e versionamento</span>
-                  </li>
-                </ul>
+              <CardContent className="space-y-2 text-sm text-muted-foreground">
+                {lgpd.map((item) => (
+                  <p key={item}>{item}</p>
+                ))}
               </CardContent>
             </Card>
-
-            {/* Auditoria */}
-            <Card className="border-l-4 border-l-amber-500">
+            <Card className="relative overflow-hidden border border-primary/15 bg-card/90">
+              <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-secondary via-primary to-secondary" />
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <FileCheck className="h-5 w-5" />
-                  Logs e Auditoria
-                </CardTitle>
+                <CardTitle className="text-base">Controle de acesso</CardTitle>
               </CardHeader>
-              <CardContent className="pt-4">
-                <ul className="text-sm text-muted-foreground space-y-2">
-                  <li className="flex items-start gap-2">
-                    <span className="shrink-0">✓</span>
-                    <span><strong>Trilha de auditoria:</strong> registro de quem aprovou, quando e qual ação</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="shrink-0">✓</span>
-                    <span><strong>Logs automáticos:</strong> todas as operações registradas com timestamp</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="shrink-0">✓</span>
-                    <span><strong>Versionamento:</strong> histórico completo de alterações em documentos</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="shrink-0">✓</span>
-                    <span><strong>Backup diário:</strong> retenção mínima de 5 anos conforme exigência legal</span>
-                  </li>
-                </ul>
+              <CardContent className="space-y-2 text-sm text-muted-foreground">
+                {controleAcesso.map((item) => (
+                  <p key={item}>{item}</p>
+                ))}
+              </CardContent>
+            </Card>
+            <Card className="relative overflow-hidden border border-primary/15 bg-card/90">
+              <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-primary via-secondary to-primary" />
+              <CardHeader>
+                <CardTitle className="text-base">Segurança técnica</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2 text-sm text-muted-foreground">
+                {segurancaTecnica.map((item) => (
+                  <p key={item}>{item}</p>
+                ))}
+              </CardContent>
+            </Card>
+            <Card className="relative overflow-hidden border border-primary/15 bg-card/90">
+              <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-secondary via-primary to-secondary" />
+              <CardHeader>
+                <CardTitle className="text-base">Logs e auditoria</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2 text-sm text-muted-foreground">
+                {logsAuditoria.map((item) => (
+                  <p key={item}>{item}</p>
+                ))}
               </CardContent>
             </Card>
           </div>
         </section>
 
-        <Separator className="my-12" />
+        <Separator className="bg-primary/10" />
 
-        {/* Tecnologias */}
-        <section className="mb-16">
-          <h2 className="text-3xl font-bold mb-8">Tecnologias Utilizadas</h2>
-
-          <div className="grid md:grid-cols-2 gap-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Front-end</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <ul className="space-y-2 text-sm">
-                  <li className="flex items-center gap-2">
-                    <Badge variant="secondary" className="text-xs">Framework</Badge>
-                    <span>Next.js 15 (App Router)</span>
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <Badge variant="secondary" className="text-xs">UI</Badge>
-                    <span>React 19 + TypeScript</span>
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <Badge variant="secondary" className="text-xs">Styling</Badge>
-                    <span>Tailwind CSS 4 + shadcn/ui</span>
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <Badge variant="secondary" className="text-xs">Auth</Badge>
-                    <span>NextAuth (Google OAuth)</span>
-                  </li>
-                </ul>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Back-end</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <ul className="space-y-2 text-sm">
-                  <li className="flex items-center gap-2">
-                    <Badge variant="secondary" className="text-xs">Framework</Badge>
-                    <span>FastAPI (Python 3.11+)</span>
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <Badge variant="secondary" className="text-xs">OCR</Badge>
-                    <span>Docling / AWS Textract (futuro)</span>
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <Badge variant="secondary" className="text-xs">AI/ML</Badge>
-                    <span>OpenAI API + FAISS (vector search)</span>
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <Badge variant="secondary" className="text-xs">Scraping</Badge>
-                    <span>Playwright / API (futuro)</span>
-                  </li>
-                </ul>
-              </CardContent>
-            </Card>
+        <section id="futuro" className="space-y-6">
+          <div className="space-y-4">
+            <Badge variant="outline" className="text-xs uppercase tracking-[0.2em] text-secondary">
+              Pra onde estamos caminhando
+            </Badge>
+            <h2 className="text-2xl font-semibold text-foreground">Score de confiabilidade</h2>
           </div>
-        </section>
-
-        {/* Resumo Executivo */}
-        <section className="mb-16">
-          <Card className="border-l-4 border-l-blue-500">
-            <CardHeader>
-              <CardTitle className="text-2xl flex items-center gap-2">
-                <Target className="h-6 w-6" />
-                Resumo Executivo
-              </CardTitle>
-              <CardDescription className="text-base">
-                Visão consolidada do projeto ProntuAI
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-6">
-                <div>
-                  <h4 className="font-semibold text-lg mb-3">Situação Atual</h4>
-                  <p className="text-sm text-muted-foreground">
-                    O processo atual é manual, moroso e vulnerável a falhas documentais, exigindo dupla conferência
-                    e intensa comunicação reativa com as clínicas terceirizadas. Alto índice de devoluções e
-                    retrabalho impactam diretamente o tempo de liberação de ASOs.
-                  </p>
-                </div>
-
-                <div>
-                  <h4 className="font-semibold text-lg mb-3">5 Focos Estratégicos de Otimização</h4>
-                  <div className="grid md:grid-cols-2 gap-4">
-                    <div className="rounded-lg p-4 border bg-muted/30">
-                      <div className="flex items-center gap-2 mb-2">
-                        <div className="h-8 w-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-bold text-sm">1</div>
-                        <h5 className="font-semibold">Automação Operacional</h5>
-                      </div>
-                      <p className="text-sm text-muted-foreground">
-                        Implantar OCR/RPA para checagem documental e integração via API, eliminando tarefas manuais repetitivas
-                      </p>
-                    </div>
-
-                    <div className="rounded-lg p-4 border bg-muted/30">
-                      <div className="flex items-center gap-2 mb-2">
-                        <div className="h-8 w-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-bold text-sm">2</div>
-                        <h5 className="font-semibold">Governança e Conformidade</h5>
-                      </div>
-                      <p className="text-sm text-muted-foreground">
-                        Criar logs, versionamento e controle de acesso para rastreabilidade e segurança jurídica
-                      </p>
-                    </div>
-
-                    <div className="rounded-lg p-4 border bg-muted/30">
-                      <div className="flex items-center gap-2 mb-2">
-                        <div className="h-8 w-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-bold text-sm">3</div>
-                        <h5 className="font-semibold">Padronização e Comunicação</h5>
-                      </div>
-                      <p className="text-sm text-muted-foreground">
-                        Checklist obrigatórios, templates padronizados e portal para clínicas reduzem ruídos de comunicação
-                      </p>
-                    </div>
-
-                    <div className="rounded-lg p-4 border bg-muted/30">
-                      <div className="flex items-center gap-2 mb-2">
-                        <div className="h-8 w-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-bold text-sm">4</div>
-                        <h5 className="font-semibold">Gestão de Performance</h5>
-                      </div>
-                      <p className="text-sm text-muted-foreground">
-                        Monitoramento automatizado via dashboards com KPIs de prazo, produtividade e qualidade
-                      </p>
-                    </div>
-
-                    <div className="rounded-lg p-4 border bg-muted/30 md:col-span-2">
-                      <div className="flex items-center gap-2 mb-2">
-                        <div className="h-8 w-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-bold text-sm">5</div>
-                        <h5 className="font-semibold">Eliminação de Desperdícios (Lean)</h5>
-                      </div>
-                      <p className="text-sm text-muted-foreground">
-                        Redução de espera, movimentação, superprocessamento, defeitos, estoque e subutilização de talento médico
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                <div>
-                  <h4 className="font-semibold text-lg mb-3">Benefícios Esperados</h4>
-                  <div className="grid md:grid-cols-3 gap-3">
-                    <div className="border-l-4 border-l-green-500 rounded-lg p-3 bg-muted/30">
-                      <p className="text-2xl font-bold text-green-700 mb-1">↓ 50%</p>
-                      <p className="text-xs text-muted-foreground">Redução no tempo de liberação</p>
-                    </div>
-                    <div className="border-l-4 border-l-green-500 rounded-lg p-3 bg-muted/30">
-                      <p className="text-2xl font-bold text-green-700 mb-1">↓ 70%</p>
-                      <p className="text-xs text-muted-foreground">Redução em devoluções</p>
-                    </div>
-                    <div className="border-l-4 border-l-blue-500 rounded-lg p-3 bg-muted/30">
-                      <p className="text-2xl font-bold text-blue-700 mb-1">↑ 80%</p>
-                      <p className="text-xs text-muted-foreground">Automação de checagem</p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="border-l-4 border-l-blue-500 rounded-lg p-4 bg-muted/30">
-                  <p className="text-sm text-muted-foreground">
-                    <strong>Conclusão:</strong> ProntuAI transforma um processo manual vulnerável em um sistema automatizado,
-                    rastreável e eficiente, garantindo conformidade legal, segurança ocupacional e agilidade na liberação de ASOs
-                    para os clientes da BR MED.
-                  </p>
-                </div>
-              </div>
+          <Card className="relative overflow-hidden border border-primary/15 bg-card/90">
+            <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-primary via-secondary to-primary" />
+            <CardContent className="space-y-2 text-sm text-muted-foreground">
+              {futuroScore.map((item) => (
+                <p key={item}>{item}</p>
+              ))}
             </CardContent>
           </Card>
         </section>
 
-        {/* Footer */}
-        <footer className="text-center text-sm text-muted-foreground pt-12 border-t">
-          <p>ProntuAI - Sistema de Validação de Documentos Médicos</p>
-          <p className="mt-1">BR MED | Última atualização: Novembro 2025 • Versão 1.0</p>
-        </footer>
-      </div>
+        <Separator className="bg-primary/10" />
+
+        <section id="boas-praticas" className="space-y-6">
+          <Card className="relative overflow-hidden border border-primary/15 bg-card/90">
+            <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-primary via-secondary to-primary" />
+            <CardHeader>
+              <CardTitle className="text-base">Boas práticas de envio</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2 text-sm text-muted-foreground">
+              <p>Prefira PDFs legíveis, com todas as páginas do exame.</p>
+              <p>Evite fotos cortadas ou páginas rotacionadas.</p>
+              <p>Se houver laudo e exames separados, envie todos no mesmo lote.</p>
+            </CardContent>
+          </Card>
+        </section>
+
+        <Separator className="bg-primary/10" />
+
+        <section id="resumo" className="space-y-6">
+          <div className="space-y-4">
+            <Badge variant="outline" className="text-xs uppercase tracking-[0.2em] text-secondary">
+              Resumo executivo
+            </Badge>
+            <h2 className="text-2xl font-semibold text-foreground">Visão consolidada</h2>
+          </div>
+          <Card className="relative overflow-hidden border border-primary/15 bg-card/90">
+            <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-primary via-secondary to-primary" />
+            <CardHeader>
+              <CardTitle className="text-base">Situação atual</CardTitle>
+            </CardHeader>
+            <CardContent className="text-sm text-muted-foreground">
+              O processo atual é manual, moroso e vulnerável a falhas documentais, exigindo dupla
+              conferência e intensa comunicação reativa com clínicas terceirizadas. O alto índice de
+              devoluções e retrabalho impacta diretamente o tempo de liberação de ASOs.
+            </CardContent>
+          </Card>
+          <Card className="relative overflow-hidden border border-primary/15 bg-primary/5">
+            <div className="absolute left-0 top-0 h-full w-1 bg-secondary" />
+            <CardContent className="text-sm text-foreground">
+              ProntuAI transforma um processo manual vulnerável em um sistema automatizado,
+              rastreável e eficiente, garantindo conformidade legal, segurança ocupacional e
+              agilidade na liberação de ASOs para os clientes da BR MED.
+            </CardContent>
+          </Card>
+        </section>
+
+          </div>
+        </div>
+      </main>
+      <footer className="border-t border-primary/10 bg-gradient-to-r from-primary via-[#0f566f] to-secondary text-white">
+        <div className="mx-auto flex w-full max-w-7xl flex-wrap items-center justify-between gap-4 px-6 py-6">
+          <div className="flex items-center gap-3">
+            <div className="relative h-8 w-24">
+              <Image src="/logo.png" alt="ProntuAI" fill className="object-contain" />
+            </div>
+            <span className="text-xs uppercase tracking-[0.2em] text-white/70">Guia de uso</span>
+          </div>
+          <div className="text-xs text-white/70">ProntuAI · BR MED</div>
+        </div>
+      </footer>
     </div>
   )
 }
