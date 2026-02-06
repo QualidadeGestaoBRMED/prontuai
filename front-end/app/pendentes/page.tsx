@@ -47,16 +47,16 @@ function PendentesContent() {
   const resultsToShow = isStrictSender && senderEmail
     ? baseResults.filter((result) => result.submittedBy === senderEmail)
     : baseResults
-  const toTime = (value: unknown) => {
-    if (!value) return 0
-    if (value instanceof Date) return value.getTime()
-    const parsed = new Date(String(value))
-    return Number.isNaN(parsed.getTime()) ? 0 : parsed.getTime()
-  }
-  const getResultTimestamp = (result: ProcessResult) => {
-    return Math.max(toTime(result.processedAt), toTime(result.uploadedAt))
-  }
   const displayResults = useMemo(() => {
+    const toTime = (value: unknown) => {
+      if (!value) return 0
+      if (value instanceof Date) return value.getTime()
+      const parsed = new Date(String(value))
+      return Number.isNaN(parsed.getTime()) ? 0 : parsed.getTime()
+    }
+    const getResultTimestamp = (result: ProcessResult) => {
+      return Math.max(toTime(result.processedAt), toTime(result.uploadedAt))
+    }
     const latestByKey = new Map<string, ProcessResult>()
     for (const result of resultsToShow) {
       const keySource = result.cpf || result.filename || result.id

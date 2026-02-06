@@ -17,6 +17,7 @@ import { Job } from "@/types/job"
 export interface DocumentProcessingResult {
   cpf_processado: string
   patient_name?: string
+  document_id?: string
   exames_ocr: string[]
   exames_brnet: string[]
   tabela_comparacao: TabelaComparacaoItem[]
