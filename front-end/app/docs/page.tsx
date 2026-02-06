@@ -2,15 +2,16 @@
 
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Separator } from "@/components/ui/separator"
 import Image from "next/image"
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useRef, useState, type MouseEvent } from "react"
 import {
   AlertCircle,
   ArrowRight,
   Bell,
   BookOpen,
   CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
   FileCheck,
   Shield,
   Target,
@@ -482,17 +483,48 @@ function FlowStepCard({ step, index }: { step: FlowStep; index: number }) {
 
 export default function DocsPage() {
   const fluxoCompletoRef = useRef<HTMLDivElement | null>(null)
+  const headerRef = useRef<HTMLElement | null>(null)
+  const [headerHidden, setHeaderHidden] = useState(false)
 
-  const scrollFluxoCompleto = () => {
+  const scrollFluxoCompleto = (direction: 1 | -1) => {
     if (!fluxoCompletoRef.current) return
     fluxoCompletoRef.current.scrollBy({
-      left: 320,
+      left: 320 * direction,
       behavior: "smooth",
     })
   }
+  const sectionHighlight =
+    "scroll-mt-24 transition-all duration-[1700ms] ease-out data-[highlight=true]:rounded-2xl data-[highlight=true]:bg-secondary/4 data-[highlight=true]:shadow-[0_18px_40px_-30px_rgba(0,120,145,0.35)]"
+
+  const handleNavClick = (href: string) => (event: MouseEvent<HTMLAnchorElement>) => {
+    event.preventDefault()
+    const target = document.querySelector(href)
+    if (!target) return
+    target.scrollIntoView({ behavior: "smooth", block: "center" })
+    if (target instanceof HTMLElement) {
+      target.dataset.highlight = "true"
+      window.setTimeout(() => {
+        target.dataset.highlight = "false"
+      }, 2200)
+    }
+    if (window.history.replaceState) {
+      window.history.replaceState(null, "", href)
+    }
+  }
+
+  useEffect(() => {
+    const node = headerRef.current
+    if (!node) return
+    const observer = new IntersectionObserver(
+      ([entry]) => setHeaderHidden(!entry.isIntersecting),
+      { threshold: 0.1 }
+    )
+    observer.observe(node)
+    return () => observer.disconnect()
+  }, [])
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
+    <div className="min-h-screen bg-[#EEF1F4] text-foreground">
       <div className="relative overflow-hidden">
         <div className="pointer-events-none absolute inset-0">
           <div className="absolute -right-36 -top-36 h-96 w-96 rounded-full bg-[radial-gradient(circle_at_center,rgba(0,120,145,0.28),transparent_65%)]" />
@@ -500,8 +532,11 @@ export default function DocsPage() {
           <div className="absolute inset-0 bg-[linear-gradient(120deg,rgba(0,120,145,0.08),rgba(25,59,79,0.08),rgba(0,120,145,0.04))]" />
         </div>
 
-        <header className="relative border-b border-primary/10 bg-gradient-to-r from-primary via-[#0f566f] to-secondary text-white">
-          <div className="mx-auto flex w-full max-w-7xl items-center justify-between px-6 py-8">
+        <header
+          ref={headerRef}
+          className="relative border-b border-primary/10 bg-gradient-to-r from-primary via-[#0f566f] to-secondary text-white"
+        >
+          <div className="mx-auto flex w-full max-w-[90rem] items-center justify-between px-4 py-8 sm:px-6">
             <div className="flex items-center gap-5">
               <div className="relative h-12 w-36">
                 <Image src="/logo.png" alt="ProntuAI" fill className="object-contain" priority />
@@ -510,6 +545,8 @@ export default function DocsPage() {
             </div>
             <a
               href="/login"
+              target="_blank"
+              rel="noreferrer"
               className="inline-flex items-center gap-2 rounded-md bg-white/15 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-white/25"
             >
               Acessar sistema
@@ -519,11 +556,15 @@ export default function DocsPage() {
         </header>
       </div>
 
-      <main className="mx-auto w-full max-w-7xl px-6 py-12">
-        <div className="grid items-start gap-10 lg:gap-12 lg:grid-cols-[minmax(0,220px)_minmax(0,1fr)]">
-          <aside className="min-w-0 space-y-4 lg:sticky lg:top-24 lg:h-fit lg:-ml-10">
+      <main className="mx-auto w-full max-w-[90rem] px-4 py-12 sm:px-6">
+        <div className="grid items-start gap-10 lg:gap-14 lg:grid-cols-[minmax(0,220px)_minmax(0,1fr)]">
+          <aside
+            className={`min-w-0 space-y-4 lg:sticky lg:h-fit lg:-ml-12 ${
+              headerHidden ? "lg:top-1/2 lg:-translate-y-1/2" : "lg:top-24"
+            }`}
+          >
             <div className="rounded-xl border border-primary/15 bg-card/90 p-4">
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-foreground/70">
+              <p className="text-xs font-bold uppercase tracking-[0.08em] text-secondary">
                 Seções principais
               </p>
               <nav className="mt-3 flex flex-col gap-2 text-sm">
@@ -532,6 +573,7 @@ export default function DocsPage() {
                     key={item.href}
                     href={item.href}
                     className="rounded-lg border border-transparent px-2 py-1 text-muted-foreground transition-colors hover:border-primary/20 hover:bg-primary/5 hover:text-foreground"
+                    onClick={handleNavClick(item.href)}
                   >
                     {item.label}
                   </a>
@@ -539,7 +581,7 @@ export default function DocsPage() {
               </nav>
             </div>
             <div className="rounded-xl border border-primary/15 bg-card/90 p-4">
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-foreground/70">
+              <p className="text-xs font-bold uppercase tracking-[0.08em] text-secondary">
                 Qualidade e governança
               </p>
               <nav className="mt-3 flex flex-col gap-2 text-sm">
@@ -548,6 +590,7 @@ export default function DocsPage() {
                     key={item.href}
                     href={item.href}
                     className="rounded-lg border border-transparent px-2 py-1 text-muted-foreground transition-colors hover:border-primary/20 hover:bg-primary/5 hover:text-foreground"
+                    onClick={handleNavClick(item.href)}
                   >
                     {item.label}
                   </a>
@@ -555,7 +598,7 @@ export default function DocsPage() {
               </nav>
             </div>
             <div className="rounded-xl border border-primary/15 bg-card/90 p-4">
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-foreground/70">
+              <p className="text-xs font-bold uppercase tracking-[0.08em] text-secondary">
                 Documentação técnica
               </p>
               <a
@@ -568,15 +611,16 @@ export default function DocsPage() {
             </div>
           </aside>
 
-          <div className="min-w-0 flex flex-col gap-12">
+          <div className="min-w-0 flex flex-col gap-20">
             <section className="grid gap-10 lg:grid-cols-[1.1fr_0.9fr] lg:gap-12">
               <div className="space-y-5">
+
                 <Badge variant="secondary" className="w-fit bg-secondary/15 text-secondary">
-                  Guia padrão QEG
+                  Qualidade e Gestão
                 </Badge>
                 <div className="space-y-3">
                   <h1 className="text-3xl font-semibold text-foreground md:text-4xl">
-                    Guia de Uso ProntuAI
+                    Guia de Uso Prontu<span className="font-bold text-cyan-800">AI</span>
                   </h1>
                   <p className="text-sm text-muted-foreground md:text-base">
                     Este guia tem o objetivo de explicar o sistema, seu fluxo e como cada área
@@ -624,13 +668,12 @@ export default function DocsPage() {
               </Card>
             </section>
 
-            <Separator className="bg-primary/10" />
 
-            <section id="visao" className="space-y-6">
+            <section id="visao" className={`space-y-6 ${sectionHighlight}`}>
           <div className="space-y-4">
-            <Badge variant="outline" className="text-xs uppercase tracking-[0.2em] text-secondary">
-              Visão geral
-            </Badge>
+              <Badge variant="outline" className="text-xs font-bold uppercase tracking-[0.08em] text-secondary">
+                Visão geral
+              </Badge>
             <h2 className="text-2xl font-semibold text-foreground">ProntuAI em contexto</h2>
           </div>
           <Card className="relative overflow-hidden border border-primary/15 bg-card/90">
@@ -646,13 +689,12 @@ export default function DocsPage() {
           </Card>
         </section>
 
-        <Separator className="bg-primary/10" />
 
-        <section id="objetivo" className="space-y-6">
+        <section id="objetivo" className={`space-y-6 ${sectionHighlight}`}>
           <div className="space-y-4">
-            <Badge variant="outline" className="text-xs uppercase tracking-[0.2em] text-secondary">
-              Objetivo central
-            </Badge>
+              <Badge variant="outline" className="text-xs font-bold uppercase tracking-[0.08em] text-secondary">
+                Objetivo central
+              </Badge>
             <h2 className="text-2xl font-semibold text-foreground">Digitalização e confiabilidade</h2>
           </div>
           <div className="grid gap-6 lg:grid-cols-3">
@@ -688,13 +730,12 @@ export default function DocsPage() {
           </div>
         </section>
 
-        <Separator className="bg-primary/10" />
 
-        <section id="publico" className="space-y-6">
+        <section id="publico" className={`space-y-6 ${sectionHighlight}`}>
           <div className="space-y-4">
-            <Badge variant="outline" className="text-xs uppercase tracking-[0.2em] text-secondary">
-              Público-alvo e stakeholders
-            </Badge>
+              <Badge variant="outline" className="text-xs font-bold uppercase tracking-[0.08em] text-secondary">
+                Público-alvo e stakeholders
+              </Badge>
             <h2 className="text-2xl font-semibold text-foreground">Quem participa do fluxo</h2>
           </div>
           <div className="grid gap-6 lg:grid-cols-2">
@@ -723,13 +764,12 @@ export default function DocsPage() {
           </div>
         </section>
 
-        <Separator className="bg-primary/10" />
 
-        <section id="valor" className="space-y-6">
+        <section id="valor" className={`space-y-6 ${sectionHighlight}`}>
           <div className="space-y-4">
-            <Badge variant="outline" className="text-xs uppercase tracking-[0.2em] text-secondary">
-              Valor gerado
-            </Badge>
+              <Badge variant="outline" className="text-xs font-bold uppercase tracking-[0.08em] text-secondary">
+                Valor gerado
+              </Badge>
             <h2 className="text-2xl font-semibold text-foreground">Benefícios operacionais</h2>
           </div>
           <div className="grid gap-6 lg:grid-cols-3">
@@ -756,13 +796,12 @@ export default function DocsPage() {
           </Card>
         </section>
 
-        <Separator className="bg-primary/10" />
 
-        <section id="areas" className="space-y-6">
+        <section id="areas" className={`space-y-6 ${sectionHighlight}`}>
           <div className="space-y-4">
-            <Badge variant="outline" className="text-xs uppercase tracking-[0.2em] text-secondary">
-              Áreas envolvidas
-            </Badge>
+              <Badge variant="outline" className="text-xs font-bold uppercase tracking-[0.08em] text-secondary">
+                Áreas envolvidas
+              </Badge>
             <h2 className="text-2xl font-semibold text-foreground">Responsabilidades internas</h2>
           </div>
           <Card className="relative overflow-hidden border border-primary/15 bg-card/90">
@@ -775,12 +814,11 @@ export default function DocsPage() {
           </Card>
         </section>
 
-        <Separator className="bg-primary/10" />
 
-        <section id="fluxo" className="space-y-8">
+        <section id="fluxo" className={`space-y-8 ${sectionHighlight}`}>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="space-y-4">
-              <Badge variant="outline" className="text-xs uppercase tracking-[0.2em] text-secondary">
+              <Badge variant="outline" className="text-xs font-bold uppercase tracking-[0.08em] text-secondary">
                 Fluxo end-to-end
               </Badge>
               <h2 className="text-2xl font-semibold text-foreground">Fluxo principal</h2>
@@ -800,29 +838,19 @@ export default function DocsPage() {
           </div>
         </section>
 
-        <Separator className="bg-primary/10" />
 
-        <section id="fluxo-completo" className="space-y-6">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div className="space-y-4">
-              <Badge variant="outline" className="text-xs uppercase tracking-[0.2em] text-secondary">
-                Fluxo completo de um documento
-              </Badge>
-              <h2 className="text-2xl font-semibold text-foreground">Do envio à liberação final</h2>
-            </div>
-            <button
-              type="button"
-              onClick={scrollFluxoCompleto}
-              className="inline-flex items-center gap-2 rounded-full border border-primary/15 bg-primary/5 px-3 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
-            >
-              Ver próximo
-              <ArrowRight className="size-4" />
-            </button>
+        <section id="fluxo-completo" className={`space-y-6 ${sectionHighlight}`}>
+          <div className="space-y-4">
+            <Badge variant="outline" className="text-xs font-bold uppercase tracking-[0.08em] text-secondary">
+              Fluxo completo de um documento
+            </Badge>
+            <h2 className="text-2xl font-semibold text-foreground">Do envio à liberação final</h2>
           </div>
-          <div
-            ref={fluxoCompletoRef}
-            className="flex gap-4 overflow-x-auto pb-2 snap-x snap-mandatory [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-          >
+          <div className="relative">
+            <div
+              ref={fluxoCompletoRef}
+              className="flex gap-4 overflow-x-auto px-8 pb-2 snap-x snap-mandatory [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+            >
             {fluxoCompleto.map((item) => (
               <Card
                 key={item.step}
@@ -841,12 +869,28 @@ export default function DocsPage() {
                 </CardContent>
               </Card>
             ))}
+            </div>
+            <button
+              type="button"
+              onClick={() => scrollFluxoCompleto(-1)}
+              className="absolute left-0 top-1/2 inline-flex -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-primary/15 bg-primary/5 p-2 text-primary shadow-sm transition-colors hover:bg-primary/10"
+              aria-label="Ver anterior"
+            >
+              <ChevronLeft className="size-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => scrollFluxoCompleto(1)}
+              className="absolute right-0 top-1/2 inline-flex translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-primary/15 bg-primary/5 p-2 text-primary shadow-sm transition-colors hover:bg-primary/10"
+              aria-label="Ver próximo"
+            >
+              <ChevronRight className="size-4" />
+            </button>
           </div>
         </section>
 
-        <Separator className="bg-primary/10" />
 
-        <section id="papeis" className="space-y-6">
+        <section id="papeis" className={`space-y-6 ${sectionHighlight}`}>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="text-2xl font-semibold">Papéis e acessos</h2>
             <Badge variant="outline" className="text-xs">
@@ -908,12 +952,11 @@ export default function DocsPage() {
           </div>
         </section>
 
-        <Separator className="bg-primary/10" />
 
-        <section id="status" className="space-y-6">
+        <section id="status" className={`space-y-6 ${sectionHighlight}`}>
           <div className="flex items-center justify-between gap-3">
             <div className="space-y-4">
-              <Badge variant="outline" className="text-xs uppercase tracking-[0.2em] text-secondary">
+              <Badge variant="outline" className="text-xs font-bold uppercase tracking-[0.08em] text-secondary">
                 Status do documento
               </Badge>
               <h2 className="text-2xl font-semibold text-foreground">Decisão guiada e revisão humana</h2>
@@ -973,77 +1016,39 @@ export default function DocsPage() {
           </div>
         </section>
 
-        <Separator className="bg-primary/10" />
 
-        <section id="comunicacao" className="space-y-8">
+        <section id="comunicacao" className={`space-y-8 ${sectionHighlight}`}>
           <div className="space-y-4">
-            <Badge variant="outline" className="text-xs uppercase tracking-[0.2em] text-secondary">
+            <Badge variant="outline" className="text-xs font-bold uppercase tracking-[0.08em] text-secondary">
               Comunicação entre páginas
             </Badge>
-            <h2 className="text-2xl font-semibold text-foreground">
-              Como as telas se conectam
-            </h2>
+            <h2 className="text-2xl font-semibold text-foreground">Como as telas se conectam</h2>
           </div>
-          <div className="grid gap-6 lg:grid-cols-2">
-            {comunicacoes.map((item) => (
-              <Card key={item.title} className="relative overflow-hidden border border-primary/15 bg-card/90">
-                <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-primary via-secondary to-primary" />
-                <CardHeader>
-                  <CardTitle className="text-base">{item.title}</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3 text-sm text-muted-foreground">
-                  <div className="space-y-1">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-foreground/80">
-                      O que acontece
-                    </p>
-                    {item.details.map((detail) => (
-                      <p key={detail}>{detail}</p>
-                    ))}
-                  </div>
-                  <div className="space-y-1">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-foreground/80">
-                      Notificações paralelas
-                    </p>
-                    {item.notifications.map((note) => (
-                      <p key={note}>{note}</p>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-          <div className="space-y-4">
-            <h3 className="text-lg font-semibold text-foreground">Resumo visual do ecossistema</h3>
-            <div className="grid gap-6 lg:grid-cols-3">
-              {ecossistema.map((item) => (
-                <Card key={item.title} className="relative overflow-hidden border border-primary/15 bg-card/90">
-                  <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-secondary via-primary to-secondary" />
-                  <CardHeader>
-                    <CardTitle className="text-base">{item.title}</CardTitle>
-                    <CardDescription>{item.subtitle}</CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-2 text-sm text-muted-foreground">
-                    <p>
-                      <span className="font-semibold text-foreground/80">Recebe de:</span>{" "}
-                      {item.receives}
-                    </p>
-                    <p>
-                      <span className="font-semibold text-foreground/80">Alimenta:</span>{" "}
-                      {item.feeds}
-                    </p>
-                  </CardContent>
-                </Card>
+          <Card className="relative overflow-hidden border border-primary/15 bg-card/90">
+            <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-primary via-secondary to-primary" />
+            <CardContent className="space-y-6 text-sm text-muted-foreground">
+              {comunicacoes.map((item, index) => (
+                <div
+                  key={item.title}
+                  className={`space-y-2 ${index === 0 ? "" : "border-t border-primary/10 pt-4"}`}
+                >
+                  <p className="text-sm font-semibold text-foreground">{item.title}</p>
+                  <p>{item.details.join(" ")}</p>
+                  <p>
+                    <span className="font-semibold text-foreground">Notificações paralelas:</span>{" "}
+                    {item.notifications.join(" ")}
+                  </p>
+                </div>
               ))}
-            </div>
-          </div>
+            </CardContent>
+          </Card>
         </section>
 
-        <Separator className="bg-primary/10" />
 
-        <section id="notificacoes" className="space-y-6">
+        <section id="notificacoes" className={`space-y-6 ${sectionHighlight}`}>
           <div className="flex items-center justify-between gap-3">
             <div className="space-y-4">
-              <Badge variant="outline" className="text-xs uppercase tracking-[0.2em] text-secondary">
+              <Badge variant="outline" className="text-xs font-bold uppercase tracking-[0.08em] text-secondary">
                 Notificações
               </Badge>
               <h2 className="text-2xl font-semibold text-foreground">Acompanhamento em tempo real</h2>
@@ -1112,11 +1117,10 @@ export default function DocsPage() {
           </div>
         </section>
 
-        <Separator className="bg-primary/10" />
 
-        <section id="riscos" className="space-y-6">
+        <section id="riscos" className={`space-y-6 ${sectionHighlight}`}>
           <div className="space-y-4">
-            <Badge variant="outline" className="text-xs uppercase tracking-[0.2em] text-secondary">
+            <Badge variant="outline" className="text-xs font-bold uppercase tracking-[0.08em] text-secondary">
               Dores e gargalos
             </Badge>
             <h2 className="text-2xl font-semibold text-foreground">
@@ -1198,11 +1202,10 @@ export default function DocsPage() {
           </div>
         </section>
 
-        <Separator className="bg-primary/10" />
 
-        <section id="kpis" className="space-y-6">
-            <div className="space-y-4">
-            <Badge variant="outline" className="text-xs uppercase tracking-[0.2em] text-secondary">
+        <section id="kpis" className={`space-y-6 ${sectionHighlight}`}>
+          <div className="space-y-4">
+            <Badge variant="outline" className="text-xs font-bold uppercase tracking-[0.08em] text-secondary">
               KPIs e indicadores
             </Badge>
             <h2 className="text-2xl font-semibold text-foreground">Métricas de sucesso</h2>
@@ -1231,11 +1234,10 @@ export default function DocsPage() {
           </Card>
         </section>
 
-        <Separator className="bg-primary/10" />
 
-        <section id="seguranca" className="space-y-6">
+        <section id="seguranca" className={`space-y-6 ${sectionHighlight}`}>
           <div className="space-y-4">
-            <Badge variant="outline" className="text-xs uppercase tracking-[0.2em] text-secondary">
+            <Badge variant="outline" className="text-xs font-bold uppercase tracking-[0.08em] text-secondary">
               Segurança, LGPD e governança
             </Badge>
             <h2 className="text-2xl font-semibold text-foreground">Conformidade e proteção</h2>
@@ -1288,11 +1290,10 @@ export default function DocsPage() {
           </div>
         </section>
 
-        <Separator className="bg-primary/10" />
 
-        <section id="futuro" className="space-y-6">
+        <section id="futuro" className={`space-y-6 ${sectionHighlight}`}>
           <div className="space-y-4">
-            <Badge variant="outline" className="text-xs uppercase tracking-[0.2em] text-secondary">
+            <Badge variant="outline" className="text-xs font-bold uppercase tracking-[0.08em] text-secondary">
               Pra onde estamos caminhando
             </Badge>
             <h2 className="text-2xl font-semibold text-foreground">Score de confiabilidade</h2>
@@ -1307,9 +1308,8 @@ export default function DocsPage() {
           </Card>
         </section>
 
-        <Separator className="bg-primary/10" />
 
-        <section id="boas-praticas" className="space-y-6">
+        <section id="boas-praticas" className={`space-y-6 ${sectionHighlight}`}>
           <Card className="relative overflow-hidden border border-primary/15 bg-card/90">
             <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-primary via-secondary to-primary" />
             <CardHeader>
@@ -1323,11 +1323,10 @@ export default function DocsPage() {
           </Card>
         </section>
 
-        <Separator className="bg-primary/10" />
 
-        <section id="resumo" className="space-y-6">
+        <section id="resumo" className={`space-y-6 ${sectionHighlight}`}>
           <div className="space-y-4">
-            <Badge variant="outline" className="text-xs uppercase tracking-[0.2em] text-secondary">
+            <Badge variant="outline" className="text-xs font-bold uppercase tracking-[0.08em] text-secondary">
               Resumo executivo
             </Badge>
             <h2 className="text-2xl font-semibold text-foreground">Visão consolidada</h2>
@@ -1357,14 +1356,16 @@ export default function DocsPage() {
         </div>
       </main>
       <footer className="border-t border-primary/10 bg-gradient-to-r from-primary via-[#0f566f] to-secondary text-white">
-        <div className="mx-auto flex w-full max-w-7xl flex-wrap items-center justify-between gap-4 px-6 py-6">
+        <div className="mx-auto flex w-full max-w-[90rem] flex-wrap items-center justify-between gap-4 px-4 py-6 sm:px-6">
           <div className="flex items-center gap-3">
             <div className="relative h-8 w-24">
               <Image src="/logo.png" alt="ProntuAI" fill className="object-contain" />
             </div>
-            <span className="text-xs uppercase tracking-[0.2em] text-white/70">Guia de uso</span>
+            <span className="text-xs uppercase tracking-[0.2em] text-white/70">Guia de Uso</span>
           </div>
-          <div className="text-xs text-white/70">ProntuAI · BR MED</div>
+          <div className="text-xs text-white/70">
+            Prontu<span className="text-cyan-200">AI</span> · BR MED
+          </div>
         </div>
       </footer>
     </div>
