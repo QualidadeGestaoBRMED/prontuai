@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 # Configurações JWT
 SECRET_KEY = settings.JWT_SECRET_KEY if hasattr(settings, 'JWT_SECRET_KEY') else "sua-chave-secreta-super-segura-mude-isso-em-producao"
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 24 horas
+ACCESS_TOKEN_EXPIRE_MINUTES = settings.JWT_EXPIRATION_HOURS * 60
 
 security = HTTPBearer(auto_error=False)
 

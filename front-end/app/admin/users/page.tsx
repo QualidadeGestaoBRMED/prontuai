@@ -30,6 +30,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { API_ENDPOINTS } from "@/lib/config";
+import { authFetch } from "@/lib/auth-fetch";
 
 type UserRole = "ADMIN" | "CHECKER" | "SENDER";
 
@@ -116,7 +117,7 @@ export default function UsersAdminPage() {
     if (!session?.accessToken) return;
 
     try {
-      const response = await fetch(API_ENDPOINTS.USERS, {
+      const response = await authFetch(API_ENDPOINTS.USERS, {
         headers: {
           Authorization: `Bearer ${session.accessToken}`,
         },
@@ -139,7 +140,7 @@ export default function UsersAdminPage() {
 
     setLoadingClinics(true);
     try {
-      const response = await fetch(API_ENDPOINTS.CLINICS, {
+      const response = await authFetch(API_ENDPOINTS.CLINICS, {
         headers: {
           Authorization: `Bearer ${session.accessToken}`,
         },
@@ -204,7 +205,7 @@ export default function UsersAdminPage() {
         body.clinic_id = formClinicId;
       }
 
-      const response = await fetch(API_ENDPOINTS.USERS, {
+      const response = await authFetch(API_ENDPOINTS.USERS, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${session.accessToken}`,
@@ -239,7 +240,7 @@ export default function UsersAdminPage() {
     if (!session?.accessToken || !selectedUser) return;
 
     try {
-      const response = await fetch(API_ENDPOINTS.USER_BY_ID(selectedUser.id), {
+      const response = await authFetch(API_ENDPOINTS.USER_BY_ID(selectedUser.id), {
         method: "PATCH",
         headers: {
           Authorization: `Bearer ${session.accessToken}`,
@@ -276,7 +277,7 @@ export default function UsersAdminPage() {
     if (!session?.accessToken) return;
 
     try {
-      const response = await fetch(API_ENDPOINTS.USER_BY_ID(user.id), {
+      const response = await authFetch(API_ENDPOINTS.USER_BY_ID(user.id), {
         method: "PATCH",
         headers: {
           Authorization: `Bearer ${session.accessToken}`,
@@ -302,7 +303,7 @@ export default function UsersAdminPage() {
 
     setDeactivating(true);
     try {
-      const response = await fetch(API_ENDPOINTS.USER_BY_ID(userToDeactivate.id), {
+      const response = await authFetch(API_ENDPOINTS.USER_BY_ID(userToDeactivate.id), {
         method: "PATCH",
         headers: {
           Authorization: `Bearer ${session.accessToken}`,

@@ -23,6 +23,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { API_ENDPOINTS } from "@/lib/config";
+import { authFetch } from "@/lib/auth-fetch";
 
 interface Clinic {
   id: string;
@@ -75,7 +76,7 @@ export default function ClinicsAdminPage() {
     if (!session?.accessToken) return;
 
     try {
-      const response = await fetch(API_ENDPOINTS.CLINICS, {
+      const response = await authFetch(API_ENDPOINTS.CLINICS, {
         headers: {
           Authorization: `Bearer ${session.accessToken}`,
         },
@@ -112,7 +113,7 @@ export default function ClinicsAdminPage() {
 
     setCreating(true);
     try {
-      const response = await fetch(API_ENDPOINTS.CLINICS, {
+      const response = await authFetch(API_ENDPOINTS.CLINICS, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${session.accessToken}`,
@@ -164,7 +165,7 @@ export default function ClinicsAdminPage() {
     if (!session?.accessToken || !selectedClinic) return;
 
     try {
-      const response = await fetch(API_ENDPOINTS.CLINIC_BY_ID(selectedClinic.id), {
+      const response = await authFetch(API_ENDPOINTS.CLINIC_BY_ID(selectedClinic.id), {
         method: "PATCH",
         headers: {
           Authorization: `Bearer ${session.accessToken}`,
@@ -192,7 +193,7 @@ export default function ClinicsAdminPage() {
     if (!session?.accessToken) return;
 
     try {
-      const response = await fetch(API_ENDPOINTS.CLINIC_BY_ID(clinic.id), {
+      const response = await authFetch(API_ENDPOINTS.CLINIC_BY_ID(clinic.id), {
         method: "PATCH",
         headers: {
           Authorization: `Bearer ${session.accessToken}`,

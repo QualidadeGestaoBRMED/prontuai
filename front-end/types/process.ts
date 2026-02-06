@@ -87,6 +87,7 @@ export interface ProcessResult {
 export interface DocumentProcessingResult {
   cpf: string
   patient_name?: string
+  document_id?: string
   ocr_result?: {
     text: string
     exames_extraidos: string[]

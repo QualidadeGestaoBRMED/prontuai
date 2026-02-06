@@ -289,23 +289,48 @@ async def view_document(document_id: str, current_user: User = Depends(get_curre
                 detail="Arquivo do documento não disponível"
             )
 
-        abs_path = os.path.abspath(file_path)
         base_dir = os.path.abspath(settings.DOCUMENT_STORAGE_DIR)
-        if not abs_path.startswith(base_dir + os.sep):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Caminho do documento inválido"
-            )
+        base_dir_prefix = base_dir + os.sep
+        candidate_paths: list[str] = []
 
-        if not os.path.exists(abs_path):
+        def add_candidate(path: str | None) -> None:
+            if not path:
+                return
+            if path not in candidate_paths:
+                candidate_paths.append(path)
+
+        add_candidate(file_path)
+        # Se vier path relativo, resolve dentro do diretório de uploads
+        if not os.path.isabs(file_path):
+            add_candidate(os.path.join(base_dir, file_path))
+        # Fallback para paths absolutos antigos: tenta basename no diretório atual
+        add_candidate(os.path.join(base_dir, os.path.basename(file_path)))
+
+        resolved_path: str | None = None
+        for candidate in candidate_paths:
+            abs_candidate = os.path.abspath(candidate)
+            if not abs_candidate.startswith(base_dir_prefix):
+                continue
+            if os.path.exists(abs_candidate):
+                resolved_path = abs_candidate
+                break
+
+        if not resolved_path:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Arquivo do documento não encontrado"
             )
 
+        # Se o path salvo estava fora do padrão atual, atualiza para evitar novos 404
+        try:
+            if os.path.abspath(file_path) != resolved_path:
+                user_db.update_document(document_id=document_id, file_path=resolved_path)
+        except Exception as update_error:
+            logger.warning(f"Falha ao atualizar file_path do documento {document_id}: {update_error}")
+
         media_type, _ = mimetypes.guess_type(document.filename)
         response = FileResponse(
-            abs_path,
+            resolved_path,
             media_type=media_type or "application/octet-stream",
             filename=document.filename,
         )

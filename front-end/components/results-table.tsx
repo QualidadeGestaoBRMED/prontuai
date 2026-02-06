@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import {
@@ -29,6 +29,7 @@ interface ResultsTableProps {
   results: ProcessResult[]
   onViewDetails?: (result: ProcessResult) => void
   onDownloadPDF?: (result: ProcessResult) => void
+  initialSearch?: string
   className?: string
 }
 
@@ -66,21 +67,36 @@ export function ResultsTable({
   results,
   onViewDetails,
   onDownloadPDF,
+  initialSearch,
   className,
 }: ResultsTableProps) {
-  const [searchCPF, setSearchCPF] = useState("")
+  const [searchQuery, setSearchQuery] = useState(initialSearch ?? "")
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all")
   const [currentPage, setCurrentPage] = useState(1)
   const resultsPerPage = 10
 
+  useEffect(() => {
+    if (initialSearch === undefined) return
+    setSearchQuery(initialSearch)
+    setCurrentPage(1)
+  }, [initialSearch])
+
   // Filtra resultados
   const filteredResults = results.filter((result) => {
-    const matchesCPF = searchCPF
-      ? result.cpf.replace(/\D/g, "").includes(searchCPF.replace(/\D/g, ""))
-      : true
+    const rawQuery = searchQuery.trim().toLowerCase()
+    const queryDigits = rawQuery.replace(/\D/g, "")
+    const matchesCPF = queryDigits
+      ? result.cpf.replace(/\D/g, "").includes(queryDigits)
+      : false
+    const matchesText = rawQuery
+      ? [result.patientName, result.filename, result.submittedBy]
+          .filter(Boolean)
+          .some((value) => value.toLowerCase().includes(rawQuery))
+      : false
+    const matchesSearch = rawQuery ? matchesCPF || matchesText : true
     const matchesStatus =
       statusFilter === "all" ? true : result.status === statusFilter
-    return matchesCPF && matchesStatus
+    return matchesSearch && matchesStatus
   })
 
   // Paginação
@@ -166,10 +182,10 @@ export function ResultsTable({
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
           <Input
-            placeholder="Buscar por CPF..."
-            value={searchCPF}
+            placeholder="Buscar por CPF ou nome do documento..."
+            value={searchQuery}
             onChange={(e) => {
-              setSearchCPF(e.target.value)
+              setSearchQuery(e.target.value)
               setCurrentPage(1) // Volta para primeira página ao buscar
             }}
             className="pl-9"

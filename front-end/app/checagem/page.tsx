@@ -22,6 +22,7 @@ import { useDocuments } from "@/hooks/use-documents";
 import { documentToProcessResult } from "@/lib/document-mapper";
 import { API_ENDPOINTS } from "@/lib/config";
 import { Loader2 } from "lucide-react";
+import { authFetch } from "@/lib/auth-fetch";
 
 export default function Page() {
   const [documentos, setDocumentos] = useState<DocumentoChecagem[]>([]);
@@ -55,7 +56,7 @@ export default function Page() {
       if (session?.accessToken) {
         headers.Authorization = `Bearer ${session.accessToken}`;
       }
-      const response = await fetch(API_ENDPOINTS.DOCUMENT_VIEW(result.id), { headers });
+      const response = await authFetch(API_ENDPOINTS.DOCUMENT_VIEW(result.id), { headers });
       if (!response.ok) {
         toast.error("Não foi possível abrir o documento.");
         setDocumentPreviewLoading(false);
@@ -137,7 +138,7 @@ export default function Page() {
 
     try {
       console.info("[CHECAGEM] Aprovando documento", { id, approvalReason: approvalReasonNormalized });
-      const response = await fetch(`${API_ENDPOINTS.DOCUMENTS}/${id}`, {
+      const response = await authFetch(`${API_ENDPOINTS.DOCUMENTS}/${id}`, {
         method: 'PATCH',
         headers,
         body: JSON.stringify({
@@ -213,7 +214,7 @@ export default function Page() {
 
     try {
       console.info("[CHECAGEM] Rejeitando documento", { id, motivo });
-      const response = await fetch(`${API_ENDPOINTS.DOCUMENTS}/${id}`, {
+      const response = await authFetch(`${API_ENDPOINTS.DOCUMENTS}/${id}`, {
         method: 'PATCH',
         headers,
         body: JSON.stringify({

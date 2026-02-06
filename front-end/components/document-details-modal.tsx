@@ -97,7 +97,11 @@ export function DocumentDetailsModal({
   }
 
   const handleReenviar = () => {
-    router.push(`/anexar-prontuario?reenviar=1&cpf=${encodeURIComponent(result.cpf)}`)
+    const params = new URLSearchParams()
+    params.set("reenviar", "1")
+    if (result.cpf) params.set("cpf", result.cpf)
+    if (result.filename) params.set("filename", result.filename)
+    router.push(`/anexar-prontuario?${params.toString()}`)
     onOpenChange(false)
   }
 

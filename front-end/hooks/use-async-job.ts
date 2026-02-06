@@ -7,6 +7,7 @@ import { useSession } from "next-auth/react"
 import { Job, CreateJobResponse, PollingOptions } from "@/types/job"
 import { API_ENDPOINTS } from "@/lib/config"
 import { DocumentProcessingResult } from "@/components/document-batch-processor"
+import { authFetch } from "@/lib/auth-fetch"
 
 interface UseAsyncJobReturn {
   /**
@@ -103,7 +104,7 @@ export function useAsyncJob(): UseAsyncJobReturn {
         headers.Authorization = `Bearer ${session.accessToken}`
       }
 
-      const response = await fetch(API_ENDPOINTS.PROCESS_DOCUMENT_ASYNC, {
+      const response = await authFetch(API_ENDPOINTS.PROCESS_DOCUMENT_ASYNC, {
         method: "POST",
         body: formData,
         headers,
@@ -130,7 +131,7 @@ export function useAsyncJob(): UseAsyncJobReturn {
    */
   const getJobStatus = useCallback(async (jobId: string): Promise<Job> => {
     try {
-      const response = await fetch(API_ENDPOINTS.JOB_STATUS(jobId))
+      const response = await authFetch(API_ENDPOINTS.JOB_STATUS(jobId))
 
       if (!response.ok) {
         if (response.status === 404) {
