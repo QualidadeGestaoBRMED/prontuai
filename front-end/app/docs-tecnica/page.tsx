@@ -12,6 +12,7 @@ const navPrimary = [
   { label: "Stack", href: "#stack" },
   { label: "Integrações", href: "#integracoes" },
   { label: "Config", href: "#config" },
+  { label: "Rotas", href: "#rotas" },
 ]
 
 const navSecondary = [
@@ -93,6 +94,17 @@ const envVars = [
   { key: "DATABASE_URL", description: "URL do banco de dados." },
 ]
 
+const routes = [
+  { path: "/login", description: "Autenticação via Google OAuth." },
+  { path: "/docs", description: "Guia de uso do ProntuAI." },
+  { path: "/docs-tecnica", description: "Documentação técnica." },
+  { path: "/anexar-prontuario", description: "Upload e processamento de documentos." },
+  { path: "/pendentes", description: "Documentos rejeitados que precisam de ação." },
+  { path: "/checagem", description: "Validação manual com aprovação/rejeição." },
+  { path: "/historico", description: "Arquivo completo de processamentos." },
+  { path: "/insights", description: "Indicadores e análises operacionais." },
+]
+
 const deployNotes = [
   "Serviço backend em Render com runtime Python.",
   "Build: pip install + requirements.txt.",
@@ -164,22 +176,26 @@ export default function DocsTecnicaPage() {
           ref={headerRef}
           className="relative border-b border-primary/10 bg-gradient-to-r from-primary via-[#0f566f] to-secondary text-white"
         >
-          <div className="mx-auto flex w-full max-w-[90rem] items-center justify-between px-4 py-8 sm:px-6">
-            <div className="flex items-center gap-5">
-              <div className="relative h-12 w-36">
-                <Image src="/logo.png" alt="ProntuAI" fill className="object-contain" priority />
+          <div className="mx-auto w-full max-w-[90rem] px-4 py-8 sm:px-6">
+            <div className="grid items-center gap-10 lg:gap-14 lg:grid-cols-[minmax(0,220px)_minmax(0,1fr)]">
+              <div className="flex items-center gap-5 xl:-ml-12">
+                <div className="relative h-12 w-36">
+                  <Image src="/logo.png" alt="ProntuAI" fill className="object-contain" priority />
+                </div>
+                <Badge className="ml-1 border border-white/30 bg-white/10 text-white">Documentação técnica</Badge>
               </div>
-              <Badge className="ml-1 border border-white/30 bg-white/10 text-white">Documentação técnica</Badge>
+              <div className="flex justify-start lg:justify-end">
+                <a
+                  href="/login"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-2 rounded-md bg-white/15 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-white/25"
+                >
+                  Acessar ProntuAI
+                  <ArrowRight className="size-4" />
+                </a>
+              </div>
             </div>
-            <a
-              href="/login"
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center gap-2 rounded-md bg-white/15 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-white/25"
-            >
-              Acessar sistema
-              <ArrowRight className="size-4" />
-            </a>
           </div>
         </header>
       </div>
@@ -187,7 +203,7 @@ export default function DocsTecnicaPage() {
       <main className="mx-auto w-full max-w-[90rem] px-4 py-12 sm:px-6">
         <div className="grid items-start gap-10 lg:gap-14 lg:grid-cols-[minmax(0,220px)_minmax(0,1fr)]">
           <aside
-            className={`min-w-0 space-y-4 lg:sticky lg:h-fit lg:-ml-12 ${
+            className={`min-w-0 space-y-4 lg:sticky lg:h-fit xl:-ml-12 ${
               headerHidden ? "lg:top-1/2 lg:-translate-y-1/2" : "lg:top-24"
             }`}
           >
@@ -230,7 +246,7 @@ export default function DocsTecnicaPage() {
                   Visão técnica
                 </Badge>
                 <h1 className="text-3xl font-semibold text-foreground md:text-4xl">
-                  Documentação técnica do Prontu<span className="font-bold text-cyan-800">AI</span>
+                  Documentação técnica do Prontu<span className="font-bold text-cyan-800">AI</span> | (EM CONSTRUÇÃO)
                 </h1>
               </div>
               <Card className="relative overflow-hidden border border-primary/15 bg-card/90">
@@ -345,6 +361,29 @@ export default function DocsTecnicaPage() {
                       className={`space-y-1 ${index === 0 ? "" : "border-t border-primary/10 pt-3"}`}
                     >
                       <p className="text-sm font-semibold text-foreground">{item.key}</p>
+                      <p>{item.description}</p>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+            </section>
+
+            <section className={`space-y-6 ${sectionHighlight}`} id="rotas">
+              <div className="space-y-4">
+                <Badge variant="outline" className="text-xs font-bold uppercase tracking-[0.08em] text-secondary">
+                  Rotas
+                </Badge>
+                <h2 className="text-2xl font-semibold text-foreground">Mapa de navegação</h2>
+              </div>
+              <Card className="relative overflow-hidden border border-primary/15 bg-card/90">
+                <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-primary via-secondary to-primary" />
+                <CardContent className="space-y-3 text-sm text-muted-foreground">
+                  {routes.map((item, index) => (
+                    <div
+                      key={item.path}
+                      className={`space-y-1 ${index === 0 ? "" : "border-t border-primary/10 pt-3"}`}
+                    >
+                      <p className="text-sm font-semibold text-foreground">{item.path}</p>
                       <p>{item.description}</p>
                     </div>
                   ))}

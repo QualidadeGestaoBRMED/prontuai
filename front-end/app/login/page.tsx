@@ -123,6 +123,12 @@ export default function LoginPage() {
             </Link>
             .
           </p>
+          <Link
+            href="/docs"
+            className="text-xs font-medium text-cyan-800 hover:text-cyan-700 underline-offset-4 text-center"
+          >
+            Acessar guia de uso
+          </Link>
         </div>
       </div>
     </div>

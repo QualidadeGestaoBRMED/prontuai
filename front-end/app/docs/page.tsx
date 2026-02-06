@@ -12,6 +12,7 @@ import {
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
+  ChevronUp,
   FileCheck,
   Shield,
   Target,
@@ -485,6 +486,7 @@ export default function DocsPage() {
   const fluxoCompletoRef = useRef<HTMLDivElement | null>(null)
   const headerRef = useRef<HTMLElement | null>(null)
   const [headerHidden, setHeaderHidden] = useState(false)
+  const [showToTop, setShowToTop] = useState(false)
 
   const scrollFluxoCompleto = (direction: 1 | -1) => {
     if (!fluxoCompletoRef.current) return
@@ -523,6 +525,15 @@ export default function DocsPage() {
     return () => observer.disconnect()
   }, [])
 
+  useEffect(() => {
+    const onScroll = () => {
+      setShowToTop(window.scrollY > 400)
+    }
+    onScroll()
+    window.addEventListener("scroll", onScroll, { passive: true })
+    return () => window.removeEventListener("scroll", onScroll)
+  }, [])
+
   return (
     <div className="min-h-screen bg-[#EEF1F4] text-foreground">
       <div className="relative overflow-hidden">
@@ -536,22 +547,26 @@ export default function DocsPage() {
           ref={headerRef}
           className="relative border-b border-primary/10 bg-gradient-to-r from-primary via-[#0f566f] to-secondary text-white"
         >
-          <div className="mx-auto flex w-full max-w-[90rem] items-center justify-between px-4 py-8 sm:px-6">
-            <div className="flex items-center gap-5">
-              <div className="relative h-12 w-36">
-                <Image src="/logo.png" alt="ProntuAI" fill className="object-contain" priority />
+          <div className="mx-auto w-full max-w-[90rem] px-4 py-8 sm:px-6">
+            <div className="grid items-center gap-10 lg:gap-14 lg:grid-cols-[minmax(0,220px)_minmax(0,1fr)]">
+              <div className="flex items-center gap-5 lg:-ml-12">
+                <div className="relative h-12 w-36">
+                  <Image src="/logo.png" alt="ProntuAI" fill className="object-contain" priority />
+                </div>
+                <Badge className="ml-1 border border-white/30 bg-white/10 text-white">Guia de uso</Badge>
               </div>
-              <Badge className="ml-1 border border-white/30 bg-white/10 text-white">Guia de uso</Badge>
+              <div className="flex justify-start lg:justify-end">
+                <a
+                  href="/login"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-2 rounded-md bg-white/15 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-white/25"
+                >
+                  Acessar ProntuAI
+                  <ArrowRight className="size-4" />
+                </a>
+              </div>
             </div>
-            <a
-              href="/login"
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center gap-2 rounded-md bg-white/15 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-white/25"
-            >
-              Acessar sistema
-              <ArrowRight className="size-4" />
-            </a>
           </div>
         </header>
       </div>
@@ -671,7 +686,7 @@ export default function DocsPage() {
 
             <section id="visao" className={`space-y-6 ${sectionHighlight}`}>
           <div className="space-y-4">
-              <Badge variant="outline" className="text-xs font-bold uppercase tracking-[0.08em] text-secondary">
+              <Badge variant="outline" className="px-3 py-1 text-xs font-bold uppercase tracking-[0.08em] text-secondary">
                 Visão geral
               </Badge>
             <h2 className="text-2xl font-semibold text-foreground">ProntuAI em contexto</h2>
@@ -692,7 +707,7 @@ export default function DocsPage() {
 
         <section id="objetivo" className={`space-y-6 ${sectionHighlight}`}>
           <div className="space-y-4">
-              <Badge variant="outline" className="text-xs font-bold uppercase tracking-[0.08em] text-secondary">
+              <Badge variant="outline" className="text-xs px-3 py-1 font-bold uppercase tracking-[0.08em] text-secondary">
                 Objetivo central
               </Badge>
             <h2 className="text-2xl font-semibold text-foreground">Digitalização e confiabilidade</h2>
@@ -733,7 +748,7 @@ export default function DocsPage() {
 
         <section id="publico" className={`space-y-6 ${sectionHighlight}`}>
           <div className="space-y-4">
-              <Badge variant="outline" className="text-xs font-bold uppercase tracking-[0.08em] text-secondary">
+              <Badge variant="outline" className="px-3 py-1 text-xs font-bold uppercase tracking-[0.08em] text-secondary">
                 Público-alvo e stakeholders
               </Badge>
             <h2 className="text-2xl font-semibold text-foreground">Quem participa do fluxo</h2>
@@ -767,7 +782,7 @@ export default function DocsPage() {
 
         <section id="valor" className={`space-y-6 ${sectionHighlight}`}>
           <div className="space-y-4">
-              <Badge variant="outline" className="text-xs font-bold uppercase tracking-[0.08em] text-secondary">
+              <Badge variant="outline" className="text-xs font-bold uppercase tracking-[0.08em] text-secondary px-3 py-1">
                 Valor gerado
               </Badge>
             <h2 className="text-2xl font-semibold text-foreground">Benefícios operacionais</h2>
@@ -799,7 +814,7 @@ export default function DocsPage() {
 
         <section id="areas" className={`space-y-6 ${sectionHighlight}`}>
           <div className="space-y-4">
-              <Badge variant="outline" className="text-xs font-bold uppercase tracking-[0.08em] text-secondary">
+              <Badge variant="outline" className="text-xs px-3 py-1 font-bold uppercase tracking-[0.08em] text-secondary">
                 Áreas envolvidas
               </Badge>
             <h2 className="text-2xl font-semibold text-foreground">Responsabilidades internas</h2>
@@ -818,7 +833,7 @@ export default function DocsPage() {
         <section id="fluxo" className={`space-y-8 ${sectionHighlight}`}>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="space-y-4">
-              <Badge variant="outline" className="text-xs font-bold uppercase tracking-[0.08em] text-secondary">
+              <Badge variant="outline" className="px-3 py-1 text-xs font-bold uppercase tracking-[0.08em] text-secondary">
                 Fluxo end-to-end
               </Badge>
               <h2 className="text-2xl font-semibold text-foreground">Fluxo principal</h2>
@@ -841,7 +856,7 @@ export default function DocsPage() {
 
         <section id="fluxo-completo" className={`space-y-6 ${sectionHighlight}`}>
           <div className="space-y-4">
-            <Badge variant="outline" className="text-xs font-bold uppercase tracking-[0.08em] text-secondary">
+            <Badge variant="outline" className="px-3 py-1 text-xs font-bold uppercase tracking-[0.08em] text-secondary">
               Fluxo completo de um documento
             </Badge>
             <h2 className="text-2xl font-semibold text-foreground">Do envio à liberação final</h2>
@@ -956,7 +971,7 @@ export default function DocsPage() {
         <section id="status" className={`space-y-6 ${sectionHighlight}`}>
           <div className="flex items-center justify-between gap-3">
             <div className="space-y-4">
-              <Badge variant="outline" className="text-xs font-bold uppercase tracking-[0.08em] text-secondary">
+              <Badge variant="outline" className="px-3 py-1 text-xs font-bold uppercase tracking-[0.08em] text-secondary">
                 Status do documento
               </Badge>
               <h2 className="text-2xl font-semibold text-foreground">Decisão guiada e revisão humana</h2>
@@ -1019,7 +1034,7 @@ export default function DocsPage() {
 
         <section id="comunicacao" className={`space-y-8 ${sectionHighlight}`}>
           <div className="space-y-4">
-            <Badge variant="outline" className="text-xs font-bold uppercase tracking-[0.08em] text-secondary">
+            <Badge variant="outline" className="px-3 py-1 text-xs font-bold uppercase tracking-[0.08em] text-secondary">
               Comunicação entre páginas
             </Badge>
             <h2 className="text-2xl font-semibold text-foreground">Como as telas se conectam</h2>
@@ -1048,7 +1063,7 @@ export default function DocsPage() {
         <section id="notificacoes" className={`space-y-6 ${sectionHighlight}`}>
           <div className="flex items-center justify-between gap-3">
             <div className="space-y-4">
-              <Badge variant="outline" className="text-xs font-bold uppercase tracking-[0.08em] text-secondary">
+              <Badge variant="outline" className="px-3 py-1 text-xs font-bold uppercase tracking-[0.08em] text-secondary">
                 Notificações
               </Badge>
               <h2 className="text-2xl font-semibold text-foreground">Acompanhamento em tempo real</h2>
@@ -1120,7 +1135,7 @@ export default function DocsPage() {
 
         <section id="riscos" className={`space-y-6 ${sectionHighlight}`}>
           <div className="space-y-4">
-            <Badge variant="outline" className="text-xs font-bold uppercase tracking-[0.08em] text-secondary">
+            <Badge variant="outline" className="px-3 py-1 text-xs font-bold uppercase tracking-[0.08em] text-secondary">
               Dores e gargalos
             </Badge>
             <h2 className="text-2xl font-semibold text-foreground">
@@ -1205,7 +1220,7 @@ export default function DocsPage() {
 
         <section id="kpis" className={`space-y-6 ${sectionHighlight}`}>
           <div className="space-y-4">
-            <Badge variant="outline" className="text-xs font-bold uppercase tracking-[0.08em] text-secondary">
+            <Badge variant="outline" className="px-3 py-1 text-xs font-bold uppercase tracking-[0.08em] text-secondary">
               KPIs e indicadores
             </Badge>
             <h2 className="text-2xl font-semibold text-foreground">Métricas de sucesso</h2>
@@ -1237,7 +1252,7 @@ export default function DocsPage() {
 
         <section id="seguranca" className={`space-y-6 ${sectionHighlight}`}>
           <div className="space-y-4">
-            <Badge variant="outline" className="text-xs font-bold uppercase tracking-[0.08em] text-secondary">
+            <Badge variant="outline" className="px-3 py-1 text-xs font-bold uppercase tracking-[0.08em] text-secondary">
               Segurança, LGPD e governança
             </Badge>
             <h2 className="text-2xl font-semibold text-foreground">Conformidade e proteção</h2>
@@ -1293,7 +1308,7 @@ export default function DocsPage() {
 
         <section id="futuro" className={`space-y-6 ${sectionHighlight}`}>
           <div className="space-y-4">
-            <Badge variant="outline" className="text-xs font-bold uppercase tracking-[0.08em] text-secondary">
+            <Badge variant="outline" className="px-3 py-1 text-xs font-bold uppercase tracking-[0.08em] text-secondary">
               Pra onde estamos caminhando
             </Badge>
             <h2 className="text-2xl font-semibold text-foreground">Score de confiabilidade</h2>
@@ -1326,7 +1341,7 @@ export default function DocsPage() {
 
         <section id="resumo" className={`space-y-6 ${sectionHighlight}`}>
           <div className="space-y-4">
-            <Badge variant="outline" className="text-xs font-bold uppercase tracking-[0.08em] text-secondary">
+            <Badge variant="outline" className="px-3 py-1 text-xs font-bold uppercase tracking-[0.08em] text-secondary">
               Resumo executivo
             </Badge>
             <h2 className="text-2xl font-semibold text-foreground">Visão consolidada</h2>
@@ -1358,9 +1373,7 @@ export default function DocsPage() {
       <footer className="border-t border-primary/10 bg-gradient-to-r from-primary via-[#0f566f] to-secondary text-white">
         <div className="mx-auto flex w-full max-w-[90rem] flex-wrap items-center justify-between gap-4 px-4 py-6 sm:px-6">
           <div className="flex items-center gap-3">
-            <div className="relative h-8 w-24">
-              <Image src="/logo.png" alt="ProntuAI" fill className="object-contain" />
-            </div>
+        
             <span className="text-xs uppercase tracking-[0.2em] text-white/70">Guia de Uso</span>
           </div>
           <div className="text-xs text-white/70">
@@ -1368,6 +1381,16 @@ export default function DocsPage() {
           </div>
         </div>
       </footer>
+      <button
+        type="button"
+        onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+        className={`fixed bottom-6 right-6 z-50 inline-flex items-center justify-center rounded-full border border-primary/20 bg-teal-50 p-3 text-primary shadow-lg transition-all hover:bg-white ${
+          showToTop ? "opacity-100" : "pointer-events-none opacity-0"
+        }`}
+        aria-label="Voltar ao topo"
+      >
+        <ChevronUp className="size-5" />
+      </button>
     </div>
   )
 }
