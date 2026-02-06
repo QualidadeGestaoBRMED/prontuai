@@ -25,8 +25,8 @@ import { ProcessProgressBar } from "@/components/process-progress-bar"
 import { ResultsTable } from "@/components/results-table"
 import { DocumentDetailsModal } from "@/components/document-details-modal"
 import { ProcessResult } from "@/types/process"
-import { generateResultPDF } from "@/lib/pdf-generator"
 import { downloadDocumentPdf } from "@/lib/document-download"
+import { toast } from "sonner"
 import { RequireRole } from "@/components/require-role"
 
 type PageState = "upload" | "processing" | "completed"
@@ -50,6 +50,8 @@ function PageLoading() {
 function PageContent() {
   const searchParams = useSearchParams()
   const autoOpenUpload = searchParams.get("reenviar") === "1"
+  const initialSearch =
+    searchParams.get("filename") || searchParams.get("cpf") || undefined
   const [pageState, setPageState] = useState<PageState>("upload")
   const [filesToProcess, setFilesToProcess] = useState<FileWithPreview[]>([])
   // const [chatInitialMessage, setChatInitialMessage] = useState<string>()
@@ -108,7 +110,7 @@ function PageContent() {
   const handleDownloadPDF = async (result: ProcessResult) => {
     if (!result) return
     if (!result.id) {
-      generateResultPDF(result)
+      toast.error("Documento ainda não disponível para download.")
       return
     }
     try {
@@ -118,8 +120,8 @@ function PageContent() {
         accessToken: session?.accessToken,
       })
     } catch (error) {
-      console.error("Falha ao baixar PDF original, usando PDF gerado:", error)
-      generateResultPDF(result)
+      console.error("Falha ao baixar PDF:", error)
+      toast.error("Não foi possível baixar o documento original.")
     }
   }
 
@@ -280,6 +282,7 @@ function PageContent() {
 
                   <ResultsTable
                     results={sortedResults}
+                    initialSearch={initialSearch}
                     onViewDetails={(result) => {
                       setSelectedResult(result)
                       setDetailsModalOpen(true)

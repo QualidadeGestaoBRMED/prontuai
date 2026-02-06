@@ -441,6 +441,10 @@ async def process_document_background(
             )
             logger.info(f"[DB] Documento salvo via async com ID: {document.id} (job_id={job_id})")
             try:
+                resultado["document_id"] = document.id
+            except Exception:
+                pass
+            try:
                 user_role = None
                 try:
                     audit_user = user_db.get_user_by_id(uploaded_by_user_id)

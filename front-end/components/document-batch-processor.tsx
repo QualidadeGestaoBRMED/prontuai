@@ -10,6 +10,7 @@ import { formatBytes } from "@/hooks/use-file-upload"
 import { useNotifications } from "@/hooks/use-notifications"
 import { ProcessStep, TabelaComparacaoItem } from "@/types/process"
 import { API_ENDPOINTS } from "@/lib/config"
+import { authFetch } from "@/lib/auth-fetch"
 import { useAsyncJob } from "@/hooks/use-async-job"
 import { Job } from "@/types/job"
 
@@ -159,7 +160,7 @@ export function DocumentBatchProcessor({
         formData.append("arquivo", file)
         formData.append("exames_obrigatorios", JSON.stringify([]))
 
-        const response = await fetch(
+        const response = await authFetch(
           API_ENDPOINTS.PROCESS_DOCUMENT_STREAM,
           {
             method: "POST",
@@ -459,7 +460,7 @@ export function DocumentBatchProcessor({
           : undefined
 
         return {
-          id: doc.id,
+          id: doc.result?.document_id || doc.id,
           batchId: processId,
           filename: doc.file.name,
           cpf: doc.result?.cpf_processado || 'N/A',

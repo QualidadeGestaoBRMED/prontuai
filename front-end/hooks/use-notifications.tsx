@@ -14,6 +14,7 @@ import {
   CreateProcessInput
 } from '@/types/process'
 import { API_ENDPOINTS } from '@/lib/config'
+import { authFetch } from '@/lib/auth-fetch'
 
 // Interface do contexto
 interface NotificationContextType {
@@ -215,7 +216,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         if (session?.accessToken) {
           headers.Authorization = `Bearer ${session.accessToken}`
         }
-        const response = await fetch(API_ENDPOINTS.NOTIFICATIONS, { headers })
+        const response = await authFetch(API_ENDPOINTS.NOTIFICATIONS, { headers })
         if (!response.ok) throw new Error('Erro ao carregar notificações')
         const data = await response.json()
         const mapped = (data || []).map(mapApiNotification)
@@ -305,7 +306,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       headers.Authorization = `Bearer ${session.accessToken}`
     }
     if (session?.accessToken) {
-      fetch(API_ENDPOINTS.NOTIFICATIONS, {
+      authFetch(API_ENDPOINTS.NOTIFICATIONS, {
         method: 'POST',
         headers,
         body: JSON.stringify({
@@ -342,7 +343,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       headers.Authorization = `Bearer ${session.accessToken}`
     }
     if (session?.accessToken) {
-      fetch(API_ENDPOINTS.NOTIFICATION_READ(id), { method: 'POST', headers }).catch(() => {})
+      authFetch(API_ENDPOINTS.NOTIFICATION_READ(id), { method: 'POST', headers }).catch(() => {})
     }
   }, [session?.accessToken])
 
@@ -353,7 +354,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       headers.Authorization = `Bearer ${session.accessToken}`
     }
     if (session?.accessToken) {
-      fetch(API_ENDPOINTS.NOTIFICATIONS_READ_ALL, { method: 'POST', headers }).catch(() => {})
+      authFetch(API_ENDPOINTS.NOTIFICATIONS_READ_ALL, { method: 'POST', headers }).catch(() => {})
     }
   }, [session?.accessToken])
 
@@ -367,7 +368,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       headers.Authorization = `Bearer ${session.accessToken}`
     }
     if (session?.accessToken) {
-      fetch(API_ENDPOINTS.NOTIFICATIONS_READ_ALL, { method: 'POST', headers }).catch(() => {})
+      authFetch(API_ENDPOINTS.NOTIFICATIONS_CLEAR, { method: 'DELETE', headers }).catch(() => {})
     }
   }, [session?.accessToken])
 
@@ -607,7 +608,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     const fetchNotifications = async () => {
       const headers: Record<string, string> = { Authorization: `Bearer ${session.accessToken}` }
       try {
-        const response = await fetch(API_ENDPOINTS.NOTIFICATIONS, { headers })
+        const response = await authFetch(API_ENDPOINTS.NOTIFICATIONS, { headers })
         if (!response.ok) return
         const data = await response.json()
         const incoming = (data || []).map(mapApiNotification)
