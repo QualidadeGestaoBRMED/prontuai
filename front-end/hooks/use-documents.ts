@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { useSession } from "next-auth/react"
 import { API_ENDPOINTS } from "@/lib/config"
 import { DocumentApi } from "@/types/document"
+import { authFetch } from "@/lib/auth-fetch"
 
 type FetchOptions = {
   silent?: boolean
@@ -67,7 +68,7 @@ export function useDocuments() {
       url.searchParams.set("cache_seconds", "10")
       url.searchParams.set("stale_seconds", "120")
 
-      const response = await fetch(url.toString(), {
+      const response = await authFetch(url.toString(), {
         headers,
         cache: "no-store",
       })

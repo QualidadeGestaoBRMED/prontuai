@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, Suspense, useCallback } from "react"
+import { useState, useEffect, Suspense, useCallback, useMemo } from "react"
 import { useSearchParams } from "next/navigation"
 import { useSession } from "next-auth/react"
 import { AppSidebar } from "@/components/app-sidebar"
@@ -47,10 +47,35 @@ function PendentesContent() {
   const resultsToShow = isStrictSender && senderEmail
     ? baseResults.filter((result) => result.submittedBy === senderEmail)
     : baseResults
+  const toTime = (value: unknown) => {
+    if (!value) return 0
+    if (value instanceof Date) return value.getTime()
+    const parsed = new Date(String(value))
+    return Number.isNaN(parsed.getTime()) ? 0 : parsed.getTime()
+  }
+  const getResultTimestamp = (result: ProcessResult) => {
+    return Math.max(toTime(result.processedAt), toTime(result.uploadedAt))
+  }
+  const displayResults = useMemo(() => {
+    const latestByKey = new Map<string, ProcessResult>()
+    for (const result of resultsToShow) {
+      const keySource = result.cpf || result.filename || result.id
+      if (!keySource) continue
+      const key = keySource.toLowerCase().trim()
+      const existing = latestByKey.get(key)
+      if (!existing || getResultTimestamp(result) > getResultTimestamp(existing)) {
+        latestByKey.set(key, result)
+      }
+    }
+    return Array.from(latestByKey.values()).sort(
+      (a, b) => getResultTimestamp(b) - getResultTimestamp(a)
+    )
+  }, [resultsToShow])
+  const pendingResults = displayResults.filter((result) => result.status !== "approved")
   const showRefreshing = refreshing && hasLoaded
-  const totalPendentes = baseResults.filter((result) => result.status === "pending_review").length
-  const totalAprovados = baseResults.filter((result) => result.status === "approved").length
-  const totalRejeitados = baseResults.filter((result) => result.status === "rejected").length
+  const totalPendentes = displayResults.filter((result) => result.status === "pending_review").length
+  const totalAprovados = displayResults.filter((result) => result.status === "approved").length
+  const totalRejeitados = displayResults.filter((result) => result.status === "rejected").length
 
   // Abre modal automaticamente se viewId for fornecido na URL
   useEffect(() => {
@@ -174,7 +199,7 @@ function PendentesContent() {
                   </div>
                 ) : (
                   <ResultsTable
-                    results={resultsToShow.filter(result => result.status !== 'approved')}
+                    results={pendingResults}
                     onViewDetails={(result) => {
                       console.log('[DEBUG] Opening modal for result:', result)
                       console.log('[DEBUG] Result exists?', !!result)

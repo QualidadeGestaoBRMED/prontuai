@@ -25,6 +25,7 @@ import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
 import type { TabelaComparacaoItem } from "@/components/exames-comparativo-table";
 import { API_ENDPOINTS } from "@/lib/config";
+import { authFetch } from "@/lib/auth-fetch";
 
 export type Message =
   | { content: string; isUser: boolean; type?: "text"; skipTyping?: boolean }
@@ -128,7 +129,7 @@ export default function Component({ onSystemMessage }: { onSystemMessage?: (msg:
 
       console.log("📤 Enviando arquivo para processamento completo com SSE...");
 
-      const uploadRes = await fetch(API_ENDPOINTS.PROCESS_DOCUMENT_STREAM, {
+      const uploadRes = await authFetch(API_ENDPOINTS.PROCESS_DOCUMENT_STREAM, {
         method: "POST",
         body: formData,
       });

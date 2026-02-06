@@ -11,6 +11,7 @@ import {
 import { RequireRole } from "@/components/require-role";
 import UserDropdown from "@/components/user-dropdown";
 import { API_ENDPOINTS } from "@/lib/config";
+import { authFetch } from "@/lib/auth-fetch";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -172,7 +173,7 @@ export default function AuditoriaPage() {
     if (!session?.accessToken) return;
     setLoading(true);
     try {
-      const response = await fetch(
+      const response = await authFetch(
         `${API_ENDPOINTS.AUDIT_LOGS}?${queryParams}`,
         {
           headers: {

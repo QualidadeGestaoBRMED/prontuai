@@ -5,6 +5,7 @@ services:
       dockerfile: Dockerfile
     container_name: prontuai-backend
     restart: unless-stopped
+    env_file: .env
     ports:
       - "80:80"
     environment:
@@ -30,7 +31,7 @@ services:
       - ./ocr_resultados:/app/ocr_resultados
       - ./auditoria_validacao:/app/auditoria_validacao
       # Uploads para visualização (leitura/escrita)
-      - ./uploads:/app/data/uploads
+      - ./data/uploads:/app/data/uploads
       # Dados FAISS (apenas leitura)
       - ./data:/app/data:ro
     healthcheck:

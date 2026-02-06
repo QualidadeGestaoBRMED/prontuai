@@ -35,6 +35,7 @@ export const API_ENDPOINTS = {
   NOTIFICATIONS: `${API_URL}/v1/notifications`,
   NOTIFICATION_READ: (id: string) => `${API_URL}/v1/notifications/${id}/read`,
   NOTIFICATIONS_READ_ALL: `${API_URL}/v1/notifications/read-all`,
+  NOTIFICATIONS_CLEAR: `${API_URL}/v1/notifications`,
 
   // Jobs
   JOB_STATUS: (jobId: string) => `${API_URL}/v1/jobs/${jobId}`,
