@@ -1031,7 +1031,7 @@ export default function DocsTecnicaPage() {
                   Visão técnica
                 </Badge>
                 <h1 className="text-3xl font-semibold text-foreground md:text-4xl">
-                  Documentação técnica do Prontu<span className="font-bold text-cyan-800">AI</span> | (EM CONSTRUÇÃO)
+                  Documentação técnica do Prontu<span className="font-bold text-cyan-800">AI</span>
                 </h1>
               </div>
               <Card className="relative overflow-hidden border border-primary/15 bg-card/90">
