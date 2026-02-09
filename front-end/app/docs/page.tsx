@@ -151,11 +151,7 @@ const publicoPrincipal = [
 
 const clienteFinal = [
   "Área de RH das empresas clientes que aguardam o ASO liberado.",
-  "Admissões.",
-  "Periódicos.",
-  "Retornos.",
-  "Mudanças de função.",
-  "Demissões.",
+  "Admissões, periódicos, retornos, mudanças de função e demissões",
 ]
 
 const valorGerado = [
@@ -751,7 +747,7 @@ export default function DocsPage() {
               <Badge variant="outline" className="px-3 py-1 text-xs font-bold uppercase tracking-[0.08em] text-secondary">
                 Público-alvo e stakeholders
               </Badge>
-            <h2 className="text-2xl font-semibold text-foreground">Quem participa do fluxo</h2>
+            <h2 className="text-2xl font-semibold text-foreground">Quem está envolvido?</h2>
           </div>
           <div className="grid gap-6 lg:grid-cols-2">
             <Card className="relative overflow-hidden border border-primary/15 bg-card/90">
@@ -811,23 +807,6 @@ export default function DocsPage() {
           </Card>
         </section>
 
-
-        <section id="areas" className={`space-y-6 ${sectionHighlight}`}>
-          <div className="space-y-4">
-              <Badge variant="outline" className="text-xs px-3 py-1 font-bold uppercase tracking-[0.08em] text-secondary">
-                Áreas envolvidas
-              </Badge>
-            <h2 className="text-2xl font-semibold text-foreground">Responsabilidades internas</h2>
-          </div>
-          <Card className="relative overflow-hidden border border-primary/15 bg-card/90">
-            <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-primary via-secondary to-primary" />
-            <CardContent className="space-y-2 text-sm text-muted-foreground">
-              {areasEnvolvidas.map((item) => (
-                <p key={item}>{item}</p>
-              ))}
-            </CardContent>
-          </Card>
-        </section>
 
 
         <section id="fluxo" className={`space-y-8 ${sectionHighlight}`}>
