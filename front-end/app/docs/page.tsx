@@ -49,7 +49,7 @@ const flowSteps = [
   {
     step: "04",
     title: "Checagem humana",
-    description: "Revisor aprova ou rejeita e o sistema registra a decisão final.",
+    description: "Revisor aprova ou rejeita e o sistema registra a decisão final, além de indicar o próximo fluxo.",
     details:
       "Entrada: status e justificativas da IA. Processo: revisão humana e validação. Saída: decisão final registrada. Responsável: time interno BR MED.",
     icon: Shield,
@@ -60,7 +60,7 @@ type FlowStep = (typeof flowSteps)[number]
 
 const roleCards = [
   {
-    title: "Clínica (Enviador)",
+    title: "Clínica",
     description: "Responsável por enviar documentos.",
     icon: Users,
     access: ["Anexar Prontuário", "Pendentes"],
@@ -69,10 +69,10 @@ const roleCards = [
       "Enviador só vê rejeições finais do revisor que precisa corrigir.",
     ],
     important:
-      "Em /pendentes aparecem apenas documentos rejeitados (pela IA ou revisor). Documentos aprovados não aparecem.",
+      "Na tela de Pendentes aparecem apenas documentos rejeitados (pela IA ou revisor). Documentos aprovados não aparecem.",
   },
   {
-    title: "Time interno BR MED (Revisor)",
+    title: "Time interno BR MED",
     description: "Valida documentos processados.",
     icon: Shield,
     access: ["Checagem"],
@@ -195,7 +195,7 @@ const fluxoCompleto = [
   {
     step: "1",
     title: "Envio do documento",
-    details: ['Enviador faz upload de PDF na página "Anexar Prontuário".'],
+    details: ['Clínica faz upload de PDF na página "Anexar Prontuário".'],
   },
   {
     step: "2",
@@ -213,14 +213,14 @@ const fluxoCompleto = [
       "A IA sugere aprovação ou rejeição com justificativas.",
       "Aprovado pela IA: todos os exames obrigatórios encontrados.",
       "Rejeitado pela IA: faltam exames ou há discrepâncias.",
-      "Importante: todos os documentos vão para checagem.",
+      "Importante: todos os documentos passam por um humano.",
     ],
   },
   {
     step: "4",
     title: "Todos vão para checagem",
     details: [
-      "Todos os documentos processados ficam disponíveis em /checagem.",
+      "Todos os documentos processados ficam disponíveis em Checagem.",
       "Todos estão sujeitos à validação do revisor, mesmo os aprovados pela IA.",
     ],
   },
@@ -228,9 +228,9 @@ const fluxoCompleto = [
     step: "5",
     title: "Validação humana (revisor)",
     details: [
-      "Revisor acessa /checagem, vê a decisão da IA e decide o resultado final.",
+      "Revisor acessa Checagem, vê a decisão da IA e decide o resultado final.",
       "Aprovar: documento validado definitivamente e arquivado.",
-      "Rejeitar: documento volta para /pendentes com motivo.",
+      "Rejeitar: documento volta para Pendentes com motivo.",
     ],
   },
 ]
@@ -239,43 +239,43 @@ const comunicacoes = [
   {
     title: "Anexar Prontuário → Checagem",
     details: [
-      "Enviador faz upload em /anexar-prontuario.",
+      "Clínica faz upload do prontuário em Anexar prontuário.",
       "Sistema processa (OCR + BRNET + IA).",
-      "Documento aparece em /checagem.",
+      "Documento aparece na tela de Checagem, para o time interno.",
       "Revisor recebe notificação de novo documento.",
     ],
     notifications: [
-      'Enviador: "Processamento iniciado".',
-      'Enviador: "Concluído".',
+      'Clínica: "Processamento iniciado".',
+      'Clínica: "Concluído".',
       'Revisor: "Novos documentos".',
     ],
   },
   {
     title: "Checagem → Pendentes (quando rejeita)",
     details: [
-      "Revisor rejeita documento em /checagem e informa o motivo.",
-      "Documento some de /checagem e aparece em /pendentes do enviador.",
-      "Enviador pode corrigir e reenviar.",
+      "Revisor rejeita documento em na tela de Checagem e informa o motivo.",
+      "Documento some de Checagem e aparece em Pendentes, somente para a clínica que realizou o envio.",
+      "Clínica pode corrigir e reenviar.",
     ],
-    notifications: ['Enviador: "Documento rejeitado: [motivo]".', "Revisor não é notificado."],
+    notifications: ['Clínica: "Documento rejeitado: [motivo]".', "Revisor não é notificado."],
   },
   {
     title: "Checagem → Histórico (quando aprova)",
     details: [
-      "Revisor aprova documento em /checagem.",
-      "Documento sai de /checagem e vai para /historico.",
-      "Enviador não vê nada em /pendentes.",
+      "Revisor aprova documento em na tela de Checagem.",
+      "Documento sai de Checagem e vai para Histórico.",
+      "Clínica não vê nada em Pendentes.",
     ],
     notifications: ["Aprovação é silenciosa para o enviador."],
   },
   {
     title: "Pendentes → Anexar Prontuário (reenvio)",
     details: [
-      "Enviador vê documento em /pendentes, lê o motivo e corrige.",
-      "Reenvia via /anexar-prontuario e o ciclo recomeça.",
+      "Clínica vê documento na tela de Pendentes, lê o motivo e corrige.",
+      "Reenvia via tela de Anexar Prontuário e o ciclo recomeça.",
     ],
     notifications: [
-      'Enviador: "Processamento iniciado".',
+      'Clínica: "Processamento iniciado".',
       'Revisor: "Novos documentos".',
       "Sistema detecta duplicata e notifica quando aplicável.",
     ],
@@ -411,7 +411,7 @@ const lgpd = [
 
 const controleAcesso = [
   "Perfis diferenciados: Enviador, Revisor, Admin.",
-  "Autenticação corporativa com Google OAuth restrito a @grupobrmed.com.br.",
+  "Autenticação corporativa com Google OAuth restrito.",
   "Acesso granular por documento e ação.",
   "Gestão de identidade com IAM e MFA (planejado).",
 ]
@@ -639,7 +639,7 @@ export default function DocsPage() {
                   </h1>
                   <p className="text-sm text-muted-foreground md:text-base">
                     Este guia tem o objetivo de explicar o sistema, seu fluxo e como cada área
-                    participa do processo de validação dos documentos médicos.
+                    participa do processo de validação dos prontuários.
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-3">
@@ -695,10 +695,10 @@ export default function DocsPage() {
             <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-primary via-secondary to-primary" />
             <CardContent className="space-y-3 text-sm text-muted-foreground">
               <p>
-                ProntuAI é uma plataforma de validação automatizada de documentos médicos para a BR
-                MED. O sistema utiliza OCR e Inteligência Artificial para extrair informações de
+                ProntuAI é uma plataforma de validação automatizada de prontuários para a BR
+                MED. O sistema utiliza técnicas de OCR e Inteligência Artificial para extrair informações de
                 exames médicos, validá-los contra requisitos obrigatórios do sistema BRNET, e
-                fornecer comparação inteligente.
+                fornecer comparação inteligente, além de técnicas de Machine Learning para aprendizado contínuo de acordo com as aprovações por parte do nosso time interno.
               </p>
             </CardContent>
           </Card>
@@ -730,7 +730,7 @@ export default function DocsPage() {
                 <CardTitle className="text-base">Gatilho de início</CardTitle>
               </CardHeader>
               <CardContent className="text-sm text-muted-foreground">
-                Recebimento de documentos médicos (ASO, exames complementares).
+                Recebimento de um prontuário.
               </CardContent>
             </Card>
             <Card className="relative overflow-hidden border border-primary/15 bg-card/90">
@@ -1103,7 +1103,7 @@ export default function DocsPage() {
               </CardHeader>
               <CardContent className="space-y-3 text-sm text-muted-foreground">
                 <div className="rounded-lg border border-primary/10 bg-primary/5 p-3">
-                  <p className="text-xs font-semibold text-foreground">Enviador</p>
+                  <p className="text-xs font-semibold text-foreground">Clínica</p>
                   <div className="mt-2 space-y-2 text-xs text-muted-foreground">
                     <p className="rounded-md border border-primary/10 bg-white/80 px-3 py-2">
                       Processamento iniciado · 3 documentos
@@ -1117,7 +1117,7 @@ export default function DocsPage() {
                   </div>
                 </div>
                 <div className="rounded-lg border border-primary/10 bg-primary/5 p-3">
-                  <p className="text-xs font-semibold text-foreground">Revisor</p>
+                  <p className="text-xs font-semibold text-foreground">Time interno BR MED</p>
                   <div className="mt-2 space-y-2 text-xs text-muted-foreground">
                     <p className="rounded-md border border-primary/10 bg-white/80 px-3 py-2">
                       Novos documentos aguardando revisão
