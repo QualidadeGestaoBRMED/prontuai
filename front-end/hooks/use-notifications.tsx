@@ -11,10 +11,23 @@ import {
   ProcessNotification,
   ProcessResult,
   ProgressBarState,
-  CreateProcessInput
+  CreateProcessInput,
+  ProcessStep
 } from '@/types/process'
+import {
+  DocumentProcessingResult,
+  ProcessingDocumentState,
+  ProcessingStage
+} from '@/types/document-processing'
 import { API_ENDPOINTS } from '@/lib/config'
 import { authFetch } from '@/lib/auth-fetch'
+import { useAsyncJob } from '@/hooks/use-async-job'
+import { Job } from '@/types/job'
+
+type StartBackgroundProcessingOptions = {
+  submittedBy?: string
+  originPath?: string
+}
 
 // Interface do contexto
 interface NotificationContextType {
@@ -33,6 +46,11 @@ interface NotificationContextType {
   updateProcess: (processId: string, update: Partial<ProcessNotification>) => void
   completeProcess: (processId: string, results: ProcessResult[]) => void
   failProcess: (processId: string, error: string) => void
+
+  // Processamento em background
+  processingDocuments: ProcessingDocumentState[]
+  startBackgroundProcessing: (files: File[], options?: StartBackgroundProcessingOptions) => string | null
+  clearProcessingState: () => void
 
   // Resultados de processos
   processResults: ProcessResult[]
@@ -58,6 +76,7 @@ const NotificationContext = createContext<NotificationContextType | undefined>(u
 const STORAGE_KEYS = {
   NOTIFICATIONS: 'notifications',
   ACTIVE_PROCESS: 'active_process',
+  PROCESSING_DOCUMENTS: 'processing_documents',
   PROCESS_RESULTS: 'process_results',
   PROGRESS_BAR_STATE: 'progress_bar_state',
   PREFERENCES: 'notification_center_preferences',
@@ -148,6 +167,40 @@ function applyClearFilter(notifications: Notification[], lastClearedAt: Date | n
 }
 
 // Limpa notificações antigas e remove duplicadas
+function filterResolvedProcessStarts(notifications: Notification[]): Notification[] {
+  const resolvedIds = new Set<string>()
+
+  for (const notif of notifications) {
+    if (notif.type !== 'process_completed' && notif.type !== 'process_error') continue
+    if (notif.metadata?.processId) resolvedIds.add(notif.metadata.processId)
+    if (notif.metadata?.batchId) resolvedIds.add(notif.metadata.batchId)
+  }
+
+  if (resolvedIds.size === 0) return notifications
+
+  return notifications.filter(notif => {
+    if (notif.type !== 'process_started') return true
+    const processId = notif.metadata?.processId
+    const batchId = notif.metadata?.batchId
+    if (processId && resolvedIds.has(processId)) return false
+    if (batchId && resolvedIds.has(batchId)) return false
+    return true
+  })
+}
+
+function keepLatestProcessStarted(notifications: Notification[]): Notification[] {
+  const processStarted = notifications.filter(n => n.type === 'process_started')
+  if (processStarted.length <= 1) return notifications
+
+  const latest = processStarted.reduce((acc, current) =>
+    new Date(current.timestamp).getTime() > new Date(acc.timestamp).getTime()
+      ? current
+      : acc
+  )
+
+  return notifications.filter(n => n.type !== 'process_started' || n.id === latest.id)
+}
+
 function cleanupOldNotifications(notifications: Notification[]): Notification[] {
   const cutoffDate = new Date()
   cutoffDate.setDate(cutoffDate.getDate() - MAX_NOTIFICATION_AGE_DAYS)
@@ -177,8 +230,10 @@ function cleanupOldNotifications(notifications: Notification[]): Notification[] 
     }
   }
 
+  const normalized = keepLatestProcessStarted(filterResolvedProcessStarts(deduped))
+
   // Mantém apenas as MAX_NOTIFICATIONS mais recentes
-  return deduped.slice(-MAX_NOTIFICATIONS)
+  return normalized.slice(-MAX_NOTIFICATIONS)
 }
 
 // Componente Provider
@@ -188,6 +243,8 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [activeProcess, setActiveProcess] = useState<ProcessNotification | null>(null)
   const [processResults, setProcessResults] = useState<ProcessResult[]>([])
+  const [processingDocuments, setProcessingDocuments] = useState<ProcessingDocumentState[]>([])
+  const [processingProcessId, setProcessingProcessId] = useState<string | null>(null)
   const [notificationCenterOpen, setNotificationCenterOpen] = useState(false)
   const [progressBarState, setProgressBarState] = useState<ProgressBarState>({
     minimized: false,
@@ -199,6 +256,11 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     lastClearedAt: null,
   })
   const lastClearedAtRef = useRef<Date | null>(null)
+  const completionNotifiedRef = useRef(false)
+  const errorNotifiedRef = useRef(false)
+  const submittedByRef = useRef<string | undefined>(undefined)
+  const pollingJobsRef = useRef<Set<string>>(new Set())
+  const { startJob, pollJob } = useAsyncJob()
 
   // Carrega do backend na montagem (fallback localStorage)
   useEffect(() => {
@@ -232,6 +294,13 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
 
     const loadedProcess = loadFromStorage<ProcessNotification | null>(STORAGE_KEYS.ACTIVE_PROCESS, null)
     setActiveProcess(loadedProcess)
+    setProcessingProcessId(loadedProcess?.id ?? null)
+
+    const loadedProcessingDocs = loadFromStorage<ProcessingDocumentState[]>(
+      STORAGE_KEYS.PROCESSING_DOCUMENTS,
+      []
+    )
+    setProcessingDocuments(loadedProcessingDocs)
 
     const loadedResults = loadFromStorage<ProcessResult[]>(STORAGE_KEYS.PROCESS_RESULTS, [])
     setProcessResults(loadedResults)
@@ -253,6 +322,10 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   useEffect(() => {
     saveToStorage(STORAGE_KEYS.ACTIVE_PROCESS, activeProcess)
   }, [activeProcess])
+
+  useEffect(() => {
+    saveToStorage(STORAGE_KEYS.PROCESSING_DOCUMENTS, processingDocuments)
+  }, [processingDocuments])
 
   useEffect(() => {
     saveToStorage(STORAGE_KEYS.PROCESS_RESULTS, processResults)
@@ -402,6 +475,8 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       processId,
     })
 
+    setNotifications(prev => prev.filter(n => n.type !== 'process_started'))
+
     // Adiciona notificação
     addNotification({
       type: 'process_started',
@@ -541,8 +616,315 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     })
   }, [addNotification])
 
+  const updateProcessingDocument = useCallback(
+    (docId: string, updater: (doc: ProcessingDocumentState) => ProcessingDocumentState) => {
+      setProcessingDocuments(prev =>
+        prev.map(doc => {
+          if (doc.id !== docId) return doc
+          const updated = updater(doc)
+          return {
+            ...updated,
+            lastUpdatedAt: new Date(),
+          }
+        })
+      )
+    },
+    []
+  )
+
+  const startPollingForDocument = useCallback(
+    (docId: string, jobId: string) => {
+      if (pollingJobsRef.current.has(jobId)) return
+      pollingJobsRef.current.add(jobId)
+
+      pollJob(jobId, {
+        interval: 2000,
+        timeout: 0,
+        onProgress: (job: Job) => {
+          const stepToStage: Record<string, ProcessingStage> = {
+            pending: 'upload',
+            upload: 'upload',
+            ocr: 'ocr',
+            brmed: 'brnet',
+            validacao: 'validation',
+            concluido: 'completed',
+            erro: 'upload',
+          }
+
+          updateProcessingDocument(docId, (current) => ({
+            ...current,
+            progress: job.progress,
+            stage: stepToStage[job.current_step] || current.stage,
+            statusMessage: job.message || current.statusMessage,
+          }))
+        },
+        onComplete: (result: DocumentProcessingResult) => {
+          updateProcessingDocument(docId, (current) => ({
+            ...current,
+            stage: 'completed',
+            progress: 100,
+            displayProgress: 100,
+            statusMessage: 'Processamento concluído!',
+            result,
+          }))
+          pollingJobsRef.current.delete(jobId)
+        },
+        onError: (error: string) => {
+          updateProcessingDocument(docId, (current) => ({
+            ...current,
+            error: `Erro: ${error}`,
+            statusMessage: 'Erro no processamento',
+          }))
+          pollingJobsRef.current.delete(jobId)
+        },
+      }).catch(() => {
+        pollingJobsRef.current.delete(jobId)
+      })
+    },
+    [pollJob, updateProcessingDocument]
+  )
+
+  const startBackgroundProcessing = useCallback(
+    (files: File[], options: StartBackgroundProcessingOptions = {}) => {
+      if (!files || files.length === 0) return null
+
+      const initialDocs: ProcessingDocumentState[] = files.map((file, index) => ({
+        id: `doc-${Date.now()}-${index}`,
+        file,
+        fileName: file.name,
+        fileSize: file.size,
+        stage: 'upload' as ProcessingStage,
+        progress: 0,
+        displayProgress: 0,
+        statusMessage: 'Preparando envio...',
+        lastUpdatedAt: new Date(),
+      }))
+
+      setProcessingDocuments(initialDocs)
+      completionNotifiedRef.current = false
+      errorNotifiedRef.current = false
+      submittedByRef.current = options.submittedBy
+
+      const batchId = `batch-${Date.now()}`
+      const filename =
+        files.length === 1 ? files[0].name : `${files.length} documentos`
+
+      const processId = startProcess({
+        batchId,
+        filename,
+        documentCount: files.length,
+        originPath: options.originPath,
+      })
+
+      setProcessingProcessId(processId)
+
+      initialDocs.forEach((doc) => {
+        if (!doc.file) {
+          updateProcessingDocument(doc.id, (current) => ({
+            ...current,
+            error: 'Arquivo indisponível para processamento.',
+            statusMessage: 'Arquivo indisponível',
+          }))
+          return
+        }
+
+        startJob(doc.file, [])
+          .then((jobId) => {
+            updateProcessingDocument(doc.id, (current) => ({
+              ...current,
+              jobId,
+              statusMessage: current.statusMessage || 'Upload enviado...',
+            }))
+
+            startPollingForDocument(doc.id, jobId)
+          })
+          .catch((error) => {
+            const message =
+              error instanceof Error ? error.message : 'Erro ao iniciar processamento'
+            updateProcessingDocument(doc.id, (current) => ({
+              ...current,
+              error: `Erro: ${message}`,
+              statusMessage: 'Erro ao iniciar processamento',
+            }))
+            failProcess(processId, message)
+          })
+      })
+
+      return processId
+    },
+    [failProcess, startJob, startProcess, startPollingForDocument, updateProcessingDocument]
+  )
+
+  useEffect(() => {
+    if (processingDocuments.length === 0) return
+    const interval = setInterval(() => {
+      setProcessingDocuments((prev) =>
+        prev.map((doc) => {
+          if (doc.displayProgress === doc.progress) return doc
+          const delta = doc.progress - doc.displayProgress
+          if (delta <= 0) return doc
+          const step = Math.max(1, Math.ceil(delta / 12))
+          return {
+            ...doc,
+            displayProgress: Math.min(doc.progress, doc.displayProgress + step),
+          }
+        })
+      )
+    }, 200)
+
+    return () => clearInterval(interval)
+  }, [processingDocuments.length])
+
+  useEffect(() => {
+    if (!processingProcessId || processingDocuments.length === 0) return
+
+    const avgProgress = Math.round(
+      processingDocuments.reduce((sum, d) => sum + d.displayProgress, 0) /
+        processingDocuments.length
+    )
+
+    let currentStep: ProcessStep = 'upload'
+    if (avgProgress === 0) {
+      currentStep = 'upload'
+    } else if (avgProgress > 0 && avgProgress < 30) {
+      currentStep = 'ocr'
+    } else if (avgProgress >= 30 && avgProgress < 60) {
+      currentStep = 'brmed'
+    } else if (avgProgress >= 60 && avgProgress < 100) {
+      currentStep = 'validation'
+    } else if (avgProgress === 100) {
+      currentStep = 'completed'
+    }
+
+    const processingDoc = processingDocuments.find(
+      d => d.progress > 0 && d.progress < 100
+    )
+    const statusMessage = processingDoc?.statusMessage || 'Processando...'
+
+    updateProcess(processingProcessId, {
+      progress: avgProgress,
+      currentStep,
+      stepMessage: statusMessage,
+      documents: processingDocuments.map((doc) => ({
+        filename: doc.file?.name ?? doc.fileName ?? 'Documento',
+        status: doc.error
+          ? ('error' as const)
+          : doc.stage === 'completed'
+          ? ('completed' as const)
+          : doc.progress > 0
+          ? ('processing' as const)
+          : ('pending' as const),
+        progress: doc.displayProgress,
+        error: doc.error,
+      })),
+    })
+
+    const errorDoc = processingDocuments.find((doc) => doc.error)
+    if (errorDoc?.error && !errorNotifiedRef.current) {
+      errorNotifiedRef.current = true
+      failProcess(processingProcessId, errorDoc.error)
+    }
+  }, [processingDocuments, processingProcessId, updateProcess, failProcess])
+
+  useEffect(() => {
+    if (!processingProcessId || processingDocuments.length === 0) return
+    if (completionNotifiedRef.current) return
+
+    const allCompleted = processingDocuments.every(
+      (doc) => doc.stage === 'completed' || doc.error
+    )
+    if (!allCompleted) return
+
+    completionNotifiedRef.current = true
+
+    const processResults = processingDocuments.map((doc) => {
+      const tabelaComparacao = doc.result?.tabela_comparacao || []
+      const examesFaltantes = tabelaComparacao.filter(
+        (e) => e.status === 'faltante'
+      ).length
+      const examesExtras = tabelaComparacao.filter(
+        (e) => e.status === 'extra_no_ocr'
+      ).length
+      const analysisDetails = doc.result?.analysis_details
+      const normalizedAnalysisDetails =
+        analysisDetails?.quality &&
+        analysisDetails?.field_checks &&
+        analysisDetails?.match_confidence
+          ? {
+              quality: analysisDetails.quality,
+              field_checks: analysisDetails.field_checks,
+              match_confidence: analysisDetails.match_confidence,
+            }
+          : undefined
+
+      return {
+        id: doc.result?.document_id || doc.id,
+        batchId: processingProcessId,
+        filename: doc.file?.name ?? doc.fileName ?? 'Documento',
+        cpf: doc.result?.cpf_processado || 'N/A',
+        patientName: doc.result?.patient_name || 'Paciente',
+        uploadedAt: new Date(),
+        processedAt: new Date(),
+        status: doc.error
+          ? ('rejected' as const)
+          : examesFaltantes === 0
+          ? ('approved' as const)
+          : ('pending_review' as const),
+        rejectionReason: doc.error,
+        examesFaltantes,
+        examesExtras,
+        result: {
+          cpf: doc.result?.cpf_processado || '',
+          patient_name: doc.result?.patient_name,
+          status: doc.error ? ('error' as const) : ('success' as const),
+          ocr_result: {
+            text: '',
+            exames_extraidos: doc.result?.exames_ocr || [],
+          },
+          brmed_result: {
+            exames_obrigatorios: doc.result?.exames_brnet || [],
+          },
+          tabela_comparacao: doc.result?.tabela_comparacao || [],
+          analysis_details: normalizedAnalysisDetails,
+          validation_result: {
+            exames_faltantes: tabelaComparacao
+              .filter((e) => e.status === 'faltante')
+              .map((e) => e.exame),
+            exames_extras: tabelaComparacao
+              .filter((e) => e.status === 'extra_no_ocr')
+              .map((e) => e.exame),
+            analysis: doc.result?.analise_comparacao,
+          },
+          error: doc.error,
+        },
+        submittedBy: submittedByRef.current || 'usuario@grupobrmed.com.br',
+      }
+    })
+
+    completeProcess(processingProcessId, processResults)
+  }, [processingDocuments, processingProcessId, completeProcess])
+
+  useEffect(() => {
+    const hasInFlight = processingDocuments.some(
+      (doc) => !doc.error && doc.stage !== 'completed'
+    )
+    if (hasInFlight) return
+
+    setNotifications((prev) => prev.filter((n) => n.type !== 'process_started'))
+  }, [processingDocuments])
+
   const addProcessResult = useCallback((result: ProcessResult) => {
     setProcessResults(prev => [...prev, result])
+  }, [])
+
+  const clearProcessingState = useCallback(() => {
+    setProcessingDocuments([])
+    setProcessingProcessId(null)
+    setActiveProcess(null)
+    setProgressBarState({ minimized: false, processId: null })
+    completionNotifiedRef.current = false
+    errorNotifiedRef.current = false
+    pollingJobsRef.current.clear()
   }, [])
 
   const getResultsByBatchId = useCallback((batchId: string) => {
@@ -640,6 +1022,16 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     }
   }, [session?.accessToken])
 
+  useEffect(() => {
+    if (processingDocuments.length === 0) return
+
+    processingDocuments.forEach((doc) => {
+      if (!doc.jobId) return
+      if (doc.stage === 'completed' || doc.error) return
+      startPollingForDocument(doc.id, doc.jobId)
+    })
+  }, [processingDocuments, startPollingForDocument])
+
   const value: NotificationContextType = {
     notifications,
     unreadCount,
@@ -653,6 +1045,9 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     updateProcess,
     completeProcess,
     failProcess,
+    processingDocuments,
+    startBackgroundProcessing,
+    clearProcessingState,
     processResults,
     addProcessResult,
     getResultsByBatchId,

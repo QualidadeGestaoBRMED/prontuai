@@ -1,7 +1,7 @@
 "use client"
 
-import { Suspense, useMemo, useState } from "react"
-import { useSearchParams } from "next/navigation"
+import { Suspense, useEffect, useMemo, useState } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
 import { useSession } from "next-auth/react"
 import { AppSidebar } from "@/components/app-sidebar"
 import {
@@ -49,6 +49,7 @@ function PageLoading() {
 
 function PageContent() {
   const searchParams = useSearchParams()
+  const router = useRouter()
   const autoOpenUpload = searchParams.get("reenviar") === "1"
   const initialSearch =
     searchParams.get("filename") || searchParams.get("cpf") || undefined
@@ -57,9 +58,40 @@ function PageContent() {
   // const [chatInitialMessage, setChatInitialMessage] = useState<string>()
   const [selectedResult, setSelectedResult] = useState<ProcessResult | null>(null)
   const [detailsModalOpen, setDetailsModalOpen] = useState(false)
-  const { unreadCount, activeProcess, setNotificationCenterOpen, processResults, progressBarMinimized, showProgressBar } = useNotifications()
+  const {
+    unreadCount,
+    activeProcess,
+    processingDocuments,
+    setNotificationCenterOpen,
+    processResults,
+    progressBarMinimized,
+    showProgressBar,
+    clearProcessingState,
+  } = useNotifications()
   const { data: session } = useSession()
   const userEmail = session?.user?.email?.toLowerCase()
+  const viewParam = searchParams.get("view")
+  const hasInFlight = processingDocuments.some(
+    (doc) => !doc.error && doc.stage !== "completed"
+  )
+  const hasProcessing = processingDocuments.length > 0
+  const hasMissingJobId = processingDocuments.some(
+    (doc) => !doc.jobId && !doc.error && doc.stage !== "completed"
+  )
+  const hasStaleUpdates = processingDocuments.some((doc) => {
+    if (doc.error || doc.stage === "completed") return false
+    if (!doc.lastUpdatedAt) return true
+    const last = new Date(doc.lastUpdatedAt).getTime()
+    return Number.isFinite(last) ? Date.now() - last > 2 * 60 * 1000 : true
+  })
+  const processStartedAt = activeProcess?.startedAt
+    ? new Date(activeProcess.startedAt).getTime()
+    : 0
+  const processAgeMs = processStartedAt ? Date.now() - processStartedAt : 0
+  const shouldShowStaleWarning =
+    hasProcessing &&
+    processAgeMs > 30_000 &&
+    (!hasInFlight || hasMissingJobId || hasStaleUpdates)
 
   const filteredResults = useMemo(() => {
     if (!userEmail) return processResults
@@ -84,6 +116,23 @@ function PageContent() {
     return list
   }, [filteredResults])
 
+  useEffect(() => {
+    if (viewParam === "processing" && hasProcessing) {
+      setPageState("processing")
+    }
+  }, [viewParam, hasProcessing])
+
+  useEffect(() => {
+    if (hasInFlight) {
+      setPageState("processing")
+      return
+    }
+
+    if (pageState === "processing" && !hasInFlight) {
+      setPageState(sortedResults.length > 0 ? "completed" : "upload")
+    }
+  }, [hasInFlight, pageState, sortedResults.length])
+
   // Don't auto-navigate to results - let user control the state
 
   const handleProcessFiles = (files: FileWithPreview[]) => {
@@ -105,6 +154,13 @@ function PageContent() {
     setPageState("upload")
     setFilesToProcess([])
     // setChatInitialMessage(undefined)
+  }
+
+  const handleClearProcessing = () => {
+    clearProcessingState()
+    setFilesToProcess([])
+    setPageState("upload")
+    router.replace("/anexar-prontuario")
   }
 
   const handleDownloadPDF = async (result: ProcessResult) => {
@@ -182,6 +238,14 @@ function PageContent() {
                       <ArrowLeft className="size-4" />
                       Voltar
                     </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleClearProcessing}
+                      className="gap-2 text-destructive border-destructive/30 hover:border-primary hover:bg-primary hover:text-white"
+                    >
+                      Encerrar processo
+                    </Button>
                   </div>
 
                   {/* Hint card when progress bar is minimized */}
@@ -206,11 +270,36 @@ function PageContent() {
                     </Card>
                   )}
 
+                  {shouldShowStaleWarning && (
+                    <Card className="p-5 border border-amber-200 bg-amber-50 text-amber-900">
+                      <div className="space-y-2 text-sm">
+                        <p className="font-semibold">Processo sem atualização</p>
+                        <p>
+                          Não foi possível recuperar o progresso do último envio. Você pode encerrar
+                          este processo e iniciar um novo envio.
+                        </p>
+                        <Button size="sm" variant="outline" onClick={handleClearProcessing}>
+                          Encerrar e liberar envio
+                        </Button>
+                      </div>
+                    </Card>
+                  )}
+
                   <DocumentBatchProcessor
                     files={filesToProcess}
                     onComplete={handleProcessingComplete}
                     submittedBy={session?.user?.email || undefined}
                   />
+
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleClearProcessing}
+                    className="fixed bottom-6 right-6 z-40 gap-2 border-destructive/30 bg-white/90 text-destructive shadow-lg hover:border-primary hover:bg-primary hover:text-white"
+                  >
+                    Encerrar processamento
+                  </Button>
                 </div>
               )}
 

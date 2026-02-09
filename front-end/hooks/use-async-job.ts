@@ -6,7 +6,7 @@ import { useState, useCallback, useRef, useEffect } from "react"
 import { useSession } from "next-auth/react"
 import { Job, CreateJobResponse, PollingOptions } from "@/types/job"
 import { API_ENDPOINTS } from "@/lib/config"
-import { DocumentProcessingResult } from "@/components/document-batch-processor"
+import { DocumentProcessingResult } from "@/types/document-processing"
 import { authFetch } from "@/lib/auth-fetch"
 
 interface UseAsyncJobReturn {
