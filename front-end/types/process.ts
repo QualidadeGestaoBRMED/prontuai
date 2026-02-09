@@ -53,6 +53,7 @@ export interface ProcessNotification {
   batchId: string
   filename: string  // Se único documento, ou nome do lote
   documentCount: number
+  originPath?: string
   status: ProcessStatus
   progress: number  // 0-100
   currentStep: ProcessStep
@@ -115,4 +116,7 @@ export interface ProgressBarState {
 }
 
 // Tipo auxiliar para criar novo processo
-export type CreateProcessInput = Pick<ProcessNotification, 'batchId' | 'filename' | 'documentCount'>
+export type CreateProcessInput = Pick<
+  ProcessNotification,
+  'batchId' | 'filename' | 'documentCount' | 'originPath'
+>

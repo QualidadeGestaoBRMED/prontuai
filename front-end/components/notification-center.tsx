@@ -130,7 +130,8 @@ function NotificationItem({
 
 // Active process display
 function ActiveProcessDisplay() {
-  const { activeProcess, showProgressBar } = useNotifications()
+  const router = useRouter()
+  const { activeProcess, showProgressBar, setNotificationCenterOpen } = useNotifications()
 
   if (!activeProcess) return null
 
@@ -164,7 +165,13 @@ function ActiveProcessDisplay() {
           variant="outline"
           size="sm"
           className="flex-1 h-8 text-xs"
-          onClick={showProgressBar}
+          onClick={() => {
+            setNotificationCenterOpen(false)
+            showProgressBar()
+            const target = activeProcess.originPath || "/anexar-prontuario"
+            const url = target.includes("?") ? `${target}&view=processing` : `${target}?view=processing`
+            router.push(url)
+          }}
         >
           <Eye className="h-3 w-3 mr-1" />
           Ver Detalhes

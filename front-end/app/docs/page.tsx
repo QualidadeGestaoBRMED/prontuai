@@ -547,9 +547,9 @@ export default function DocsPage() {
           ref={headerRef}
           className="relative border-b border-primary/10 bg-gradient-to-r from-primary via-[#0f566f] to-secondary text-white"
         >
-          <div className="mx-auto w-full max-w-[90rem] px-4 py-8 sm:px-6">
+          <div className="mx-auto w-full max-w-[90rem] px-4 py-8 sm:px-6 xl:px-8 2xl:px-10">
             <div className="grid items-center gap-10 lg:gap-14 lg:grid-cols-[minmax(0,220px)_minmax(0,1fr)]">
-              <div className="flex items-center gap-5 xl:-ml-8 2xl:-ml-12">
+              <div className="flex items-center gap-5 xl:-ml-4 2xl:-ml-8">
                 <div className="relative h-12 w-36">
                   <Image src="/logo.png" alt="ProntuAI" fill className="object-contain" priority />
                 </div>
@@ -571,10 +571,10 @@ export default function DocsPage() {
         </header>
       </div>
 
-      <main className="mx-auto w-full max-w-[90rem] px-4 py-12 sm:px-6">
+      <main className="mx-auto w-full max-w-[90rem] px-4 py-12 sm:px-6 xl:px-8 2xl:px-10">
         <div className="grid items-start gap-10 lg:gap-14 lg:grid-cols-[minmax(0,220px)_minmax(0,1fr)]">
           <aside
-            className={`min-w-0 space-y-4 lg:sticky lg:h-fit xl:-ml-8 2xl:-ml-12 ${
+            className={`min-w-0 space-y-4 lg:sticky lg:h-fit xl:-ml-4 2xl:-ml-8 ${
               headerHidden ? "lg:top-1/2 lg:-translate-y-1/2" : "lg:top-24"
             }`}
           >
