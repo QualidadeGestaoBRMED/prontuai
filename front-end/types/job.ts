@@ -2,7 +2,7 @@
  * Tipos para o sistema de jobs assíncronos
  */
 
-import { DocumentProcessingResult } from "@/components/document-batch-processor"
+import { DocumentProcessingResult } from "@/types/document-processing"
 
 /**
  * Status possíveis de um job
