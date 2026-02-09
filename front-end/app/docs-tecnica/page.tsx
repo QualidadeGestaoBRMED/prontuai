@@ -1153,7 +1153,7 @@ export default function DocsTecnicaPage() {
                 <p className="text-sm text-muted-foreground">
                   Alterne entre a visão de navegação do produto e os endpoints principais da API.
                 </p>
-                <div className="inline-flex rounded-full border border-primary/15 bg-white/70 p-1 text-xs font-semibold">
+                <div className="inline-flex rounded-full border border-primary/15 bg-white/70 p-1 text-sm font-semibold">
                   <button
                     type="button"
                     onClick={() => setRouteView("front")}
@@ -1184,7 +1184,7 @@ export default function DocsTecnicaPage() {
                   <CardTitle className="text-base">
                     {routeView === "front" ? "Interface (Front-end)" : "API (Back-end)"}
                   </CardTitle>
-                  <span className="text-xs font-semibold uppercase tracking-[0.16em] text-secondary">
+                  <span className="text-sm font-semibold uppercase tracking-[0.16em] text-secondary">
                     {routeView === "front" ? "Navegação" : "Endpoints"}
                   </span>
                 </CardHeader>
@@ -1196,25 +1196,25 @@ export default function DocsTecnicaPage() {
                           <div className="flex flex-wrap items-center justify-between gap-3">
                             <div className="space-y-1">
                               <p className="text-sm font-semibold text-foreground">{item.path}</p>
-                              <p className="text-xs uppercase tracking-[0.12em] text-secondary">{item.label}</p>
+                              <p className="text-[12px] uppercase tracking-[0.12em] text-secondary">{item.label}</p>
                             </div>
                             <Badge
                               variant="secondary"
-                              className="h-5 px-3 text-[10px] font-semibold uppercase tracking-[0.14em]"
+                              className="h-5 px-3 text-[11px] font-semibold uppercase tracking-[0.14em]"
                             >
                               {item.access}
                             </Badge>
                           </div>
                           <p className="mt-2 text-sm text-muted-foreground">{item.description}</p>
-                          <div className="mt-3 grid gap-3 text-xs text-muted-foreground sm:grid-cols-2">
+                          <div className="mt-3 grid gap-3 text-sm text-muted-foreground sm:grid-cols-2">
                             <div className="space-y-1">
-                              <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-secondary">
+                              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-secondary">
                                 Parâmetros
                               </p>
                               <p className="text-foreground/80">{item.params}</p>
                             </div>
                             <div className="space-y-1">
-                              <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-secondary">
+                              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-secondary">
                                 Exemplo
                               </p>
                               <p className="text-foreground/80">{item.example}</p>
@@ -1230,7 +1230,7 @@ export default function DocsTecnicaPage() {
                           key={group.title}
                           className={`space-y-3 ${index === 0 ? "" : "border-t border-primary/10 pt-4"}`}
                         >
-                          <p className="text-xs font-semibold uppercase tracking-[0.08em] text-secondary">
+                          <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-secondary">
                             {group.title}
                           </p>
                           <div className="space-y-3">
@@ -1242,7 +1242,7 @@ export default function DocsTecnicaPage() {
                                 <div className="flex items-start gap-3">
                                   <Badge
                                     variant="secondary"
-                                    className="h-5 min-w-[56px] justify-center text-[10px] uppercase tracking-[0.14em]"
+                                    className="h-5 min-w-[56px] justify-center text-[11px] uppercase tracking-[0.14em]"
                                   >
                                     {item.method}
                                   </Badge>
@@ -1251,51 +1251,51 @@ export default function DocsTecnicaPage() {
                                       <p className="text-sm font-semibold text-foreground">{item.path}</p>
                                       <p className="text-sm text-muted-foreground">{item.description}</p>
                                     </div>
-                                    <div className="grid gap-3 text-xs text-muted-foreground sm:grid-cols-2 lg:grid-cols-4">
+                                    <div className="grid gap-3 text-sm text-muted-foreground sm:grid-cols-2 lg:grid-cols-4">
                                       <div className="space-y-1">
-                                        <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-secondary">
+                                        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-secondary">
                                           Auth
                                         </p>
                                         <p className="text-foreground/80">{item.auth}</p>
                                       </div>
                                       <div className="space-y-1">
-                                        <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-secondary">
+                                        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-secondary">
                                           Headers
                                         </p>
                                         <p className="text-foreground/80">{item.headers ?? "—"}</p>
                                       </div>
                                       <div className="space-y-1">
-                                        <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-secondary">
+                                        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-secondary">
                                           Query
                                         </p>
                                         <p className="text-foreground/80">{item.query}</p>
                                       </div>
                                       <div className="space-y-1">
-                                        <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-secondary">
+                                        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-secondary">
                                           Body
                                         </p>
                                         <p className="text-foreground/80">{item.body}</p>
                                       </div>
                                     </div>
-                                    <div className="space-y-1 text-xs text-muted-foreground">
-                                      <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-secondary">
+                                    <div className="space-y-1 text-sm text-muted-foreground">
+                                      <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-secondary">
                                         Response
                                       </p>
                                       <p className="text-foreground/80">{item.response ?? "—"}</p>
                                     </div>
-                                    <div className="space-y-2 text-xs text-muted-foreground">
-                                      <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-secondary">
+                                    <div className="space-y-2 text-sm text-muted-foreground">
+                                      <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-secondary">
                                         Exemplo (request)
                                       </p>
-                                      <pre className="whitespace-pre-wrap rounded-lg border border-primary/10 bg-white/80 p-3 text-[11px] text-foreground/80">
+                                      <pre className="whitespace-pre-wrap rounded-lg border border-primary/10 bg-white/80 p-3 text-[12px] text-foreground/80">
                                         {item.example ?? "—"}
                                       </pre>
                                     </div>
-                                    <div className="space-y-2 text-xs text-muted-foreground">
-                                      <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-secondary">
+                                    <div className="space-y-2 text-sm text-muted-foreground">
+                                      <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-secondary">
                                         Exemplo (response)
                                       </p>
-                                      <pre className="whitespace-pre-wrap rounded-lg border border-primary/10 bg-white/80 p-3 text-[11px] text-foreground/80">
+                                      <pre className="whitespace-pre-wrap rounded-lg border border-primary/10 bg-white/80 p-3 text-[12px] text-foreground/80">
                                         {item.exampleResponse ?? "—"}
                                       </pre>
                                     </div>
