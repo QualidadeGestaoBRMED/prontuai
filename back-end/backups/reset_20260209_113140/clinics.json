@@ -1,0 +1,62 @@
+[
+  {
+    "id": "101b6c7e-bfce-4cfc-a072-800eeda896c7",
+    "name": "teste",
+    "is_active": false,
+    "created_at": "2025-11-19 19:47:19.746690",
+    "updated_at": "2025-11-19 19:48:30.960541",
+    "cnpj": null,
+    "phone": null,
+    "address": null,
+    "city": null,
+    "state": null
+  },
+  {
+    "id": "c3939f25-ca95-40aa-b63b-617f1b2ad3f7",
+    "name": "teste",
+    "is_active": false,
+    "created_at": "2025-11-19 19:46:34.217588",
+    "updated_at": "2025-11-19 19:48:36.212074",
+    "cnpj": null,
+    "phone": null,
+    "address": null,
+    "city": null,
+    "state": null
+  },
+  {
+    "id": "d39031a8-4a12-4f8d-812e-459b977f1354",
+    "name": "Clinica Default",
+    "is_active": false,
+    "created_at": "2026-01-27 19:10:54.028307",
+    "updated_at": "2026-02-09 10:14:33.843094",
+    "cnpj": null,
+    "phone": null,
+    "address": null,
+    "city": null,
+    "state": null
+  },
+  {
+    "id": "07c5c778-d4d7-4958-8acf-e16e0653eca1",
+    "name": "testando",
+    "is_active": false,
+    "created_at": "2025-11-25 19:51:29.599963",
+    "updated_at": "2026-02-09 10:14:38.575984",
+    "cnpj": null,
+    "phone": null,
+    "address": null,
+    "city": null,
+    "state": null
+  },
+  {
+    "id": "ef85bf79-cb1f-4581-8119-a82527b1a195",
+    "name": "Grupo BR MED",
+    "is_active": true,
+    "created_at": "2025-11-19 18:46:36.686974",
+    "updated_at": "2026-02-09 10:14:59.089089",
+    "cnpj": null,
+    "phone": null,
+    "address": null,
+    "city": null,
+    "state": null
+  }
+]

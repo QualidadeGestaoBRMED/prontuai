@@ -1,0 +1,122 @@
+[
+  {
+    "id": "e42c9970-ebc5-4cbd-bb7b-50a7ea99cb63",
+    "email": "projetos@grupobrmed.com.br",
+    "name": "Qualidade e Gestão",
+    "role": "ADMIN",
+    "is_active": true,
+    "created_at": "2025-11-18 10:34:27.523321",
+    "updated_at": "2025-11-18 10:34:27.523325",
+    "clinic_id": null
+  },
+  {
+    "id": "admin-default",
+    "email": "gabriel.rodrigues@grupobrmed.com.br",
+    "name": "Gabriel Rodrigues",
+    "role": "ADMIN",
+    "is_active": true,
+    "created_at": "2025-11-17 18:35:41.003599",
+    "updated_at": "2025-11-18 19:34:01.981370",
+    "clinic_id": null
+  },
+  {
+    "id": "8874ab09-df6a-492a-a354-9f75625656fa",
+    "email": "breno.rios@grupobrmed.com.br",
+    "name": "Brenin",
+    "role": "SENDER",
+    "is_active": false,
+    "created_at": "2025-11-18 13:59:59.760671",
+    "updated_at": "2025-11-25 18:48:53.333816",
+    "clinic_id": "ef85bf79-cb1f-4581-8119-a82527b1a195"
+  },
+  {
+    "id": "c78520be-9708-4c39-a44b-ce89346d8771",
+    "email": "leonardo.miers@grupobrmed.com.br",
+    "name": "Leonardo Miers",
+    "role": "ADMIN",
+    "is_active": false,
+    "created_at": "2026-01-22 17:48:10.104284",
+    "updated_at": "2026-01-22 17:48:32.956550",
+    "clinic_id": null
+  },
+  {
+    "id": "ed931a9b-772d-47f3-a60e-379356386fa6",
+    "email": "leonardo@grupobrmed.com.br",
+    "name": "Leonardo Miers",
+    "role": "ADMIN",
+    "is_active": true,
+    "created_at": "2026-01-22 17:48:46.077126",
+    "updated_at": "2026-01-22 17:48:46.077133",
+    "clinic_id": null
+  },
+  {
+    "id": "bbe871a9-65c9-489f-b6d4-77c5ecfb4c46",
+    "email": "dev@grupobrmed.com.br",
+    "name": "Dev Bypass",
+    "role": "ADMIN",
+    "is_active": true,
+    "created_at": "2026-01-27 19:23:53.347553",
+    "updated_at": "2026-01-27 19:23:53.347560",
+    "clinic_id": "ef85bf79-cb1f-4581-8119-a82527b1a195"
+  },
+  {
+    "id": "8d000200-05ee-4ca9-9933-67d9bf5adaa2",
+    "email": "wendel.rufino@grupobrmed.com.br",
+    "name": "Wendel Enablement (teste)",
+    "role": "ADMIN",
+    "is_active": false,
+    "created_at": "2026-02-03 11:17:07.141708",
+    "updated_at": "2026-02-03 11:41:27.132860",
+    "clinic_id": null
+  },
+  {
+    "id": "4ecd99c5-ecdd-4628-80d3-51b2e474ccc3",
+    "email": "thiago.simoes@grupobrmed.com.br",
+    "name": "Thiago Simões",
+    "role": "ADMIN",
+    "is_active": true,
+    "created_at": "2025-11-18 19:26:59.762154",
+    "updated_at": "2026-02-03 13:46:52.433415",
+    "clinic_id": null
+  },
+  {
+    "id": "f85b9501-ba76-4fa1-bd8d-1b0f5bf74512",
+    "email": "thiago@grupobrmed.com.br",
+    "name": "Thiago Cezar",
+    "role": "ADMIN",
+    "is_active": true,
+    "created_at": "2025-12-04 17:25:53.258077",
+    "updated_at": "2026-02-03 17:47:58.732599",
+    "clinic_id": null
+  },
+  {
+    "id": "43b004e0-cdb8-49bd-92ab-d37a9b7441c3",
+    "email": "ocupacional@cisviver.com.br",
+    "name": "Cisviver teste",
+    "role": "SENDER",
+    "is_active": false,
+    "created_at": "2026-02-05 18:25:44.087255",
+    "updated_at": "2026-02-09 10:06:40.448556",
+    "clinic_id": "07c5c778-d4d7-4958-8acf-e16e0653eca1"
+  },
+  {
+    "id": "9d0d7af6-73b1-46a9-9ca7-fe23cc6b9afe",
+    "email": "alais.enf@gmail.com",
+    "name": "teste",
+    "role": "SENDER",
+    "is_active": false,
+    "created_at": "2026-02-05 18:29:52.899962",
+    "updated_at": "2026-02-09 10:06:47.453059",
+    "clinic_id": "07c5c778-d4d7-4958-8acf-e16e0653eca1"
+  },
+  {
+    "id": "da248e5a-9f37-496c-bce6-6c2110c9bdb2",
+    "email": "rdsgabriel.dev@gmail.com",
+    "name": "Gabriel (SENDER)",
+    "role": "SENDER",
+    "is_active": false,
+    "created_at": "2025-11-25 19:52:07.016954",
+    "updated_at": "2026-02-09 10:06:53.397991",
+    "clinic_id": "ef85bf79-cb1f-4581-8119-a82527b1a195"
+  }
+]
