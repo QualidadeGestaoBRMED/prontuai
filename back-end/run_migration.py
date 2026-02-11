@@ -5,6 +5,7 @@ Uso:
     python run_migration.py
 """
 import os
+import sys
 import psycopg2
 from dotenv import load_dotenv
 
@@ -31,7 +32,11 @@ def run_migration():
         print("✓ Conectado ao banco de dados")
 
         # Ler arquivo de migração
-        migration_file = "migrations/001_add_multi_tenant.sql"
+        migration_file = (
+            sys.argv[1]
+            if len(sys.argv) > 1
+            else os.getenv("MIGRATION_FILE", "migrations/001_add_multi_tenant.sql")
+        )
 
         if not os.path.exists(migration_file):
             print(f"❌ Arquivo de migração não encontrado: {migration_file}")
