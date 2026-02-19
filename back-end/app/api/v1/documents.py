@@ -381,22 +381,40 @@ async def update_document(
 
         approval_reason = payload.approval_reason
         rejection_reason = payload.rejection_reason
+        payload_result = payload.result_payload if isinstance(payload.result_payload, dict) else None
+        existing_result = document.result_payload if isinstance(document.result_payload, dict) else None
         reviewed_by = None
         reviewed_at = None
-        if isinstance(payload.result_payload, dict):
+        if payload_result is not None:
             if approval_reason is None:
-                approval_reason = payload.result_payload.get("approvalReason")
+                approval_reason = payload_result.get("approvalReason")
             if rejection_reason is None:
-                rejection_reason = payload.result_payload.get("rejectionReason")
-            reviewed_by = payload.result_payload.get("reviewed_by") or payload.result_payload.get("reviewedBy")
-            reviewed_at = payload.result_payload.get("reviewed_at") or payload.result_payload.get("reviewedAt")
+                rejection_reason = payload_result.get("rejectionReason")
+            reviewed_by = payload_result.get("reviewed_by") or payload_result.get("reviewedBy")
+            reviewed_at = payload_result.get("reviewed_at") or payload_result.get("reviewedAt")
 
-        if payload.validation_status == "validated" and not reviewed_by:
+        existing_reviewed_by = None
+        existing_reviewed_at = None
+        if existing_result is not None:
+            existing_reviewed_by = existing_result.get("reviewed_by") or existing_result.get("reviewedBy")
+            existing_reviewed_at = existing_result.get("reviewed_at") or existing_result.get("reviewedAt")
+
+        if not reviewed_by:
+            reviewed_by = existing_reviewed_by
+        if not reviewed_at:
+            reviewed_at = existing_reviewed_at
+
+        is_human_reviewer = current_user.role in [UserRole.ADMIN, UserRole.CHECKER]
+        effective_status = payload.validation_status or document.validation_status
+
+        if effective_status == "validated" and is_human_reviewer and not reviewed_by:
             reviewed_by = current_user.email
             reviewed_at = reviewed_at or datetime.utcnow().isoformat()
-            if isinstance(payload.result_payload, dict):
-                payload.result_payload["reviewed_by"] = reviewed_by
-                payload.result_payload["reviewed_at"] = reviewed_at
+            merged_payload = dict(payload_result) if payload_result is not None else dict(existing_result or {})
+            merged_payload["reviewed_by"] = reviewed_by
+            merged_payload["reviewed_at"] = reviewed_at
+            payload.result_payload = merged_payload
+            payload_result = merged_payload
         updated = user_db.update_document(
             document_id=document_id,
             validation_status=payload.validation_status,
@@ -409,14 +427,13 @@ async def update_document(
             approval_reason=approval_reason,
             rejection_reason=rejection_reason,
         )
-        is_human_reviewer = current_user.role in [UserRole.ADMIN, UserRole.CHECKER]
-        payload_result = payload.result_payload if isinstance(payload.result_payload, dict) else {}
         payload_reviewed_by = None
         if isinstance(payload_result, dict):
             payload_reviewed_by = payload_result.get("reviewed_by") or payload_result.get("reviewedBy")
         should_upload = (
-            payload.validation_status == "validated"
-            and (payload_reviewed_by or reviewed_by or is_human_reviewer)
+            effective_status == "validated"
+            and is_human_reviewer
+            and (payload.validation_status == "validated" or payload_reviewed_by or reviewed_by)
         )
         if should_upload and background_tasks is not None:
             logger.info(
@@ -438,9 +455,9 @@ async def update_document(
                     "action": "documents.update",
                     "resource": "documents",
                     "resource_id": document_id,
-                    "metadata": {
-                        "before_status": document.validation_status,
-                        "after_status": payload.validation_status,
+                        "metadata": {
+                            "before_status": document.validation_status,
+                            "after_status": effective_status,
                         "approval_reason": approval_reason,
                         "rejection_reason": rejection_reason,
                         "validation_message": (

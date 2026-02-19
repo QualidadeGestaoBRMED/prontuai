@@ -70,6 +70,7 @@ export function ProcessingStepper({
 }: ProcessingStepperProps) {
   const currentStepIndex = steps.findIndex((s) => s.stage === currentStage)
   const currentStepNumber = currentStepIndex >= 0 ? currentStepIndex + 1 : 1
+  const normalizedStatusMessage = statusMessage?.replace(/\.\.\.$/, "")?.trim()
 
   return (
     <div className={cn("w-full max-w-2xl mx-auto", className)}>
@@ -78,6 +79,22 @@ export function ProcessingStepper({
           const isActive = stage === currentStage
           const isCompleted = step < currentStepNumber
           const isLoading = isActive && stage !== "completed"
+          let effectiveDescription = description
+
+          if (isActive && normalizedStatusMessage) {
+            if (stage === "ocr") {
+              const pageMsg = normalizedStatusMessage.replace(/^Lendo\s+/i, "")
+              if (/^Página\s+/i.test(pageMsg)) {
+                effectiveDescription = `Processando documento com OCR... ${pageMsg}`
+              } else if (!/OCR/i.test(pageMsg)) {
+                effectiveDescription = `Processando documento com OCR... ${pageMsg}`
+              } else {
+                effectiveDescription = normalizedStatusMessage
+              }
+            } else {
+              effectiveDescription = normalizedStatusMessage
+            }
+          }
 
           return (
             <StepperItem
@@ -97,7 +114,7 @@ export function ProcessingStepper({
                 <div className="mt-0.5 min-w-0 space-y-1 text-left">
                   <StepperTitle className="text-base leading-tight">{title}</StepperTitle>
                   <StepperDescription className="text-sm leading-snug">
-                    {isActive && statusMessage ? statusMessage : description}
+                    {effectiveDescription}
                   </StepperDescription>
                 </div>
               </StepperTrigger>
