@@ -196,6 +196,11 @@ async def list_documents(
             user_id=current_user.id if current_user.role == UserRole.SENDER else None,
         )
 
+        if current_user.role == UserRole.SENDER and current_user.email:
+            for doc in documents:
+                if doc.uploaded_by_user_id == current_user.id:
+                    doc.uploaded_by_user_email = current_user.email
+
         if cache_seconds > 0:
             _set_cache_entry(cache_key, documents)
 

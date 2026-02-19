@@ -98,8 +98,21 @@ def upload_document_to_drive(document) -> None:
         logger.warning("[DRIVE] Documento %s sem file_path; upload ignorado", getattr(document, "id", "-"))
         return
     if not os.path.exists(file_path):
-        logger.warning("[DRIVE] Arquivo não encontrado para upload: %s", file_path)
-        return
+        base_dir = os.path.abspath(settings.DOCUMENT_STORAGE_DIR)
+        candidates: list[str] = [file_path]
+        if not os.path.isabs(file_path):
+            candidates.append(os.path.join(base_dir, file_path))
+        candidates.append(os.path.join(base_dir, os.path.basename(file_path)))
+        resolved = None
+        for candidate in candidates:
+            if candidate and os.path.exists(candidate):
+                resolved = candidate
+                break
+        if resolved:
+            file_path = resolved
+        else:
+            logger.warning("[DRIVE] Arquivo não encontrado para upload: %s", file_path)
+            return
 
     try:
         logger.info(

@@ -55,6 +55,7 @@ export function DocumentDetailsModalChecagem({
   const [motivo, setMotivo] = useState("")
   const [showRejectDialog, setShowRejectDialog] = useState(false)
   const [showApproveDialog, setShowApproveDialog] = useState(false)
+  const [approvalReason, setApprovalReason] = useState("")
 
   if (!result) return null
   const showPreview = Boolean(documentUrl || documentLoading)
@@ -125,7 +126,9 @@ export function DocumentDetailsModalChecagem({
   }
 
   const handleAprovar = () => {
-    onAprovar(result.id, "")
+    const reason = approvalReason.trim()
+    onAprovar(result.id, reason)
+    setApprovalReason("")
     setShowApproveDialog(false)
     onOpenChange(false)
   }
@@ -140,6 +143,13 @@ export function DocumentDetailsModalChecagem({
   }
 
   const isPending = !result.reviewedBy
+  const requiresApprovalReason = result.status === "pending_review"
+  const handleApproveDialogChange = (open: boolean) => {
+    setShowApproveDialog(open)
+    if (!open) {
+      setApprovalReason("")
+    }
+  }
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
@@ -569,7 +579,7 @@ export function DocumentDetailsModalChecagem({
       </Dialog>
 
       {/* Approve Confirmation Dialog */}
-      <AlertDialog open={showApproveDialog} onOpenChange={setShowApproveDialog}>
+      <AlertDialog open={showApproveDialog} onOpenChange={handleApproveDialogChange}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Confirmar aprovação</AlertDialogTitle>
@@ -578,10 +588,25 @@ export function DocumentDetailsModalChecagem({
               <strong>{result.patientName}</strong> (CPF: {result.cpf}).
             </AlertDialogDescription>
           </AlertDialogHeader>
+          {requiresApprovalReason && (
+            <div className="space-y-2 py-4">
+              <Label htmlFor="approvalReason" className="text-foreground">
+                Justificativa da aprovação
+              </Label>
+              <Textarea
+                id="approvalReason"
+                placeholder="Ex: Revisão humana confirmou os exames exigidos."
+                value={approvalReason}
+                onChange={(e) => setApprovalReason(e.target.value)}
+                rows={4}
+              />
+            </div>
+          )}
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleAprovar}
+              disabled={requiresApprovalReason && !approvalReason.trim()}
               className="bg-green-600 hover:bg-green-700"
             >
               Aprovar

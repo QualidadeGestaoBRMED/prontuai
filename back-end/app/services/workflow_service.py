@@ -84,6 +84,11 @@ def _normalizar_busca(texto: str) -> str:
     normalizado = ocr_service.normalizar_texto(texto)
     normalizado = re.sub(r"[^A-Z0-9 ]+", " ", normalizado)
     normalizado = re.sub(r"\s+", " ", normalizado).strip()
+    normalizado = re.sub(r"\bGAMA\s*GLUTAMIL\s*TRANSPEPTIDASE\b", "GGT", normalizado)
+    normalizado = re.sub(r"\bGAMA\s*GLUTAMIL\s*TRANSFERASE\b", "GGT", normalizado)
+    normalizado = re.sub(r"\bGAMA\s*GLUTAMILTRANSFERASE\b", "GGT", normalizado)
+    normalizado = re.sub(r"\bGAMA\s*GT\b", "GGT", normalizado)
+    normalizado = re.sub(r"\bGGT\s+GGT\b", "GGT", normalizado)
     return normalizado
 
 def _build_master_exam_terms() -> set[str]:
@@ -251,6 +256,11 @@ def _token_overlap_match(a: str, b: str) -> bool:
     max_len = max(len(t) for t in overlap)
     return overlap_ratio >= 0.75 or (overlap_ratio >= 0.5 and max_len >= 8)
 
+def _is_audiometria_marker(normalizado: str) -> bool:
+    if not normalizado:
+        return False
+    return "ORELHA DIREITA" in normalizado or "ORELHA ESQUERDA" in normalizado
+
 def _match_ocr_exame(
     exame_brnet: str,
     exames_ocr: list[str],
@@ -274,6 +284,15 @@ def _match_ocr_exame(
             if _normalizar_busca(exame) in synonyms:
                 return {
                     "match_type": "similar",
+                    "ocr_match": exame,
+                    "evidence": _buscar_evidencias(exame, linhas)
+                }
+
+    if "AUDIOMETRIA" in norm_brnet:
+        for exame in exames_ocr:
+            if _is_audiometria_marker(_normalizar_busca(exame)):
+                return {
+                    "match_type": "parcial",
                     "ocr_match": exame,
                     "evidence": _buscar_evidencias(exame, linhas)
                 }
@@ -361,6 +380,7 @@ def _filtrar_exames_ocr(
         brnet_norm_set.add(normalizado)
         brnet_norm_list.append((exame, normalizado))
     termos_validos = MASTER_EXAM_TERMS | brnet_norm_set
+    contains_audiometria = any("AUDIOMETRIA" in normalizado for _, normalizado in brnet_norm_list)
 
     filtrados = []
     vistos = set()
@@ -370,12 +390,15 @@ def _filtrar_exames_ocr(
             continue
         chave = normalizado
         if normalizado not in termos_validos:
-            for _, brnet_norm in brnet_norm_list:
-                if _token_subset_match(brnet_norm, normalizado) or _token_overlap_match(brnet_norm, normalizado):
-                    chave = brnet_norm
-                    break
+            if contains_audiometria and _is_audiometria_marker(normalizado):
+                chave = normalizado
             else:
-                continue
+                for _, brnet_norm in brnet_norm_list:
+                    if _token_subset_match(brnet_norm, normalizado) or _token_overlap_match(brnet_norm, normalizado):
+                        chave = brnet_norm
+                        break
+                else:
+                    continue
         if chave in vistos:
             continue
         vistos.add(chave)
@@ -397,6 +420,23 @@ def _filtrar_exames_ocr(
             if encontrou:
                 vistos.add(normalizado)
                 filtrados.append(exame)
+
+        # Fallbacks por marcador no texto: audiometria e GGT
+        has_orelha_marker = " ORELHA DIREITA " in markdown_norm or " ORELHA ESQUERDA " in markdown_norm
+        if contains_audiometria and has_orelha_marker:
+            for exame in exames_brnet:
+                normalizado = _normalizar_busca(exame)
+                if "AUDIOMETRIA" in normalizado and normalizado not in vistos:
+                    vistos.add(normalizado)
+                    filtrados.append(exame)
+
+        has_ggt_marker = " GGT " in markdown_norm or " GAMA GLUTAMIL " in markdown_norm
+        if has_ggt_marker:
+            for exame in exames_brnet:
+                normalizado = _normalizar_busca(exame)
+                if "GGT" in normalizado and normalizado not in vistos:
+                    vistos.add(normalizado)
+                    filtrados.append(exame)
 
     return filtrados
 
