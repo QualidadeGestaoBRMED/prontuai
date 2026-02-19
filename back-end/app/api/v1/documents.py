@@ -18,6 +18,7 @@ import json
 import threading
 import mimetypes
 import os
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -101,7 +102,8 @@ def _load_documents(
             uploader_map = {}
 
     for doc in documents:
-        doc.uploaded_by_user_email = uploader_map.get(doc.uploaded_by_user_id)
+        if not doc.uploaded_by_user_email:
+            doc.uploaded_by_user_email = uploader_map.get(doc.uploaded_by_user_id)
         if compact:
             doc.ocr_markdown = None
             doc.result_payload = _compact_result_payload(doc.result_payload)
@@ -379,11 +381,22 @@ async def update_document(
 
         approval_reason = payload.approval_reason
         rejection_reason = payload.rejection_reason
+        reviewed_by = None
+        reviewed_at = None
         if isinstance(payload.result_payload, dict):
             if approval_reason is None:
                 approval_reason = payload.result_payload.get("approvalReason")
             if rejection_reason is None:
                 rejection_reason = payload.result_payload.get("rejectionReason")
+            reviewed_by = payload.result_payload.get("reviewed_by") or payload.result_payload.get("reviewedBy")
+            reviewed_at = payload.result_payload.get("reviewed_at") or payload.result_payload.get("reviewedAt")
+
+        if payload.validation_status == "validated" and not reviewed_by:
+            reviewed_by = current_user.email
+            reviewed_at = reviewed_at or datetime.utcnow().isoformat()
+            if isinstance(payload.result_payload, dict):
+                payload.result_payload["reviewed_by"] = reviewed_by
+                payload.result_payload["reviewed_at"] = reviewed_at
         updated = user_db.update_document(
             document_id=document_id,
             validation_status=payload.validation_status,
@@ -399,7 +412,7 @@ async def update_document(
         should_upload = (
             payload.validation_status == "validated"
             and isinstance(payload.result_payload, dict)
-            and payload.result_payload.get("reviewed_by")
+            and (payload.result_payload.get("reviewed_by") or reviewed_by)
         )
         if should_upload and background_tasks is not None:
             logger.info(
