@@ -526,7 +526,6 @@ async def processar_documento_async_api(
         # Cleanup em caso de erro
         if temp_file_path:
             try:
-                import os
                 os.unlink(temp_file_path)
             except:
                 pass
@@ -691,7 +690,6 @@ async def process_document_background(
     finally:
         # Cleanup: remover arquivo temporário
         try:
-            import os
             os.unlink(file_path)
             logger.debug(f"[JOB {job_id}] Arquivo temporário removido: {file_path}")
         except Exception as cleanup_error:
