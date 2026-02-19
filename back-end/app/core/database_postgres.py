@@ -4,6 +4,7 @@ Migração futura do JSON file-based database.
 """
 import os
 import time
+import json
 import logging
 from typing import List, Optional
 from datetime import datetime, timezone
@@ -118,6 +119,25 @@ class AuditLogModel(Base):
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
 
 
+class JobModel(Base):
+    """Modelo SQLAlchemy para tabela Job (progresso assíncrono)."""
+    __tablename__ = "jobs"
+
+    id = Column(String, primary_key=True)
+    job_type = Column(String, nullable=False)
+    status = Column(String, nullable=False)
+    progress = Column(Integer, nullable=False, default=0)
+    current_step = Column(String, nullable=True)
+    message = Column(Text, nullable=True)
+    result_json = Column(Text, nullable=True)
+    error = Column(Text, nullable=True)
+    metadata_json = Column(Text, nullable=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    started_at = Column(DateTime, nullable=True)
+    completed_at = Column(DateTime, nullable=True)
+
+
 class PostgresUserDatabase:
     """Implementação do banco de dados de usuários baseado em PostgreSQL."""
 
@@ -161,6 +181,7 @@ class PostgresUserDatabase:
         self._ensure_document_columns()
         self._ensure_notification_columns()
         self._ensure_audit_log_table()
+        self._ensure_job_table()
 
         # Cria admin padrão se banco estiver vazio
         self._ensure_default_admin()
@@ -201,6 +222,12 @@ class PostgresUserDatabase:
             connection.execute(text("CREATE INDEX IF NOT EXISTS idx_audit_logs_user_email ON audit_logs(user_email)"))
             connection.execute(text("CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON audit_logs(created_at)"))
             connection.execute(text("CREATE INDEX IF NOT EXISTS idx_audit_logs_request_id ON audit_logs(request_id)"))
+
+    def _ensure_job_table(self) -> None:
+        """Garante índices úteis para jobs."""
+        with self.engine.begin() as connection:
+            connection.execute(text("CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status)"))
+            connection.execute(text("CREATE INDEX IF NOT EXISTS idx_jobs_created_at ON jobs(created_at)"))
 
     # =============== MÉTODOS DE NOTIFICAÇÃO ===============
 
@@ -344,6 +371,120 @@ class PostgresUserDatabase:
                 query = query.filter(AuditLogModel.created_at >= since)
             models = query.order_by(AuditLogModel.created_at.desc()).limit(limit).all()
             return [self._model_to_audit_log(model) for model in models]
+        finally:
+            session.close()
+
+    # =============== MÉTODOS DE JOBS (PROGRESSO ASSÍNCRONO) ===============
+
+    def _model_to_job_dict(self, model: JobModel) -> dict:
+        metadata = None
+        result = None
+        if model.metadata_json:
+            try:
+                metadata = json.loads(model.metadata_json)
+            except Exception:
+                metadata = None
+        if model.result_json:
+            try:
+                result = json.loads(model.result_json)
+            except Exception:
+                result = None
+        return {
+            "job_id": model.id,
+            "job_type": model.job_type,
+            "status": model.status,
+            "progress": model.progress,
+            "current_step": model.current_step,
+            "message": model.message,
+            "created_at": model.created_at.isoformat() if model.created_at else None,
+            "updated_at": model.updated_at.isoformat() if model.updated_at else None,
+            "started_at": model.started_at.isoformat() if model.started_at else None,
+            "completed_at": model.completed_at.isoformat() if model.completed_at else None,
+            "result": result,
+            "error": model.error,
+            "metadata": metadata,
+        }
+
+    def create_job_record(self, job_id: str, job_type: str, metadata: Optional[dict] = None) -> dict:
+        session = self._get_session()
+        try:
+            job_model = JobModel(
+                id=job_id,
+                job_type=job_type,
+                status="pending",
+                progress=0,
+                current_step="pending",
+                message="Job criado, aguardando processamento",
+                metadata_json=json.dumps(metadata, ensure_ascii=False) if metadata is not None else None,
+                created_at=datetime.utcnow(),
+                updated_at=datetime.utcnow(),
+            )
+            session.add(job_model)
+            session.commit()
+            session.refresh(job_model)
+            return self._model_to_job_dict(job_model)
+        finally:
+            session.close()
+
+    def update_job_record(
+        self,
+        job_id: str,
+        status: Optional[str] = None,
+        progress: Optional[int] = None,
+        current_step: Optional[str] = None,
+        message: Optional[str] = None,
+        result: Optional[dict] = None,
+        error: Optional[str] = None,
+        started_at: Optional[datetime] = None,
+        completed_at: Optional[datetime] = None,
+        metadata: Optional[dict] = None,
+    ) -> Optional[dict]:
+        session = self._get_session()
+        try:
+            model = session.query(JobModel).filter(JobModel.id == job_id).first()
+            if not model:
+                return None
+            if status is not None:
+                model.status = status
+            if progress is not None:
+                model.progress = progress
+            if current_step is not None:
+                model.current_step = current_step
+            if message is not None:
+                model.message = message
+            if result is not None:
+                model.result_json = json.dumps(result, ensure_ascii=False)
+            if error is not None:
+                model.error = error
+            if metadata is not None:
+                model.metadata_json = json.dumps(metadata, ensure_ascii=False)
+            if started_at is not None:
+                model.started_at = started_at
+            if completed_at is not None:
+                model.completed_at = completed_at
+            model.updated_at = datetime.utcnow()
+            session.commit()
+            session.refresh(model)
+            return self._model_to_job_dict(model)
+        finally:
+            session.close()
+
+    def get_job_record(self, job_id: str) -> Optional[dict]:
+        session = self._get_session()
+        try:
+            model = session.query(JobModel).filter(JobModel.id == job_id).first()
+            return self._model_to_job_dict(model) if model else None
+        finally:
+            session.close()
+
+    def list_job_records(self, status: Optional[str] = None, limit: int = 50) -> list[dict]:
+        session = self._get_session()
+        try:
+            query = session.query(JobModel)
+            if status:
+                query = query.filter(JobModel.status == status)
+            models = query.order_by(JobModel.created_at.desc()).limit(limit).all()
+            return [self._model_to_job_dict(model) for model in models]
         finally:
             session.close()
 
