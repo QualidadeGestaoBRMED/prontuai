@@ -3,7 +3,7 @@
  */
 
 import { useState, useCallback, useRef, useEffect } from "react"
-import { useSession } from "next-auth/react"
+import { getSession, useSession } from "next-auth/react"
 import { Job, CreateJobResponse, PollingOptions } from "@/types/job"
 import { API_ENDPOINTS } from "@/lib/config"
 import { DocumentProcessingResult } from "@/types/document-processing"
@@ -54,6 +54,7 @@ export function useAsyncJob(): UseAsyncJobReturn {
 
   const pollingIntervalsRef = useRef<Map<string, NodeJS.Timeout>>(new Map())
   const pollingTimeoutsRef = useRef<Map<string, NodeJS.Timeout>>(new Map())
+  const inFlightJobsRef = useRef<Map<string, Promise<string>>>(new Map())
 
   /**
    * Limpa timers de polling
@@ -92,39 +93,66 @@ export function useAsyncJob(): UseAsyncJobReturn {
    * Inicia o processamento de um documento
    */
   const startJob = useCallback(async (file: File, examesObrigatorios: string[]): Promise<string> => {
-    try {
-      setError(null)
-
-      const formData = new FormData()
-      formData.append("arquivo", file)
-      formData.append("exames_obrigatorios", JSON.stringify(examesObrigatorios))
-
-      const headers: Record<string, string> = {}
-      if (session?.accessToken) {
-        headers.Authorization = `Bearer ${session.accessToken}`
-      }
-
-      const response = await authFetch(API_ENDPOINTS.PROCESS_DOCUMENT_ASYNC, {
-        method: "POST",
-        body: formData,
-        headers,
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ detail: "Erro desconhecido" }))
-        throw new Error(errorData.detail || `HTTP error! status: ${response.status}`)
-      }
-
-      const data: CreateJobResponse = await response.json()
-      console.log(`[useAsyncJob] Job criado: ${data.job_id}`)
-
-      return data.job_id
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : "Erro ao iniciar processamento"
-      setError(errorMessage)
-      throw err
+    const fileKey = `${file.name}:${file.size}:${file.lastModified}`
+    const existingPromise = inFlightJobsRef.current.get(fileKey)
+    if (existingPromise) {
+      console.warn(`[useAsyncJob] Upload duplicado ignorado (fileKey=${fileKey})`)
+      return existingPromise
     }
-  }, [])
+
+    const jobPromise = (async () => {
+      try {
+        setError(null)
+
+        const formData = new FormData()
+        formData.append("arquivo", file)
+        formData.append("exames_obrigatorios", JSON.stringify(examesObrigatorios))
+
+        let token = session?.accessToken as string | undefined
+        if (!token) {
+          const freshSession = await getSession()
+          token = (freshSession?.accessToken as string | undefined) ?? undefined
+        }
+        if (!token) {
+          throw new Error("Sessão inválida. Faça login novamente.")
+        }
+
+        const headers: Record<string, string> = {
+          Authorization: `Bearer ${token}`,
+        }
+
+        const response = await authFetch(API_ENDPOINTS.PROCESS_DOCUMENT_ASYNC, {
+          method: "POST",
+          body: formData,
+          headers,
+        })
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({ detail: "Erro desconhecido" }))
+          throw new Error(errorData.detail || `HTTP error! status: ${response.status}`)
+        }
+
+        const data: CreateJobResponse = await response.json()
+        console.log(`[useAsyncJob] Job criado: ${data.job_id}`)
+
+        return data.job_id
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : "Erro ao iniciar processamento"
+        setError(errorMessage)
+        throw err
+      }
+    })()
+
+    inFlightJobsRef.current.set(fileKey, jobPromise)
+    try {
+      const jobId = await jobPromise
+      return jobId
+    } finally {
+      window.setTimeout(() => {
+        inFlightJobsRef.current.delete(fileKey)
+      }, 15000)
+    }
+  }, [session?.accessToken])
 
   /**
    * Consulta o status de um job

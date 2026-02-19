@@ -113,10 +113,28 @@ def _token_overlap_match(a: str, b: str) -> bool:
     max_len = max(len(t) for t in overlap)
     return overlap_ratio >= 0.75 or (overlap_ratio >= 0.5 and max_len >= 8)
 
-def _is_audiometria_marker(norm_ocr: str) -> bool:
-    if not norm_ocr:
+def _has_audiometria_marker_text(normalizado: str) -> bool:
+    if not normalizado:
         return False
-    return "ORELHA DIREITA" in norm_ocr or "ORELHA ESQUERDA" in norm_ocr
+    padded = f" {normalizado} "
+    if "AUDIOMETRIA" in normalizado or "AUDIOMETR" in normalizado:
+        return True
+    if "AUDIOMETRO" in normalizado:
+        return True
+    if "FONOAUDIO" in normalizado or "FONOAUDIOLOG" in normalizado:
+        return True
+    if " ORELHA DIREITA " in padded or " ORELHA ESQUERDA " in padded:
+        return True
+    if " HZ " in padded and " DB " in padded:
+        return True
+    if (" OD " in padded or " OE " in padded) and (" HZ " in padded or " DB " in padded):
+        return True
+    if (" SRT " in padded or " IRF " in padded) and (" OD " in padded or " OE " in padded):
+        return True
+    return False
+
+def _is_audiometria_marker(norm_ocr: str) -> bool:
+    return _has_audiometria_marker_text(norm_ocr)
 
 def _build_synonym_map() -> Dict[str, set[str]]:
     synonym_map: Dict[str, set[str]] = {}
