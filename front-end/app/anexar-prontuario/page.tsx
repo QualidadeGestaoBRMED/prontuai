@@ -136,7 +136,7 @@ function PageContent() {
   // Don't auto-navigate to results - let user control the state
 
   const handleProcessFiles = (files: FileWithPreview[]) => {
-    if (hasProcessing || pageState === "processing") return
+    if (hasInFlight || pageState === "processing") return
     setFilesToProcess(files)
     setPageState("processing")
     // setChatInitialMessage(
@@ -226,7 +226,7 @@ function PageContent() {
                   <DocumentUploadZone
                     onProcessFiles={handleProcessFiles}
                     autoOpen={autoOpenUpload}
-                    disabled={hasProcessing}
+                    disabled={hasInFlight}
                   />
                 </div>
               )}
