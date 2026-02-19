@@ -256,10 +256,28 @@ def _token_overlap_match(a: str, b: str) -> bool:
     max_len = max(len(t) for t in overlap)
     return overlap_ratio >= 0.75 or (overlap_ratio >= 0.5 and max_len >= 8)
 
-def _is_audiometria_marker(normalizado: str) -> bool:
+def _has_audiometria_marker_text(normalizado: str) -> bool:
     if not normalizado:
         return False
-    return "ORELHA DIREITA" in normalizado or "ORELHA ESQUERDA" in normalizado
+    padded = f" {normalizado} "
+    if "AUDIOMETRIA" in normalizado or "AUDIOMETR" in normalizado:
+        return True
+    if "AUDIOMETRO" in normalizado:
+        return True
+    if "FONOAUDIO" in normalizado or "FONOAUDIOLOG" in normalizado:
+        return True
+    if " ORELHA DIREITA " in padded or " ORELHA ESQUERDA " in padded:
+        return True
+    if " HZ " in padded and " DB " in padded:
+        return True
+    if (" OD " in padded or " OE " in padded) and (" HZ " in padded or " DB " in padded):
+        return True
+    if (" SRT " in padded or " IRF " in padded) and (" OD " in padded or " OE " in padded):
+        return True
+    return False
+
+def _is_audiometria_marker(normalizado: str) -> bool:
+    return _has_audiometria_marker_text(normalizado)
 
 def _match_ocr_exame(
     exame_brnet: str,
@@ -422,8 +440,8 @@ def _filtrar_exames_ocr(
                 filtrados.append(exame)
 
         # Fallbacks por marcador no texto: audiometria e GGT
-        has_orelha_marker = " ORELHA DIREITA " in markdown_norm or " ORELHA ESQUERDA " in markdown_norm
-        if contains_audiometria and has_orelha_marker:
+        has_audiometria_marker = _has_audiometria_marker_text(markdown_norm)
+        if contains_audiometria and has_audiometria_marker:
             for exame in exames_brnet:
                 normalizado = _normalizar_busca(exame)
                 if "AUDIOMETRIA" in normalizado and normalizado not in vistos:

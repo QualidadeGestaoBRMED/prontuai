@@ -88,7 +88,15 @@ async def processar_documento_completo_api(
     except:
         pass
 
-    logger.info(f"[REQUEST] Documento recebido: {arquivo.filename} ({file_size})")
+    logger.info(
+        "[REQUEST] Documento recebido uploader_id=%s email=%s role=%s clinic_id=%s file=%s size=%s",
+        current_user.id,
+        current_user.email,
+        current_user.role.value if hasattr(current_user.role, "value") else str(current_user.role),
+        current_user.clinic_id,
+        arquivo.filename,
+        file_size,
+    )
 
     try:
         # Converte a string JSON de exames_obrigatorios para lista
@@ -309,7 +317,15 @@ async def processar_documento_async_api(
     except:
         pass
 
-    logger.info(f"[REQUEST-ASYNC] Documento recebido: {arquivo.filename} ({file_size})")
+    logger.info(
+        "[REQUEST-ASYNC] Documento recebido uploader_id=%s email=%s role=%s clinic_id=%s file=%s size=%s",
+        current_user.id,
+        current_user.email,
+        current_user.role.value if hasattr(current_user.role, "value") else str(current_user.role),
+        current_user.clinic_id,
+        arquivo.filename,
+        file_size,
+    )
 
     # Parse exames obrigatórios
     try:
@@ -329,6 +345,51 @@ async def processar_documento_async_api(
     dedup_key = f"{current_user.id}:{fingerprint}" if fingerprint else ""
     now = time.monotonic()
     job_id = None
+
+    if content_hash:
+        dedup_hard = os.getenv("UPLOAD_DEDUP_HARD", "false").lower() == "true"
+        if dedup_hard:
+            get_any = getattr(user_db, "get_document_by_hash", None)
+            if callable(get_any):
+                try:
+                    existing_doc = get_any(
+                        uploaded_by_user_id=current_user.id,
+                        content_hash=content_hash,
+                        clinic_id=current_user.clinic_id,
+                    )
+                    if existing_doc:
+                        result_payload = existing_doc.result_payload if isinstance(existing_doc.result_payload, dict) else {}
+                        if not isinstance(result_payload, dict):
+                            result_payload = {}
+                        if existing_doc.id and result_payload.get("document_id") is None:
+                            result_payload = dict(result_payload)
+                            result_payload["document_id"] = existing_doc.id
+                        job_id = await job_manager.create_job(
+                            job_type="document_processing",
+                            metadata={
+                                "filename": existing_doc.filename,
+                                "file_size": file_size,
+                                "num_exames_obrigatorios": len(exames_obrigatorios_list),
+                                "uploaded_by_user_id": current_user.id,
+                                "uploaded_by_user_email": current_user.email,
+                                "clinic_id": current_user.clinic_id,
+                                "duplicate_of": existing_doc.id,
+                            },
+                        )
+                        await job_manager.complete_job(job_id, result_payload)
+                        logger.warning(
+                            "[REQUEST-ASYNC] Upload duplicado (hard) detectado (doc=%s). Resultado reutilizado.",
+                            existing_doc.id,
+                        )
+                        return {
+                            "job_id": job_id,
+                            "status": "duplicate",
+                            "message": "Upload duplicado detectado. Resultado reutilizado.",
+                            "poll_url": f"/v1/jobs/{job_id}",
+                            "document_id": existing_doc.id,
+                        }
+                except Exception as dedup_error:
+                    logger.warning("[REQUEST-ASYNC] Falha ao verificar duplicidade hard: %s", dedup_error)
 
     if dedup_window > 0 and content_hash:
         get_recent = getattr(user_db, "get_recent_document_by_hash", None)
@@ -497,7 +558,14 @@ async def process_document_background(
         exames_obrigatorios: Lista de exames obrigatórios
     """
     try:
-        logger.info(f"[JOB {job_id}] Iniciando processamento em background")
+        logger.info(
+            "[JOB %s] Iniciando processamento em background uploader_id=%s email=%s clinic_id=%s file=%s",
+            job_id,
+            uploaded_by_user_id,
+            uploaded_by_user_email,
+            clinic_id,
+            filename,
+        )
         await job_manager.start_job(job_id)
 
         # Criar callback de progresso

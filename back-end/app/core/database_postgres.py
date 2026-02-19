@@ -1009,3 +1009,23 @@ class PostgresUserDatabase:
             return self._model_to_document(model, include_ocr_markdown=False, use_compact_payload=True) if model else None
         finally:
             session.close()
+
+    def get_document_by_hash(
+        self,
+        uploaded_by_user_id: str,
+        content_hash: str,
+        clinic_id: Optional[str] = None,
+    ) -> Optional[Document]:
+        session = self._get_session()
+        try:
+            query = (
+                session.query(DocumentModel)
+                .filter(DocumentModel.uploaded_by_user_id == uploaded_by_user_id)
+                .filter(DocumentModel.content_hash == content_hash)
+            )
+            if clinic_id:
+                query = query.filter(DocumentModel.clinic_id == clinic_id)
+            model = query.order_by(DocumentModel.uploaded_at.desc()).first()
+            return self._model_to_document(model, include_ocr_markdown=False, use_compact_payload=True) if model else None
+        finally:
+            session.close()

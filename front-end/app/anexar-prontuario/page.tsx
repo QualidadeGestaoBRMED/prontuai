@@ -1,6 +1,6 @@
 "use client"
 
-import { Suspense, useEffect, useMemo, useState } from "react"
+import { Suspense, useEffect, useMemo, useRef, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { useSession } from "next-auth/react"
 import { AppSidebar } from "@/components/app-sidebar"
@@ -58,6 +58,7 @@ function PageContent() {
   // const [chatInitialMessage, setChatInitialMessage] = useState<string>()
   const [selectedResult, setSelectedResult] = useState<ProcessResult | null>(null)
   const [detailsModalOpen, setDetailsModalOpen] = useState(false)
+  const processLockRef = useRef(false)
   const {
     unreadCount,
     activeProcess,
@@ -136,7 +137,12 @@ function PageContent() {
   // Don't auto-navigate to results - let user control the state
 
   const handleProcessFiles = (files: FileWithPreview[]) => {
-    if (hasInFlight || pageState === "processing") return
+    if (!session?.accessToken) {
+      toast.error("Sessão inválida. Faça login novamente para enviar documentos.")
+      return
+    }
+    if (processLockRef.current || hasInFlight || pageState === "processing") return
+    processLockRef.current = true
     setFilesToProcess(files)
     setPageState("processing")
     // setChatInitialMessage(
@@ -146,6 +152,7 @@ function PageContent() {
 
   const handleProcessingComplete = () => {
     setPageState("completed")
+    processLockRef.current = false
     // setChatInitialMessage(
     //   `Processamento concluído!`
     // )
@@ -154,6 +161,7 @@ function PageContent() {
   const handleStartOver = () => {
     setPageState("upload")
     setFilesToProcess([])
+    processLockRef.current = false
     // setChatInitialMessage(undefined)
   }
 
@@ -161,6 +169,7 @@ function PageContent() {
     clearProcessingState()
     setFilesToProcess([])
     setPageState("upload")
+    processLockRef.current = false
     router.replace("/anexar-prontuario")
   }
 
