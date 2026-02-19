@@ -2,6 +2,7 @@ import os
 import asyncio
 import time
 import tempfile
+import io
 import re
 import json
 import unicodedata
@@ -494,6 +495,82 @@ def aguardar_job_textract(
     raise TimeoutError(f"Job Textract não completou após {max_attempts} tentativas")
 
 
+def aguardar_job_textract_shadow(
+    job_ids: List[str],
+    max_wait_seconds: int,
+    progress_hook: Optional[Callable[[str], None]] = None,
+    heartbeat_seconds: int = 15,
+) -> str:
+    """
+    Aguarda a conclusão de qualquer job Textract em paralelo (shadow jobs).
+    Retorna o job_id que concluir com sucesso primeiro.
+    """
+    if textract_client is None:
+        raise RuntimeError("Cliente Textract não foi inicializado")
+
+    start_times = {job_id: time.monotonic() for job_id in job_ids}
+    last_heartbeat = time.monotonic()
+    last_errors: dict[str, str] = {}
+    status_map: dict[str, str] = {job_id: "IN_PROGRESS" for job_id in job_ids}
+    attempt = 0
+
+    while True:
+        attempt += 1
+        now = time.monotonic()
+        active_jobs = []
+
+        for job_id in job_ids:
+            status = status_map.get(job_id, "IN_PROGRESS")
+            if status in {"SUCCEEDED", "FAILED", "TIMEOUT"}:
+                continue
+            if now - start_times[job_id] >= max_wait_seconds:
+                status_map[job_id] = "TIMEOUT"
+                continue
+            active_jobs.append(job_id)
+
+        if not active_jobs:
+            if any(status == "FAILED" for status in status_map.values()):
+                error_msg = next(iter(last_errors.values()), "Textract job falhou.")
+                raise RuntimeError(error_msg)
+            raise TimeoutError(
+                f"Job Textract não completou após {max_wait_seconds} segundos"
+            )
+
+        for job_id in active_jobs:
+            try:
+                response = textract_client.get_document_text_detection(JobId=job_id)
+                status = response["JobStatus"]
+                status_map[job_id] = status
+                logger.debug(
+                    f"[OCR] Shadow job {job_id} tentativa {attempt} - Status: {status}"
+                )
+
+                if status == "SUCCEEDED":
+                    logger.info(f"[OCR] Shadow job concluído com sucesso: {job_id}")
+                    return job_id
+                if status == "FAILED":
+                    status_message = response.get("StatusMessage", "Sem detalhes")
+                    last_errors[job_id] = f"Textract job falhou: {status_message}"
+                    logger.error(f"[OCR] Shadow job falhou: {status_message}")
+            except ClientError as e:
+                last_errors[job_id] = str(e)
+                logger.error(f"[OCR] Erro ao verificar status do shadow job: {e}")
+                status_map[job_id] = "FAILED"
+
+        if progress_hook and (time.monotonic() - last_heartbeat) >= heartbeat_seconds:
+            progress_hook("OCR em andamento (shadow jobs)...")
+            last_heartbeat = time.monotonic()
+
+        # Polling adaptativo: 1s nas primeiras 10 tentativas, depois aumenta até 5s
+        if attempt <= 10:
+            sleep_time = 1
+        elif attempt <= 30:
+            sleep_time = 2
+        else:
+            sleep_time = 5
+        time.sleep(sleep_time)
+
+
 def calcular_timeout_textract(tamanho_mb: float) -> int:
     base = settings.TEXTRACT_MIN_WAIT_SECONDS
     per_mb = settings.TEXTRACT_WAIT_SECONDS_PER_MB
@@ -648,6 +725,72 @@ def processar_arquivo_textract_sincrono(file_path: str) -> str:
                     logger.warning(f"[OCR] Nao foi possivel remover arquivo temporario: {e}")
 
 
+def processar_pdf_textract_sincrono_por_pagina(file_path: str) -> str:
+    """
+    Processa PDF página a página usando Textract síncrono.
+    Útil para evitar fila do Textract assíncrono.
+    """
+    logger.info(f"[OCR] Processando PDF por pagina com Textract (Síncrono): {file_path}")
+
+    # Reparar PDF para melhorar compatibilidade com Textract
+    pdf_reparado = reparar_pdf_para_textract(file_path)
+    arquivo_temporario_reparo = pdf_reparado != file_path
+
+    # Otimizar PDF para reduzir tamanho (se necessario)
+    pdf_otimizado = otimizar_pdf_para_textract(pdf_reparado)
+    arquivo_temporario_otimizado = pdf_otimizado != pdf_reparado
+
+    markdown_parts: list[str] = []
+    try:
+        reader = PdfReader(pdf_otimizado)
+        total_pages = len(reader.pages)
+        if total_pages == 0:
+            raise ValueError("PDF sem páginas")
+
+        logger.info(f"[OCR] PDF possui {total_pages} pagina(s)")
+
+        for idx, page in enumerate(reader.pages, start=1):
+            writer = PdfWriter()
+            writer.add_page(page)
+            buffer = io.BytesIO()
+            writer.write(buffer)
+            page_bytes = buffer.getvalue()
+            buffer.close()
+
+            file_size = len(page_bytes)
+            tamanho_mb = file_size / (1024 * 1024)
+            if file_size > 5 * 1024 * 1024:
+                raise ValueError(
+                    f"Pagina {idx} muito grande para Textract síncrono ({tamanho_mb:.2f} MB)."
+                )
+
+            logger.info(f"[OCR] Textract síncrono página {idx}/{total_pages} ({tamanho_mb:.2f} MB)")
+            response = textract_client.detect_document_text(
+                Document={"Bytes": page_bytes}
+            )
+            markdown_parts.append(textract_to_markdown(response))
+
+        markdown = "\n\n".join(markdown_parts)
+        logger.info(f"[OCR] PDF por página concluído. Markdown: {len(markdown)} caracteres")
+        return markdown
+    except Exception:
+        raise
+    finally:
+        if 'arquivo_temporario_otimizado' in locals() and arquivo_temporario_otimizado:
+            if os.path.exists(pdf_otimizado):
+                try:
+                    os.remove(pdf_otimizado)
+                except Exception as e:
+                    logger.warning(f"[OCR] Nao foi possivel remover arquivo temporario: {e}")
+
+        if 'arquivo_temporario_reparo' in locals() and arquivo_temporario_reparo:
+            if os.path.exists(pdf_reparado):
+                try:
+                    os.remove(pdf_reparado)
+                except Exception as e:
+                    logger.warning(f"[OCR] Nao foi possivel remover arquivo temporario: {e}")
+
+
 def processar_arquivo_textract(
     file_path: str,
     progress_hook: Optional[Callable[[str], None]] = None
@@ -698,60 +841,102 @@ def processar_arquivo_textract(
         tamanho_mb = file_size / (1024 * 1024)
         logger.info(f"[OCR] Upload concluído. Tamanho: {tamanho_mb:.2f} MB (em {time.perf_counter() - t_upload:.2f}s)")
 
-        # 2. Iniciar processamento assíncrono com Textract
-        t_start = time.perf_counter()
-        logger.info(f"[OCR] Iniciando job Textract assíncrono (StartDocumentTextDetection)...")
-
-        response = textract_client.start_document_text_detection(
-            DocumentLocation={
-                'S3Object': {
-                    'Bucket': bucket_name,
-                    'Name': s3_key
-                }
-            }
-        )
-
-        job_id = response['JobId']
-        logger.info(f"[OCR] Job iniciado com sucesso. JobId: {job_id} (em {time.perf_counter() - t_start:.2f}s)")
-
-        # 3. Aguardar conclusão do job
-        t_wait = time.perf_counter()
+        # 2. Iniciar processamento assíncrono com Textract (com retry em timeout)
         max_wait_seconds = calcular_timeout_textract(tamanho_mb)
         if settings.TEXTRACT_FALLBACK_TO_LOCAL:
             max_wait_seconds = min(max_wait_seconds, settings.TEXTRACT_FALLBACK_AFTER_SECONDS)
         logger.info(f"[OCR] Timeout maximo do Textract: {max_wait_seconds}s")
+
+        max_retries = settings.TEXTRACT_RETRY_MAX if settings.TEXTRACT_RETRY_ON_TIMEOUT else 0
+        attempt = 0
         last_status = {"value": "IN_PROGRESS"}
-        def status_hook(status: str):
-            last_status["value"] = status
 
-        try:
-            aguardar_job_textract(
-                job_id,
-                max_wait_seconds=max_wait_seconds,
-                progress_hook=progress_hook,
-                status_hook=status_hook
+        while True:
+            attempt += 1
+            t_start = time.perf_counter()
+            logger.info(
+                f"[OCR] Iniciando job Textract assíncrono (StartDocumentTextDetection)... tentativa {attempt}"
             )
-        except TimeoutError:
-            extra_wait = settings.TEXTRACT_EXTRA_WAIT_SECONDS
-            remaining = max(settings.TEXTRACT_MAX_WAIT_SECONDS - max_wait_seconds, 0)
-            extra_wait = min(extra_wait, remaining)
-            if extra_wait > 0:
-                logger.warning(
-                    f"[OCR] Timeout atingido, estendendo espera por mais {extra_wait}s"
-                )
-                aguardar_job_textract(
-                    job_id,
-                    max_wait_seconds=extra_wait,
-                    progress_hook=progress_hook,
-                    status_hook=status_hook
-                )
-            else:
-                raise
 
-        if last_status["value"] in ["IN_PROGRESS", "PENDING"]:
-            logger.info("[OCR] Status ainda pendente, usando waiter do boto3")
-            aguardar_job_textract_com_backoff(job_id, settings.TEXTRACT_MAX_WAIT_SECONDS)
-        logger.info(f"[OCR] Job Textract finalizado em {time.perf_counter() - t_wait:.2f}s (status={last_status['value']})")
+            response = textract_client.start_document_text_detection(
+                DocumentLocation={
+                    "S3Object": {
+                        "Bucket": bucket_name,
+                        "Name": s3_key,
+                    }
+                }
+            )
+
+            job_id = response["JobId"]
+            logger.info(
+                f"[OCR] Job iniciado com sucesso. JobId: {job_id} (em {time.perf_counter() - t_start:.2f}s)"
+            )
+
+            # 3. Aguardar conclusão do job
+            t_wait = time.perf_counter()
+            last_status["value"] = "IN_PROGRESS"
+            job_ids = [job_id]
+
+            if settings.TEXTRACT_SHADOW_JOB_ENABLED:
+                shadow_delay = max(settings.TEXTRACT_SHADOW_JOB_DELAY_SECONDS, 0)
+                if shadow_delay > 0:
+                    logger.info(f"[OCR] Agendando shadow job em {shadow_delay}s")
+                    if progress_hook:
+                        progress_hook("OCR em andamento (shadow job agendado)...")
+                    time.sleep(shadow_delay)
+                logger.info("[OCR] Iniciando shadow job Textract")
+                shadow_response = textract_client.start_document_text_detection(
+                    DocumentLocation={
+                        "S3Object": {
+                            "Bucket": bucket_name,
+                            "Name": s3_key,
+                        }
+                    }
+                )
+                shadow_job_id = shadow_response["JobId"]
+                job_ids.append(shadow_job_id)
+                logger.info(f"[OCR] Shadow job iniciado. JobId: {shadow_job_id}")
+
+            try:
+                winner_job_id = aguardar_job_textract_shadow(
+                    job_ids,
+                    max_wait_seconds=max_wait_seconds,
+                    progress_hook=progress_hook,
+                )
+                job_id = winner_job_id
+                logger.info(f"[OCR] Shadow jobs concluídos. Vencedor: {job_id}")
+                last_status["value"] = "SUCCEEDED"
+            except TimeoutError:
+                if attempt <= max_retries:
+                    logger.warning(
+                        f"[OCR] Timeout Textract na tentativa {attempt}/{max_retries + 1}. Reenviando job."
+                    )
+                    continue
+                extra_wait = settings.TEXTRACT_EXTRA_WAIT_SECONDS
+                remaining = max(settings.TEXTRACT_MAX_WAIT_SECONDS - max_wait_seconds, 0)
+                extra_wait = min(extra_wait, remaining)
+                if extra_wait > 0:
+                    logger.warning(
+                        f"[OCR] Timeout atingido, estendendo espera por mais {extra_wait}s"
+                    )
+                    winner_job_id = aguardar_job_textract_shadow(
+                        job_ids,
+                        max_wait_seconds=extra_wait,
+                        progress_hook=progress_hook,
+                    )
+                    job_id = winner_job_id
+                    logger.info(f"[OCR] Shadow jobs concluídos. Vencedor: {job_id}")
+                    last_status["value"] = "SUCCEEDED"
+                else:
+                    raise
+
+            if last_status["value"] in ["IN_PROGRESS", "PENDING"]:
+                logger.info("[OCR] Status ainda pendente, usando waiter do boto3")
+                aguardar_job_textract_com_backoff(job_id, settings.TEXTRACT_MAX_WAIT_SECONDS)
+            logger.info(
+                f"[OCR] Job Textract finalizado em {time.perf_counter() - t_wait:.2f}s (status={last_status['value']})"
+            )
+            break
 
         # 4. Coletar resultados paginados
         t_collect = time.perf_counter()
@@ -902,7 +1087,12 @@ async def _ocr_pipeline_impl(file, salvar_markdown=True, progress_hook: Optional
         if usar_textract:
             file_size = os.path.getsize(temp_path)
             try:
-                if file_size <= 5 * 1024 * 1024:
+                if file.filename.lower().endswith(".pdf"):
+                    markdown = await asyncio.to_thread(
+                        processar_pdf_textract_sincrono_por_pagina,
+                        temp_path
+                    )
+                elif file_size <= 5 * 1024 * 1024:
                     markdown = await asyncio.to_thread(
                         processar_arquivo_textract_sincrono,
                         temp_path
