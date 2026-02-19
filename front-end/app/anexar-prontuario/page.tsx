@@ -136,6 +136,7 @@ function PageContent() {
   // Don't auto-navigate to results - let user control the state
 
   const handleProcessFiles = (files: FileWithPreview[]) => {
+    if (hasProcessing || pageState === "processing") return
     setFilesToProcess(files)
     setPageState("processing")
     // setChatInitialMessage(
@@ -222,7 +223,11 @@ function PageContent() {
                       Faça upload dos documentos médicos para validação automática
                     </p>
                   </div>
-                  <DocumentUploadZone onProcessFiles={handleProcessFiles} autoOpen={autoOpenUpload} />
+                  <DocumentUploadZone
+                    onProcessFiles={handleProcessFiles}
+                    autoOpen={autoOpenUpload}
+                    disabled={hasProcessing || pageState === "processing"}
+                  />
                 </div>
               )}
 
