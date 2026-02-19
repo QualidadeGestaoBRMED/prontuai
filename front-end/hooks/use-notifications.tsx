@@ -260,6 +260,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   const errorNotifiedRef = useRef(false)
   const submittedByRef = useRef<string | undefined>(undefined)
   const pollingJobsRef = useRef<Set<string>>(new Set())
+  const activeBatchKeyRef = useRef<string | null>(null)
   const { startJob, pollJob } = useAsyncJob()
 
   // Carrega do backend na montagem (fallback localStorage)
@@ -696,6 +697,20 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   const startBackgroundProcessing = useCallback(
     (files: File[], options: StartBackgroundProcessingOptions = {}) => {
       if (!files || files.length === 0) return null
+      const batchKey = files
+        .map((file) => `${file.name}:${file.size}:${file.lastModified}`)
+        .sort()
+        .join("|")
+      const hasInFlight = processingDocuments.some(
+        (doc) => !doc.error && doc.stage !== "completed"
+      )
+      if (hasInFlight && processingProcessId) {
+        return processingProcessId
+      }
+      if (activeBatchKeyRef.current === batchKey && processingProcessId) {
+        return processingProcessId
+      }
+      activeBatchKeyRef.current = batchKey
 
       const initialDocs: ProcessingDocumentState[] = files.map((file, index) => ({
         id: `doc-${Date.now()}-${index}`,
@@ -761,7 +776,15 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
 
       return processId
     },
-    [failProcess, startJob, startProcess, startPollingForDocument, updateProcessingDocument]
+    [
+      failProcess,
+      processingDocuments,
+      processingProcessId,
+      startJob,
+      startProcess,
+      startPollingForDocument,
+      updateProcessingDocument,
+    ]
   )
 
   useEffect(() => {
@@ -920,6 +943,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     if (hasInFlight) return
 
     setNotifications((prev) => prev.filter((n) => n.type !== 'process_started'))
+    activeBatchKeyRef.current = null
   }, [processingDocuments])
 
   const addProcessResult = useCallback((result: ProcessResult) => {
@@ -934,6 +958,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     completionNotifiedRef.current = false
     errorNotifiedRef.current = false
     pollingJobsRef.current.clear()
+    activeBatchKeyRef.current = null
   }, [])
 
   const getResultsByBatchId = useCallback((batchId: string) => {

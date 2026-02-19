@@ -130,9 +130,12 @@ function PageContent() {
     }
 
     if (pageState === "processing" && !hasInFlight) {
+      if (filesToProcess.length > 0) {
+        return
+      }
       setPageState(sortedResults.length > 0 ? "completed" : "upload")
     }
-  }, [hasInFlight, pageState, sortedResults.length])
+  }, [filesToProcess.length, hasInFlight, pageState, sortedResults.length])
 
   // Don't auto-navigate to results - let user control the state
 
