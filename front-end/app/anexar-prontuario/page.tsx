@@ -226,7 +226,7 @@ function PageContent() {
                   <DocumentUploadZone
                     onProcessFiles={handleProcessFiles}
                     autoOpen={autoOpenUpload}
-                    disabled={hasProcessing || pageState === "processing"}
+                    disabled={hasProcessing}
                   />
                 </div>
               )}
