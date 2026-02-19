@@ -56,6 +56,7 @@ class DocumentModel(Base):
     id = Column(String, primary_key=True)
     clinic_id = Column(String, ForeignKey('clinics.id'), nullable=False)
     uploaded_by_user_id = Column(String, ForeignKey('users.id'), nullable=False)
+    uploaded_by_user_email = Column(String, nullable=True, index=True)
     content_hash = Column(String, nullable=True, index=True)
     filename = Column(String, nullable=False)
     file_path = Column(String, nullable=True)
@@ -183,7 +184,9 @@ class PostgresUserDatabase:
             connection.execute(text("ALTER TABLE documents ADD COLUMN IF NOT EXISTS exams_ocr TEXT[]"))
             connection.execute(text("ALTER TABLE documents ADD COLUMN IF NOT EXISTS exams_brnet TEXT[]"))
             connection.execute(text("ALTER TABLE documents ADD COLUMN IF NOT EXISTS content_hash VARCHAR"))
+            connection.execute(text("ALTER TABLE documents ADD COLUMN IF NOT EXISTS uploaded_by_user_email VARCHAR"))
             connection.execute(text("CREATE INDEX IF NOT EXISTS idx_documents_content_hash ON documents(content_hash)"))
+            connection.execute(text("CREATE INDEX IF NOT EXISTS idx_documents_uploader_email ON documents(uploaded_by_user_email)"))
 
     def _ensure_notification_columns(self) -> None:
         """Garante que colunas novas existam para notificações."""
@@ -746,6 +749,7 @@ class PostgresUserDatabase:
             id=model.id,
             clinic_id=model.clinic_id,
             uploaded_by_user_id=model.uploaded_by_user_id,
+            uploaded_by_user_email=getattr(model, "uploaded_by_user_email", None),
             content_hash=getattr(model, "content_hash", None),
             file_path=getattr(model, "file_path", None),
             filename=model.filename,
@@ -856,6 +860,7 @@ class PostgresUserDatabase:
         filename: str,
         file_path: Optional[str] = None,
         content_hash: Optional[str] = None,
+        uploaded_by_user_email: Optional[str] = None,
         cpf: Optional[str] = None,
         exams_found: Optional[List[str]] = None,
         exams_ocr: Optional[List[str]] = None,
@@ -882,6 +887,7 @@ class PostgresUserDatabase:
                 id=str(uuid.uuid4()),
                 clinic_id=clinic_id,
                 uploaded_by_user_id=uploaded_by_user_id,
+                uploaded_by_user_email=uploaded_by_user_email,
                 content_hash=content_hash,
                 filename=filename,
                 file_path=file_path,
@@ -928,7 +934,8 @@ class PostgresUserDatabase:
         quality_score: Optional[float] = None,
         mandatory_coverage: Optional[float] = None,
         file_path: Optional[str] = None,
-        content_hash: Optional[str] = None
+        content_hash: Optional[str] = None,
+        uploaded_by_user_email: Optional[str] = None
     ) -> Document:
         """Atualiza documento."""
         session = self._get_session()
@@ -954,6 +961,8 @@ class PostgresUserDatabase:
                 doc_model.file_path = file_path
             if content_hash is not None:
                 doc_model.content_hash = content_hash
+            if uploaded_by_user_email is not None:
+                doc_model.uploaded_by_user_email = uploaded_by_user_email
             if result_payload is not None:
                 import json
                 doc_model.result_payload = json.dumps(result_payload, ensure_ascii=False)

@@ -138,6 +138,7 @@ async def processar_documento_completo_api(
                     filename=arquivo.filename,
                     file_path=stored_path,
                     content_hash=content_hash,
+                    uploaded_by_user_email=current_user.email,
                     cpf=cpf,
                     exams_found=exams_found,
                     exams_ocr=exams_ocr,
@@ -182,9 +183,9 @@ async def processar_documento_completo_api(
 
 @router.post("/processar-documento-stream", summary="Processar documento com feedback em tempo real (SSE)")
 async def processar_documento_stream_api(
+    request: Request,
     arquivo: UploadFile = File(...),
-    exames_obrigatorios: str = Body(..., embed=True),
-    request: Request | None = None
+    exames_obrigatorios: str = Body(..., embed=True)
 ):
     """Endpoint com Server-Sent Events para feedback de progresso em tempo real."""
 
@@ -557,6 +558,7 @@ async def process_document_background(
                 filename=filename,
                 file_path=stored_path,
                 content_hash=content_hash,
+                uploaded_by_user_email=uploaded_by_user_email,
                 cpf=cpf,
                 exams_found=exams_found,
                 exams_ocr=exams_ocr,
