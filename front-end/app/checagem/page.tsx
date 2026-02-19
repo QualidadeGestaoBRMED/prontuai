@@ -80,34 +80,10 @@ export default function Page() {
   useEffect(() => {
     if (loading && !hasLoaded) return;
     const dbResults = documents.map(documentToProcessResult);
-    const source = hasLoaded ? dbResults : processResults;
-    const toTime = (value: unknown) => {
-      if (!value) return 0
-      if (value instanceof Date) return value.getTime()
-      const parsed = new Date(String(value))
-      return Number.isNaN(parsed.getTime()) ? 0 : parsed.getTime()
-    }
-    const getTimestamp = (result: ProcessResult) => {
-      return Math.max(
-        toTime(result.reviewedAt),
-        toTime(result.processedAt),
-        toTime(result.uploadedAt),
-      )
-    }
-    const latestByKey = new Map<string, ProcessResult>()
-    for (const result of source) {
-      const keySource = result.cpf || result.filename || result.id
-      if (!keySource) continue
-      const key = keySource.toLowerCase().trim()
-      const existing = latestByKey.get(key)
-      if (!existing || getTimestamp(result) > getTimestamp(existing)) {
-        latestByKey.set(key, result)
-      }
-    }
-    const dedupedSource = Array.from(latestByKey.values())
+    const sourceResults = hasLoaded ? dbResults : processResults;
     // Converte ProcessResult para formato DocumentoChecagem
     // Inclui: aprovados pela IA (precisam de validação humana), pending_review (rejeitados pela IA), e rejeitados pela IA mas ainda não revisados por humano
-    const pendingDocs: DocumentoChecagem[] = dedupedSource
+    const pendingDocs: DocumentoChecagem[] = sourceResults
       .filter(result =>
         result.status === 'approved' ||
         result.status === 'pending_review' ||
