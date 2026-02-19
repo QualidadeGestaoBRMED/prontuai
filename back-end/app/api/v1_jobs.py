@@ -83,10 +83,13 @@ async def cancel_job(job_id: str):
     job = await job_manager.get_job(job_id)
 
     if not job:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Job {job_id} não encontrado"
-        )
+        # Tenta cancelar via persistência (DB), se habilitado
+        job = await job_manager.cancel_job(job_id)
+        if not job:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Job {job_id} não encontrado"
+            )
 
     if job.status in [JobStatus.COMPLETED, JobStatus.FAILED]:
         raise HTTPException(
@@ -94,10 +97,8 @@ async def cancel_job(job_id: str):
             detail=f"Não é possível cancelar um job já finalizado (status={job.status})"
         )
 
-    # Marca como cancelado
-    async with job_manager._lock:
-        job.status = JobStatus.CANCELLED
-        job.message = "Job cancelado pelo usuário"
+    # Marca como cancelado (persiste quando configurado)
+    await job_manager.cancel_job(job_id)
 
     logger.info(f"[JOBS] Job cancelado: {job_id}")
 

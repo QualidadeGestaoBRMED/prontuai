@@ -4,10 +4,13 @@ Evita timeouts de workers ao executar tarefas longas em background.
 """
 import asyncio
 import uuid
+import os
 from typing import Dict, Any, Optional, Callable
 from datetime import datetime, timedelta
 from enum import Enum
 import logging
+
+from app.core.database import user_db
 
 logger = logging.getLogger(__name__)
 
@@ -103,7 +106,69 @@ class JobManager:
         self._lock = asyncio.Lock()
         self.max_jobs_history = max_jobs_history
         self.cleanup_after_hours = cleanup_after_hours
+        self._persist_enabled = os.getenv("JOB_PERSISTENCE", "true").lower() == "true"
         logger.info(f"[JobManager] Inicializado (max_jobs={max_jobs_history}, cleanup_after={cleanup_after_hours}h)")
+
+    def _db_enabled(self) -> bool:
+        return self._persist_enabled and hasattr(user_db, "create_job_record")
+
+    def _parse_dt(self, value: Optional[str]) -> Optional[datetime]:
+        if not value:
+            return None
+        try:
+            return datetime.fromisoformat(value)
+        except Exception:
+            return None
+
+    def _hydrate_job_from_record(self, record: dict) -> Job:
+        job = Job(record.get("job_id"), record.get("job_type"), record.get("metadata") or {})
+        status_raw = record.get("status") or JobStatus.PENDING.value
+        try:
+            job.status = JobStatus(status_raw)
+        except Exception:
+            job.status = JobStatus.PENDING
+        job.progress = record.get("progress") or 0
+        job.current_step = record.get("current_step") or "pending"
+        job.message = record.get("message") or "Job carregado"
+        job.created_at = self._parse_dt(record.get("created_at")) or job.created_at
+        job.updated_at = self._parse_dt(record.get("updated_at")) or job.updated_at
+        job.started_at = self._parse_dt(record.get("started_at"))
+        job.completed_at = self._parse_dt(record.get("completed_at"))
+        job.result = record.get("result")
+        job.error = record.get("error")
+        return job
+
+    def _persist_create(self, job: Job) -> None:
+        if not self._db_enabled():
+            return
+        try:
+            user_db.create_job_record(job.job_id, job.job_type, metadata=job.metadata)
+        except Exception as exc:
+            logger.warning("[JobManager] Falha ao persistir job %s: %s", job.job_id, exc)
+
+    def _persist_update(
+        self,
+        job: Job,
+        result: Optional[Dict[str, Any]] = None,
+        error: Optional[str] = None,
+    ) -> None:
+        if not self._db_enabled():
+            return
+        try:
+            user_db.update_job_record(
+                job_id=job.job_id,
+                status=job.status.value if isinstance(job.status, JobStatus) else str(job.status),
+                progress=job.progress,
+                current_step=job.current_step,
+                message=job.message,
+                result=result,
+                error=error,
+                started_at=job.started_at,
+                completed_at=job.completed_at,
+                metadata=job.metadata,
+            )
+        except Exception as exc:
+            logger.warning("[JobManager] Falha ao atualizar job %s: %s", job.job_id, exc)
 
     async def create_job(self, job_type: str, metadata: Dict[str, Any] = None) -> str:
         """
@@ -125,46 +190,102 @@ class JobManager:
             if len(self._jobs) > self.max_jobs_history:
                 await self._cleanup_old_jobs()
 
+        self._persist_create(job)
         logger.info(f"[JobManager] Job criado: {job_id} (tipo={job_type})")
         return job_id
 
     async def get_job(self, job_id: str) -> Optional[Job]:
         """Retorna um job pelo ID."""
         async with self._lock:
-            return self._jobs.get(job_id)
+            job = self._jobs.get(job_id)
+        if job is None and self._db_enabled():
+            try:
+                record = user_db.get_job_record(job_id)
+                if record:
+                    job = self._hydrate_job_from_record(record)
+                    async with self._lock:
+                        self._jobs[job_id] = job
+            except Exception as exc:
+                logger.warning("[JobManager] Falha ao buscar job %s no DB: %s", job_id, exc)
+        return job
 
     async def get_job_status(self, job_id: str) -> Optional[Dict[str, Any]]:
         """Retorna o status de um job em formato dict."""
+        if self._db_enabled():
+            try:
+                record = user_db.get_job_record(job_id)
+                if record:
+                    return record
+            except Exception as exc:
+                logger.warning("[JobManager] Falha ao consultar job %s no DB: %s", job_id, exc)
         job = await self.get_job(job_id)
         return job.to_dict() if job else None
 
     async def update_job_progress(self, job_id: str, progress: int, step: str, message: str):
         """Atualiza o progresso de um job."""
+        job = None
         async with self._lock:
             job = self._jobs.get(job_id)
             if job:
                 job.update_progress(progress, step, message)
+        if job:
+            self._persist_update(job)
 
     async def start_job(self, job_id: str):
         """Marca um job como iniciado."""
+        job = None
         async with self._lock:
             job = self._jobs.get(job_id)
             if job:
                 job.start()
+        if job:
+            self._persist_update(job)
 
     async def complete_job(self, job_id: str, result: Dict[str, Any]):
         """Marca um job como completo."""
+        job = None
         async with self._lock:
             job = self._jobs.get(job_id)
             if job:
                 job.complete(result)
+        if job:
+            self._persist_update(job, result=result)
 
     async def fail_job(self, job_id: str, error: str):
         """Marca um job como falho."""
+        job = None
         async with self._lock:
             job = self._jobs.get(job_id)
             if job:
                 job.fail(error)
+        if job:
+            self._persist_update(job, error=error)
+
+    async def cancel_job(self, job_id: str) -> Optional[Job]:
+        """Cancela um job e persiste no banco, se habilitado."""
+        job = None
+        async with self._lock:
+            job = self._jobs.get(job_id)
+            if job:
+                job.status = JobStatus.CANCELLED
+                job.message = "Job cancelado pelo usuário"
+                job.updated_at = datetime.utcnow()
+        if job:
+            self._persist_update(job)
+            return job
+        if self._db_enabled():
+            try:
+                user_db.update_job_record(
+                    job_id=job_id,
+                    status=JobStatus.CANCELLED.value,
+                    message="Job cancelado pelo usuário",
+                    completed_at=datetime.utcnow(),
+                )
+                record = user_db.get_job_record(job_id)
+                return self._hydrate_job_from_record(record) if record else None
+            except Exception as exc:
+                logger.warning("[JobManager] Falha ao cancelar job %s no DB: %s", job_id, exc)
+        return None
 
     async def list_jobs(self, status: Optional[JobStatus] = None, limit: int = 50) -> list[Dict[str, Any]]:
         """
@@ -177,16 +298,22 @@ class JobManager:
         Returns:
             Lista de jobs em formato dict
         """
+        if self._db_enabled():
+            try:
+                status_value = status.value if isinstance(status, JobStatus) else None
+                return user_db.list_job_records(status=status_value, limit=limit)
+            except Exception as exc:
+                logger.warning("[JobManager] Falha ao listar jobs no DB: %s", exc)
         async with self._lock:
             jobs = list(self._jobs.values())
 
-            if status:
-                jobs = [j for j in jobs if j.status == status]
+        if status:
+            jobs = [j for j in jobs if j.status == status]
 
-            # Ordena por data de criação (mais recentes primeiro)
-            jobs.sort(key=lambda j: j.created_at, reverse=True)
+        # Ordena por data de criação (mais recentes primeiro)
+        jobs.sort(key=lambda j: j.created_at, reverse=True)
 
-            return [job.to_dict() for job in jobs[:limit]]
+        return [job.to_dict() for job in jobs[:limit]]
 
     async def collect_stale_jobs(self, stale_after: timedelta) -> list[Job]:
         """

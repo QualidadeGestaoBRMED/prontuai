@@ -410,23 +410,26 @@ async def update_document(
             rejection_reason=rejection_reason,
         )
         is_human_reviewer = current_user.role in [UserRole.ADMIN, UserRole.CHECKER]
+        payload_result = payload.result_payload if isinstance(payload.result_payload, dict) else {}
+        payload_reviewed_by = None
+        if isinstance(payload_result, dict):
+            payload_reviewed_by = payload_result.get("reviewed_by") or payload_result.get("reviewedBy")
         should_upload = (
             payload.validation_status == "validated"
-            and isinstance(payload.result_payload, dict)
-            and (payload.result_payload.get("reviewed_by") or reviewed_by or is_human_reviewer)
+            and (payload_reviewed_by or reviewed_by or is_human_reviewer)
         )
         if should_upload and background_tasks is not None:
             logger.info(
                 "[DRIVE] Agendando upload doc_id=%s reviewer=%s",
                 document_id,
-                payload.result_payload.get("reviewed_by") if isinstance(payload.result_payload, dict) else None,
+                payload_reviewed_by or reviewed_by,
             )
             background_tasks.add_task(drive_service.upload_document_to_drive, updated)
         elif payload.validation_status == "validated":
             logger.warning(
                 "[DRIVE] Upload não agendado doc_id=%s reviewed_by=%s role=%s",
                 document_id,
-                payload.result_payload.get("reviewed_by") if isinstance(payload.result_payload, dict) else None,
+                payload_reviewed_by or reviewed_by,
                 current_user.role.value if hasattr(current_user.role, "value") else str(current_user.role),
             )
         try:
