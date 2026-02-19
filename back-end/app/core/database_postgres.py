@@ -56,6 +56,7 @@ class DocumentModel(Base):
     id = Column(String, primary_key=True)
     clinic_id = Column(String, ForeignKey('clinics.id'), nullable=False)
     uploaded_by_user_id = Column(String, ForeignKey('users.id'), nullable=False)
+    content_hash = Column(String, nullable=True, index=True)
     filename = Column(String, nullable=False)
     file_path = Column(String, nullable=True)
     cpf = Column(String, nullable=True)
@@ -181,6 +182,8 @@ class PostgresUserDatabase:
             connection.execute(text("ALTER TABLE documents ADD COLUMN IF NOT EXISTS mandatory_coverage DOUBLE PRECISION"))
             connection.execute(text("ALTER TABLE documents ADD COLUMN IF NOT EXISTS exams_ocr TEXT[]"))
             connection.execute(text("ALTER TABLE documents ADD COLUMN IF NOT EXISTS exams_brnet TEXT[]"))
+            connection.execute(text("ALTER TABLE documents ADD COLUMN IF NOT EXISTS content_hash VARCHAR"))
+            connection.execute(text("CREATE INDEX IF NOT EXISTS idx_documents_content_hash ON documents(content_hash)"))
 
     def _ensure_notification_columns(self) -> None:
         """Garante que colunas novas existam para notificações."""
@@ -743,6 +746,7 @@ class PostgresUserDatabase:
             id=model.id,
             clinic_id=model.clinic_id,
             uploaded_by_user_id=model.uploaded_by_user_id,
+            content_hash=getattr(model, "content_hash", None),
             file_path=getattr(model, "file_path", None),
             filename=model.filename,
             cpf=model.cpf,
@@ -851,6 +855,7 @@ class PostgresUserDatabase:
         uploaded_by_user_id: str,
         filename: str,
         file_path: Optional[str] = None,
+        content_hash: Optional[str] = None,
         cpf: Optional[str] = None,
         exams_found: Optional[List[str]] = None,
         exams_ocr: Optional[List[str]] = None,
@@ -877,6 +882,7 @@ class PostgresUserDatabase:
                 id=str(uuid.uuid4()),
                 clinic_id=clinic_id,
                 uploaded_by_user_id=uploaded_by_user_id,
+                content_hash=content_hash,
                 filename=filename,
                 file_path=file_path,
                 cpf=cpf,
@@ -921,7 +927,8 @@ class PostgresUserDatabase:
         confidence_score: Optional[float] = None,
         quality_score: Optional[float] = None,
         mandatory_coverage: Optional[float] = None,
-        file_path: Optional[str] = None
+        file_path: Optional[str] = None,
+        content_hash: Optional[str] = None
     ) -> Document:
         """Atualiza documento."""
         session = self._get_session()
@@ -945,6 +952,8 @@ class PostgresUserDatabase:
                 doc_model.run_id = run_id
             if file_path is not None:
                 doc_model.file_path = file_path
+            if content_hash is not None:
+                doc_model.content_hash = content_hash
             if result_payload is not None:
                 import json
                 doc_model.result_payload = json.dumps(result_payload, ensure_ascii=False)
@@ -967,5 +976,27 @@ class PostgresUserDatabase:
             session.refresh(doc_model)
 
             return self._model_to_document(doc_model)
+        finally:
+            session.close()
+
+    def get_recent_document_by_hash(
+        self,
+        uploaded_by_user_id: str,
+        content_hash: str,
+        since: datetime,
+        clinic_id: Optional[str] = None,
+    ) -> Optional[Document]:
+        session = self._get_session()
+        try:
+            query = (
+                session.query(DocumentModel)
+                .filter(DocumentModel.uploaded_by_user_id == uploaded_by_user_id)
+                .filter(DocumentModel.content_hash == content_hash)
+                .filter(DocumentModel.uploaded_at >= since)
+            )
+            if clinic_id:
+                query = query.filter(DocumentModel.clinic_id == clinic_id)
+            model = query.order_by(DocumentModel.uploaded_at.desc()).first()
+            return self._model_to_document(model, include_ocr_markdown=False, use_compact_payload=True) if model else None
         finally:
             session.close()
