@@ -74,9 +74,6 @@ const integracoes = [
   },
 ]
 
-const envVars = [
-]
-
 const frontendRoutes = [
   {
     path: "/login",

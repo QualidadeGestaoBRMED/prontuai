@@ -180,12 +180,6 @@ const resultadosEsperados = [
   "Padronização de informações recebidas.",
 ]
 
-const areasEnvolvidas = [
-  "Coordenação Médica: responsável pelo processo.",
-  "Administrativo: conferência inicial.",
-  "Médico: validação clínica.",
-  "TI: integração e automação.",
-]
 
 const fluxoCompleto = [
   {
@@ -275,27 +269,6 @@ const comunicacoes = [
       'Revisor: "Novos documentos".',
       "Sistema detecta duplicata e notifica quando aplicável.",
     ],
-  },
-]
-
-const ecossistema = [
-  {
-    title: "/anexar-prontuario",
-    subtitle: "Ponto de entrada de documentos.",
-    receives: "Nenhum (input do usuário da clínica).",
-    feeds: "Checagem, Pendentes (se resultado negativo da IA).",
-  },
-  {
-    title: "/checagem",
-    subtitle: "Centro de decisão.",
-    receives: "Envio de documentos processados.",
-    feeds: "Histórico (aprova) ou Pendentes (rejeita).",
-  },
-  {
-    title: "/pendentes",
-    subtitle: "Fila de correções.",
-    receives: "Envio negativo da IA ou rejeição do revisor.",
-    feeds: "Reenvio para Anexar Prontuário.",
   },
 ]
 
