@@ -10,6 +10,7 @@ class Document(BaseModel):
     uploaded_by_user_id: str  # Chave estrangeira para User
     uploaded_by_user_email: Optional[str] = None
     file_path: Optional[str] = Field(default=None, exclude=True)
+    content_hash: Optional[str] = Field(default=None, exclude=True)
     filename: str
     cpf: Optional[str] = None  # CPF extraído do documento
     uploaded_at: Optional[datetime] = None
@@ -63,6 +64,7 @@ class DocumentCreate(BaseModel):
     confidence_score: Optional[float] = None
     quality_score: Optional[float] = None
     mandatory_coverage: Optional[float] = None
+    content_hash: Optional[str] = None
 
     class Config:
         json_schema_extra = {
@@ -89,6 +91,7 @@ class DocumentUpdate(BaseModel):
     confidence_score: Optional[float] = None
     quality_score: Optional[float] = None
     mandatory_coverage: Optional[float] = None
+    content_hash: Optional[str] = None
 
     class Config:
         json_schema_extra = {

@@ -273,6 +273,15 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     setPreferences(loadedPrefs)
 
     const load = async () => {
+      const isLoginPage = typeof window !== 'undefined' && window.location.pathname === '/login'
+      const shouldSkipRemote = !session?.accessToken || isLoginPage
+
+      if (shouldSkipRemote) {
+        const loadedNotifications = loadFromStorage<Notification[]>(STORAGE_KEYS.NOTIFICATIONS, [])
+        const filtered = applyClearFilter(loadedNotifications, lastClearedAtRef.current)
+        setNotifications(cleanupOldNotifications(filtered))
+        return
+      }
       try {
         const headers: Record<string, string> = {}
         if (session?.accessToken) {
