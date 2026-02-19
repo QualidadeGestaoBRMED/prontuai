@@ -57,17 +57,7 @@ function PendentesContent() {
     const getResultTimestamp = (result: ProcessResult) => {
       return Math.max(toTime(result.processedAt), toTime(result.uploadedAt))
     }
-    const latestByKey = new Map<string, ProcessResult>()
-    for (const result of resultsToShow) {
-      const keySource = result.cpf || result.filename || result.id
-      if (!keySource) continue
-      const key = keySource.toLowerCase().trim()
-      const existing = latestByKey.get(key)
-      if (!existing || getResultTimestamp(result) > getResultTimestamp(existing)) {
-        latestByKey.set(key, result)
-      }
-    }
-    return Array.from(latestByKey.values()).sort(
+    return [...resultsToShow].sort(
       (a, b) => getResultTimestamp(b) - getResultTimestamp(a)
     )
   }, [resultsToShow])
