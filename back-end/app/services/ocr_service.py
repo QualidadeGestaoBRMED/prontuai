@@ -754,7 +754,7 @@ def processar_pdf_textract_sincrono_por_pagina(
 
         for idx, page in enumerate(reader.pages, start=1):
             if progress_hook:
-                progress_hook(f"Lendo página {idx}/{total_pages}...")
+                progress_hook(f"Processando documento com OCR... Página {idx}/{total_pages}")
             writer = PdfWriter()
             writer.add_page(page)
             buffer = io.BytesIO()
