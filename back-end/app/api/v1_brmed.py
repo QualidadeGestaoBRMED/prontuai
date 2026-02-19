@@ -15,11 +15,24 @@ import tempfile
 import shutil
 import os
 import re
+import time
+import hashlib
 from pathlib import Path
 from uuid import uuid4
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+_UPLOAD_DEDUP_LOCK = asyncio.Lock()
+_RECENT_UPLOADS: dict[str, tuple[float, str]] = {}
+
+def _purge_recent_uploads(now: float, window_seconds: int) -> None:
+    if window_seconds <= 0:
+        _RECENT_UPLOADS.clear()
+        return
+    expired = [key for key, (ts, _) in _RECENT_UPLOADS.items() if now - ts > window_seconds]
+    for key in expired:
+        _RECENT_UPLOADS.pop(key, None)
 
 def _safe_filename(filename: str) -> str:
     base = os.path.basename(filename or "documento")
@@ -173,14 +186,14 @@ async def processar_documento_stream_api(
         logger.warning("Arquivo não enviado na requisição de processamento stream.")
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Arquivo não enviado.")
 
-    # Log de entrada
+    # Log de entrada e leitura do arquivo (evita leitura duplicada)
     file_size = "desconhecido"
+    content = b""
     try:
         content = await arquivo.read()
         file_size = f"{len(content) / 1024 / 1024:.2f}MB"
-        await arquivo.seek(0)
-    except:
-        pass
+    except Exception:
+        content = b""
 
     logger.info(f"[REQUEST-STREAM] Documento recebido: {arquivo.filename} ({file_size})")
 
@@ -282,18 +295,54 @@ async def processar_documento_async_api(
             detail="Exames obrigatórios devem ser um array JSON válido."
         )
 
-    # Criar job
-    job_id = await job_manager.create_job(
-        job_type="document_processing",
-        metadata={
-            "filename": arquivo.filename,
-            "file_size": file_size,
-            "num_exames_obrigatorios": len(exames_obrigatorios_list),
-            "uploaded_by_user_id": current_user.id,
-            "uploaded_by_user_email": current_user.email,
-            "clinic_id": current_user.clinic_id,
-        }
-    )
+    # Criar job (com deduplicação por hash)
+    dedup_window = int(os.getenv("UPLOAD_DEDUP_WINDOW_SECONDS", "0"))
+    fingerprint = hashlib.sha256(content or b"").hexdigest() if dedup_window > 0 else ""
+    dedup_key = f"{current_user.id}:{fingerprint}" if fingerprint else ""
+    now = time.monotonic()
+    job_id = None
+
+    if dedup_window > 0 and dedup_key:
+        async with _UPLOAD_DEDUP_LOCK:
+            _purge_recent_uploads(now, dedup_window)
+            existing = _RECENT_UPLOADS.get(dedup_key)
+            if existing and now - existing[0] <= dedup_window:
+                logger.warning(
+                    "[REQUEST-ASYNC] Upload duplicado ignorado (job=%s filename=%s)",
+                    existing[1],
+                    arquivo.filename,
+                )
+                return {
+                    "job_id": existing[1],
+                    "status": "duplicate",
+                    "message": "Upload duplicado detectado. Reutilizando job existente.",
+                    "poll_url": f"/v1/jobs/{existing[1]}",
+                }
+
+            job_id = await job_manager.create_job(
+                job_type="document_processing",
+                metadata={
+                    "filename": arquivo.filename,
+                    "file_size": file_size,
+                    "num_exames_obrigatorios": len(exames_obrigatorios_list),
+                    "uploaded_by_user_id": current_user.id,
+                    "uploaded_by_user_email": current_user.email,
+                    "clinic_id": current_user.clinic_id,
+                }
+            )
+            _RECENT_UPLOADS[dedup_key] = (now, job_id)
+    else:
+        job_id = await job_manager.create_job(
+            job_type="document_processing",
+            metadata={
+                "filename": arquivo.filename,
+                "file_size": file_size,
+                "num_exames_obrigatorios": len(exames_obrigatorios_list),
+                "uploaded_by_user_id": current_user.id,
+                "uploaded_by_user_email": current_user.email,
+                "clinic_id": current_user.clinic_id,
+            }
+        )
 
     # Salvar arquivo temporariamente (UploadFile não pode ser passado para background task)
     temp_file_path = None
@@ -302,7 +351,8 @@ async def processar_documento_async_api(
         # Criar arquivo temporário
         with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as temp_file:
             temp_file_path = temp_file.name
-            content = await arquivo.read()
+            if not content:
+                content = await arquivo.read()
             temp_file.write(content)
 
         logger.info(f"[JOB {job_id}] Arquivo salvo temporariamente: {temp_file_path}")
@@ -335,6 +385,9 @@ async def processar_documento_async_api(
         }
 
     except Exception as e:
+        if dedup_window > 0 and dedup_key and job_id:
+            async with _UPLOAD_DEDUP_LOCK:
+                _RECENT_UPLOADS.pop(dedup_key, None)
         # Cleanup em caso de erro
         if temp_file_path:
             try:

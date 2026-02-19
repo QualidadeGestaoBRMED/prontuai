@@ -61,6 +61,7 @@ interface DocumentUploadZoneProps {
   maxSize?: number
   maxFiles?: number
   autoOpen?: boolean
+  disabled?: boolean
 }
 
 export function DocumentUploadZone({
@@ -68,6 +69,7 @@ export function DocumentUploadZone({
   maxSize = 5 * 1024 * 1024,
   maxFiles = 3,
   autoOpen = false,
+  disabled = false,
 }: DocumentUploadZoneProps) {
   const hasAutoOpened = useRef(false)
   const [
@@ -105,7 +107,7 @@ export function DocumentUploadZone({
     <div className="flex flex-col gap-4 max-w-4xl mx-auto">
       <div
         role="button"
-        onClick={openFileDialog}
+        onClick={disabled ? undefined : openFileDialog}
         onDragEnter={handleDragEnter}
         onDragLeave={handleDragLeave}
         onDragOver={handleDragOver}
@@ -119,6 +121,7 @@ data-[dragging=true]:bg-accent/50 data-[dragging=true]:border-primary cursor-poi
           {...getInputProps()}
           className="sr-only"
           aria-label="Upload files"
+          disabled={disabled}
         />
 
         <div className="flex flex-col items-center justify-center text-center">
@@ -215,7 +218,7 @@ data-[dragging=true]:bg-accent/50 data-[dragging=true]:border-primary cursor-poi
             size="lg"
             onClick={handleProcessFiles}
             className="w-full"
-            disabled={files.length === 0}
+            disabled={disabled || files.length === 0}
           >
             Processar {files.length} {files.length === 1 ? "Documento" : "Documentos"}
           </Button>

@@ -84,6 +84,12 @@ def _normalizar_exame(texto: str) -> str:
         return ""
     texto_normalizado = re.sub(r"\bRAIO\s*X\b", "RADIOGRAFIA", texto_normalizado)
     texto_normalizado = re.sub(r"\bRX\b", "RADIOGRAFIA", texto_normalizado)
+    # Normalizações específicas para evitar falsos negativos
+    texto_normalizado = re.sub(r"\bGAMA\s*GLUTAMIL\s*TRANSPEPTIDASE\b", "GGT", texto_normalizado)
+    texto_normalizado = re.sub(r"\bGAMA\s*GLUTAMIL\s*TRANSFERASE\b", "GGT", texto_normalizado)
+    texto_normalizado = re.sub(r"\bGAMA\s*GLUTAMILTRANSFERASE\b", "GGT", texto_normalizado)
+    texto_normalizado = re.sub(r"\bGAMA\s*GT\b", "GGT", texto_normalizado)
+    texto_normalizado = re.sub(r"\bGGT\s+GGT\b", "GGT", texto_normalizado)
     return texto_normalizado
 
 def _tokens_relevantes(texto: str) -> set[str]:
@@ -106,6 +112,11 @@ def _token_overlap_match(a: str, b: str) -> bool:
     overlap_ratio = len(overlap) / len(a_tokens)
     max_len = max(len(t) for t in overlap)
     return overlap_ratio >= 0.75 or (overlap_ratio >= 0.5 and max_len >= 8)
+
+def _is_audiometria_marker(norm_ocr: str) -> bool:
+    if not norm_ocr:
+        return False
+    return "ORELHA DIREITA" in norm_ocr or "ORELHA ESQUERDA" in norm_ocr
 
 def _build_synonym_map() -> Dict[str, set[str]]:
     synonym_map: Dict[str, set[str]] = {}
@@ -144,6 +155,12 @@ def _match_exame_local(exame_brnet: str, exames_ocr: List[str]) -> Optional[str]
             return exame
         if synonyms and norm_ocr in synonyms:
             return exame
+
+    if "AUDIOMETRIA" in norm_brnet:
+        for exame in exames_ocr:
+            norm_ocr = _normalizar_exame(exame)
+            if _is_audiometria_marker(norm_ocr):
+                return exame
 
     for exame in exames_ocr:
         norm_ocr = _normalizar_exame(exame)

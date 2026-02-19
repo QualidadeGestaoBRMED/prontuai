@@ -20,11 +20,30 @@ import logging
 import os
 import time
 import asyncio
+import threading
 from uuid import uuid4
 
 logger = logging.getLogger(__name__)
 
 setup_logging(settings.LOG_FILE)
+
+_RATE_LIMIT_LOCK = threading.Lock()
+_RATE_LIMIT_STATE: dict[str, tuple[float, int]] = {}
+
+def _rate_limit_allowed(ip: str) -> bool:
+    limit = int(os.getenv("RATE_LIMIT_PER_MINUTE", "0"))
+    if limit <= 0:
+        return True
+    window = float(os.getenv("RATE_LIMIT_WINDOW_SECONDS", "60"))
+    now = time.monotonic()
+    with _RATE_LIMIT_LOCK:
+        start, count = _RATE_LIMIT_STATE.get(ip, (now, 0))
+        if now - start >= window:
+            start, count = now, 0
+        if count >= limit:
+            return False
+        _RATE_LIMIT_STATE[ip] = (start, count + 1)
+    return True
 
 if os.getenv("SENTRY_DSN"):
     try:
@@ -58,6 +77,17 @@ async def cors_preflight_middleware(request: Request, call_next):
                 response.headers["access-control-allow-headers"] = req_headers
             response.headers["vary"] = "Origin"
         return response
+    return await call_next(request)
+
+@app.middleware("http")
+async def rate_limit_middleware(request: Request, call_next):
+    if request.method == "OPTIONS" or request.url.path == "/health":
+        return await call_next(request)
+    raw_ip = request.headers.get("x-forwarded-for") or (request.client.host if request.client else "unknown")
+    client_ip = raw_ip.split(",")[0].strip() if raw_ip else "unknown"
+    if not _rate_limit_allowed(client_ip):
+        logger.warning("rate.limit.exceeded", extra={"ip": client_ip, "path": request.url.path})
+        return Response(status_code=429, content="Rate limit exceeded")
     return await call_next(request)
 
 @app.middleware("http")

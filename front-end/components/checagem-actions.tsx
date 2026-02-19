@@ -30,6 +30,8 @@ export function CheckagemActions({
   onRejeitar,
 }: CheckagemActionsProps) {
   const [motivo, setMotivo] = useState("");
+  const [approvalReason, setApprovalReason] = useState("");
+  const requiresApprovalReason = documento.decisaoIA === "rejected";
 
   return (
     <div className="flex gap-2">
@@ -66,12 +68,30 @@ export function CheckagemActions({
               <strong>{documento.paciente}</strong> (CPF: {documento.cpf}).
             </AlertDialogDescription>
           </AlertDialogHeader>
+          {requiresApprovalReason && (
+            <div className="space-y-2 py-4">
+              <Label htmlFor="approvalReason" className="text-foreground">
+                Justificativa da aprovação
+              </Label>
+              <Textarea
+                id="approvalReason"
+                placeholder="Ex: Revisão humana confirmou os exames exigidos."
+                value={approvalReason}
+                onChange={(e) => setApprovalReason(e.target.value)}
+                rows={4}
+              />
+            </div>
+          )}
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogCancel onClick={() => setApprovalReason("")}>
+              Cancelar
+            </AlertDialogCancel>
             <AlertDialogAction
               onClick={() => {
-                onAprovar(documento.id, "");
+                onAprovar(documento.id, approvalReason.trim());
+                setApprovalReason("");
               }}
+              disabled={requiresApprovalReason && !approvalReason.trim()}
               className="bg-green-600 hover:bg-green-700"
             >
               Aprovar
