@@ -154,6 +154,7 @@ export function ProcessProgressBar({
         <button
           onClick={showProgressBar}
           className="w-full p-3 flex items-center gap-3 hover:bg-muted/50 transition-colors"
+          title={process.stepMessage || "Processamento em andamento"}
         >
           <div
             className={cn(
@@ -168,6 +169,11 @@ export function ProcessProgressBar({
             <p className="text-xs font-medium truncate">
               {hasError ? "Erro" : isCompleted ? "Concluído" : "Processando"}
             </p>
+            {!hasError && !isCompleted && process.stepMessage && (
+              <p className="text-[10px] text-muted-foreground truncate">
+                {process.stepMessage}
+              </p>
+            )}
           </div>
           <span className="text-xs font-bold tabular-nums">{process.progress}%</span>
           <ChevronDown className="size-3 shrink-0 -rotate-90" />

@@ -725,7 +725,10 @@ def processar_arquivo_textract_sincrono(file_path: str) -> str:
                     logger.warning(f"[OCR] Nao foi possivel remover arquivo temporario: {e}")
 
 
-def processar_pdf_textract_sincrono_por_pagina(file_path: str) -> str:
+def processar_pdf_textract_sincrono_por_pagina(
+    file_path: str,
+    progress_hook: Optional[Callable[[str], None]] = None,
+) -> str:
     """
     Processa PDF página a página usando Textract síncrono.
     Útil para evitar fila do Textract assíncrono.
@@ -750,6 +753,8 @@ def processar_pdf_textract_sincrono_por_pagina(file_path: str) -> str:
         logger.info(f"[OCR] PDF possui {total_pages} pagina(s)")
 
         for idx, page in enumerate(reader.pages, start=1):
+            if progress_hook:
+                progress_hook(f"Lendo página {idx}/{total_pages}...")
             writer = PdfWriter()
             writer.add_page(page)
             buffer = io.BytesIO()
@@ -1090,7 +1095,8 @@ async def _ocr_pipeline_impl(file, salvar_markdown=True, progress_hook: Optional
                 if file.filename.lower().endswith(".pdf"):
                     markdown = await asyncio.to_thread(
                         processar_pdf_textract_sincrono_por_pagina,
-                        temp_path
+                        temp_path,
+                        progress_hook
                     )
                 elif file_size <= 5 * 1024 * 1024:
                     markdown = await asyncio.to_thread(
