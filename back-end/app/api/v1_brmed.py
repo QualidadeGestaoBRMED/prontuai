@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, status, UploadFile, File, Body, BackgroundTasks, Depends
+from fastapi import APIRouter, HTTPException, status, UploadFile, File, Body, BackgroundTasks, Depends, Request
 from fastapi.responses import StreamingResponse
 from app.services import workflow_service, brmed_service
 from app.core.job_manager import job_manager
@@ -19,12 +19,13 @@ import time
 import hashlib
 from pathlib import Path
 from uuid import uuid4
+from datetime import datetime, timedelta
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
 _UPLOAD_DEDUP_LOCK = asyncio.Lock()
-_RECENT_UPLOADS: dict[str, tuple[float, str]] = {}
+_RECENT_UPLOADS: dict[str, tuple[float, str | None]] = {}
 
 def _purge_recent_uploads(now: float, window_seconds: int) -> None:
     if window_seconds <= 0:
@@ -73,9 +74,12 @@ async def processar_documento_completo_api(
 # Log de entrada da requisição
     file_size = "desconhecido"
     stored_path = None
+    content_hash = None
     try:
         content = await arquivo.read()
         file_size = f"{len(content) / 1024 / 1024:.2f}MB"
+        if content:
+            content_hash = hashlib.sha256(content).hexdigest()
         try:
             stored_path = _store_upload_bytes(content, arquivo.filename, str(uuid4()))
         except Exception as store_error:
@@ -133,6 +137,7 @@ async def processar_documento_completo_api(
                     uploaded_by_user_id=current_user.id,
                     filename=arquivo.filename,
                     file_path=stored_path,
+                    content_hash=content_hash,
                     cpf=cpf,
                     exams_found=exams_found,
                     exams_ocr=exams_ocr,
@@ -178,7 +183,8 @@ async def processar_documento_completo_api(
 @router.post("/processar-documento-stream", summary="Processar documento com feedback em tempo real (SSE)")
 async def processar_documento_stream_api(
     arquivo: UploadFile = File(...),
-    exames_obrigatorios: str = Body(..., embed=True)
+    exames_obrigatorios: str = Body(..., embed=True),
+    request: Request | None = None
 ):
     """Endpoint com Server-Sent Events para feedback de progresso em tempo real."""
 
@@ -192,10 +198,29 @@ async def processar_documento_stream_api(
     try:
         content = await arquivo.read()
         file_size = f"{len(content) / 1024 / 1024:.2f}MB"
+        await arquivo.seek(0)
     except Exception:
         content = b""
 
     logger.info(f"[REQUEST-STREAM] Documento recebido: {arquivo.filename} ({file_size})")
+
+    dedup_window = int(os.getenv("UPLOAD_DEDUP_WINDOW_SECONDS", "0"))
+    if dedup_window > 0 and content:
+        fingerprint = hashlib.sha256(content).hexdigest()
+        client_ip = "unknown"
+        if request is not None:
+            client_ip = request.headers.get("x-forwarded-for") or (request.client.host if request.client else "unknown")
+        dedup_key = f"stream:{client_ip}:{fingerprint}"
+        now = time.monotonic()
+        async with _UPLOAD_DEDUP_LOCK:
+            _purge_recent_uploads(now, dedup_window)
+            existing = _RECENT_UPLOADS.get(dedup_key)
+            if existing and now - existing[0] <= dedup_window:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Upload duplicado detectado. Aguarde o processamento anterior."
+                )
+            _RECENT_UPLOADS[dedup_key] = (now, None)
 
     try:
         exames_obrigatorios_list = json.loads(exames_obrigatorios)
@@ -275,6 +300,7 @@ async def processar_documento_async_api(
 
     # Log de entrada
     file_size = "desconhecido"
+    content = b""
     try:
         content = await arquivo.read()
         file_size = f"{len(content) / 1024 / 1024:.2f}MB"
@@ -295,18 +321,64 @@ async def processar_documento_async_api(
             detail="Exames obrigatórios devem ser um array JSON válido."
         )
 
-    # Criar job (com deduplicação por hash)
+    # Deduplicação persistente (DB) e in-memory
     dedup_window = int(os.getenv("UPLOAD_DEDUP_WINDOW_SECONDS", "0"))
-    fingerprint = hashlib.sha256(content or b"").hexdigest() if dedup_window > 0 else ""
+    fingerprint = hashlib.sha256(content or b"").hexdigest() if dedup_window > 0 and content else ""
+    content_hash = fingerprint or None
     dedup_key = f"{current_user.id}:{fingerprint}" if fingerprint else ""
     now = time.monotonic()
     job_id = None
+
+    if dedup_window > 0 and content_hash:
+        get_recent = getattr(user_db, "get_recent_document_by_hash", None)
+        if callable(get_recent):
+            try:
+                since = datetime.utcnow() - timedelta(seconds=dedup_window)
+                existing_doc = get_recent(
+                    uploaded_by_user_id=current_user.id,
+                    content_hash=content_hash,
+                    since=since,
+                    clinic_id=current_user.clinic_id,
+                )
+                if existing_doc:
+                    result_payload = existing_doc.result_payload if isinstance(existing_doc.result_payload, dict) else {}
+                    if not isinstance(result_payload, dict):
+                        result_payload = {}
+                    if existing_doc.id and result_payload.get("document_id") is None:
+                        result_payload = dict(result_payload)
+                        result_payload["document_id"] = existing_doc.id
+                    job_id = await job_manager.create_job(
+                        job_type="document_processing",
+                        metadata={
+                            "filename": existing_doc.filename,
+                            "file_size": file_size,
+                            "num_exames_obrigatorios": len(exames_obrigatorios_list),
+                            "uploaded_by_user_id": current_user.id,
+                            "uploaded_by_user_email": current_user.email,
+                            "clinic_id": current_user.clinic_id,
+                            "duplicate_of": existing_doc.id,
+                        },
+                    )
+                    await job_manager.complete_job(job_id, result_payload)
+                    logger.warning(
+                        "[REQUEST-ASYNC] Upload duplicado detectado (doc=%s). Resultado reutilizado.",
+                        existing_doc.id,
+                    )
+                    return {
+                        "job_id": job_id,
+                        "status": "duplicate",
+                        "message": "Upload duplicado detectado. Resultado reutilizado.",
+                        "poll_url": f"/v1/jobs/{job_id}",
+                        "document_id": existing_doc.id,
+                    }
+            except Exception as dedup_error:
+                logger.warning("[REQUEST-ASYNC] Falha ao verificar duplicidade persistente: %s", dedup_error)
 
     if dedup_window > 0 and dedup_key:
         async with _UPLOAD_DEDUP_LOCK:
             _purge_recent_uploads(now, dedup_window)
             existing = _RECENT_UPLOADS.get(dedup_key)
-            if existing and now - existing[0] <= dedup_window:
+            if existing and existing[1] and now - existing[0] <= dedup_window:
                 logger.warning(
                     "[REQUEST-ASYNC] Upload duplicado ignorado (job=%s filename=%s)",
                     existing[1],
@@ -372,7 +444,8 @@ async def processar_documento_async_api(
             exames_obrigatorios=exames_obrigatorios_list,
             uploaded_by_user_id=current_user.id,
             clinic_id=current_user.clinic_id,
-            uploaded_by_user_email=current_user.email
+            uploaded_by_user_email=current_user.email,
+            content_hash=content_hash
         )
 
         logger.info(f"[JOB {job_id}] Task adicionada ao background")
@@ -410,7 +483,8 @@ async def process_document_background(
     exames_obrigatorios: list[str],
     uploaded_by_user_id: str,
     clinic_id: str,
-    uploaded_by_user_email: str
+    uploaded_by_user_email: str,
+    content_hash: str | None
 ):
     """
     Processa documento em background task.
@@ -436,6 +510,8 @@ async def process_document_background(
 
         with open(file_path, "rb") as f:
             file_content = f.read()
+        if not content_hash and file_content:
+            content_hash = hashlib.sha256(file_content).hexdigest()
 
         # Criar UploadFile fake
         upload_file = UploadFile(
@@ -480,6 +556,7 @@ async def process_document_background(
                 uploaded_by_user_id=uploaded_by_user_id,
                 filename=filename,
                 file_path=stored_path,
+                content_hash=content_hash,
                 cpf=cpf,
                 exams_found=exams_found,
                 exams_ocr=exams_ocr,
