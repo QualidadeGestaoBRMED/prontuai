@@ -230,6 +230,16 @@ class JobManager:
                 job.update_progress(progress, step, message)
         if job:
             self._persist_update(job)
+        elif self._db_enabled():
+            try:
+                user_db.update_job_record(
+                    job_id=job_id,
+                    progress=progress,
+                    current_step=step,
+                    message=message,
+                )
+            except Exception as exc:
+                logger.warning("[JobManager] Falha ao atualizar job %s no DB: %s", job_id, exc)
 
     async def start_job(self, job_id: str):
         """Marca um job como iniciado."""
