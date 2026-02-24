@@ -300,7 +300,7 @@ export default function Page() {
         </header>
 
         <div className="flex flex-col h-[calc(100svh-4rem)] bg-[hsl(240_5%_92.16%)] md:rounded-s-3xl md:group-peer-data-[state=collapsed]/sidebar-inset:rounded-s-none transition-all ease-in-out duration-300">
-          <div className="flex-1 flex flex-col p-4 md:p-6 lg:p-8 overflow-hidden">
+          <div className="flex-1 min-h-0 flex flex-col p-4 md:p-6 lg:p-8 overflow-hidden">
             {lastUpdatedAt && (
               <p className="text-xs text-muted-foreground/70 mb-2">
                 Última atualização: {lastUpdatedAt.toLocaleTimeString("pt-BR")}
@@ -370,7 +370,7 @@ export default function Page() {
             )}
 
             {/* Tabela de checagem - ocupando todo espaço disponível */}
-            <div className="flex-1 bg-white rounded-lg p-6 shadow-sm overflow-hidden flex flex-col">
+            <div className="flex-1 min-h-0 bg-white rounded-lg p-6 shadow-sm overflow-hidden flex flex-col">
               {loading && !hasLoaded ? (
                 <div className="flex-1 flex items-center justify-center text-muted-foreground gap-3">
                   <Loader2 className="size-4 animate-spin" />

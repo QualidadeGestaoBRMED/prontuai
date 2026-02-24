@@ -218,7 +218,7 @@ export function CheckagemTable({
   });
 
   return (
-    <div className="space-y-6">
+    <div className="flex h-full min-h-0 flex-col gap-6">
       {/* Filtros */}
       <div className="flex flex-wrap gap-3">
         <div className="w-52">
@@ -233,7 +233,7 @@ export function CheckagemTable({
       </div>
 
       {/* Tabela */}
-      <div className="rounded-lg border">
+      <div className="flex-1 min-h-0 overflow-auto rounded-lg border">
         <Table>
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
