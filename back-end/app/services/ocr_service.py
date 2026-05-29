@@ -1058,6 +1058,43 @@ def extrair_cpf_regex(markdown: str) -> str:
 
     return None
 
+
+def extrair_cnpj_regex(markdown: str) -> str:
+    if not markdown:
+        return None
+
+    def _digits_only(value: str) -> str:
+        return re.sub(r"\D", "", value or "")
+
+    cnpj_label_match = re.search(r"CNPJ[^0-9]{0,10}([0-9.\-/\s]{14,24})", markdown, flags=re.IGNORECASE)
+    if cnpj_label_match:
+        digits = _digits_only(cnpj_label_match.group(1))
+        if len(digits) == 14:
+            return digits
+
+    generic_cnpj_match = re.search(r"\b\d{2}[.\s-]?\d{3}[.\s-]?\d{3}[/\s-]?\d{4}[-\s]?\d{2}\b", markdown)
+    if generic_cnpj_match:
+        digits = _digits_only(generic_cnpj_match.group(0))
+        if len(digits) == 14:
+            return digits
+
+    return None
+
+
+def extrair_passaporte_regex(markdown: str) -> str:
+    if not markdown:
+        return None
+
+    passport_label_match = re.search(
+        r"(?:PASSAPORTE|PASSPORT)[^A-Z0-9]{0,12}([A-Z0-9]{5,20})",
+        markdown,
+        flags=re.IGNORECASE,
+    )
+    if passport_label_match:
+        return passport_label_match.group(1).upper()
+
+    return None
+
 _OCR_SEMAPHORE = None
 if getattr(settings, "OCR_CONCURRENCY", 0) > 0:
     _OCR_SEMAPHORE = asyncio.Semaphore(settings.OCR_CONCURRENCY)
@@ -1176,6 +1213,12 @@ async def _ocr_pipeline_impl(file, salvar_markdown=True, progress_hook: Optional
             logger.warning(f"[OCR] Falha ao extrair CPF via IA: {e}")
     logger.info(f"[OCR] CPF extraído: {cpf_extraido if cpf_extraido else 'Nenhum CPF encontrado'}")
 
+    # Extrair passaporte e CNPJ via regex
+    passaporte_extraido = extrair_passaporte_regex(markdown)
+    cnpj_extraido = extrair_cnpj_regex(markdown)
+    logger.info(f"[OCR] Passaporte extraído: {passaporte_extraido if passaporte_extraido else 'Nenhum passaporte encontrado'}")
+    logger.info(f"[OCR] CNPJ extraído: {cnpj_extraido if cnpj_extraido else 'Nenhum CNPJ encontrado'}")
+
     # Extrair exames via IA
     logger.info("[OCR] Iniciando extração de exames via OpenAI GPT...")
     exames_info = await asyncio.to_thread(extrair_exames_ia, markdown)
@@ -1184,6 +1227,9 @@ async def _ocr_pipeline_impl(file, salvar_markdown=True, progress_hook: Optional
 
     info = {
         "cpf": cpf_extraido,
+        "passaporte": passaporte_extraido,
+        "passport": passaporte_extraido,  # alias para compatibilidade com integração externa
+        "cnpj": cnpj_extraido,
         "exames": exames_extraidos,
         "markdown_content": markdown # Adiciona o markdown para o orquestrador usar
     }

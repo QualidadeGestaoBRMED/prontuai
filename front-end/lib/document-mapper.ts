@@ -16,6 +16,16 @@ const mapStatus = (validationStatus?: string | null): ProcessResult["status"] =>
 export const documentToProcessResult = (doc: DocumentApi): ProcessResult => {
   const payload = doc.result_payload || {}
   const validation = payload.validation_result || {}
+  const cpfPersistido = typeof doc.cpf === "string" && doc.cpf.trim() && doc.cpf !== "Não encontrado" ? doc.cpf : null
+  const cpfProcessado =
+    typeof payload.cpf_processado === "string" && payload.cpf_processado.trim() && payload.cpf_processado !== "Não encontrado"
+      ? payload.cpf_processado
+      : null
+  const identificadorConsulta =
+    typeof payload.identificador_consulta === "string" && payload.identificador_consulta.trim()
+      ? payload.identificador_consulta
+      : null
+  const displayIdentifier = cpfPersistido || cpfProcessado || identificadorConsulta || "N/A"
   const tabelaComparacao = Array.isArray(payload.tabela_comparacao)
     ? (payload.tabela_comparacao as Array<{ status?: string }>)
     : []
@@ -35,7 +45,7 @@ export const documentToProcessResult = (doc: DocumentApi): ProcessResult => {
     id: doc.id,
     batchId: doc.id,
     filename: doc.filename,
-    cpf: doc.cpf || "N/A",
+    cpf: displayIdentifier,
     patientName: payload.patient_name || payload.patientName || "Paciente",
     uploadedAt: toDate(doc.uploaded_at),
     processedAt: toDate(doc.updated_at || doc.uploaded_at),
@@ -46,7 +56,11 @@ export const documentToProcessResult = (doc: DocumentApi): ProcessResult => {
     examesExtras,
     result: payload,
     submittedBy: doc.uploaded_by_user_email || "-",
-    reviewedBy: payload.reviewed_by,
-    reviewedAt: payload.reviewed_at ? toDate(payload.reviewed_at) : undefined,
+    reviewedBy: payload.reviewed_by || doc.reviewed_by || undefined,
+    reviewedAt: payload.reviewed_at
+      ? toDate(payload.reviewed_at)
+      : doc.reviewed_at
+        ? toDate(doc.reviewed_at)
+        : undefined,
   }
 }

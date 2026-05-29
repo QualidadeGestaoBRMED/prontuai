@@ -3,7 +3,13 @@ import type { TabelaComparacaoItem } from "@/types/process"
 export type ProcessingStage = "upload" | "ocr" | "brnet" | "validation" | "completed"
 
 export interface DocumentProcessingResult {
+  status?: "success" | "partial" | "error"
   cpf_processado: string
+  passaporte_processado?: string | null
+  cnpj_processado?: string | null
+  tipo_identificador_consulta?: "cpf" | "passaporte" | string
+  identificador_consulta?: string | null
+  fonte_exames_obrigatorios?: string | null
   patient_name?: string
   document_id?: string
   exames_ocr: string[]
@@ -36,6 +42,20 @@ export interface DocumentProcessingResult {
     }[]
   }
   erro?: string
+  error?: string
+  error_type?: string
+  error_code?: string
+  error_source?: string | null
+  error_http_status?: number | null
+  business_error?: {
+    code?: string
+    type?: string
+    message?: string
+    source?: string | null
+    http_status?: number | null
+    retryable?: boolean
+    trace_id?: string
+  } | null
 }
 
 export interface ProcessingDocumentState {

@@ -5,9 +5,17 @@ load_dotenv()
 
 class Settings:
     BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    APP_ENV = os.getenv("APP_ENV", os.getenv("ENVIRONMENT", "production")).lower()
     OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+    GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
     BRMED_USERNAME = os.getenv("BRMED_USERNAME")
     BRMED_PASSWORD = os.getenv("BRMED_PASSWORD")
+    PRONTUAI_API_BASE_URL = os.getenv("PRONTUAI_API_BASE_URL", "https://api.grupobrmed.com.br")
+    PRONTUAI_SERVICE_TOKEN = os.getenv("PRONTUAI_SERVICE_TOKEN")
+    PRONTUAI_CLIENT_NAME = os.getenv("PRONTUAI_CLIENT_NAME")
+    PRONTUAI_API_TIMEOUT_SECONDS = float(os.getenv("PRONTUAI_API_TIMEOUT_SECONDS", "20"))
+    USE_PRONTUAI_PATIENTS_EXAMS = os.getenv("USE_PRONTUAI_PATIENTS_EXAMS", "false").lower() == "true"
+    USE_PRONTUAI_API_FALLBACK_RPA = os.getenv("USE_PRONTUAI_API_FALLBACK_RPA", "true").lower() == "true"
     MODELO_GPT = os.getenv("MODELO_GPT", "gpt-4o-mini")
     LOG_FILE = os.getenv("LOG_FILE", "logs/app.log")
     LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
@@ -55,6 +63,7 @@ class Settings:
     USE_TEXTRACT = os.getenv("USE_TEXTRACT", "false").lower() == "true"
 
     # BRMED RPA (Playwright) worker pool
+    BRMED_CONSULT_ENABLED = os.getenv("BRMED_CONSULT_ENABLED", "true").lower() == "true"
     BRMED_RPA_WORKERS = int(os.getenv("BRMED_RPA_WORKERS", 1))
     BRMED_RPA_CONCURRENCY = int(os.getenv("BRMED_RPA_CONCURRENCY", 1))
 
@@ -63,9 +72,16 @@ class Settings:
     DOCUMENT_PROCESS_CONCURRENCY = int(os.getenv("DOCUMENT_PROCESS_CONCURRENCY", 2))
 
     # JWT Authentication
-    JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "dev-secret-key-change-in-production-please")
+    JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY")
     JWT_ALGORITHM = "HS256"
-    JWT_EXPIRATION_HOURS = int(os.getenv("JWT_EXPIRATION_HOURS", 24))
+    JWT_EXPIRATION_HOURS = int(os.getenv("JWT_EXPIRATION_HOURS", 2))
+    JWT_ISSUER = os.getenv("JWT_ISSUER", "prontuai-backend")
+    JWT_AUDIENCE = os.getenv("JWT_AUDIENCE", "prontuai-frontend")
+    JWT_MIN_SECRET_LENGTH = int(os.getenv("JWT_MIN_SECRET_LENGTH", 32))
+    DEV_AUTH_BYPASS = os.getenv("DEV_AUTH_BYPASS", "false").lower() == "true"
+
+    # Assinatura de artefatos RAG
+    ARTIFACT_SIGNING_KEY = os.getenv("ARTIFACT_SIGNING_KEY")
 
     # CORS Configuration
     # Aceita múltiplas origens separadas por vírgula na variável de ambiente

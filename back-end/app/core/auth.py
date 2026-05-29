@@ -2,6 +2,7 @@
 Sistema de autenticação e autorização com JWT.
 """
 from datetime import datetime, timedelta
+import uuid
 import os
 from typing import Optional, List
 from jose import JWTError, jwt
@@ -16,22 +17,86 @@ import logging
 logger = logging.getLogger(__name__)
 
 # Configurações JWT
-SECRET_KEY = settings.JWT_SECRET_KEY if hasattr(settings, 'JWT_SECRET_KEY') else "sua-chave-secreta-super-segura-mude-isso-em-producao"
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = settings.JWT_EXPIRATION_HOURS * 60
 
 security = HTTPBearer(auto_error=False)
 
 
+def _is_non_production() -> bool:
+    return settings.APP_ENV in {"local", "dev", "development", "test", "testing"}
+
+
+def _resolve_secret_key() -> str:
+    configured = settings.JWT_SECRET_KEY or ""
+    if configured:
+        return configured
+    if _is_non_production():
+        fallback = os.getenv(
+            "JWT_SECRET_KEY_LOCAL_FALLBACK",
+            "local-dev-secret-not-for-production-use-only",
+        )
+        logger.warning(
+            "JWT_SECRET_KEY ausente. Usando fallback local; configure segredo explícito no ambiente.",
+        )
+        return fallback
+    return ""
+
+
+SECRET_KEY = _resolve_secret_key()
+
+
+def _is_weak_jwt_secret(secret: str) -> bool:
+    if not secret:
+        return True
+    if len(secret) < settings.JWT_MIN_SECRET_LENGTH:
+        return True
+    bad_prefixes = (
+        "dev-secret-key-change-in-production-please",
+        "sua-chave-secreta-super-segura-mude-isso-em-producao",
+        "changeme",
+        "secret",
+    )
+    normalized = secret.strip().lower()
+    return any(normalized.startswith(prefix) for prefix in bad_prefixes)
+
+
+def assert_auth_security_configuration() -> None:
+    """
+    Falha rápido em ambientes não-locais quando configuração de auth está insegura.
+    """
+    if _is_non_production():
+        return
+
+    if _is_weak_jwt_secret(settings.JWT_SECRET_KEY):
+        raise RuntimeError(
+            "JWT_SECRET_KEY insegura para ambiente não-local. "
+            "Configure segredo forte e com comprimento mínimo."
+        )
+
+    if settings.DEV_AUTH_BYPASS:
+        raise RuntimeError("DEV_AUTH_BYPASS não pode estar ativo fora de ambiente local/teste.")
+
+
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     """Cria um token JWT"""
     to_encode = data.copy()
+    now = datetime.utcnow()
     if expires_delta:
-        expire = datetime.utcnow() + expires_delta
+        expire = now + expires_delta
     else:
-        expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+        expire = now + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
 
-    to_encode.update({"exp": expire})
+    to_encode.update(
+        {
+            "exp": expire,
+            "iat": now,
+            "nbf": now,
+            "iss": settings.JWT_ISSUER,
+            "aud": settings.JWT_AUDIENCE,
+            "jti": str(uuid.uuid4()),
+        }
+    )
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
@@ -39,7 +104,13 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
 def decode_token(token: str) -> TokenData:
     """Decodifica e valida um token JWT"""
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        payload = jwt.decode(
+            token,
+            SECRET_KEY,
+            algorithms=[ALGORITHM],
+            issuer=settings.JWT_ISSUER,
+            audience=settings.JWT_AUDIENCE,
+        )
         email: str = payload.get("sub")
         role: str = payload.get("role")
         name: str = payload.get("name")
@@ -52,7 +123,16 @@ def decode_token(token: str) -> TokenData:
                 headers={"WWW-Authenticate": "Bearer"},
             )
 
-        return TokenData(email=email, role=UserRole(role), name=name, clinic_id=clinic_id)
+        try:
+            parsed_role = UserRole(role)
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Token inválido: role inválida",
+                headers={"WWW-Authenticate": "Bearer"},
+            ) from exc
+
+        return TokenData(email=email, role=parsed_role, name=name, clinic_id=clinic_id)
 
     except JWTError as e:
         logger.error(f"Erro ao decodificar token: {e}")
@@ -71,7 +151,13 @@ async def get_current_user(
     Valida o token JWT e retorna o usuário.
     """
     if credentials is None:
-        if os.getenv("DEV_AUTH_BYPASS", "false").lower() == "true":
+        if settings.DEV_AUTH_BYPASS:
+            if not _is_non_production():
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Token ausente",
+                    headers={"WWW-Authenticate": "Bearer"},
+                )
             dev_email = os.getenv("DEV_AUTH_EMAIL", "dev@grupobrmed.com.br")
             dev_name = os.getenv("DEV_AUTH_NAME", "Dev Bypass")
             dev_role_raw = os.getenv("DEV_AUTH_ROLE", "ADMIN")

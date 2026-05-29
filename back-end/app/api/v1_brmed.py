@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, status, UploadFile, File, Body, BackgroundTasks, Depends, Request
+from fastapi import APIRouter, HTTPException, status, UploadFile, File, Body, Depends, Request
 from fastapi.responses import StreamingResponse
 from app.services import workflow_service, brmed_service
 from app.core.job_manager import job_manager
@@ -8,6 +8,7 @@ from app.core.database import user_db
 from app.core.logging import set_audit_context
 from app.models.audit_log import AuditLogCreate
 from app.core.config import settings
+from pydantic import BaseModel
 import logging
 import json
 import asyncio
@@ -17,6 +18,7 @@ import os
 import re
 import time
 import hashlib
+import threading
 from pathlib import Path
 from uuid import uuid4
 from datetime import datetime, timedelta
@@ -26,6 +28,12 @@ logger = logging.getLogger(__name__)
 
 _UPLOAD_DEDUP_LOCK = asyncio.Lock()
 _RECENT_UPLOADS: dict[str, tuple[float, str | None]] = {}
+
+
+class ConsultarBrmedRequest(BaseModel):
+    cpf: str | None = None
+    passaporte: str | None = None
+    cnpj: str | None = None
 
 def _purge_recent_uploads(now: float, window_seconds: int) -> None:
     if window_seconds <= 0:
@@ -60,6 +68,40 @@ def _store_upload_file(file_path: str, original_name: str, prefix: str | None) -
     dest_path = storage_dir / safe_name
     shutil.copyfile(file_path, dest_path)
     return str(dest_path)
+
+
+def _get_clinic_cnpj(clinic_id: str | None) -> str | None:
+    if not clinic_id:
+        return None
+    try:
+        clinic = user_db.get_clinic_by_id(clinic_id)
+        cnpj = getattr(clinic, "cnpj", None) if clinic else None
+        if not cnpj:
+            return None
+        digits = re.sub(r"\D", "", cnpj)
+        return digits if len(digits) == 14 else None
+    except Exception as exc:
+        logger.warning(f"[CLINIC] Falha ao obter CNPJ da clínica {clinic_id}: {exc}")
+        return None
+
+
+def _run_background_job_in_thread(**kwargs) -> None:
+    """
+    Executa o processamento assíncrono em thread dedicada.
+
+    Isso evita bloquear o worker HTTP (e o polling de /v1/jobs) quando o
+    processamento do documento leva vários minutos.
+    """
+    job_id = kwargs.get("job_id", "unknown")
+    try:
+        asyncio.run(process_document_background(**kwargs))
+    except Exception as exc:
+        logger.exception("[JOB %s] Falha inesperada no worker thread: %s", job_id, exc)
+        if isinstance(job_id, str) and job_id:
+            try:
+                asyncio.run(job_manager.fail_job(job_id, f"Falha interna no worker thread: {exc}"))
+            except Exception:
+                logger.exception("[JOB %s] Não foi possível marcar job como failed após exceção do thread worker", job_id)
 
 @router.post("/processar-documento", summary="Processar documento completo com OCR, BRMED e Validação")
 async def processar_documento_completo_api(
@@ -107,14 +149,23 @@ async def processar_documento_completo_api(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Exames obrigatórios devem ser um array JSON válido.")
 
     try:
-        resultado = await workflow_service.processar_documento_completo(arquivo, exames_obrigatorios_list)
+        clinic_cnpj = _get_clinic_cnpj(current_user.clinic_id)
+        resultado = await workflow_service.processar_documento_completo(
+            arquivo,
+            exames_obrigatorios_list,
+            clinic_cnpj=clinic_cnpj,
+        )
         logger.info(f"[REQUEST] Processamento concluído com sucesso para: {arquivo.filename}")
 
         # Salvar documento no banco de dados
         if current_user.clinic_id:
             try:
                 # Extrair informações do resultado
-                cpf = resultado.get('cpf_processado') or resultado.get('cpf')
+                cpf = (
+                    resultado.get('cpf_processado')
+                    or resultado.get('cpf')
+                    or resultado.get("identificador_consulta")
+                )
                 exams_ocr = resultado.get('exames_ocr', []) or resultado.get('ocr_result', {}).get('exames_extraidos', [])
                 exams_brnet = resultado.get('exames_brnet', []) or resultado.get('brmed_result', {}).get('exames_obrigatorios', [])
                 exams_found = exams_ocr
@@ -193,7 +244,8 @@ async def processar_documento_completo_api(
 async def processar_documento_stream_api(
     request: Request,
     arquivo: UploadFile = File(...),
-    exames_obrigatorios: str = Body(..., embed=True)
+    exames_obrigatorios: str = Body(..., embed=True),
+    current_user: User = Depends(require_sender),
 ):
     """Endpoint com Server-Sent Events para feedback de progresso em tempo real."""
 
@@ -211,7 +263,14 @@ async def processar_documento_stream_api(
     except Exception:
         content = b""
 
-    logger.info(f"[REQUEST-STREAM] Documento recebido: {arquivo.filename} ({file_size})")
+    logger.info(
+        "[REQUEST-STREAM] Documento recebido uploader_id=%s email=%s clinic_id=%s file=%s size=%s",
+        current_user.id,
+        current_user.email,
+        current_user.clinic_id,
+        arquivo.filename,
+        file_size,
+    )
 
     dedup_window = int(os.getenv("UPLOAD_DEDUP_WINDOW_SECONDS", "0"))
     if dedup_window > 0 and content:
@@ -258,7 +317,8 @@ async def processar_documento_stream_api(
             resultado = await workflow_service.processar_documento_completo(
                 arquivo,
                 exames_obrigatorios_list,
-                progress_callback=progress_callback
+                progress_callback=progress_callback,
+                clinic_cnpj=_get_clinic_cnpj(current_user.clinic_id),
             )
 
             # Yield todos os eventos coletados
@@ -287,7 +347,6 @@ async def processar_documento_stream_api(
 
 @router.post("/processar-documento-async", summary="Processar documento em background (assíncrono)")
 async def processar_documento_async_api(
-    background_tasks: BackgroundTasks,
     arquivo: UploadFile = File(...),
     exames_obrigatorios: str = Body(..., embed=True),
     current_user: User = Depends(require_sender)
@@ -496,21 +555,27 @@ async def processar_documento_async_api(
         except Exception as store_error:
             logger.warning(f"[JOB {job_id}] Falha ao salvar arquivo para visualização: {store_error}")
 
-        # Adicionar task em background
-        background_tasks.add_task(
-            process_document_background,
-            job_id=job_id,
-            file_path=temp_file_path,
-            stored_path=stored_path,
-            filename=arquivo.filename,
-            exames_obrigatorios=exames_obrigatorios_list,
-            uploaded_by_user_id=current_user.id,
-            clinic_id=current_user.clinic_id,
-            uploaded_by_user_email=current_user.email,
-            content_hash=content_hash
+        thread_kwargs = {
+            "job_id": job_id,
+            "file_path": temp_file_path,
+            "stored_path": stored_path,
+            "filename": arquivo.filename,
+            "exames_obrigatorios": exames_obrigatorios_list,
+            "uploaded_by_user_id": current_user.id,
+            "clinic_id": current_user.clinic_id,
+            "clinic_cnpj": _get_clinic_cnpj(current_user.clinic_id),
+            "uploaded_by_user_email": current_user.email,
+            "content_hash": content_hash,
+        }
+        worker = threading.Thread(
+            target=_run_background_job_in_thread,
+            kwargs=thread_kwargs,
+            daemon=True,
+            name=f"job-worker-{job_id[:8]}",
         )
+        worker.start()
 
-        logger.info(f"[JOB {job_id}] Task adicionada ao background")
+        logger.info(f"[JOB {job_id}] Task iniciada em thread dedicada ({worker.name})")
 
         return {
             "job_id": job_id,
@@ -543,7 +608,8 @@ async def process_document_background(
     filename: str,
     exames_obrigatorios: list[str],
     uploaded_by_user_id: str,
-    clinic_id: str,
+    clinic_id: str | None,
+    clinic_cnpj: str | None,
     uploaded_by_user_email: str,
     content_hash: str | None
 ):
@@ -591,16 +657,27 @@ async def process_document_background(
         resultado = await workflow_service.processar_documento_completo(
             upload_file,
             exames_obrigatorios,
-            progress_callback=progress_callback
+            progress_callback=progress_callback,
+            clinic_cnpj=clinic_cnpj,
         )
 
         # Salvar documento no banco
         try:
-            cpf = resultado.get('cpf_processado') or resultado.get('cpf')
+            cpf = (
+                resultado.get('cpf_processado')
+                or resultado.get('cpf')
+                or resultado.get("identificador_consulta")
+            )
             exams_ocr = resultado.get('exames_ocr', []) or resultado.get('ocr_result', {}).get('exames_extraidos', [])
             exams_brnet = resultado.get('exames_brnet', []) or resultado.get('brmed_result', {}).get('exames_obrigatorios', [])
             exams_found = exams_ocr
             ocr_markdown = resultado.get('ocr_result', {}).get('text', '')
+            business_error = resultado.get("business_error") if isinstance(resultado.get("business_error"), dict) else {}
+            rejection_reason = (
+                business_error.get("message")
+                or resultado.get("erro")
+                or resultado.get("error")
+            )
             validation_status = 'validated' if not resultado.get('validation_result', {}).get('exames_faltantes') and resultado.get('status') == 'success' else 'pending'
             if resultado.get('status') == 'error':
                 validation_status = 'rejected'
@@ -637,6 +714,7 @@ async def process_document_background(
                 confidence_score=resultado.get("confidence_score"),
                 quality_score=(resultado.get("confidence_details") or {}).get("quality_score"),
                 mandatory_coverage=(resultado.get("confidence_details") or {}).get("mandatory_coverage"),
+                rejection_reason=rejection_reason if validation_status == "rejected" else None,
             )
             logger.info(f"[DB] Documento salvo via async com ID: {document.id} (job_id={job_id})")
             try:
@@ -669,6 +747,11 @@ async def process_document_background(
                             "filename": filename,
                             "run_id": resultado.get("run_id"),
                             "validation_status": validation_status,
+                            "error_code": resultado.get("error_code"),
+                            "error_type": resultado.get("error_type"),
+                            "error_source": resultado.get("error_source"),
+                            "error_http_status": resultado.get("error_http_status"),
+                            "business_error_trace_id": (business_error or {}).get("trace_id"),
                             "async": True,
                             "job_id": job_id,
                         },
@@ -696,18 +779,60 @@ async def process_document_background(
             logger.warning(f"[JOB {job_id}] Erro ao remover arquivo temporário: {cleanup_error}")
 
 
-@router.post("/consultar-brmed", summary="Consultar exames BRMED por CPF")
-async def consultar_brmed_api(cpf: str = Body(..., embed=True)):
-    if not cpf:
-        logger.warning("CPF não fornecido para consulta BRMED.")
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="CPF é obrigatório.")
+@router.post("/consultar-brmed", summary="Consultar exames BRMED por CPF/Passaporte")
+async def consultar_brmed_api(
+    payload: ConsultarBrmedRequest,
+    current_user: User = Depends(require_sender),
+):
+    cpf = payload.cpf
+    passaporte = payload.passaporte
+    cnpj = payload.cnpj
+
+    if cpf and passaporte:
+        logger.info("[CONSULTAR-BRMED] CPF e passaporte informados; priorizando CPF para consulta.")
+        passaporte = None
+
+    if not cpf and not passaporte:
+        logger.warning("Nenhum identificador fornecido para consulta BRMED/ProntuAI.")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Informe cpf ou passaporte.")
+
     try:
-        resultado = await brmed_service.consultar_exames_brmed(cpf)
+        cnpj_efetivo = cnpj or _get_clinic_cnpj(current_user.clinic_id)
+        if settings.USE_PRONTUAI_PATIENTS_EXAMS and cnpj_efetivo:
+            resultado = await brmed_service.consultar_exames_prontuai(
+                cpf=cpf,
+                passaporte=passaporte,
+                cnpj=cnpj_efetivo,
+                allow_rpa_fallback=settings.USE_PRONTUAI_API_FALLBACK_RPA,
+            )
+        elif cpf:
+            # Compatibilidade legada: mantém consulta por CPF no RPA
+            resultado = await brmed_service.consultar_exames_brmed(cpf)
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Para consulta por passaporte é necessário informar também o cnpj.",
+            )
+
         if "erro" in resultado:
-            logger.error(f"Erro ao consultar BRMED para CPF {cpf}: {resultado['erro']}")
-            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=resultado["erro"])
+            logger.error(
+                "[CONSULTAR-BRMED] erro source=%s type=%s cpf=%s passaporte=%s cnpj=%s erro=%s",
+                resultado.get("source"),
+                resultado.get("error_type"),
+                "***" if cpf else None,
+                "***" if passaporte else None,
+                cnpj,
+                resultado["erro"],
+            )
+            if resultado.get("http_status") in (400, 404):
+                raise HTTPException(status_code=resultado["http_status"], detail=resultado["erro"])
+            if resultado.get("error_type") == "semantic":
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=resultado["erro"])
+            raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=resultado["erro"])
         return resultado
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.exception(f"Erro inesperado ao consultar BRMED para CPF {cpf}: {e}")
+        logger.exception(f"Erro inesperado ao consultar BRMED/ProntuAI para identificadores fornecidos: {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Erro inesperado ao consultar BRMED.")
  

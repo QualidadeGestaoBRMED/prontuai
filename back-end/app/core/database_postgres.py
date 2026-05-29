@@ -1,6 +1,10 @@
 """
-Implementação PostgreSQL do banco de dados de usuários.
-Migração futura do JSON file-based database.
+Implementação PostgreSQL do banco de dados.
+
+Modelos SQLAlchemy ficam em `app.core.db.models`; este módulo contém
+apenas a classe de operações `PostgresUserDatabase`. Próximo passo de
+refactor (documentado em CONTEXTO.md): quebrar a classe em mixins por
+agregado dentro de `app.core.db`.
 """
 import os
 import time
@@ -8,134 +12,24 @@ import json
 import logging
 from typing import List, Optional
 from datetime import datetime, timezone
-from sqlalchemy import create_engine, Column, String, Boolean, DateTime, Enum as SQLEnum, ForeignKey, Text, ARRAY, Float, Integer, text
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker, Session, relationship, defer
+from sqlalchemy import create_engine, text, func, or_, and_, case
+from sqlalchemy.orm import sessionmaker, Session, defer
 from app.models.user import User, UserCreate, UserUpdate, UserRole
 from app.models.clinic import Clinic, ClinicCreate, ClinicUpdate
 from app.models.document import Document, DocumentCreate, DocumentUpdate
 from app.models.notification import Notification, NotificationCreate, NotificationUpdate
 from app.models.audit_log import AuditLog, AuditLogCreate
+from app.core.db.models import (
+    Base,
+    ClinicModel,
+    UserModel,
+    DocumentModel,
+    NotificationModel,
+    AuditLogModel,
+    JobModel,
+)
 
-Base = declarative_base()
 logger = logging.getLogger(__name__)
-
-class ClinicModel(Base):
-    """Modelo SQLAlchemy para tabela Clinic."""
-    __tablename__ = "clinics"
-
-    id = Column(String, primary_key=True)
-    name = Column(String, nullable=False)
-    cnpj = Column(String, nullable=True)
-    phone = Column(String, nullable=True)
-    address = Column(String, nullable=True)
-    city = Column(String, nullable=True)
-    state = Column(String, nullable=True)
-    is_active = Column(Boolean, nullable=False, default=True)
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
-    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
-
-
-class UserModel(Base):
-    """Modelo SQLAlchemy para tabela User."""
-    __tablename__ = "users"
-
-    id = Column(String, primary_key=True)
-    email = Column(String, unique=True, nullable=False, index=True)
-    name = Column(String, nullable=False)
-    role = Column(SQLEnum(UserRole), nullable=False, default=UserRole.CHECKER)
-    is_active = Column(Boolean, nullable=False, default=True)
-    clinic_id = Column(String, ForeignKey('clinics.id'), nullable=True)  # NULL para CHECKER/ADMIN
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
-    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
-
-
-class DocumentModel(Base):
-    """Modelo SQLAlchemy para tabela Document."""
-    __tablename__ = "documents"
-
-    id = Column(String, primary_key=True)
-    clinic_id = Column(String, ForeignKey('clinics.id'), nullable=False)
-    uploaded_by_user_id = Column(String, ForeignKey('users.id'), nullable=False)
-    uploaded_by_user_email = Column(String, nullable=True, index=True)
-    content_hash = Column(String, nullable=True, index=True)
-    filename = Column(String, nullable=False)
-    file_path = Column(String, nullable=True)
-    cpf = Column(String, nullable=True)
-    uploaded_at = Column(DateTime, nullable=False, default=datetime.utcnow)
-    exams_found = Column(ARRAY(String), nullable=True)  # Array de strings
-    exams_ocr = Column(ARRAY(String), nullable=True)
-    exams_brnet = Column(ARRAY(String), nullable=True)
-    validation_status = Column(String, nullable=False, default='pending')
-    ocr_markdown = Column(Text, nullable=True)
-    run_id = Column(String, nullable=True)
-    result_payload = Column(Text, nullable=True)
-    result_payload_compact = Column(Text, nullable=True)
-    approval_reason = Column(Text, nullable=True)
-    rejection_reason = Column(Text, nullable=True)
-    confidence_score = Column(Float, nullable=True)
-    quality_score = Column(Float, nullable=True)
-    mandatory_coverage = Column(Float, nullable=True)
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
-    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
-
-class NotificationModel(Base):
-    """Modelo SQLAlchemy para tabela Notification."""
-    __tablename__ = "notifications"
-
-    id = Column(String, primary_key=True)
-    user_id = Column(String, ForeignKey('users.id'), nullable=True, index=True)
-    user_email = Column(String, nullable=True, index=True)
-    clinic_id = Column(String, ForeignKey('clinics.id'), nullable=True)
-    document_id = Column(String, ForeignKey('documents.id'), nullable=True)
-    type = Column(String, nullable=False)
-    title = Column(String, nullable=False)
-    message = Column(Text, nullable=False)
-    variant = Column(String, nullable=True)
-    action_url = Column(String, nullable=True)
-    action_label = Column(String, nullable=True)
-    metadata_json = Column(Text, nullable=True)
-    read = Column(Boolean, nullable=False, default=False)
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
-
-class AuditLogModel(Base):
-    """Modelo SQLAlchemy para tabela AuditLog."""
-    __tablename__ = "audit_logs"
-
-    id = Column(String, primary_key=True)
-    user_id = Column(String, nullable=True)
-    user_email = Column(String, nullable=True, index=True)
-    user_role = Column(String, nullable=True)
-    action = Column(String, nullable=False)
-    resource = Column(String, nullable=True)
-    resource_id = Column(String, nullable=True)
-    method = Column(String, nullable=True)
-    path = Column(String, nullable=True)
-    status_code = Column(Integer, nullable=True)
-    ip = Column(String, nullable=True)
-    user_agent = Column(Text, nullable=True)
-    request_id = Column(String, nullable=True, index=True)
-    metadata_json = Column(Text, nullable=True)
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
-
-
-class JobModel(Base):
-    """Modelo SQLAlchemy para tabela Job (progresso assíncrono)."""
-    __tablename__ = "jobs"
-
-    id = Column(String, primary_key=True)
-    job_type = Column(String, nullable=False)
-    status = Column(String, nullable=False)
-    progress = Column(Integer, nullable=False, default=0)
-    current_step = Column(String, nullable=True)
-    message = Column(Text, nullable=True)
-    result_json = Column(Text, nullable=True)
-    error = Column(Text, nullable=True)
-    metadata_json = Column(Text, nullable=True)
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
-    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow)
-    started_at = Column(DateTime, nullable=True)
-    completed_at = Column(DateTime, nullable=True)
 
 
 class PostgresUserDatabase:
@@ -197,6 +91,8 @@ class PostgresUserDatabase:
             connection.execute(text("ALTER TABLE documents ADD COLUMN IF NOT EXISTS run_id VARCHAR"))
             connection.execute(text("ALTER TABLE documents ADD COLUMN IF NOT EXISTS result_payload TEXT"))
             connection.execute(text("ALTER TABLE documents ADD COLUMN IF NOT EXISTS result_payload_compact TEXT"))
+            connection.execute(text("ALTER TABLE documents ADD COLUMN IF NOT EXISTS reviewed_by VARCHAR"))
+            connection.execute(text("ALTER TABLE documents ADD COLUMN IF NOT EXISTS reviewed_at TIMESTAMP"))
             connection.execute(text("ALTER TABLE documents ADD COLUMN IF NOT EXISTS approval_reason TEXT"))
             connection.execute(text("ALTER TABLE documents ADD COLUMN IF NOT EXISTS rejection_reason TEXT"))
             connection.execute(text("ALTER TABLE documents ADD COLUMN IF NOT EXISTS confidence_score DOUBLE PRECISION"))
@@ -208,6 +104,7 @@ class PostgresUserDatabase:
             connection.execute(text("ALTER TABLE documents ADD COLUMN IF NOT EXISTS uploaded_by_user_email VARCHAR"))
             connection.execute(text("CREATE INDEX IF NOT EXISTS idx_documents_content_hash ON documents(content_hash)"))
             connection.execute(text("CREATE INDEX IF NOT EXISTS idx_documents_uploader_email ON documents(uploaded_by_user_email)"))
+            connection.execute(text("CREATE INDEX IF NOT EXISTS idx_documents_reviewed_by ON documents(reviewed_by)"))
 
     def _ensure_notification_columns(self) -> None:
         """Garante que colunas novas existam para notificações."""
@@ -477,6 +374,30 @@ class PostgresUserDatabase:
         finally:
             session.close()
 
+    def get_job_record_scoped(
+        self,
+        job_id: str,
+        *,
+        role: UserRole,
+        user_id: Optional[str] = None,
+        clinic_id: Optional[str] = None,
+    ) -> Optional[dict]:
+        job = self.get_job_record(job_id)
+        if not job:
+            return None
+        metadata = job.get("metadata") if isinstance(job.get("metadata"), dict) else {}
+        if role == UserRole.ADMIN:
+            return job
+        if role == UserRole.SENDER:
+            if user_id and metadata.get("uploaded_by_user_id") == user_id:
+                return job
+            return None
+        if role == UserRole.CHECKER:
+            if clinic_id and metadata.get("clinic_id") == clinic_id:
+                return job
+            return None
+        return None
+
     def list_job_records(self, status: Optional[str] = None, limit: int = 50) -> list[dict]:
         session = self._get_session()
         try:
@@ -487,6 +408,46 @@ class PostgresUserDatabase:
             return [self._model_to_job_dict(model) for model in models]
         finally:
             session.close()
+
+    def list_stale_job_records(self, cutoff_time: datetime, limit: int = 100) -> list[dict]:
+        """Lista jobs ativos (pending/in_progress) sem atualização desde `cutoff_time`.
+
+        Usado pelo job_watchdog para detectar jobs órfãos que sobreviveram a
+        restart de worker ou foram criados em outro processo.
+        """
+        session = self._get_session()
+        try:
+            query = (
+                session.query(JobModel)
+                .filter(JobModel.status.in_(["pending", "in_progress"]))
+                .filter(JobModel.updated_at < cutoff_time)
+                .order_by(JobModel.updated_at.asc())
+                .limit(limit)
+            )
+            return [self._model_to_job_dict(model) for model in query.all()]
+        finally:
+            session.close()
+
+    def list_job_records_scoped(
+        self,
+        *,
+        role: UserRole,
+        status: Optional[str] = None,
+        limit: int = 50,
+        user_id: Optional[str] = None,
+        clinic_id: Optional[str] = None,
+    ) -> list[dict]:
+        records = self.list_job_records(status=status, limit=limit)
+        if role == UserRole.ADMIN:
+            return records
+        filtered = []
+        for job in records:
+            metadata = job.get("metadata") if isinstance(job.get("metadata"), dict) else {}
+            if role == UserRole.SENDER and user_id and metadata.get("uploaded_by_user_id") == user_id:
+                filtered.append(job)
+            if role == UserRole.CHECKER and clinic_id and metadata.get("clinic_id") == clinic_id:
+                filtered.append(job)
+        return filtered
 
     def list_notifications(self, clinic_id: Optional[str] = None, user_id: Optional[str] = None, limit: int = 100, include_read: bool = True) -> List[Notification]:
         session = self._get_session()
@@ -903,6 +864,8 @@ class PostgresUserDatabase:
             ocr_markdown=model.ocr_markdown if include_ocr_markdown else None,
             run_id=model.run_id,
             result_payload=result_payload,
+            reviewed_by=getattr(model, "reviewed_by", None),
+            reviewed_at=_as_utc(getattr(model, "reviewed_at", None)),
             approval_reason=getattr(model, "approval_reason", None),
             rejection_reason=getattr(model, "rejection_reason", None),
             confidence_score=model.confidence_score,
@@ -994,6 +957,175 @@ class PostgresUserDatabase:
         finally:
             session.close()
 
+    def list_documents_paged(
+        self,
+        *,
+        role: UserRole,
+        clinic_id: Optional[str],
+        user_id: Optional[str] = None,
+        queue: Optional[str] = None,
+        page: int = 1,
+        page_size: int = 20,
+        use_compact_payload: bool = True,
+        search: Optional[str] = None,
+        status_filter: Optional[str] = None,
+        sort_by: str = "uploaded_at",
+        sort_dir: str = "desc",
+    ) -> dict:
+        """
+        Lista documentos paginados com escopo por role e filtros de fila.
+        """
+        session = self._get_session()
+        try:
+            query_options = [defer(DocumentModel.ocr_markdown)]
+            if use_compact_payload:
+                query_options.append(defer(DocumentModel.result_payload))
+
+            base_query = session.query(DocumentModel).options(*query_options)
+
+            if role in [UserRole.CHECKER, UserRole.ADMIN]:
+                scoped_query = base_query
+            else:
+                if not clinic_id:
+                    raise ValueError("Usuário SENDER deve estar associado a uma clínica")
+                scoped_query = base_query.filter(DocumentModel.clinic_id == clinic_id)
+                if user_id:
+                    scoped_query = scoped_query.filter(DocumentModel.uploaded_by_user_id == user_id)
+
+            normalized_search = (search or "").strip()
+            if normalized_search:
+                like = f"%{normalized_search}%"
+                scoped_query = scoped_query.filter(
+                    or_(
+                        DocumentModel.cpf.ilike(like),
+                        DocumentModel.filename.ilike(like),
+                        DocumentModel.uploaded_by_user_email.ilike(like),
+                    )
+                )
+
+            if queue == "pendentes":
+                scoped_query = scoped_query.filter(
+                    or_(
+                        DocumentModel.validation_status.is_(None),
+                        DocumentModel.validation_status != "validated",
+                    )
+                )
+            elif queue == "checagem":
+                scoped_query = scoped_query.filter(
+                    or_(
+                        DocumentModel.validation_status == "validated",
+                        DocumentModel.validation_status == "pending",
+                        and_(
+                            DocumentModel.validation_status == "rejected",
+                            DocumentModel.reviewed_by.is_(None),
+                        ),
+                    )
+                )
+
+            if status_filter == "approved":
+                scoped_query = scoped_query.filter(DocumentModel.validation_status == "validated")
+            elif status_filter == "rejected":
+                scoped_query = scoped_query.filter(DocumentModel.validation_status == "rejected")
+            elif status_filter == "pending_review":
+                scoped_query = scoped_query.filter(
+                    or_(
+                        DocumentModel.validation_status == "pending",
+                        DocumentModel.validation_status.is_(None),
+                    )
+                )
+
+            # Contagens para dashboard/status cards no frontend
+            summary_query = session.query(
+                func.count().label("total"),
+                func.sum(
+                    case((DocumentModel.validation_status == "validated", 1), else_=0)
+                ).label("approved"),
+                func.sum(
+                    case((DocumentModel.validation_status == "rejected", 1), else_=0)
+                ).label("rejected"),
+                func.sum(
+                    case(
+                        (
+                            or_(
+                                DocumentModel.validation_status == "pending",
+                                DocumentModel.validation_status.is_(None),
+                            ),
+                            1,
+                        ),
+                        else_=0,
+                    )
+                ).label("pending_review"),
+            )
+
+            if role in [UserRole.CHECKER, UserRole.ADMIN]:
+                scoped_summary_query = summary_query
+            else:
+                if not clinic_id:
+                    raise ValueError("Usuário SENDER deve estar associado a uma clínica")
+                scoped_summary_query = summary_query.filter(DocumentModel.clinic_id == clinic_id)
+                if user_id:
+                    scoped_summary_query = scoped_summary_query.filter(DocumentModel.uploaded_by_user_id == user_id)
+
+            if normalized_search:
+                like = f"%{normalized_search}%"
+                scoped_summary_query = scoped_summary_query.filter(
+                    or_(
+                        DocumentModel.cpf.ilike(like),
+                        DocumentModel.filename.ilike(like),
+                        DocumentModel.uploaded_by_user_email.ilike(like),
+                    )
+                )
+
+            summary_row = scoped_summary_query.one()
+            summary_map = summary_row._mapping if hasattr(summary_row, "_mapping") else {}
+
+            total_items = scoped_query.count()
+            total_pages = max(1, (total_items + page_size - 1) // page_size) if page_size > 0 else 1
+            safe_page = max(1, min(page, total_pages))
+
+            sort_columns = {
+                "uploaded_at": DocumentModel.uploaded_at,
+                "updated_at": DocumentModel.updated_at,
+                "filename": DocumentModel.filename,
+                "cpf": DocumentModel.cpf,
+                "status": DocumentModel.validation_status,
+            }
+            sort_column = sort_columns.get(sort_by, DocumentModel.uploaded_at)
+            if sort_dir.lower() == "asc":
+                scoped_query = scoped_query.order_by(sort_column.asc())
+            else:
+                scoped_query = scoped_query.order_by(sort_column.desc())
+
+            if page_size > 0:
+                scoped_query = scoped_query.offset((safe_page - 1) * page_size).limit(page_size)
+
+            models = scoped_query.all()
+            items = [
+                self._model_to_document(
+                    m,
+                    include_ocr_markdown=False,
+                    use_compact_payload=use_compact_payload,
+                )
+                for m in models
+            ]
+
+            return {
+                "items": items,
+                "page": safe_page,
+                "page_size": page_size,
+                "total_items": total_items,
+                "total_pages": total_pages,
+                "has_next": safe_page < total_pages,
+                "summary_counts": {
+                    "approved": int(summary_map.get("approved", 0) or 0),
+                    "rejected": int(summary_map.get("rejected", 0) or 0),
+                    "pending_review": int(summary_map.get("pending_review", 0) or 0),
+                    "total": int(summary_map.get("total", 0) or 0),
+                },
+            }
+        finally:
+            session.close()
+
     def create_document(
         self,
         clinic_id: str,
@@ -1010,6 +1142,8 @@ class PostgresUserDatabase:
         ocr_markdown: Optional[str] = None,
         run_id: Optional[str] = None,
         result_payload: Optional[dict] = None,
+        reviewed_by: Optional[str] = None,
+        reviewed_at: Optional[datetime] = None,
         approval_reason: Optional[str] = None,
         rejection_reason: Optional[str] = None,
         confidence_score: Optional[float] = None,
@@ -1024,6 +1158,18 @@ class PostgresUserDatabase:
             compact_payload = self._compact_payload_for_storage(result_payload)
             payload_json = json.dumps(result_payload, ensure_ascii=False) if result_payload is not None else None
             compact_payload_json = json.dumps(compact_payload, ensure_ascii=False) if compact_payload is not None else None
+            payload_reviewed_by = None
+            payload_reviewed_at = None
+            if isinstance(result_payload, dict):
+                payload_reviewed_by = result_payload.get("reviewed_by") or result_payload.get("reviewedBy")
+                payload_reviewed_at = result_payload.get("reviewed_at") or result_payload.get("reviewedAt")
+            if not reviewed_by and payload_reviewed_by:
+                reviewed_by = str(payload_reviewed_by)
+            if reviewed_at is None and payload_reviewed_at:
+                try:
+                    reviewed_at = datetime.fromisoformat(str(payload_reviewed_at).replace("Z", "+00:00"))
+                except Exception:
+                    reviewed_at = None
             document_model = DocumentModel(
                 id=str(uuid.uuid4()),
                 clinic_id=clinic_id,
@@ -1042,6 +1188,8 @@ class PostgresUserDatabase:
                 run_id=run_id,
                 result_payload=payload_json,
                 result_payload_compact=compact_payload_json,
+                reviewed_by=reviewed_by,
+                reviewed_at=reviewed_at,
                 approval_reason=approval_reason,
                 rejection_reason=rejection_reason,
                 confidence_score=confidence_score,
@@ -1069,6 +1217,8 @@ class PostgresUserDatabase:
         ocr_markdown: Optional[str] = None,
         run_id: Optional[str] = None,
         result_payload: Optional[dict] = None,
+        reviewed_by: Optional[str] = None,
+        reviewed_at: Optional[datetime] = None,
         approval_reason: Optional[str] = None,
         rejection_reason: Optional[str] = None,
         confidence_score: Optional[float] = None,
@@ -1109,6 +1259,21 @@ class PostgresUserDatabase:
                 doc_model.result_payload = json.dumps(result_payload, ensure_ascii=False)
                 compact_payload = self._compact_payload_for_storage(result_payload)
                 doc_model.result_payload_compact = json.dumps(compact_payload, ensure_ascii=False) if compact_payload is not None else None
+                if reviewed_by is None and isinstance(result_payload, dict):
+                    payload_reviewed_by = result_payload.get("reviewed_by") or result_payload.get("reviewedBy")
+                    if payload_reviewed_by:
+                        reviewed_by = str(payload_reviewed_by)
+                if reviewed_at is None and isinstance(result_payload, dict):
+                    payload_reviewed_at = result_payload.get("reviewed_at") or result_payload.get("reviewedAt")
+                    if payload_reviewed_at:
+                        try:
+                            reviewed_at = datetime.fromisoformat(str(payload_reviewed_at).replace("Z", "+00:00"))
+                        except Exception:
+                            reviewed_at = None
+            if reviewed_by is not None:
+                doc_model.reviewed_by = reviewed_by
+            if reviewed_at is not None:
+                doc_model.reviewed_at = reviewed_at
             if approval_reason is not None:
                 doc_model.approval_reason = approval_reason
             if rejection_reason is not None:

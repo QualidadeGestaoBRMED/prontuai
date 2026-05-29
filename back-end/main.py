@@ -11,7 +11,7 @@ from app.core.logging import (
     was_audit_logged,
     mark_audit_logged,
 )
-from app.core.auth import decode_token
+from app.core.auth import decode_token, assert_auth_security_configuration
 from app.core.config import settings
 from app.core.database import user_db
 from app.models.audit_log import AuditLogCreate
@@ -30,19 +30,91 @@ setup_logging(settings.LOG_FILE)
 _RATE_LIMIT_LOCK = threading.Lock()
 _RATE_LIMIT_STATE: dict[str, tuple[float, int]] = {}
 
-def _rate_limit_allowed(ip: str) -> bool:
-    limit = int(os.getenv("RATE_LIMIT_PER_MINUTE", "0"))
+_RECON_PATH_MARKERS = (
+    "/.env",
+    "/.git/",
+    "/phpinfo.php",
+    "/.aws/credentials",
+    "/config.php",
+    ".bak",
+    ".old",
+    ".swp",
+)
+
+
+def _normalize_ip(raw_ip: str | None) -> str:
+    if not raw_ip:
+        return "unknown"
+    candidate = raw_ip.strip()
+    if not candidate:
+        return "unknown"
+    if candidate.startswith("[") and "]" in candidate:
+        candidate = candidate[1:candidate.index("]")]
+    elif candidate.count(":") == 1 and "." in candidate:
+        host, maybe_port = candidate.rsplit(":", 1)
+        if maybe_port.isdigit():
+            candidate = host
+    if candidate.startswith("::ffff:"):
+        candidate = candidate.replace("::ffff:", "", 1)
+    return candidate or "unknown"
+
+
+def _get_client_ip(request: Request) -> str:
+    # Cloudflare preserva o IP original neste header.
+    cf_ip = _normalize_ip(request.headers.get("cf-connecting-ip"))
+    if cf_ip != "unknown":
+        return cf_ip
+
+    x_forwarded_for = request.headers.get("x-forwarded-for")
+    if x_forwarded_for:
+        candidates = [_normalize_ip(item) for item in x_forwarded_for.split(",") if item.strip()]
+        candidates = [candidate for candidate in candidates if candidate != "unknown"]
+        if candidates:
+            trusted_proxies = {
+                _normalize_ip(item)
+                for item in os.getenv("TRUSTED_PROXY_IPS", "127.0.0.1,::1").split(",")
+                if item.strip()
+            }
+            # Seleciona o último IP não confiável para reduzir spoofing via XFF.
+            for candidate in reversed(candidates):
+                if candidate not in trusted_proxies:
+                    return candidate
+            return candidates[0]
+
+    x_real_ip = _normalize_ip(request.headers.get("x-real-ip"))
+    if x_real_ip != "unknown":
+        return x_real_ip
+
+    return _normalize_ip(request.client.host if request.client else None)
+
+
+def _is_recon_path(path: str) -> bool:
+    lowered = (path or "").lower()
+    return any(marker in lowered for marker in _RECON_PATH_MARKERS)
+
+
+def _resolve_rate_limit(path: str) -> tuple[str, int, float]:
+    window = float(os.getenv("RATE_LIMIT_WINDOW_SECONDS", "60"))
+    lowered = (path or "").lower()
+    if lowered.startswith("/v1/auth/"):
+        return "auth", int(os.getenv("RATE_LIMIT_AUTH_PER_MINUTE", "30")), window
+    if _is_recon_path(lowered):
+        return "recon", int(os.getenv("RATE_LIMIT_RECON_PER_MINUTE", "5")), window
+    return "default", int(os.getenv("RATE_LIMIT_PER_MINUTE", "180")), window
+
+
+def _rate_limit_allowed(client_ip: str, scope: str, limit: int, window: float) -> bool:
     if limit <= 0:
         return True
-    window = float(os.getenv("RATE_LIMIT_WINDOW_SECONDS", "60"))
     now = time.monotonic()
+    state_key = f"{scope}:{client_ip}"
     with _RATE_LIMIT_LOCK:
-        start, count = _RATE_LIMIT_STATE.get(ip, (now, 0))
+        start, count = _RATE_LIMIT_STATE.get(state_key, (now, 0))
         if now - start >= window:
             start, count = now, 0
         if count >= limit:
             return False
-        _RATE_LIMIT_STATE[ip] = (start, count + 1)
+        _RATE_LIMIT_STATE[state_key] = (start, count + 1)
     return True
 
 if os.getenv("SENTRY_DSN"):
@@ -83,11 +155,21 @@ async def cors_preflight_middleware(request: Request, call_next):
 async def rate_limit_middleware(request: Request, call_next):
     if request.method == "OPTIONS" or request.url.path == "/health":
         return await call_next(request)
-    raw_ip = request.headers.get("x-forwarded-for") or (request.client.host if request.client else "unknown")
-    client_ip = raw_ip.split(",")[0].strip() if raw_ip else "unknown"
-    if not _rate_limit_allowed(client_ip):
-        logger.warning("rate.limit.exceeded", extra={"ip": client_ip, "path": request.url.path})
-        return Response(status_code=429, content="Rate limit exceeded")
+    client_ip = _get_client_ip(request)
+    path = request.url.path or "/"
+    scope, limit, window = _resolve_rate_limit(path)
+
+    if _is_recon_path(path):
+        logger.warning("recon.path.blocked", extra={"ip": client_ip, "path": path})
+        return Response(status_code=404, content="Not Found")
+
+    if not _rate_limit_allowed(client_ip, scope, limit, window):
+        logger.warning("rate.limit.exceeded", extra={"ip": client_ip, "path": path, "scope": scope})
+        return Response(
+            status_code=429,
+            content="Rate limit exceeded",
+            headers={"Retry-After": str(int(window)), "X-RateLimit-Scope": scope},
+        )
     return await call_next(request)
 
 @app.middleware("http")
@@ -193,6 +275,7 @@ async def request_logging_middleware(request: Request, call_next):
 async def startup_event():
     """Executa tarefas no startup da aplicação"""
     logger.info("🚀 Iniciando aplicação...")
+    assert_auth_security_configuration()
 
     # Auto-migração do banco de dados
     try:
@@ -244,4 +327,7 @@ async def root():
 @app.get("/health")
 async def health_check():
     """Endpoint de verificação de saúde para Render e monitoramento"""
-    return {"status": "healthy", "service": "prontuai-backend"} 
+    return {
+        "status": "healthy",
+        "service": "prontuai-backend",
+    }

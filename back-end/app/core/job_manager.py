@@ -242,7 +242,11 @@ class JobManager:
                 logger.warning("[JobManager] Falha ao atualizar job %s no DB: %s", job_id, exc)
 
     async def start_job(self, job_id: str):
-        """Marca um job como iniciado."""
+        """Marca um job como iniciado.
+
+        Em multi-worker, o job pode não estar na memória deste processo;
+        nesse caso atualizamos direto no DB para manter o estado consistente.
+        """
         job = None
         async with self._lock:
             job = self._jobs.get(job_id)
@@ -250,9 +254,19 @@ class JobManager:
                 job.start()
         if job:
             self._persist_update(job)
+        elif self._db_enabled():
+            now = datetime.utcnow()
+            try:
+                user_db.update_job_record(
+                    job_id=job_id,
+                    status=JobStatus.IN_PROGRESS.value,
+                    started_at=now,
+                )
+            except Exception as exc:
+                logger.warning("[JobManager] Falha ao iniciar job %s no DB: %s", job_id, exc)
 
     async def complete_job(self, job_id: str, result: Dict[str, Any]):
-        """Marca um job como completo."""
+        """Marca um job como completo (com fallback DB direto em multi-worker)."""
         job = None
         async with self._lock:
             job = self._jobs.get(job_id)
@@ -260,9 +274,21 @@ class JobManager:
                 job.complete(result)
         if job:
             self._persist_update(job, result=result)
+        elif self._db_enabled():
+            now = datetime.utcnow()
+            try:
+                user_db.update_job_record(
+                    job_id=job_id,
+                    status=JobStatus.COMPLETED.value,
+                    progress=100,
+                    result=result,
+                    completed_at=now,
+                )
+            except Exception as exc:
+                logger.warning("[JobManager] Falha ao completar job %s no DB: %s", job_id, exc)
 
     async def fail_job(self, job_id: str, error: str):
-        """Marca um job como falho."""
+        """Marca um job como falho (com fallback DB direto em multi-worker)."""
         job = None
         async with self._lock:
             job = self._jobs.get(job_id)
@@ -270,6 +296,17 @@ class JobManager:
                 job.fail(error)
         if job:
             self._persist_update(job, error=error)
+        elif self._db_enabled():
+            now = datetime.utcnow()
+            try:
+                user_db.update_job_record(
+                    job_id=job_id,
+                    status=JobStatus.FAILED.value,
+                    error=error,
+                    completed_at=now,
+                )
+            except Exception as exc:
+                logger.warning("[JobManager] Falha ao registrar falha do job %s no DB: %s", job_id, exc)
 
     async def cancel_job(self, job_id: str) -> Optional[Job]:
         """Cancela um job e persiste no banco, se habilitado."""
@@ -326,15 +363,17 @@ class JobManager:
         return [job.to_dict() for job in jobs[:limit]]
 
     async def collect_stale_jobs(self, stale_after: timedelta) -> list[Job]:
-        """
-        Marca jobs "travados" como FAILED e retorna a lista para notificação.
+        """Marca jobs "travados" como FAILED e retorna a lista para notificação.
 
-        Args:
-            stale_after: Tempo máximo sem atualização.
+        Em multi-worker (ou após restart), o dict em memória não é fonte
+        única — varremos também o Postgres via `list_stale_job_records` para
+        que jobs órfãos sejam fechados.
         """
         now = datetime.utcnow()
         cutoff_time = now - stale_after
         stale_jobs: list[Job] = []
+        seen_ids: set[str] = set()
+
         async with self._lock:
             for job in self._jobs.values():
                 if job.status not in [JobStatus.PENDING, JobStatus.IN_PROGRESS]:
@@ -343,7 +382,47 @@ class JobManager:
                 if last_update and last_update < cutoff_time:
                     elapsed = int((now - last_update).total_seconds())
                     job.fail(f"Job sem atualização há {elapsed}s")
+                    seen_ids.add(job.job_id)
                     stale_jobs.append(job)
+
+        for job in stale_jobs:
+            self._persist_update(job, error=job.error)
+
+        if self._db_enabled() and hasattr(user_db, "list_stale_job_records"):
+            try:
+                records = user_db.list_stale_job_records(cutoff_time)
+            except Exception as exc:
+                logger.warning("[JobManager] Falha ao buscar jobs travados no DB: %s", exc)
+                records = []
+
+            for record in records:
+                job_id = record.get("job_id")
+                if not job_id or job_id in seen_ids:
+                    continue
+                hydrated = self._hydrate_job_from_record(record)
+                last_update = hydrated.updated_at or hydrated.created_at
+                elapsed = int((now - last_update).total_seconds()) if last_update else 0
+                error_msg = f"Job sem atualização há {elapsed}s"
+                try:
+                    user_db.update_job_record(
+                        job_id=job_id,
+                        status=JobStatus.FAILED.value,
+                        error=error_msg,
+                        completed_at=now,
+                    )
+                except Exception as exc:
+                    logger.warning(
+                        "[JobManager] Falha ao marcar job %s como FAILED no DB: %s",
+                        job_id,
+                        exc,
+                    )
+                    continue
+                hydrated.status = JobStatus.FAILED
+                hydrated.error = error_msg
+                hydrated.completed_at = now
+                seen_ids.add(job_id)
+                stale_jobs.append(hydrated)
+
         return stale_jobs
 
     async def _cleanup_old_jobs(self):

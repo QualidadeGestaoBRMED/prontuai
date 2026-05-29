@@ -6,7 +6,9 @@ import { ChatMessage } from "@/components/chat-message"
 import { useRef, useEffect, useState } from "react"
 import { Bot, Square, RefreshCw, MessageSquare } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { API_ENDPOINTS } from "@/lib/config"
+
+const FAQ_DISABLED_MESSAGE =
+  "Assistente FAQ desativado na STG por segurança. Se necessário, podemos reativar com uma versão nova."
 
 export interface Message {
   content: string
@@ -27,11 +29,19 @@ export function ChatSidebar({ initialMessage, className }: ChatSidebarProps) {
   const [isLoading, setIsLoading] = useState(false)
   const [isCancelling, setIsCancelling] = useState(false)
   const [aiTyping, setAiTyping] = useState("")
-  const abortControllerRef = useRef<AbortController | null>(null)
+  const responseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [messages, aiTyping])
+
+  useEffect(() => {
+    return () => {
+      if (responseTimeoutRef.current) {
+        clearTimeout(responseTimeoutRef.current)
+      }
+    }
+  }, [])
 
   useEffect(() => {
     if (initialMessage) {
@@ -55,79 +65,17 @@ export function ChatSidebar({ initialMessage, className }: ChatSidebarProps) {
     const newConversation = [...messages, { content: userMessage, isUser: true }]
     setMessages(newConversation)
 
-    abortControllerRef.current = new AbortController()
-
-    try {
-      const pergunta = userMessage
-      const recentHistory = messages.slice(-10)
-      const historico = recentHistory.map((msg) => ({
-        role: msg.isUser ? "user" : "assistant",
-        content: msg.content,
-      }))
-
-      const response = await fetch(API_ENDPOINTS.FAQ, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          pergunta,
-          historico,
-        }),
-        signal: abortControllerRef.current.signal,
-      })
-
-      if (!response.ok || !response.body) {
-        throw new Error(`Error: ${response.statusText}`)
-      }
-
-      const reader = response.body.getReader()
-      const decoder = new TextDecoder()
-      let fullResponse = ""
-
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-        fullResponse += decoder.decode(value, { stream: true })
-      }
-
-      const responseJson = JSON.parse(fullResponse)
-      const aiContent =
-        responseJson.resposta_gerada || "Desculpe, não foi possível gerar uma resposta."
-
-      setIsLoading(false)
-
-      // Typewriter effect
-      let i = 0
-      function typeWriter() {
-        setAiTyping(aiContent.slice(0, i))
-        if (i < aiContent.length) {
-          i++
-          setTimeout(typeWriter, 20)
-        } else {
-          setMessages((prev) => [...prev, { content: aiContent, isUser: false }])
-          setAiTyping("")
-        }
-      }
-      typeWriter()
-    } catch (err: unknown) {
-      if (err instanceof Error && err.name === "AbortError") {
-        setMessages((prev) => [
-          ...prev,
-          { content: "Operação cancelada pelo usuário.", isUser: false },
-        ])
-      } else {
-        console.error(err)
-        setMessages((prev) => [
-          ...prev,
-          { content: "Desculpe, ocorreu um erro. Tente novamente.", isUser: false },
-        ])
-      }
-      setIsLoading(false)
-    } finally {
-      setIsCancelling(false)
-      abortControllerRef.current = null
+    if (responseTimeoutRef.current) {
+      clearTimeout(responseTimeoutRef.current)
+      responseTimeoutRef.current = null
     }
+
+    responseTimeoutRef.current = setTimeout(() => {
+      setMessages((prev) => [...prev, { content: FAQ_DISABLED_MESSAGE, isUser: false }])
+      setIsLoading(false)
+      setIsCancelling(false)
+      responseTimeoutRef.current = null
+    }, 200)
   }
 
   const handleKeyPress = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -141,8 +89,15 @@ export function ChatSidebar({ initialMessage, className }: ChatSidebarProps) {
     if (!isLoading || isCancelling) return
 
     setIsCancelling(true)
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort()
+    if (responseTimeoutRef.current) {
+      clearTimeout(responseTimeoutRef.current)
+      responseTimeoutRef.current = null
+      setIsLoading(false)
+      setIsCancelling(false)
+      setMessages((prev) => [
+        ...prev,
+        { content: "Operação cancelada pelo usuário.", isUser: false },
+      ])
     }
   }
 
@@ -171,7 +126,7 @@ export function ChatSidebar({ initialMessage, className }: ChatSidebarProps) {
       <div className="flex items-center justify-between gap-2 p-4 border-b bg-background/50">
         <div className="flex items-center gap-2">
           <MessageSquare className="size-5 text-primary" />
-          <h3 className="font-semibold text-sm">FAQ Assistente</h3>
+          <h3 className="font-semibold text-sm">Assistente (desativado)</h3>
         </div>
         <Button
           variant="ghost"
@@ -191,8 +146,8 @@ export function ChatSidebar({ initialMessage, className }: ChatSidebarProps) {
           {messages.length === 0 && !initialMessage && (
             <div className="text-center text-sm text-muted-foreground py-8">
               <MessageSquare className="size-12 mx-auto mb-3 opacity-20" />
-              <p>Pergunte qualquer coisa</p>
-              <p className="text-xs mt-1">sobre saúde ocupacional</p>
+              <p>FAQ legado desativado</p>
+              <p className="text-xs mt-1">por endurecimento de segurança</p>
             </div>
           )}
 

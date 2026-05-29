@@ -260,6 +260,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   const errorNotifiedRef = useRef(false)
   const submittedByRef = useRef<string | undefined>(undefined)
   const pollingJobsRef = useRef<Set<string>>(new Set())
+  const pollingRetryCountRef = useRef<Map<string, number>>(new Map())
   const activeBatchKeyRef = useRef<string | null>(null)
   const { startJob, pollJob } = useAsyncJob()
 
@@ -275,7 +276,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
 
     const load = async () => {
       const isLoginPage = typeof window !== 'undefined' && window.location.pathname === '/login'
-      const shouldSkipRemote = !session?.accessToken || isLoginPage
+      const shouldSkipRemote = !session?.user?.email || isLoginPage
 
       if (shouldSkipRemote) {
         const loadedNotifications = loadFromStorage<Notification[]>(STORAGE_KEYS.NOTIFICATIONS, [])
@@ -284,11 +285,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         return
       }
       try {
-        const headers: Record<string, string> = {}
-        if (session?.accessToken) {
-          headers.Authorization = `Bearer ${session.accessToken}`
-        }
-        const response = await authFetch(API_ENDPOINTS.NOTIFICATIONS, { headers })
+        const response = await authFetch(API_ENDPOINTS.NOTIFICATIONS)
         if (!response.ok) throw new Error('Erro ao carregar notificações')
         const data = await response.json()
         const mapped = (data || []).map(mapApiNotification)
@@ -322,7 +319,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     setProgressBarState(loadedBarState)
 
     // preferences already loaded above
-  }, [session?.accessToken])
+  }, [session?.user?.email])
 
   // Salva no localStorage quando o estado muda
   useEffect(() => {
@@ -385,75 +382,52 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     })
 
     const headers: Record<string, string> = { 'Content-Type': 'application/json' }
-    if (session?.accessToken) {
-      headers.Authorization = `Bearer ${session.accessToken}`
-    }
-    if (session?.accessToken) {
-      authFetch(API_ENDPOINTS.NOTIFICATIONS, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({
-          type: input.type,
-          title: input.title,
-          message: input.message,
-          variant: input.variant,
-          action_url: input.actionUrl,
-          action_label: input.actionLabel,
-          metadata: input.metadata,
-          document_id: input.metadata?.documentId,
-        }),
+    authFetch(API_ENDPOINTS.NOTIFICATIONS, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        type: input.type,
+        title: input.title,
+        message: input.message,
+        variant: input.variant,
+        action_url: input.actionUrl,
+        action_label: input.actionLabel,
+        metadata: input.metadata,
+        document_id: input.metadata?.documentId,
+      }),
+    })
+      .then(async (res) => {
+        if (!res.ok) return
+        const created = mapApiNotification(await res.json())
+        setNotifications(prev => cleanupOldNotifications([
+          ...prev.filter(n => n.id !== notification.id),
+          created,
+        ]))
       })
-        .then(async (res) => {
-          if (!res.ok) return
-          const created = mapApiNotification(await res.json())
-          setNotifications(prev => cleanupOldNotifications([
-            ...prev.filter(n => n.id !== notification.id),
-            created,
-          ]))
-        })
-        .catch(() => {})
-    }
+      .catch(() => {})
 
     return notification.id
-  }, [session?.accessToken])
+  }, [session?.user?.email])
 
   const markAsRead = useCallback((id: string) => {
     setNotifications(prev =>
       prev.map(n => n.id === id ? { ...n, read: true } : n)
     )
-    const headers: Record<string, string> = {}
-    if (session?.accessToken) {
-      headers.Authorization = `Bearer ${session.accessToken}`
-    }
-    if (session?.accessToken) {
-      authFetch(API_ENDPOINTS.NOTIFICATION_READ(id), { method: 'POST', headers }).catch(() => {})
-    }
-  }, [session?.accessToken])
+    authFetch(API_ENDPOINTS.NOTIFICATION_READ(id), { method: 'POST' }).catch(() => {})
+  }, [])
 
   const markAllAsRead = useCallback(() => {
     setNotifications(prev => prev.map(n => ({ ...n, read: true })))
-    const headers: Record<string, string> = {}
-    if (session?.accessToken) {
-      headers.Authorization = `Bearer ${session.accessToken}`
-    }
-    if (session?.accessToken) {
-      authFetch(API_ENDPOINTS.NOTIFICATIONS_READ_ALL, { method: 'POST', headers }).catch(() => {})
-    }
-  }, [session?.accessToken])
+    authFetch(API_ENDPOINTS.NOTIFICATIONS_READ_ALL, { method: 'POST' }).catch(() => {})
+  }, [])
 
   const clearHistory = useCallback(() => {
     const clearedAt = new Date()
     lastClearedAtRef.current = clearedAt
     setNotifications([])
     setPreferences(prev => ({ ...prev, lastClearedAt: clearedAt }))
-    const headers: Record<string, string> = {}
-    if (session?.accessToken) {
-      headers.Authorization = `Bearer ${session.accessToken}`
-    }
-    if (session?.accessToken) {
-      authFetch(API_ENDPOINTS.NOTIFICATIONS_CLEAR, { method: 'DELETE', headers }).catch(() => {})
-    }
-  }, [session?.accessToken])
+    authFetch(API_ENDPOINTS.NOTIFICATIONS_CLEAR, { method: 'DELETE' }).catch(() => {})
+  }, [])
 
   const getNotificationById = useCallback((id: string) => {
     return notifications.find(n => n.id === id)
@@ -651,6 +625,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         interval: 2000,
         timeout: 0,
         onProgress: (job: Job) => {
+          pollingRetryCountRef.current.set(docId, 0)
           const stepToStage: Record<string, ProcessingStage> = {
             pending: 'upload',
             upload: 'upload',
@@ -669,23 +644,57 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
           }))
         },
         onComplete: (result: DocumentProcessingResult) => {
+          pollingRetryCountRef.current.delete(docId)
+          const backendBusinessError = result.business_error
+          const backendErrorMessage =
+            backendBusinessError?.message ||
+            result.erro ||
+            result.error ||
+            null
+          const hasBusinessRuleRejection =
+            result.status === "error" &&
+            (
+              backendBusinessError?.type === "business_rule" ||
+              result.error_type === "business_rule" ||
+              result.error_code === "NO_OPEN_EXAM_ORDER"
+            )
+
           updateProcessingDocument(docId, (current) => ({
             ...current,
             stage: 'completed',
             progress: 100,
             displayProgress: 100,
-            statusMessage: 'Processamento concluído!',
+            statusMessage: backendErrorMessage
+              ? (hasBusinessRuleRejection
+                  ? 'Processamento concluído com rejeição por regra de negócio.'
+                  : 'Processamento concluído com erro.')
+              : 'Processamento concluído!',
+            error: backendErrorMessage || current.error,
             result,
           }))
           pollingJobsRef.current.delete(jobId)
         },
         onError: (error: string) => {
+          const retries = (pollingRetryCountRef.current.get(docId) ?? 0) + 1
+          pollingRetryCountRef.current.set(docId, retries)
+          pollingJobsRef.current.delete(jobId)
+
+          if (retries <= 3) {
+            updateProcessingDocument(docId, (current) => ({
+              ...current,
+              statusMessage: `Reconectando ao status do processamento... (tentativa ${retries}/3)`,
+            }))
+            window.setTimeout(() => {
+              startPollingForDocument(docId, jobId)
+            }, retries * 3000)
+            return
+          }
+
           updateProcessingDocument(docId, (current) => ({
             ...current,
             error: `Erro: ${error}`,
             statusMessage: 'Erro no processamento',
           }))
-          pollingJobsRef.current.delete(jobId)
         },
       }).catch(() => {
         pollingJobsRef.current.delete(jobId)
@@ -888,13 +897,14 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
               match_confidence: analysisDetails.match_confidence,
             }
           : undefined
-
+      const identificadorConsulta = doc.result?.identificador_consulta || doc.result?.cpf_processado || 'N/A'
+      const cpfCompat = doc.result?.cpf_processado || doc.result?.identificador_consulta || ''
       return {
         id: doc.result?.document_id || doc.id,
         batchId: processingProcessId,
         filename: doc.file?.name ?? doc.fileName ?? 'Documento',
-        cpf: doc.result?.cpf_processado || 'N/A',
-        patientName: doc.result?.patient_name || 'Paciente',
+        cpf: identificadorConsulta,
+        patientName: doc.result?.patient_name || 'Não identificado',
         uploadedAt: new Date(),
         processedAt: new Date(),
         status: doc.error
@@ -906,7 +916,13 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         examesFaltantes,
         examesExtras,
         result: {
-          cpf: doc.result?.cpf_processado || '',
+          cpf: cpfCompat,
+          cpf_processado: doc.result?.cpf_processado || undefined,
+          passaporte_processado: doc.result?.passaporte_processado || undefined,
+          cnpj_processado: doc.result?.cnpj_processado || undefined,
+          tipo_identificador_consulta: doc.result?.tipo_identificador_consulta || undefined,
+          identificador_consulta: doc.result?.identificador_consulta || undefined,
+          fonte_exames_obrigatorios: doc.result?.fonte_exames_obrigatorios || undefined,
           patient_name: doc.result?.patient_name,
           status: doc.error ? ('error' as const) : ('success' as const),
           ocr_result: {
@@ -1018,13 +1034,12 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   }, [notificationCenterOpen, updatePreferences])
 
   useEffect(() => {
-    if (!session?.accessToken) return
+    if (!session?.user?.email) return
     let cancelled = false
 
     const fetchNotifications = async () => {
-      const headers: Record<string, string> = { Authorization: `Bearer ${session.accessToken}` }
       try {
-        const response = await authFetch(API_ENDPOINTS.NOTIFICATIONS, { headers })
+        const response = await authFetch(API_ENDPOINTS.NOTIFICATIONS)
         if (!response.ok) return
         const data = await response.json()
         const incoming = (data || []).map(mapApiNotification)
@@ -1054,7 +1069,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       cancelled = true
       clearInterval(interval)
     }
-  }, [session?.accessToken])
+  }, [session?.user?.email])
 
   useEffect(() => {
     if (processingDocuments.length === 0) return

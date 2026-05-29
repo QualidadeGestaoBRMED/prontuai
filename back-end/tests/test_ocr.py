@@ -1,40 +1,39 @@
-import pytest
-from unittest.mock import patch, MagicMock
-from app.services import ocr_service
+from unittest.mock import patch
+
 from fastapi import status
 
-# Teste unitário: normal OCR pipeline com mock
-@patch("app.services.ocr_service.processar_arquivo_docling", return_value="# HEMOGRAMA\n## GLICOSE")
-@patch("app.services.ocr_service.extrair_info_ia", return_value={"cpf": "12345678900", "exames": ["HEMOGRAMA", "GLICOSE"]})
-def test_ocr_pipeline_success(mock_ia, mock_docling):
-    class DummyFile:
-        filename = "teste.pdf"
-        def save(self, path):
-            with open(path, "w") as f:
-                f.write("dummy")
-    result = ocr_service.ocr_pipeline(DummyFile(), salvar_markdown=False)
-    assert result["cpf"] == "12345678900"
-    assert "HEMOGRAMA" in result["exames"]
-    assert "GLICOSE" in result["exames"]
+from app.services import ocr_service
 
-# Teste de fallback de CPF via regex
-@patch("app.services.ocr_service.processar_arquivo_docling", return_value="Paciente: Fulano CPF: 111.222.333-44\n## HEMOGRAMA")
-@patch("app.services.ocr_service.extrair_info_ia", return_value={"cpf": None, "exames": ["HEMOGRAMA"]})
-def test_ocr_pipeline_fallback_cpf(mock_ia, mock_docling):
-    class DummyFile:
-        filename = "teste2.pdf"
-        def save(self, path):
-            with open(path, "w") as f:
-                f.write("dummy")
-    result = ocr_service.ocr_pipeline(DummyFile(), salvar_markdown=False)
-    assert result["cpf"] == "11122233344"
-    assert "HEMOGRAMA" in result["exames"]
 
-# Teste de integração da rota OCR
-@patch("app.services.ocr_service.ocr_pipeline", return_value={"cpf": "12345678900", "exames": ["HEMOGRAMA"]})
+def test_extrair_cpf_regex():
+    markdown = "Paciente: Fulano\nCPF: 111.222.333-44\n"
+    assert ocr_service.extrair_cpf_regex(markdown) == "11122233344"
+
+
+def test_extrair_cnpj_regex():
+    markdown = "Empresa XYZ\nCNPJ: 12.345.678/0001-90\n"
+    assert ocr_service.extrair_cnpj_regex(markdown) == "12345678000190"
+
+
+def test_extrair_passaporte_regex():
+    markdown = "Dados do paciente\nPassaporte: ab123456\n"
+    assert ocr_service.extrair_passaporte_regex(markdown) == "AB123456"
+
+
+@patch(
+    "app.services.ocr_service.ocr_pipeline",
+    return_value={
+        "cpf": "12345678900",
+        "passaporte": "AB123456",
+        "cnpj": "12345678000190",
+        "exames": ["HEMOGRAMA"],
+    },
+)
 def test_ocr_route(mock_pipeline, client):
     response = client.post("/v1/ocr", files={"arquivo": ("teste.pdf", b"dummy", "application/pdf")})
     assert response.status_code == status.HTTP_200_OK
     data = response.json()
     assert data["cpf"] == "12345678900"
+    assert data["passaporte"] == "AB123456"
+    assert data["cnpj"] == "12345678000190"
     assert "HEMOGRAMA" in data["exames"]
