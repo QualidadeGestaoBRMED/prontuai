@@ -100,16 +100,11 @@ export default function ValidacoesPage() {
   const [onlyWithJustification, setOnlyWithJustification] = useState(false);
 
   const fetchDocuments = useCallback(async () => {
-    if (!session?.accessToken) return;
+    if (!session?.user?.email) return;
     setLoading(true);
     try {
       const response = await authFetch(
         `${API_ENDPOINTS.DOCUMENTS}?compact=true&cache_seconds=10&stale_seconds=120`,
-        {
-          headers: {
-            Authorization: `Bearer ${session.accessToken}`,
-          },
-        },
       );
       if (!response.ok) {
         throw new Error("Erro ao carregar documentos");
@@ -123,7 +118,7 @@ export default function ValidacoesPage() {
     } finally {
       setLoading(false);
     }
-  }, [session?.accessToken]);
+  }, [session?.user?.email]);
 
   useEffect(() => {
     fetchDocuments();

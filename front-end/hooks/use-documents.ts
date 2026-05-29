@@ -1,5 +1,10 @@
 "use client"
 
+// DEPRECATED: hook legado que carrega TODA a coleção de documentos.
+// Usado somente por /historico enquanto não migra para useDocumentsPaged
+// com uma queue "historico" no backend. Não use em telas novas — prefira
+// `useDocumentsPaged({ queue: ... })` para evitar fetches O(N).
+
 import { useCallback, useEffect, useRef, useState } from "react"
 import { useSession } from "next-auth/react"
 import { API_ENDPOINTS } from "@/lib/config"
@@ -57,13 +62,10 @@ export function useDocuments() {
 
     try {
       const headers: Record<string, string> = {}
-      if (session?.accessToken) {
-        headers.Authorization = `Bearer ${session.accessToken}`
-      }
       headers["Cache-Control"] = "no-cache"
       headers.Pragma = "no-cache"
 
-      const url = new URL(API_ENDPOINTS.DOCUMENTS)
+      const url = new URL(API_ENDPOINTS.DOCUMENTS, window.location.origin)
       url.searchParams.set("compact", "true")
       url.searchParams.set("cache_seconds", "10")
       url.searchParams.set("stale_seconds", "120")
@@ -97,7 +99,7 @@ export function useDocuments() {
       }
       inFlightRef.current = false
     }
-  }, [session?.accessToken])
+  }, [session?.user?.email])
 
   useEffect(() => {
     fetchDocuments()

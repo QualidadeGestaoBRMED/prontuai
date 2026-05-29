@@ -7,7 +7,7 @@ api_router = APIRouter()
 api_router.include_router(v1_ocr.router, prefix="/v1")
 api_router.include_router(v1_brmed.router, prefix="/v1")
 api_router.include_router(v1_validacao.router, prefix="/v1")
-# FAQ removido temporariamente (manter para retorno futuro).
+# FAQ desativado por segurança.
 # api_router.include_router(v1_faq.router, prefix="/v1")
 api_router.include_router(v1_jobs.router, prefix="/v1")
 api_router.include_router(v1_notifications.router, prefix="/v1")

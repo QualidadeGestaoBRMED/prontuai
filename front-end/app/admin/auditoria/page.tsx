@@ -170,17 +170,10 @@ export default function AuditoriaPage() {
       : null;
 
   const fetchLogs = useCallback(async () => {
-    if (!session?.accessToken) return;
+    if (!session?.user?.email) return;
     setLoading(true);
     try {
-      const response = await authFetch(
-        `${API_ENDPOINTS.AUDIT_LOGS}?${queryParams}`,
-        {
-          headers: {
-            Authorization: `Bearer ${session.accessToken}`,
-          },
-        },
-      );
+      const response = await authFetch(`${API_ENDPOINTS.AUDIT_LOGS}?${queryParams}`);
 
       if (!response.ok) {
         throw new Error("Erro ao carregar logs de auditoria");
@@ -207,7 +200,7 @@ export default function AuditoriaPage() {
     } finally {
       setLoading(false);
     }
-  }, [session?.accessToken, queryParams, hideNotifications]);
+  }, [session?.user?.email, queryParams, hideNotifications]);
 
   useEffect(() => {
     fetchLogs();

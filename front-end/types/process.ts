@@ -87,6 +87,12 @@ export interface ProcessResult {
 // Estrutura de resposta do backend (da API existente)
 export interface DocumentProcessingResult {
   cpf: string
+  cpf_processado?: string
+  passaporte_processado?: string | null
+  cnpj_processado?: string | null
+  tipo_identificador_consulta?: "cpf" | "passaporte" | string
+  identificador_consulta?: string | null
+  fonte_exames_obrigatorios?: string | null
   patient_name?: string
   document_id?: string
   ocr_result?: {
@@ -96,6 +102,11 @@ export interface DocumentProcessingResult {
   brmed_result?: {
     exames_obrigatorios: string[]
     empresa?: string
+    source?: string | null
+    pedido_exame_id?: number | string | null
+    tipo_pedido_exame?: string | null
+    data_previsao_liberacao?: string | null
+    atendimento_realizado_em?: string | null
   }
   tabela_comparacao?: TabelaComparacaoItem[]
   analysis_details?: AnalysisDetails
@@ -107,6 +118,20 @@ export interface DocumentProcessingResult {
   }
   status: 'success' | 'partial' | 'error'
   error?: string
+  erro?: string
+  error_type?: string
+  error_code?: string
+  error_source?: string | null
+  error_http_status?: number | null
+  business_error?: {
+    code?: string
+    type?: string
+    message?: string
+    source?: string | null
+    http_status?: number | null
+    retryable?: boolean
+    trace_id?: string
+  } | null
 }
 
 // Estado para UI da barra de progresso

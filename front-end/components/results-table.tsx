@@ -25,15 +25,26 @@ import { ProcessResult } from "@/types/process"
 import { Download, Eye, Search, FileDown } from "lucide-react"
 import { cn } from "@/lib/utils"
 
+type StatusFilter = "all" | "approved" | "rejected" | "pending_review"
+
 interface ResultsTableProps {
   results: ProcessResult[]
   onViewDetails?: (result: ProcessResult) => void
   onDownloadPDF?: (result: ProcessResult) => void
   initialSearch?: string
+  serverMode?: boolean
+  searchQuery?: string
+  onSearchQueryChange?: (value: string) => void
+  statusFilter?: StatusFilter
+  onStatusFilterChange?: (value: StatusFilter) => void
+  currentPage?: number
+  totalPages?: number
+  totalItems?: number
+  pageSize?: number
+  onPageChange?: (page: number) => void
   className?: string
 }
 
-// Função auxiliar para exportar CSV
 const exportToCSV = (results: ProcessResult[]) => {
   const headers = ["CPF", "Paciente", "Data Upload", "Status", "Exames Faltantes", "Enviado Por"]
   const rows = results.map((r) => [
@@ -44,12 +55,7 @@ const exportToCSV = (results: ProcessResult[]) => {
     r.examesFaltantes.toString(),
     r.submittedBy,
   ])
-
-  const csvContent = [
-    headers.join(","),
-    ...rows.map((row) => row.map((cell) => `"${cell}"`).join(",")),
-  ].join("\n")
-
+  const csvContent = [headers.join(","), ...rows.map((row) => row.map((cell) => `"${cell}"`).join(","))].join("\n")
   const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" })
   const url = URL.createObjectURL(blob)
   const link = document.createElement("a")
@@ -61,108 +67,85 @@ const exportToCSV = (results: ProcessResult[]) => {
   URL.revokeObjectURL(url)
 }
 
-type StatusFilter = "all" | "approved" | "rejected" | "pending_review"
-
 export function ResultsTable({
   results,
   onViewDetails,
   onDownloadPDF,
   initialSearch,
+  serverMode = false,
+  searchQuery: controlledSearchQuery,
+  onSearchQueryChange,
+  statusFilter: controlledStatusFilter,
+  onStatusFilterChange,
+  currentPage: controlledCurrentPage,
+  totalPages: controlledTotalPages,
+  totalItems: controlledTotalItems,
+  pageSize: controlledPageSize,
+  onPageChange,
   className,
 }: ResultsTableProps) {
   const [searchQuery, setSearchQuery] = useState(initialSearch ?? "")
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all")
   const [currentPage, setCurrentPage] = useState(1)
-  const resultsPerPage = 10
+  const defaultPageSize = 10
 
   useEffect(() => {
-    if (initialSearch === undefined) return
+    if (initialSearch === undefined || serverMode) return
     setSearchQuery(initialSearch)
     setCurrentPage(1)
-  }, [initialSearch])
+  }, [initialSearch, serverMode])
 
-  // Filtra resultados
-  const filteredResults = results.filter((result) => {
-    const rawQuery = searchQuery.trim().toLowerCase()
-    const queryDigits = rawQuery.replace(/\D/g, "")
-    const matchesCPF = queryDigits
-      ? result.cpf.replace(/\D/g, "").includes(queryDigits)
-      : false
-    const matchesText = rawQuery
-      ? [result.patientName, result.filename, result.submittedBy]
-          .filter(Boolean)
-          .some((value) => value.toLowerCase().includes(rawQuery))
-      : false
-    const matchesSearch = rawQuery ? matchesCPF || matchesText : true
-    const matchesStatus =
-      statusFilter === "all" ? true : result.status === statusFilter
-    return matchesSearch && matchesStatus
-  })
+  const effectiveSearch = serverMode ? (controlledSearchQuery ?? "") : searchQuery
+  const effectiveStatusFilter = serverMode ? (controlledStatusFilter ?? "all") : statusFilter
+  const effectiveCurrentPage = serverMode ? (controlledCurrentPage ?? 1) : currentPage
+  const effectivePageSize = serverMode ? (controlledPageSize ?? defaultPageSize) : defaultPageSize
 
-  // Paginação
-  const totalPages = Math.ceil(filteredResults.length / resultsPerPage)
-  const startIndex = (currentPage - 1) * resultsPerPage
-  const endIndex = startIndex + resultsPerPage
-  const paginatedResults = filteredResults.slice(startIndex, endIndex)
+  const filteredResults = serverMode
+    ? results
+    : results.filter((result) => {
+        const rawQuery = searchQuery.trim().toLowerCase()
+        const queryDigits = rawQuery.replace(/\D/g, "")
+        const matchesCPF = queryDigits ? result.cpf.replace(/\D/g, "").includes(queryDigits) : false
+        const matchesText = rawQuery
+          ? [result.patientName, result.filename, result.submittedBy]
+              .filter(Boolean)
+              .some((value) => value.toLowerCase().includes(rawQuery))
+          : false
+        const matchesSearch = rawQuery ? matchesCPF || matchesText : true
+        const matchesStatus = statusFilter === "all" ? true : result.status === statusFilter
+        return matchesSearch && matchesStatus
+      })
 
-  // Formata CPF para exibição
+  const totalPages = serverMode
+    ? Math.max(1, controlledTotalPages ?? 1)
+    : Math.max(1, Math.ceil(filteredResults.length / effectivePageSize))
+  const startIndex = (effectiveCurrentPage - 1) * effectivePageSize
+  const endIndex = startIndex + effectivePageSize
+  const paginatedResults = serverMode ? filteredResults : filteredResults.slice(startIndex, endIndex)
+
   const formatCPF = (cpf: string) => {
     const cleaned = cpf.replace(/\D/g, "")
-    if (cleaned.length === 11) {
-      return cleaned.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4")
-    }
+    if (cleaned.length === 11) return cleaned.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4")
     return cpf
   }
 
-  // Variantes do badge de status
   const getStatusBadge = (result: ProcessResult) => {
     const { status, reviewedBy } = result
-
-    // Aprovado por humano (aprovação final)
     if (status === "approved" && reviewedBy) {
-      return (
-        <Badge variant="default" className="bg-green-500 hover:bg-green-600">
-          Aprovado
-        </Badge>
-      )
+      return <Badge variant="default" className="bg-green-500 hover:bg-green-600">Aprovado</Badge>
     }
-
-    // Aprovado pela IA, aguardando validação humana
     if (status === "approved" && !reviewedBy) {
-      return (
-        <Badge variant="secondary" className="bg-amber-100 text-amber-700 hover:bg-amber-200">
-          Aguardando Revisão
-        </Badge>
-      )
+      return <Badge variant="secondary" className="bg-amber-100 text-amber-700 hover:bg-amber-200">Aguardando Revisão</Badge>
     }
-
-    // Rejeitado pela IA, aguardando revisão humana
     if (status === "pending_review") {
-      return (
-        <Badge variant="secondary" className="bg-orange-100 text-orange-700 hover:bg-orange-200">
-          Aguardando Revisão
-        </Badge>
-      )
+      return <Badge variant="secondary" className="bg-orange-100 text-orange-700 hover:bg-orange-200">Aguardando Revisão</Badge>
     }
-
-    // Rejeitado por humano (rejeição final)
     if (status === "rejected" && reviewedBy) {
-      return (
-        <Badge variant="destructive">
-          Documentos Incompletos
-        </Badge>
-      )
+      return <Badge variant="destructive">Documentos Incompletos</Badge>
     }
-
-    // Fallback padrão
-    return (
-      <Badge variant="secondary">
-        {status}
-      </Badge>
-    )
+    return <Badge variant="secondary">{status}</Badge>
   }
 
-  // Estado vazio
   if (results.length === 0) {
     return (
       <div className={cn("text-center py-12 border rounded-lg", className)}>
@@ -177,25 +160,34 @@ export function ResultsTable({
 
   return (
     <div className={cn("flex h-full min-h-0 flex-col gap-4", className)}>
-      {/* Filters and Actions */}
       <div className="flex flex-col sm:flex-row gap-4">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
           <Input
             placeholder="Buscar por CPF ou nome do documento..."
-            value={searchQuery}
+            value={effectiveSearch}
             onChange={(e) => {
-              setSearchQuery(e.target.value)
-              setCurrentPage(1) // Volta para primeira página ao buscar
+              if (serverMode) {
+                onSearchQueryChange?.(e.target.value)
+                onPageChange?.(1)
+              } else {
+                setSearchQuery(e.target.value)
+                setCurrentPage(1)
+              }
             }}
             className="pl-9"
           />
         </div>
         <Select
-          value={statusFilter}
+          value={effectiveStatusFilter}
           onValueChange={(value: StatusFilter) => {
-            setStatusFilter(value)
-            setCurrentPage(1) // Volta para primeira página ao mudar filtro
+            if (serverMode) {
+              onStatusFilterChange?.(value)
+              onPageChange?.(1)
+            } else {
+              setStatusFilter(value)
+              setCurrentPage(1)
+            }
           }}
         >
           <SelectTrigger className="w-full sm:w-[200px]">
@@ -220,7 +212,6 @@ export function ResultsTable({
         </Button>
       </div>
 
-      {/* Table */}
       <div className="flex-1 min-h-0 overflow-auto border rounded-lg">
         <Table>
           <TableHeader>
@@ -242,20 +233,16 @@ export function ResultsTable({
                 </TableCell>
               </TableRow>
             ) : (
-              paginatedResults.map((result, index) => (
+              paginatedResults.map((result) => (
                 <TableRow
-                  key={`${result.id}-${result.batchId}-${index}`}
+                  key={result.id}
                   className="cursor-pointer hover:bg-muted/50 transition-colors"
                   onClick={() => onViewDetails?.(result)}
                 >
-                  <TableCell className="font-mono text-sm">
-                    {formatCPF(result.cpf)}
-                  </TableCell>
+                  <TableCell className="font-mono text-sm">{formatCPF(result.cpf)}</TableCell>
                   <TableCell>{result.patientName}</TableCell>
                   <TableCell className="text-sm text-muted-foreground">
-                    {format(result.uploadedAt, "dd/MM/yyyy HH:mm", {
-                      locale: ptBR,
-                    })}
+                    {format(result.uploadedAt, "dd/MM/yyyy HH:mm", { locale: ptBR })}
                   </TableCell>
                   <TableCell>{getStatusBadge(result)}</TableCell>
                   <TableCell className="text-center">
@@ -267,29 +254,31 @@ export function ResultsTable({
                       <span className="text-muted-foreground">-</span>
                     )}
                   </TableCell>
-                  <TableCell className="text-sm text-muted-foreground truncate max-w-[200px]">
-                    {result.submittedBy}
-                  </TableCell>
+                  <TableCell className="text-sm text-muted-foreground truncate max-w-[200px]">{result.submittedBy}</TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-2">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onViewDetails?.(result);
+                      <button
+                        type="button"
+                        onPointerDown={(e) => {
+                          e.preventDefault()
+                          e.stopPropagation()
+                          onViewDetails?.(result)
                         }}
-                        className="gap-2"
+                        onClick={(e) => {
+                          e.preventDefault()
+                          e.stopPropagation()
+                        }}
+                        className="inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium text-foreground cursor-pointer hover:bg-accent hover:text-accent-foreground focus-visible:bg-accent focus-visible:text-accent-foreground"
                       >
                         <Eye className="size-4" />
                         Ver
-                      </Button>
+                      </button>
                       <Button
                         variant="ghost"
                         size="sm"
                         onClick={(e) => {
-                          e.stopPropagation();
-                          onDownloadPDF?.(result);
+                          e.stopPropagation()
+                          onDownloadPDF?.(result)
                         }}
                         className="gap-2"
                       >
@@ -305,54 +294,34 @@ export function ResultsTable({
         </Table>
       </div>
 
-      {/* Pagination */}
       {totalPages > 1 && (
         <div className="flex items-center justify-between">
           <p className="text-sm text-muted-foreground">
-            Mostrando {startIndex + 1} a {Math.min(endIndex, filteredResults.length)} de{" "}
-            {filteredResults.length} resultados
+            Mostrando {Math.min(startIndex + 1, serverMode ? (controlledTotalItems ?? 0) : filteredResults.length)} a{" "}
+            {Math.min(endIndex, serverMode ? (controlledTotalItems ?? 0) : filteredResults.length)} de{" "}
+            {serverMode ? (controlledTotalItems ?? filteredResults.length) : filteredResults.length} resultados
           </p>
           <div className="flex items-center gap-2">
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-              disabled={currentPage === 1}
+              onClick={() => {
+                if (serverMode) onPageChange?.(Math.max(1, effectiveCurrentPage - 1))
+                else setCurrentPage((p) => Math.max(1, p - 1))
+              }}
+              disabled={effectiveCurrentPage === 1}
             >
               Anterior
             </Button>
-            <div className="flex items-center gap-1">
-              {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                // Mostra páginas ao redor da página atual
-                let pageNum: number
-                if (totalPages <= 5) {
-                  pageNum = i + 1
-                } else if (currentPage <= 3) {
-                  pageNum = i + 1
-                } else if (currentPage >= totalPages - 2) {
-                  pageNum = totalPages - 4 + i
-                } else {
-                  pageNum = currentPage - 2 + i
-                }
-
-                return (
-                  <Button
-                    key={pageNum}
-                    variant={currentPage === pageNum ? "default" : "outline"}
-                    size="sm"
-                    className="w-8"
-                    onClick={() => setCurrentPage(pageNum)}
-                  >
-                    {pageNum}
-                  </Button>
-                )
-              })}
-            </div>
+            <span className="text-sm text-muted-foreground">Página {effectiveCurrentPage} de {totalPages}</span>
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-              disabled={currentPage === totalPages}
+              onClick={() => {
+                if (serverMode) onPageChange?.(Math.min(totalPages, effectiveCurrentPage + 1))
+                else setCurrentPage((p) => Math.min(totalPages, p + 1))
+              }}
+              disabled={effectiveCurrentPage === totalPages}
             >
               Próxima
             </Button>

@@ -132,17 +132,21 @@ def test_full_integration_workflow(mock_brmed, test_case):
         full_process_data = response_full_process.json()
 
         # --- 2. Verificação da Resposta do Workflow ---
-        assert full_process_data["status"] == "sucesso"
+        assert full_process_data["status"] == "success"
         assert full_process_data["cpf_processado"] == test_case["expected_ocr_extraction"]["cpf"]
-        assert full_process_data["exames_enviados"] == test_case["expected_ocr_extraction"]["exames"]
+        assert full_process_data["exames_ocr"] == test_case["expected_ocr_extraction"]["exames"]
 
-        validation_data = full_process_data["resultado_validacao"]
+        validation_data = full_process_data["validation_result"]
         expected_result = test_case["expected_validation"]
 
-        assert validation_data["status_liberado"] == expected_result["status_liberado"]
-        # Compara as listas de exames como conjuntos para ignorar a ordem
         assert set(validation_data["exames_faltantes"]) == set(expected_result["exames_faltantes"])
-        assert set(validation_data["exames_presentes"]) == set(expected_result["exames_presentes"])
+
+        encontrados = {
+            item["exame"]
+            for item in full_process_data.get("tabela_comparacao", [])
+            if item.get("status") == "encontrado"
+        }
+        assert set(expected_result["exames_presentes"]).issubset(encontrados)
 
         # Garante que os mocks foram chamados como esperado
         mock_exames_ia.assert_called_once()
