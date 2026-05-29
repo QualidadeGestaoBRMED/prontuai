@@ -20,6 +20,10 @@ interface ExtendedProfile {
 }
 
 const authOptions: AuthOptions = {
+  session: {
+    strategy: "jwt",
+    maxAge: Number(process.env.NEXTAUTH_SESSION_MAX_AGE || 60 * 60 * 2), // 2h
+  },
   providers: [
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID as string,
@@ -36,6 +40,10 @@ const authOptions: AuthOptions = {
         console.error("Email não encontrado no profile do Google");
         return false;
       }
+      if (!account?.id_token) {
+        console.error("id_token não encontrado na resposta do Google");
+        return false;
+      }
 
       // Chamar back-end para obter JWT e dados do usuário
       try {
@@ -43,6 +51,7 @@ const authOptions: AuthOptions = {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
+            id_token: account.id_token,
             email: profile.email,
             name: profile.name || profile.email.split('@')[0],
             google_id: account?.providerAccountId || 'google-oauth'
@@ -99,10 +108,7 @@ const authOptions: AuthOptions = {
     },
 
     async session({ session, token }) {
-      // Adicionar dados do token à session (acessível no client)
-      if (token.accessToken) {
-        session.accessToken = token.accessToken as string;
-      }
+      // Não expor accessToken para o cliente; token fica apenas em cookie HttpOnly.
       if (token.user) {
         const tokenUser = token.user as BackendAuthData['user'] & { image?: string };
         const tokenPicture = (token as { picture?: string }).picture;

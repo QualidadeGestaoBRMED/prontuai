@@ -48,6 +48,7 @@ function PageLoading() {
 }
 
 function PageContent() {
+  const isDevAuthBypass = process.env.NEXT_PUBLIC_DEV_AUTH_BYPASS === "true"
   const searchParams = useSearchParams()
   const router = useRouter()
   const autoOpenUpload = searchParams.get("reenviar") === "1"
@@ -92,7 +93,7 @@ function PageContent() {
   const shouldShowStaleWarning =
     hasProcessing &&
     processAgeMs > 30_000 &&
-    (!hasInFlight || hasMissingJobId || hasStaleUpdates)
+    (!hasInFlight || hasMissingJobId || (hasStaleUpdates && !hasInFlight))
 
   const filteredResults = useMemo(() => {
     if (!userEmail) return processResults
@@ -140,7 +141,7 @@ function PageContent() {
   // Don't auto-navigate to results - let user control the state
 
   const handleProcessFiles = (files: FileWithPreview[]) => {
-    if (!session?.accessToken) {
+    if (!session?.user?.email && !isDevAuthBypass) {
       toast.error("Sessão inválida. Faça login novamente para enviar documentos.")
       return
     }
@@ -186,7 +187,6 @@ function PageContent() {
       await downloadDocumentPdf({
         id: result.id,
         filename: result.filename,
-        accessToken: session?.accessToken,
       })
     } catch (error) {
       console.error("Falha ao baixar PDF:", error)

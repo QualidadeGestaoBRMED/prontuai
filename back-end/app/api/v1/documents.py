@@ -3,12 +3,16 @@ Endpoints para gerenciamento de documentos.
 """
 from fastapi import APIRouter, HTTPException, status, Depends, Query, Request, BackgroundTasks
 from fastapi.responses import FileResponse
-from typing import List
+from typing import List, Any
 from app.core.auth import get_current_user, require_admin
 from app.core.database import user_db
 from app.models.user import User, UserRole
-from app.models.document import Document
-from app.models.document import DocumentUpdate
+from app.models.document import (
+    Document,
+    DocumentUpdate,
+    DocumentQueue,
+    PaginatedDocumentsResponse,
+)
 from app.core.logging import set_audit_context
 from app.core.config import settings
 from app.services import drive_service
@@ -137,6 +141,171 @@ def warm_documents_cache() -> None:
         logger.debug("[DOCUMENTS] Cache warmup concluído key=ADMIN:all:True rows=%d", len(documents))
     except Exception as exc:
         logger.warning("[DOCUMENTS] Cache warmup falhou: %s", exc)
+
+
+def _status_from_validation(doc: Document) -> str:
+    if doc.validation_status == "validated":
+        return "approved"
+    if doc.validation_status == "rejected":
+        return "rejected"
+    return "pending_review"
+
+
+def _in_memory_paged_documents(
+    docs: List[Document],
+    *,
+    page: int,
+    page_size: int,
+    queue: DocumentQueue | None,
+    status_filter: str | None,
+    search: str | None,
+    sort_by: str,
+    sort_dir: str,
+) -> dict[str, Any]:
+    normalized_search = (search or "").strip().lower()
+
+    filtered = docs
+    if normalized_search:
+        filtered = [
+            d for d in filtered
+            if normalized_search in (d.filename or "").lower()
+            or normalized_search in (d.cpf or "").lower()
+            or normalized_search in (d.uploaded_by_user_email or "").lower()
+        ]
+
+    summary_counts = {"approved": 0, "rejected": 0, "pending_review": 0, "total": len(filtered)}
+    for doc in filtered:
+        summary_counts[_status_from_validation(doc)] += 1
+
+    if queue == DocumentQueue.PENDENTES:
+        filtered = [d for d in filtered if d.validation_status != "validated"]
+    elif queue == DocumentQueue.CHECAGEM:
+        filtered = [
+            d for d in filtered
+            if d.validation_status in {"validated", "pending"}
+            or (d.validation_status == "rejected" and not d.reviewed_by)
+        ]
+
+    if status_filter == "approved":
+        filtered = [d for d in filtered if d.validation_status == "validated"]
+    elif status_filter == "rejected":
+        filtered = [d for d in filtered if d.validation_status == "rejected"]
+    elif status_filter == "pending_review":
+        filtered = [d for d in filtered if d.validation_status in {"pending", None}]
+
+    def _to_ts(value: Any) -> float:
+        if not value:
+            return 0.0
+        try:
+            return value.timestamp()
+        except Exception:
+            return 0.0
+
+    reverse = sort_dir.lower() != "asc"
+    if sort_by == "updated_at":
+        filtered.sort(key=lambda d: _to_ts(d.updated_at), reverse=reverse)
+    elif sort_by == "filename":
+        filtered.sort(key=lambda d: (d.filename or "").lower(), reverse=reverse)
+    elif sort_by == "cpf":
+        filtered.sort(key=lambda d: (d.cpf or "").lower(), reverse=reverse)
+    elif sort_by == "status":
+        filtered.sort(key=lambda d: (d.validation_status or "").lower(), reverse=reverse)
+    else:
+        filtered.sort(key=lambda d: _to_ts(d.uploaded_at), reverse=reverse)
+
+    total_items = len(filtered)
+    total_pages = max(1, (total_items + page_size - 1) // page_size)
+    safe_page = max(1, min(page, total_pages))
+    start = (safe_page - 1) * page_size
+    end = start + page_size
+    items = filtered[start:end]
+
+    return {
+        "items": items,
+        "page": safe_page,
+        "page_size": page_size,
+        "total_items": total_items,
+        "total_pages": total_pages,
+        "has_next": safe_page < total_pages,
+        "summary_counts": summary_counts,
+    }
+
+
+@router.get("/paged", response_model=PaginatedDocumentsResponse)
+async def list_documents_paged(
+    current_user: User = Depends(get_current_user),
+    queue: DocumentQueue | None = Query(None, description="Fila para otimizar a consulta"),
+    compact: bool = Query(True, description="Remove campos pesados do payload para melhorar performance"),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    search: str | None = Query(None, max_length=120),
+    status_filter: str | None = Query(None, pattern="^(approved|rejected|pending_review)$"),
+    sort_by: str = Query("uploaded_at", pattern="^(uploaded_at|updated_at|filename|cpf|status)$"),
+    sort_dir: str = Query("desc", pattern="^(asc|desc)$"),
+):
+    """
+    Lista documentos com paginação e filtros server-side.
+    """
+    try:
+        role = current_user.role
+        user_id = current_user.id if role == UserRole.SENDER else None
+        clinic_id = current_user.clinic_id
+
+        if hasattr(user_db, "list_documents_paged"):
+            payload = user_db.list_documents_paged(
+                role=role,
+                clinic_id=clinic_id,
+                user_id=user_id,
+                queue=queue.value if queue else None,
+                page=page,
+                page_size=page_size,
+                use_compact_payload=compact,
+                search=search,
+                status_filter=status_filter,
+                sort_by=sort_by,
+                sort_dir=sort_dir,
+            )
+        else:
+            docs = _load_documents(
+                role,
+                clinic_id,
+                compact,
+                user_id=user_id,
+            )
+            payload = _in_memory_paged_documents(
+                docs,
+                page=page,
+                page_size=page_size,
+                queue=queue,
+                status_filter=status_filter,
+                search=search,
+                sort_by=sort_by,
+                sort_dir=sort_dir,
+            )
+
+        items = payload.get("items", [])
+        if role == UserRole.SENDER and current_user.email:
+            for doc in items:
+                if doc.uploaded_by_user_id == current_user.id and not doc.uploaded_by_user_email:
+                    doc.uploaded_by_user_email = current_user.email
+
+        return PaginatedDocumentsResponse(
+            items=items,
+            page=int(payload.get("page", page)),
+            page_size=int(payload.get("page_size", page_size)),
+            total_items=int(payload.get("total_items", 0)),
+            total_pages=int(payload.get("total_pages", 1)),
+            has_next=bool(payload.get("has_next", False)),
+            summary_counts=payload.get("summary_counts") or {},
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("Erro ao listar documentos paginados: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Erro ao listar documentos paginados."
+        ) from exc
 
 @router.get("", response_model=List[Document])
 async def list_documents(
@@ -415,18 +584,42 @@ async def update_document(
             merged_payload["reviewed_at"] = reviewed_at
             payload.result_payload = merged_payload
             payload_result = merged_payload
-        updated = user_db.update_document(
-            document_id=document_id,
-            validation_status=payload.validation_status,
-            exams_found=payload.exams_found,
-            exams_ocr=payload.exams_ocr,
-            exams_brnet=payload.exams_brnet,
-            ocr_markdown=payload.ocr_markdown,
-            run_id=payload.run_id,
-            result_payload=payload.result_payload,
-            approval_reason=approval_reason,
-            rejection_reason=rejection_reason,
-        )
+        reviewed_at_dt = None
+        if reviewed_at:
+            try:
+                reviewed_at_dt = datetime.fromisoformat(str(reviewed_at).replace("Z", "+00:00"))
+            except Exception:
+                reviewed_at_dt = None
+
+        try:
+            updated = user_db.update_document(
+                document_id=document_id,
+                validation_status=payload.validation_status,
+                exams_found=payload.exams_found,
+                exams_ocr=payload.exams_ocr,
+                exams_brnet=payload.exams_brnet,
+                ocr_markdown=payload.ocr_markdown,
+                run_id=payload.run_id,
+                result_payload=payload.result_payload,
+                reviewed_by=reviewed_by,
+                reviewed_at=reviewed_at_dt,
+                approval_reason=approval_reason,
+                rejection_reason=rejection_reason,
+            )
+        except TypeError:
+            # Compatibilidade com implementações antigas do backend de persistência.
+            updated = user_db.update_document(
+                document_id=document_id,
+                validation_status=payload.validation_status,
+                exams_found=payload.exams_found,
+                exams_ocr=payload.exams_ocr,
+                exams_brnet=payload.exams_brnet,
+                ocr_markdown=payload.ocr_markdown,
+                run_id=payload.run_id,
+                result_payload=payload.result_payload,
+                approval_reason=approval_reason,
+                rejection_reason=rejection_reason,
+            )
         payload_reviewed_by = None
         if isinstance(payload_result, dict):
             payload_reviewed_by = payload_result.get("reviewed_by") or payload_result.get("reviewedBy")

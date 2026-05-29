@@ -1,6 +1,12 @@
 from pydantic import BaseModel, Field
 from typing import Optional, List, Dict, Any
 from datetime import datetime
+from enum import Enum
+
+
+class DocumentQueue(str, Enum):
+    PENDENTES = "pendentes"
+    CHECAGEM = "checagem"
 
 
 class Document(BaseModel):
@@ -21,6 +27,8 @@ class Document(BaseModel):
     ocr_markdown: Optional[str] = None  # Resultado do OCR em markdown
     run_id: Optional[str] = None
     result_payload: Optional[Dict[str, Any]] = None
+    reviewed_by: Optional[str] = None
+    reviewed_at: Optional[datetime] = None
     approval_reason: Optional[str] = None
     rejection_reason: Optional[str] = None
     confidence_score: Optional[float] = None
@@ -59,6 +67,8 @@ class DocumentCreate(BaseModel):
     ocr_markdown: Optional[str] = None
     run_id: Optional[str] = None
     result_payload: Optional[Dict[str, Any]] = None
+    reviewed_by: Optional[str] = None
+    reviewed_at: Optional[datetime] = None
     approval_reason: Optional[str] = None
     rejection_reason: Optional[str] = None
     confidence_score: Optional[float] = None
@@ -86,6 +96,8 @@ class DocumentUpdate(BaseModel):
     ocr_markdown: Optional[str] = None
     run_id: Optional[str] = None
     result_payload: Optional[Dict[str, Any]] = None
+    reviewed_by: Optional[str] = None
+    reviewed_at: Optional[datetime] = None
     approval_reason: Optional[str] = None
     rejection_reason: Optional[str] = None
     confidence_score: Optional[float] = None
@@ -99,3 +111,20 @@ class DocumentUpdate(BaseModel):
                 "validation_status": "validated"
             }
         }
+
+
+class DocumentSummaryCounts(BaseModel):
+    approved: int = 0
+    rejected: int = 0
+    pending_review: int = 0
+    total: int = 0
+
+
+class PaginatedDocumentsResponse(BaseModel):
+    items: List[Document]
+    page: int
+    page_size: int
+    total_items: int
+    total_pages: int
+    has_next: bool
+    summary_counts: DocumentSummaryCounts

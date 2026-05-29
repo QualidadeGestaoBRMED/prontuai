@@ -114,14 +114,10 @@ export default function UsersAdminPage() {
   };
 
   const fetchUsers = useCallback(async () => {
-    if (!session?.accessToken) return;
+    if (!session?.user?.email) return;
 
     try {
-      const response = await authFetch(API_ENDPOINTS.USERS, {
-        headers: {
-          Authorization: `Bearer ${session.accessToken}`,
-        },
-      });
+      const response = await authFetch(API_ENDPOINTS.USERS);
 
       if (!response.ok) throw new Error("Erro ao carregar usuários");
 
@@ -133,18 +129,14 @@ export default function UsersAdminPage() {
     } finally {
       setLoading(false);
     }
-  }, [session?.accessToken]);
+  }, [session?.user?.email]);
 
   const fetchClinics = useCallback(async () => {
-    if (!session?.accessToken) return;
+    if (!session?.user?.email) return;
 
     setLoadingClinics(true);
     try {
-      const response = await authFetch(API_ENDPOINTS.CLINICS, {
-        headers: {
-          Authorization: `Bearer ${session.accessToken}`,
-        },
-      });
+      const response = await authFetch(API_ENDPOINTS.CLINICS);
 
       if (!response.ok) throw new Error("Erro ao carregar clínicas");
 
@@ -156,7 +148,7 @@ export default function UsersAdminPage() {
     } finally {
       setLoadingClinics(false);
     }
-  }, [session?.accessToken]);
+  }, [session?.user?.email]);
 
   useEffect(() => {
     fetchUsers();
@@ -169,7 +161,7 @@ export default function UsersAdminPage() {
   }, [createModalOpen, fetchClinics]);
 
   const handleCreateUser = async () => {
-    if (!session?.accessToken || !formEmail || !formName) {
+    if (!session?.user?.email || !formEmail || !formName) {
       toast.error("Preencha todos os campos");
       return;
     }
@@ -208,7 +200,6 @@ export default function UsersAdminPage() {
       const response = await authFetch(API_ENDPOINTS.USERS, {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${session.accessToken}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify(body),
@@ -237,13 +228,12 @@ export default function UsersAdminPage() {
   };
 
   const handleUpdateUser = async () => {
-    if (!session?.accessToken || !selectedUser) return;
+    if (!session?.user?.email || !selectedUser) return;
 
     try {
       const response = await authFetch(API_ENDPOINTS.USER_BY_ID(selectedUser.id), {
         method: "PATCH",
         headers: {
-          Authorization: `Bearer ${session.accessToken}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
@@ -274,13 +264,12 @@ export default function UsersAdminPage() {
     }
 
     // Se estiver ativando, executar diretamente
-    if (!session?.accessToken) return;
+    if (!session?.user?.email) return;
 
     try {
       const response = await authFetch(API_ENDPOINTS.USER_BY_ID(user.id), {
         method: "PATCH",
         headers: {
-          Authorization: `Bearer ${session.accessToken}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
@@ -299,14 +288,13 @@ export default function UsersAdminPage() {
   };
 
   const confirmDeactivate = async () => {
-    if (!session?.accessToken || !userToDeactivate) return;
+    if (!session?.user?.email || !userToDeactivate) return;
 
     setDeactivating(true);
     try {
       const response = await authFetch(API_ENDPOINTS.USER_BY_ID(userToDeactivate.id), {
         method: "PATCH",
         headers: {
-          Authorization: `Bearer ${session.accessToken}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({

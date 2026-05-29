@@ -4,17 +4,12 @@ import { authFetch } from "@/lib/auth-fetch"
 type DownloadOptions = {
   id: string
   filename?: string
-  accessToken?: string | null
 }
 
 export async function downloadDocumentPdf(options: DownloadOptions) {
-  const { id, filename, accessToken } = options
-  const headers: Record<string, string> = {}
-  if (accessToken) {
-    headers.Authorization = `Bearer ${accessToken}`
-  }
+  const { id, filename } = options
 
-  const response = await authFetch(API_ENDPOINTS.DOCUMENT_VIEW(id), { headers })
+  const response = await authFetch(API_ENDPOINTS.DOCUMENT_VIEW(id))
   if (!response.ok) {
     const detail = await response.text().catch(() => "Erro ao baixar documento")
     throw new Error(detail)

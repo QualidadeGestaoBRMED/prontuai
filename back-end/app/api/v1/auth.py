@@ -3,9 +3,13 @@ Endpoints de autenticação e autorização.
 """
 from fastapi import APIRouter, HTTPException, status, Depends
 from pydantic import BaseModel, EmailStr
+from google.auth.transport import requests as google_requests
+from google.oauth2 import id_token as google_id_token
 from app.core.auth import create_access_token, get_current_user
+from app.core.config import settings
 from app.core.database import user_db
 from app.models.user import User
+from typing import Optional
 import logging
 
 logger = logging.getLogger(__name__)
@@ -15,9 +19,10 @@ router = APIRouter(prefix="/auth", tags=["Autenticação"])
 
 class GoogleAuthRequest(BaseModel):
     """Request de autenticação via Google"""
-    email: EmailStr
-    name: str
-    google_id: str
+    id_token: str
+    email: Optional[EmailStr] = None
+    name: Optional[str] = None
+    google_id: Optional[str] = None
 
 
 class TokenResponse(BaseModel):
@@ -33,8 +38,40 @@ async def google_auth(auth_request: GoogleAuthRequest):
     Autentica usuário via Google OAuth.
     Se usuário não existir, retorna erro (admin deve criar primeiro).
     """
-    # Buscar usuário no banco
-    user = user_db.get_user_by_email(auth_request.email)
+    if not settings.GOOGLE_CLIENT_ID:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Configuração de autenticação Google inválida no servidor."
+        )
+
+    # Validação criptográfica do token Google
+    try:
+        token_info = google_id_token.verify_oauth2_token(
+            auth_request.id_token,
+            google_requests.Request(),
+            settings.GOOGLE_CLIENT_ID,
+        )
+    except Exception as exc:
+        logger.warning("Falha ao validar id_token Google: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token Google inválido."
+        ) from exc
+
+    email = token_info.get("email")
+    email_verified = token_info.get("email_verified")
+    google_sub = token_info.get("sub")
+    if not email or email_verified is not True or not google_sub:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token Google sem claims obrigatórias."
+        )
+
+    if auth_request.email and str(auth_request.email).lower() != str(email).lower():
+        logger.warning("Email no payload diverge do id_token Google. Ignorando payload do cliente.")
+
+    # Buscar usuário no banco usando somente o email validado no token
+    user = user_db.get_user_by_email(email)
 
     if user is None:
         raise HTTPException(
@@ -60,7 +97,13 @@ async def google_auth(auth_request: GoogleAuthRequest):
 
     access_token = create_access_token(data=token_data)
 
-    logger.info(f"Usuário autenticado: {user.email} (role: {user.role.value}, clinic_id: {user.clinic_id})")
+    logger.info(
+        "Usuário autenticado: %s (role: %s, clinic_id: %s, google_sub: %s)",
+        user.email,
+        user.role.value,
+        user.clinic_id,
+        google_sub,
+    )
 
     return TokenResponse(
         access_token=access_token,

@@ -2,7 +2,6 @@
 
 import { useState, useEffect, Suspense, useMemo, useCallback } from "react"
 import { useSearchParams } from "next/navigation"
-import { useSession } from "next-auth/react"
 import { AppSidebar } from "@/components/app-sidebar"
 import {
   SidebarInset,
@@ -23,7 +22,6 @@ import { History, Loader2 } from "lucide-react"
 import { downloadDocumentPdf } from "@/lib/document-download"
 
 function HistoricoContent() {
-  const { data: session } = useSession()
   const searchParams = useSearchParams()
   const [selectedResult, setSelectedResult] = useState<ProcessResult | null>(null)
   const [detailsModalOpen, setDetailsModalOpen] = useState(false)
@@ -62,12 +60,11 @@ function HistoricoContent() {
       await downloadDocumentPdf({
         id: result.id,
         filename: result.filename,
-        accessToken: session?.accessToken,
       })
     } catch (error) {
       console.error("Falha ao baixar PDF:", error)
     }
-  }, [session?.accessToken])
+  }, [])
 
   return (
     <SidebarProvider>

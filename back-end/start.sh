@@ -6,18 +6,14 @@ set -e
 
 echo "🚀 Iniciando ProntuAI Backend..."
 
-# Verificar se os índices FAISS existem
-if [ ! -f "data/faq_index.faiss" ]; then
-    echo "⚠️  Índice FAQ não encontrado. Gerando..."
-    python scripts/generate_faq_index.py
+# Verificar se os artefatos críticos existem
+if [ ! -f "data/exam_similarity_index.faiss" ] || [ ! -f "data/exam_similarity_data.json" ] || [ ! -f "data/exam_similarity_index.faiss.hmac" ] || [ ! -f "data/exam_similarity_data.json.hmac" ]; then
+    echo "❌ Artefatos de similaridade de exames não encontrados (index + json + hmac)."
+    echo "❌ Gere artefatos assinados previamente no pipeline de build."
+    exit 1
 fi
 
-if [ ! -f "data/exam_similarity_index.faiss" ]; then
-    echo "⚠️  Índice de similaridade de exames não encontrado. Gerando..."
-    python scripts/generate_exam_similarity_index.py
-fi
-
-echo "✅ Índices FAISS verificados"
+echo "✅ Artefatos validados"
 
 # Criar diretórios de output se não existirem
 mkdir -p logs resultados ocr_resultados auditoria_validacao

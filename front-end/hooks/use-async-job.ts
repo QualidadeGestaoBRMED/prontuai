@@ -3,7 +3,7 @@
  */
 
 import { useState, useCallback, useRef, useEffect } from "react"
-import { getSession, useSession } from "next-auth/react"
+import { useSession } from "next-auth/react"
 import { Job, CreateJobResponse, PollingOptions } from "@/types/job"
 import { API_ENDPOINTS } from "@/lib/config"
 import { DocumentProcessingResult } from "@/types/document-processing"
@@ -47,6 +47,7 @@ interface UseAsyncJobReturn {
 }
 
 export function useAsyncJob(): UseAsyncJobReturn {
+  const isDevAuthBypass = process.env.NEXT_PUBLIC_DEV_AUTH_BYPASS === "true"
   const { data: session } = useSession()
   const [currentJob, setCurrentJob] = useState<Job | null>(null)
   const [isPolling, setIsPolling] = useState(false)
@@ -55,6 +56,22 @@ export function useAsyncJob(): UseAsyncJobReturn {
   const pollingIntervalsRef = useRef<Map<string, NodeJS.Timeout>>(new Map())
   const pollingTimeoutsRef = useRef<Map<string, NodeJS.Timeout>>(new Map())
   const inFlightJobsRef = useRef<Map<string, Promise<string>>>(new Map())
+
+  const fetchWithTimeout = useCallback(
+    async (input: RequestInfo | URL, init: RequestInit = {}, timeoutMs = 15000) => {
+      const controller = new AbortController()
+      const timeoutHandle = setTimeout(() => controller.abort(), timeoutMs)
+      try {
+        return await authFetch(input, {
+          ...init,
+          signal: controller.signal,
+        })
+      } finally {
+        clearTimeout(timeoutHandle)
+      }
+    },
+    []
+  )
 
   /**
    * Limpa timers de polling
@@ -108,24 +125,14 @@ export function useAsyncJob(): UseAsyncJobReturn {
         formData.append("arquivo", file)
         formData.append("exames_obrigatorios", JSON.stringify(examesObrigatorios))
 
-        let token = session?.accessToken as string | undefined
-        if (!token) {
-          const freshSession = await getSession()
-          token = (freshSession?.accessToken as string | undefined) ?? undefined
-        }
-        if (!token) {
+        if (!session?.user?.email && !isDevAuthBypass) {
           throw new Error("Sessão inválida. Faça login novamente.")
         }
 
-        const headers: Record<string, string> = {
-          Authorization: `Bearer ${token}`,
-        }
-
-        const response = await authFetch(API_ENDPOINTS.PROCESS_DOCUMENT_ASYNC, {
+        const response = await fetchWithTimeout(API_ENDPOINTS.PROCESS_DOCUMENT_ASYNC, {
           method: "POST",
           body: formData,
-          headers,
-        })
+        }, 30000)
 
         if (!response.ok) {
           const errorData = await response.json().catch(() => ({ detail: "Erro desconhecido" }))
@@ -152,14 +159,14 @@ export function useAsyncJob(): UseAsyncJobReturn {
         inFlightJobsRef.current.delete(fileKey)
       }, 15000)
     }
-  }, [session?.accessToken])
+  }, [fetchWithTimeout, isDevAuthBypass, session?.user?.email])
 
   /**
    * Consulta o status de um job
    */
   const getJobStatus = useCallback(async (jobId: string): Promise<Job> => {
     try {
-      const response = await authFetch(API_ENDPOINTS.JOB_STATUS(jobId))
+      const response = await fetchWithTimeout(API_ENDPOINTS.JOB_STATUS(jobId), {}, 12000)
 
       if (!response.ok) {
         if (response.status === 404) {
@@ -171,11 +178,16 @@ export function useAsyncJob(): UseAsyncJobReturn {
       const job: Job = await response.json()
       return job
     } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") {
+        const timeoutMessage = "Timeout ao consultar status do processamento"
+        setError(timeoutMessage)
+        throw new Error(timeoutMessage)
+      }
       const errorMessage = err instanceof Error ? err.message : "Erro ao consultar status"
       setError(errorMessage)
       throw err
     }
-  }, [])
+  }, [fetchWithTimeout])
 
   /**
    * Inicia polling de um job até completar ou falhar
@@ -196,6 +208,9 @@ export function useAsyncJob(): UseAsyncJobReturn {
 
         console.log(`[useAsyncJob] Iniciando polling para job: ${jobId}`)
         let finished = false
+        let isPollingNow = false
+        let consecutivePollingErrors = 0
+        const maxConsecutivePollingErrors = 5
 
         const finish = (
           result: { type: "resolve"; value: DocumentProcessingResult } | { type: "reject"; error: Error }
@@ -223,9 +238,12 @@ export function useAsyncJob(): UseAsyncJobReturn {
 
         // Função de polling
         const poll = async () => {
+          if (isPollingNow || finished) return
+          isPollingNow = true
           try {
             const job = await getJobStatus(jobId)
             setCurrentJob(job)
+            consecutivePollingErrors = 0
 
             console.log(`[useAsyncJob] Status: ${job.status} (${job.progress}%)`)
 
@@ -271,9 +289,19 @@ export function useAsyncJob(): UseAsyncJobReturn {
             // Continua polling se ainda estiver em progresso ou pendente
           } catch (err) {
             const errorMsg = err instanceof Error ? err.message : "Erro durante polling"
-            setError(errorMsg)
-            onError?.(errorMsg)
-            finish({ type: "reject", error: err instanceof Error ? err : new Error(errorMsg) })
+            consecutivePollingErrors += 1
+            console.warn(
+              `[useAsyncJob] Falha transitória no polling (${consecutivePollingErrors}/${maxConsecutivePollingErrors}): ${errorMsg}`
+            )
+
+            // Em ambiente real, erros intermitentes de rede acontecem; só falhamos após N seguidos.
+            if (consecutivePollingErrors >= maxConsecutivePollingErrors) {
+              setError(errorMsg)
+              onError?.(errorMsg)
+              finish({ type: "reject", error: err instanceof Error ? err : new Error(errorMsg) })
+            }
+          } finally {
+            isPollingNow = false
           }
         }
 

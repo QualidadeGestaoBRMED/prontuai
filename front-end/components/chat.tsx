@@ -22,7 +22,9 @@ import { Bot, Square, RefreshCw  } from "lucide-react";
 import { cn } from "@/lib/utils";
 import ExamesComparativoTable, { TabelaComparacaoItem } from "@/components/exames-comparativo-table";
 import { Message } from "@/components/file-uploader";
-import { API_ENDPOINTS } from "@/lib/config";
+
+const FAQ_DISABLED_MESSAGE =
+  "Assistente FAQ desativado na STG por segurança. Se precisar, podemos reativar via nova implementação sem FAQ legado.";
 
 export default function Chat({
   messages,
@@ -39,11 +41,19 @@ export default function Chat({
   const [inputMessage, setInputMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
-  const abortControllerRef = useRef<AbortController | null>(null);
+  const responseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, aiTyping]);
+
+  useEffect(() => {
+    return () => {
+      if (responseTimeoutRef.current) {
+        clearTimeout(responseTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const handleSendMessage = async () => {
     if (!inputMessage.trim() || isLoading) return;
@@ -55,80 +65,17 @@ export default function Chat({
     const newConversation = [...messages, { content: userMessage, isUser: true }];
     setMessages(newConversation);
 
-    abortControllerRef.current = new AbortController();
-
-    try {
-      const pergunta = userMessage;
-      const recentHistory = messages.slice(-10);
-      const historico = recentHistory.map(msg => ({
-        role: msg.isUser ? "user" : "assistant",
-        content: msg.content,
-      }));
-
-      const response = await fetch(API_ENDPOINTS.FAQ, { 
-
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          pergunta,
-          historico,
-        }),
-        signal: abortControllerRef.current.signal,
-      });
-
-      if (!response.ok || !response.body) {
-        throw new Error(`Error: ${response.statusText}`);
-      }
-
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let fullResponse = "";
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        fullResponse += decoder.decode(value, { stream: true });
-      }
-
-      const responseJson = JSON.parse(fullResponse);
-      const aiContent = responseJson.resposta_gerada || "Desculpe, não foi possível gerar uma resposta.";
-      
-      setIsLoading(false); // Network loading is done, now start typing effect.
-
-      // Typewriter effect
-      let i = 0;
-      function typeWriter() {
-        setAiTyping(aiContent.slice(0, i));
-        if (i < aiContent.length) {
-          i++;
-          setTimeout(typeWriter, 20); // Adjust typing speed here
-        } else {
-          setMessages((prev) => [...prev, { content: aiContent, isUser: false }]);
-          setAiTyping("");
-        }
-      }
-      typeWriter();
-
-    } catch (err: unknown) {
-      if (err instanceof Error && err.name === 'AbortError') {
-        setMessages((prev) => [
-          ...prev,
-          { content: "Operação cancelada pelo usuário.", isUser: false },
-        ]);
-      } else {
-        console.error(err);
-        setMessages((prev) => [
-          ...prev,
-          { content: "Desculpe, ocorreu um erro. Tente novamente.", isUser: false },
-        ]);
-      }
-      setIsLoading(false);
-    } finally {
-      setIsCancelling(false);
-      abortControllerRef.current = null;
+    if (responseTimeoutRef.current) {
+      clearTimeout(responseTimeoutRef.current);
+      responseTimeoutRef.current = null;
     }
+
+    responseTimeoutRef.current = setTimeout(() => {
+      setMessages((prev) => [...prev, { content: FAQ_DISABLED_MESSAGE, isUser: false }]);
+      setIsLoading(false);
+      setIsCancelling(false);
+      responseTimeoutRef.current = null;
+    }, 200);
   };
   
   const handleKeyPress = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -142,8 +89,15 @@ export default function Chat({
     if (!isLoading || isCancelling) return;
 
     setIsCancelling(true);
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
+    if (responseTimeoutRef.current) {
+      clearTimeout(responseTimeoutRef.current);
+      responseTimeoutRef.current = null;
+      setIsLoading(false);
+      setIsCancelling(false);
+      setMessages((prev) => [
+        ...prev,
+        { content: "Operação cancelada pelo usuário.", isUser: false },
+      ]);
     }
   };
 

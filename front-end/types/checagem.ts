@@ -5,6 +5,7 @@ export type DocumentoChecagem = {
   cpf: string;
   paciente: string;
   dataUpload: string;
+  dataPrevisaoLiberacao?: string;
   dataProcessamento?: string;
   status: StatusDocumento;
   motivoRejeicao?: string;

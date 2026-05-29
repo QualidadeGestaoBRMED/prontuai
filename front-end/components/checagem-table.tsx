@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import {
   Column,
   ColumnDef,
@@ -58,15 +58,74 @@ type CheckagemTableProps = {
   onAprovar?: (id: string, approvalReason: string) => void;
   onRejeitar?: (id: string, motivo: string) => void;
   onViewDetails?: (id: string) => void;
+  serverPagination?: {
+    page: number;
+    totalPages: number;
+    onPageChange: (nextPage: number) => void;
+  };
 };
+
+const DAY_IN_MS = 24 * 60 * 60 * 1000;
+
+function parseBrDate(value?: string): Date | null {
+  if (!value) return null;
+  const trimmed = value.trim();
+  const parts = trimmed.split("/");
+  if (parts.length === 3) {
+    const day = Number(parts[0]);
+    const month = Number(parts[1]) - 1;
+    const year = Number(parts[2]);
+    if (!Number.isNaN(day) && !Number.isNaN(month) && !Number.isNaN(year)) {
+      return new Date(year, month, day);
+    }
+  }
+
+  const fallback = new Date(trimmed);
+  return Number.isNaN(fallback.getTime()) ? null : fallback;
+}
+
+function startOfDay(date: Date): Date {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+function getDueLabel(value?: string): { text: string; className: string } | null {
+  const parsed = parseBrDate(value);
+  if (!parsed) return null;
+
+  const due = startOfDay(parsed).getTime();
+  const today = startOfDay(new Date()).getTime();
+  const diffDays = Math.round((due - today) / DAY_IN_MS);
+
+  if (diffDays < 0) {
+    return { text: `Atrasado ${Math.abs(diffDays)}d`, className: "text-red-600" };
+  }
+  if (diffDays === 0) {
+    return { text: "Hoje", className: "text-amber-600" };
+  }
+  return { text: `D-${diffDays}`, className: "text-slate-600" };
+}
 
 export function CheckagemTable({
   documentos,
   onViewDetails,
+  serverPagination,
 }: CheckagemTableProps) {
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [sorting, setSorting] = useState<SortingState>([]);
   const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 10 });
+
+  useEffect(() => {
+    if (serverPagination) {
+      setPagination({ pageIndex: 0, pageSize: Math.max(1, documentos.length) });
+    }
+  }, [Boolean(serverPagination), documentos.length]);
+
+  useEffect(() => {
+    if (!serverPagination) return;
+    // Em paginação server-side, evita que filtros locais antigos escondam
+    // registros recém-carregados e deem impressão de lista vazia.
+    setColumnFilters([]);
+  }, [serverPagination?.page, documentos.length]);
 
   const columns = useMemo<ColumnDef<DocumentoChecagem>[]>(
     () => [
@@ -98,6 +157,33 @@ export function CheckagemTable({
             })}
           </div>
         ),
+      },
+      {
+        header: "Prev. liberação",
+        accessorKey: "dataPrevisaoLiberacao",
+        cell: ({ row }) => {
+          const previsao = row.original.dataPrevisaoLiberacao;
+          if (!previsao) {
+            return <span className="text-muted-foreground">-</span>;
+          }
+
+          const parsed = parseBrDate(previsao);
+          const label = getDueLabel(previsao);
+          const formatted = parsed
+            ? parsed.toLocaleDateString("pt-BR", {
+                year: "numeric",
+                month: "2-digit",
+                day: "2-digit",
+              })
+            : previsao;
+
+          return (
+            <div className="text-sm leading-tight">
+              <div>{formatted}</div>
+              {label ? <div className={cn("text-xs", label.className)}>{label.text}</div> : null}
+            </div>
+          );
+        },
       },
       {
         header: "Status",
@@ -174,18 +260,22 @@ export function CheckagemTable({
         cell: ({ row }) => {
           return (
             <div className="flex items-center gap-2">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={(e) => {
+              <button
+                type="button"
+                onPointerDown={(e) => {
+                  e.preventDefault();
                   e.stopPropagation();
                   onViewDetails?.(row.original.id);
                 }}
-                className="gap-2"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                }}
+                className="inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium text-foreground cursor-pointer hover:bg-accent hover:text-accent-foreground focus-visible:bg-accent focus-visible:text-accent-foreground"
               >
                 <EyeIcon className="size-4" />
                 Ver
-              </Button>
+              </button>
             </div>
           );
         },
@@ -197,6 +287,7 @@ export function CheckagemTable({
 
   const table = useReactTable({
     data: documentos,
+    getRowId: (row) => row.id,
     columns,
     state: {
       sorting,
@@ -310,7 +401,7 @@ export function CheckagemTable({
                 <TableRow
                   key={row.id}
                   data-state={row.getIsSelected() && "selected"}
-                  className="cursor-pointer hover:bg-muted/50 transition-colors"
+                  className="cursor-pointer hover:bg-muted/50"
                   onClick={() => onViewDetails?.(row.original.id)}
                 >
                   {row.getVisibleCells().map((cell) => (
@@ -340,22 +431,41 @@ export function CheckagemTable({
       {/* Paginação */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="text-sm text-muted-foreground">
-          Página {table.getState().pagination.pageIndex + 1} de {table.getPageCount() || 1}
+          Página {serverPagination ? serverPagination.page : table.getState().pagination.pageIndex + 1} de{" "}
+          {serverPagination ? serverPagination.totalPages : table.getPageCount() || 1}
         </div>
         <div className="flex items-center gap-2">
           <Button
             variant="outline"
             size="sm"
-            onClick={() => table.previousPage()}
-            disabled={!table.getCanPreviousPage()}
+            onClick={() => {
+              if (serverPagination) {
+                serverPagination.onPageChange(Math.max(1, serverPagination.page - 1));
+                return;
+              }
+              table.previousPage();
+            }}
+            disabled={serverPagination ? serverPagination.page <= 1 : !table.getCanPreviousPage()}
           >
             Anterior
           </Button>
           <Button
             variant="outline"
             size="sm"
-            onClick={() => table.nextPage()}
-            disabled={!table.getCanNextPage()}
+            onClick={() => {
+              if (serverPagination) {
+                serverPagination.onPageChange(
+                  Math.min(serverPagination.totalPages, serverPagination.page + 1)
+                );
+                return;
+              }
+              table.nextPage();
+            }}
+            disabled={
+              serverPagination
+                ? serverPagination.page >= serverPagination.totalPages
+                : !table.getCanNextPage()
+            }
           >
             Próxima
           </Button>

@@ -611,18 +611,23 @@ FormData:
       {
         method: "POST",
         path: "/v1/consultar-brmed",
-        description: "Consulta de exames BRMED por CPF.",
+        description: "Consulta de exames obrigatórios por CPF ou passaporte (com CNPJ).",
         auth: "Sem auth explícita",
         headers: "Content-Type: application/json",
-        body: "cpf",
+        body: "cpf? ou passaporte? + cnpj",
         query: "—",
-        response: "exames_obrigatorios",
+        response: "nome, exames, source, identificador_consulta",
         example: `POST /v1/consultar-brmed
 {
-  "cpf": "12345678901"
+  "cpf": "12345678901",
+  "cnpj": "12345678000190"
 }`,
         exampleResponse: `{
-  "exames_obrigatorios": ["Hemograma","Glicemia"]
+  "nome": "PACIENTE EXEMPLO",
+  "exames": ["Hemograma","Glicemia"],
+  "source": "prontuai_api",
+  "tipo_identificador_consulta": "cpf",
+  "identificador_consulta": "12345678901"
 }`,
       },
       {
@@ -633,13 +638,15 @@ FormData:
         headers: "Content-Type: multipart/form-data",
         body: "arquivo (PDF)",
         query: "—",
-        response: "cpf, exames, markdown",
+        response: "cpf, passaporte, cnpj, exames, markdown",
         example: `POST /v1/ocr
 Authorization: Bearer <token>
 FormData:
   arquivo=@aso.pdf`,
         exampleResponse: `{
   "cpf": "12345678901",
+  "passaporte": null,
+  "cnpj": "12345678000190",
   "exames": ["Hemograma","Glicemia"],
   "markdown_content": "# Laudo..."
 }`,

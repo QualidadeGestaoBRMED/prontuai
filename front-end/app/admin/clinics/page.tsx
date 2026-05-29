@@ -73,14 +73,10 @@ export default function ClinicsAdminPage() {
   };
 
   const fetchClinics = useCallback(async () => {
-    if (!session?.accessToken) return;
+    if (!session?.user?.email) return;
 
     try {
-      const response = await authFetch(API_ENDPOINTS.CLINICS, {
-        headers: {
-          Authorization: `Bearer ${session.accessToken}`,
-        },
-      });
+      const response = await authFetch(API_ENDPOINTS.CLINICS);
 
       if (!response.ok) throw new Error("Erro ao carregar clínicas");
 
@@ -92,14 +88,14 @@ export default function ClinicsAdminPage() {
     } finally {
       setLoading(false);
     }
-  }, [session?.accessToken]);
+  }, [session?.user?.email]);
 
   useEffect(() => {
     fetchClinics();
   }, [fetchClinics]);
 
   const handleCreateClinic = async () => {
-    if (!session?.accessToken || !formEmail || !formName) {
+    if (!session?.user?.email || !formEmail || !formName) {
       toast.error("Preencha todos os campos");
       return;
     }
@@ -116,7 +112,6 @@ export default function ClinicsAdminPage() {
       const response = await authFetch(API_ENDPOINTS.CLINICS, {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${session.accessToken}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
@@ -162,13 +157,12 @@ export default function ClinicsAdminPage() {
   };
 
   const handleUpdateClinic = async () => {
-    if (!session?.accessToken || !selectedClinic) return;
+    if (!session?.user?.email || !selectedClinic) return;
 
     try {
       const response = await authFetch(API_ENDPOINTS.CLINIC_BY_ID(selectedClinic.id), {
         method: "PATCH",
         headers: {
-          Authorization: `Bearer ${session.accessToken}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
@@ -190,13 +184,12 @@ export default function ClinicsAdminPage() {
   };
 
   const handleToggleActive = async (clinic: Clinic) => {
-    if (!session?.accessToken) return;
+    if (!session?.user?.email) return;
 
     try {
       const response = await authFetch(API_ENDPOINTS.CLINIC_BY_ID(clinic.id), {
         method: "PATCH",
         headers: {
-          Authorization: `Bearer ${session.accessToken}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
