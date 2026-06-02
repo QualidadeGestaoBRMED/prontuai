@@ -22,6 +22,7 @@ import json
 import threading
 import mimetypes
 import os
+import re
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
@@ -458,16 +459,10 @@ async def view_document(document_id: str, current_user: User = Depends(get_curre
                     detail="Você não tem permissão para acessar este documento"
                 )
 
-        file_path = getattr(document, "file_path", None)
-        if not file_path:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Arquivo do documento não disponível"
-            )
-
         base_dir = os.path.abspath(settings.DOCUMENT_STORAGE_DIR)
         base_dir_prefix = base_dir + os.sep
         candidate_paths: list[str] = []
+        file_path = getattr(document, "file_path", None)
 
         def add_candidate(path: str | None) -> None:
             if not path:
@@ -475,12 +470,31 @@ async def view_document(document_id: str, current_user: User = Depends(get_curre
             if path not in candidate_paths:
                 candidate_paths.append(path)
 
+        def safe_filename(filename: str | None) -> str:
+            base = os.path.basename(filename or "documento")
+            safe = re.sub(r"[^A-Za-z0-9._-]", "_", base)
+            return safe or "documento"
+
         add_candidate(file_path)
         # Se vier path relativo, resolve dentro do diretório de uploads
-        if not os.path.isabs(file_path):
+        if file_path and not os.path.isabs(file_path):
             add_candidate(os.path.join(base_dir, file_path))
         # Fallback para paths absolutos antigos: tenta basename no diretório atual
-        add_candidate(os.path.join(base_dir, os.path.basename(file_path)))
+        if file_path:
+            add_candidate(os.path.join(base_dir, os.path.basename(file_path)))
+
+        # Fallback final para registros antigos sem file_path persistido:
+        # arquivos salvos pelo upload usam "<prefixo>_<nome_sanitizado>".
+        original_safe_name = safe_filename(document.filename)
+        add_candidate(os.path.join(base_dir, original_safe_name))
+        try:
+            for entry in os.scandir(base_dir):
+                if not entry.is_file():
+                    continue
+                if entry.name == original_safe_name or entry.name.endswith(f"_{original_safe_name}"):
+                    add_candidate(entry.path)
+        except FileNotFoundError:
+            pass
 
         resolved_path: str | None = None
         for candidate in candidate_paths:

@@ -13,19 +13,39 @@ const mapStatus = (validationStatus?: string | null): ProcessResult["status"] =>
   return "pending_review"
 }
 
+const isPresentString = (value: unknown): value is string =>
+  typeof value === "string" && value.trim() !== "" && value !== "Não encontrado"
+
+const asStringArray = (value: unknown): string[] =>
+  Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : []
+
 export const documentToProcessResult = (doc: DocumentApi): ProcessResult => {
   const payload = doc.result_payload || {}
   const validation = payload.validation_result || {}
-  const cpfPersistido = typeof doc.cpf === "string" && doc.cpf.trim() && doc.cpf !== "Não encontrado" ? doc.cpf : null
-  const cpfProcessado =
-    typeof payload.cpf_processado === "string" && payload.cpf_processado.trim() && payload.cpf_processado !== "Não encontrado"
-      ? payload.cpf_processado
-      : null
-  const identificadorConsulta =
-    typeof payload.identificador_consulta === "string" && payload.identificador_consulta.trim()
-      ? payload.identificador_consulta
-      : null
+  const cpfPersistido = isPresentString(doc.cpf) ? doc.cpf : null
+  const cpfProcessado = isPresentString(payload.cpf_processado) ? payload.cpf_processado : null
+  const identificadorConsulta = isPresentString(payload.identificador_consulta) ? payload.identificador_consulta : null
   const displayIdentifier = cpfPersistido || cpfProcessado || identificadorConsulta || "N/A"
+  const examesOcr =
+    asStringArray(payload.ocr_result?.exames_extraidos).length > 0
+      ? asStringArray(payload.ocr_result?.exames_extraidos)
+      : asStringArray(payload.exames_ocr).length > 0
+        ? asStringArray(payload.exames_ocr)
+        : asStringArray(doc.exams_ocr).length > 0
+          ? asStringArray(doc.exams_ocr)
+          : asStringArray(doc.exams_found)
+  const examesBrnet =
+    asStringArray(payload.brmed_result?.exames_obrigatorios).length > 0
+      ? asStringArray(payload.brmed_result?.exames_obrigatorios)
+      : asStringArray(payload.exames_brnet).length > 0
+        ? asStringArray(payload.exames_brnet)
+        : asStringArray(doc.exams_brnet)
+  const patientName =
+    isPresentString(payload.patient_name)
+      ? payload.patient_name
+      : isPresentString(payload.patientName)
+        ? payload.patientName
+        : "Não identificado"
   const tabelaComparacao = Array.isArray(payload.tabela_comparacao)
     ? (payload.tabela_comparacao as Array<{ status?: string }>)
     : []
@@ -40,13 +60,29 @@ export const documentToProcessResult = (doc: DocumentApi): ProcessResult => {
     : tabelaComparacao.length > 0
       ? tabelaComparacao.filter((e) => e.status === "extra_no_ocr").length
       : 0
+  const normalizedPayload = {
+    ...payload,
+    cpf: isPresentString(payload.cpf) ? payload.cpf : displayIdentifier,
+    cpf_processado: cpfProcessado || displayIdentifier,
+    identificador_consulta: identificadorConsulta || displayIdentifier,
+    patient_name: patientName,
+    ocr_result: {
+      ...(payload.ocr_result || {}),
+      text: payload.ocr_result?.text || "",
+      exames_extraidos: examesOcr,
+    },
+    brmed_result: {
+      ...(payload.brmed_result || {}),
+      exames_obrigatorios: examesBrnet,
+    },
+  }
 
   return {
     id: doc.id,
     batchId: doc.id,
     filename: doc.filename,
     cpf: displayIdentifier,
-    patientName: payload.patient_name || payload.patientName || "Paciente",
+    patientName,
     uploadedAt: toDate(doc.uploaded_at),
     processedAt: toDate(doc.updated_at || doc.uploaded_at),
     status: mapStatus(doc.validation_status),
@@ -54,7 +90,7 @@ export const documentToProcessResult = (doc: DocumentApi): ProcessResult => {
     approvalReason: payload.approvalReason || doc.approval_reason,
     examesFaltantes,
     examesExtras,
-    result: payload,
+    result: normalizedPayload,
     submittedBy: doc.uploaded_by_user_email || "-",
     reviewedBy: payload.reviewed_by || doc.reviewed_by || undefined,
     reviewedAt: payload.reviewed_at
