@@ -18,6 +18,8 @@ import uuid
 import csv
 import hashlib
 import hmac
+import threading
+from weakref import WeakKeyDictionary
 from pydantic import BaseModel, Field, ValidationError
 
 logger = logging.getLogger(__name__)
@@ -127,9 +129,22 @@ def _load_exam_similarity_csv() -> list[dict]:
 
 EXAM_SIMILARITY_CSV_DATA = _load_exam_similarity_csv()
 
-_PROCESSING_SEMAPHORE = None
-if getattr(settings, "DOCUMENT_PROCESS_CONCURRENCY", 0) > 0:
-    _PROCESSING_SEMAPHORE = asyncio.Semaphore(settings.DOCUMENT_PROCESS_CONCURRENCY)
+_PROCESSING_SEMAPHORES_BY_LOOP: "WeakKeyDictionary[asyncio.AbstractEventLoop, asyncio.Semaphore]" = WeakKeyDictionary()
+_PROCESSING_SEMAPHORES_LOCK = threading.Lock()
+
+
+def _get_processing_semaphore() -> asyncio.Semaphore | None:
+    concurrency = int(getattr(settings, "DOCUMENT_PROCESS_CONCURRENCY", 0) or 0)
+    if concurrency <= 0:
+        return None
+
+    loop = asyncio.get_running_loop()
+    with _PROCESSING_SEMAPHORES_LOCK:
+        semaphore = _PROCESSING_SEMAPHORES_BY_LOOP.get(loop)
+        if semaphore is None:
+            semaphore = asyncio.Semaphore(concurrency)
+            _PROCESSING_SEMAPHORES_BY_LOOP[loop] = semaphore
+        return semaphore
 
 def _normalizar_busca(texto: str) -> str:
     normalizado = ocr_service.normalizar_texto(texto)
@@ -1215,14 +1230,15 @@ async def processar_documento_completo(
     progress_callback=None,
     clinic_cnpj: Optional[str] = None,
 ) -> Dict[str, Any]:
-    if _PROCESSING_SEMAPHORE is None:
+    processing_semaphore = _get_processing_semaphore()
+    if processing_semaphore is None:
         return await _processar_documento_completo_impl(
             arquivo,
             exames_obrigatorios,
             progress_callback=progress_callback,
             clinic_cnpj=clinic_cnpj,
         )
-    async with _PROCESSING_SEMAPHORE:
+    async with processing_semaphore:
         return await _processar_documento_completo_impl(
             arquivo,
             exames_obrigatorios,
