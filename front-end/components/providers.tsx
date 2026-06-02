@@ -2,13 +2,16 @@
 
 import { SessionProvider } from "next-auth/react"
 import { NotificationProvider } from "@/hooks/use-notifications"
+import { MaintenanceWrapper } from "@/components/maintenance/maintenance-wrapper"
 
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <SessionProvider>
-      <NotificationProvider>
-        {children}
-      </NotificationProvider>
+      <MaintenanceWrapper>
+        <NotificationProvider>
+          {children}
+        </NotificationProvider>
+      </MaintenanceWrapper>
     </SessionProvider>
   )
 }

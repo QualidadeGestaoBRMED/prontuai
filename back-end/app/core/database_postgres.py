@@ -27,6 +27,7 @@ from app.core.db.models import (
     NotificationModel,
     AuditLogModel,
     JobModel,
+    MaintenanceWindowModel,
 )
 
 logger = logging.getLogger(__name__)
@@ -76,6 +77,7 @@ class PostgresUserDatabase:
         self._ensure_notification_columns()
         self._ensure_audit_log_table()
         self._ensure_job_table()
+        self._ensure_maintenance_table()
 
         # Cria admin padrão se banco estiver vazio
         self._ensure_default_admin()
@@ -125,6 +127,12 @@ class PostgresUserDatabase:
         with self.engine.begin() as connection:
             connection.execute(text("CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status)"))
             connection.execute(text("CREATE INDEX IF NOT EXISTS idx_jobs_created_at ON jobs(created_at)"))
+
+    def _ensure_maintenance_table(self) -> None:
+        """Garante índices úteis para janelas de manutenção."""
+        with self.engine.begin() as connection:
+            connection.execute(text("CREATE INDEX IF NOT EXISTS idx_maintenance_status ON maintenance_windows(status)"))
+            connection.execute(text("CREATE INDEX IF NOT EXISTS idx_maintenance_starts_at ON maintenance_windows(starts_at)"))
 
     # =============== MÉTODOS DE NOTIFICAÇÃO ===============
 
