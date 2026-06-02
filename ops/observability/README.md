@@ -35,7 +35,7 @@ Grafana will be at:
 
 ## Dashboards
 - A basic dashboard is provisioned: "ProntuAI - Logs"
-- It shows request rate, error rate, RPA failures, and a log panel.
+- It shows request rate, error rate, external API failures, and a log panel.
 
 ## Alerts
 An alert rule is provisioned (Grafana alerting) for error logs.
