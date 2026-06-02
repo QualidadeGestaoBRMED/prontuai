@@ -101,6 +101,25 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     return encoded_jwt
 
 
+def create_upload_token(user: User, expires_delta: Optional[timedelta] = None) -> str:
+    """
+    Cria um JWT curto e limitado ao envio direto de arquivos.
+
+    Esse token não deve funcionar nas rotas comuns: ele é aceito apenas pelas
+    dependencies específicas de upload para evitar expor o JWT principal no browser.
+    """
+    return create_access_token(
+        {
+            "sub": user.email,
+            "role": user.role.value if hasattr(user.role, "value") else str(user.role),
+            "name": user.name,
+            "clinic_id": user.clinic_id,
+            "scope": "upload",
+        },
+        expires_delta=expires_delta or timedelta(minutes=10),
+    )
+
+
 def decode_token(token: str) -> TokenData:
     """Decodifica e valida um token JWT"""
     try:
@@ -115,6 +134,14 @@ def decode_token(token: str) -> TokenData:
         role: str = payload.get("role")
         name: str = payload.get("name")
         clinic_id: Optional[str] = payload.get("clinic_id")
+        scope: Optional[str] = payload.get("scope")
+
+        if scope == "upload":
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Token de upload não é válido para esta rota",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
 
         if email is None or role is None:
             raise HTTPException(
@@ -270,6 +297,71 @@ async def require_admin(current_user: User = Depends(get_current_user)) -> User:
     return current_user
 
 
+async def get_current_upload_user(
+    credentials: HTTPAuthorizationCredentials = Depends(security)
+) -> User:
+    """
+    Valida token curto de upload direto.
+
+    Usado para evitar que arquivos grandes passem pelo proxy server-side do Next.
+    """
+    if credentials is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token de upload ausente",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    try:
+        payload = jwt.decode(
+            credentials.credentials,
+            SECRET_KEY,
+            algorithms=[ALGORITHM],
+            issuer=settings.JWT_ISSUER,
+            audience=settings.JWT_AUDIENCE,
+        )
+    except JWTError as e:
+        logger.error(f"Erro ao decodificar token de upload: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token de upload inválido ou expirado",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    scope = payload.get("scope")
+    if scope not in (None, "upload"):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token não autorizado para upload direto",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    email: str = payload.get("sub")
+    role: str = payload.get("role")
+    if not email or not role:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token de upload inválido: dados faltando",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    user = user_db.get_user_by_email(email)
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Usuário não encontrado",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Usuário inativo"
+        )
+
+    set_user_context(user)
+    return user
+
+
 async def require_checker(current_user: User = Depends(get_current_user)) -> User:
     """Requer role CHECKER ou ADMIN"""
     if current_user.role not in [UserRole.CHECKER, UserRole.ADMIN]:
@@ -286,5 +378,15 @@ async def require_sender(current_user: User = Depends(get_current_user)) -> User
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Apenas enviadores ou administradores podem acessar este recurso"
+        )
+    return current_user
+
+
+async def require_upload_sender(current_user: User = Depends(get_current_upload_user)) -> User:
+    """Requer token curto de upload para role SENDER ou ADMIN."""
+    if current_user.role not in [UserRole.SENDER, UserRole.ADMIN]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Apenas enviadores ou administradores podem enviar documentos"
         )
     return current_user

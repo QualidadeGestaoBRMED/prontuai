@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException, status, UploadFile, File, Body, De
 from fastapi.responses import StreamingResponse
 from app.services import workflow_service, brmed_service
 from app.core.job_manager import job_manager
-from app.core.auth import require_sender, get_current_user
+from app.core.auth import create_upload_token, require_sender, require_upload_sender, get_current_user
 from app.models.user import User, UserRole
 from app.core.database import user_db
 from app.core.logging import set_audit_context
@@ -34,6 +34,12 @@ class ConsultarBrmedRequest(BaseModel):
     cpf: str | None = None
     passaporte: str | None = None
     cnpj: str | None = None
+
+
+class UploadTokenResponse(BaseModel):
+    upload_token: str
+    expires_in_seconds: int = 600
+    token_type: str = "Bearer"
 
 def _purge_recent_uploads(now: float, window_seconds: int) -> None:
     if window_seconds <= 0:
@@ -83,6 +89,17 @@ def _get_clinic_cnpj(clinic_id: str | None) -> str | None:
     except Exception as exc:
         logger.warning(f"[CLINIC] Falha ao obter CNPJ da clínica {clinic_id}: {exc}")
         return None
+
+
+@router.post("/upload-token", response_model=UploadTokenResponse, summary="Gerar token curto para upload direto")
+async def create_direct_upload_token(current_user: User = Depends(require_sender)):
+    """
+    Emite token curto e limitado ao endpoint de upload direto.
+
+    O front chama este endpoint via proxy (requisição pequena) e usa o token
+    apenas para enviar o arquivo diretamente ao backend, sem passar pela Vercel.
+    """
+    return UploadTokenResponse(upload_token=create_upload_token(current_user))
 
 
 def _run_background_job_in_thread(**kwargs) -> None:
@@ -349,7 +366,7 @@ async def processar_documento_stream_api(
 async def processar_documento_async_api(
     arquivo: UploadFile = File(...),
     exames_obrigatorios: str = Body(..., embed=True),
-    current_user: User = Depends(require_sender)
+    current_user: User = Depends(require_upload_sender)
 ):
     """
     Inicia processamento de documento em background e retorna job_id imediatamente.
