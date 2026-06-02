@@ -63,6 +63,12 @@ const data = {
           roles: ["ADMIN", "SENDER"],
         },
         {
+          title: "Histórico",
+          url: "/historico",
+          icon: RiFileSearchLine,
+          roles: ["ADMIN", "SENDER"],
+        },
+        {
           title: "Checagem",
           url: "/checagem",
           icon: RiCheckDoubleLine,
@@ -75,7 +81,7 @@ const data = {
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const { isAdmin, role } = usePermissions();
-  const documentsRoutes = new Set(["/pendentes", "/checagem"]);
+  const documentsRoutes = new Set(["/pendentes", "/historico", "/checagem"]);
   const handleDocumentsRefresh = (url?: string) => {
     if (!url || !documentsRoutes.has(url)) return;
     if (typeof window === "undefined") return;
