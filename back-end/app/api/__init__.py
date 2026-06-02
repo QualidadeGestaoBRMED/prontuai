@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 from app.api import v1_ocr, v1_brmed, v1_validacao, v1_jobs, v1_notifications
 from app.api.v1 import audit_logs
-from app.api.v1 import auth, users, documents, clinics, admin
+from app.api.v1 import auth, users, documents, clinics, admin, maintenance
 
 api_router = APIRouter()
 api_router.include_router(v1_ocr.router, prefix="/v1")
@@ -17,3 +17,4 @@ api_router.include_router(documents.router, prefix="/v1")
 api_router.include_router(clinics.router, prefix="/v1")
 api_router.include_router(admin.router, prefix="/v1")
 api_router.include_router(audit_logs.router, prefix="/v1")
+api_router.include_router(maintenance.router, prefix="/v1")
