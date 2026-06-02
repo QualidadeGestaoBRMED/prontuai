@@ -815,21 +815,16 @@ async def consultar_brmed_api(
 
     try:
         cnpj_efetivo = cnpj or _get_clinic_cnpj(current_user.clinic_id)
-        if settings.USE_PRONTUAI_PATIENTS_EXAMS and cnpj_efetivo:
-            resultado = await brmed_service.consultar_exames_prontuai(
-                cpf=cpf,
-                passaporte=passaporte,
-                cnpj=cnpj_efetivo,
-                allow_rpa_fallback=settings.USE_PRONTUAI_API_FALLBACK_RPA,
-            )
-        elif cpf:
-            # Compatibilidade legada: mantém consulta por CPF no RPA
-            resultado = await brmed_service.consultar_exames_brmed(cpf)
-        else:
+        if not cnpj_efetivo:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Para consulta por passaporte é necessário informar também o cnpj.",
+                detail="Para consultar exames obrigatórios é necessário informar o cnpj.",
             )
+        resultado = await brmed_service.consultar_exames_prontuai(
+            cpf=cpf,
+            passaporte=passaporte,
+            cnpj=cnpj_efetivo,
+        )
 
         if "erro" in resultado:
             logger.error(
