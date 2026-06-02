@@ -86,6 +86,84 @@ const STORAGE_KEYS = {
 const MAX_NOTIFICATIONS = 100
 const MAX_NOTIFICATION_AGE_DAYS = 30
 
+const isPresentString = (value: unknown): value is string =>
+  typeof value === 'string' && value.trim() !== '' && value !== 'Não encontrado'
+
+const asStringArray = (value: unknown): string[] =>
+  Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : []
+
+const normalizeProcessingResultPayload = (result?: DocumentProcessingResult) => {
+  const raw = (result || {}) as DocumentProcessingResult & {
+    cpf?: string
+    patientName?: string
+    ocr_result?: { text?: string; exames_extraidos?: unknown }
+    brmed_result?: { exames_obrigatorios?: unknown }
+    validation_result?: {
+      exames_faltantes?: unknown
+      exames_extras?: unknown
+      analysis?: string
+    }
+  }
+
+  const examesOcr =
+    asStringArray(raw.ocr_result?.exames_extraidos).length > 0
+      ? asStringArray(raw.ocr_result?.exames_extraidos)
+      : asStringArray(raw.exames_ocr)
+  const examesBrnet =
+    asStringArray(raw.brmed_result?.exames_obrigatorios).length > 0
+      ? asStringArray(raw.brmed_result?.exames_obrigatorios)
+      : asStringArray(raw.exames_brnet)
+  const tabelaComparacao = Array.isArray(raw.tabela_comparacao)
+    ? raw.tabela_comparacao
+    : []
+  const examesFaltantes =
+    asStringArray(raw.validation_result?.exames_faltantes).length > 0
+      ? asStringArray(raw.validation_result?.exames_faltantes).length
+      : tabelaComparacao.filter((e) => e.status === 'faltante').length
+  const examesExtras =
+    asStringArray(raw.validation_result?.exames_extras).length > 0
+      ? asStringArray(raw.validation_result?.exames_extras).length
+      : tabelaComparacao.filter((e) => e.status === 'extra_no_ocr').length
+  const displayIdentifier =
+    (isPresentString(raw.cpf_processado) && raw.cpf_processado) ||
+    (isPresentString(raw.identificador_consulta) && raw.identificador_consulta) ||
+    (isPresentString(raw.cpf) && raw.cpf) ||
+    'N/A'
+  const patientName =
+    (isPresentString(raw.patient_name) && raw.patient_name) ||
+    (isPresentString(raw.patientName) && raw.patientName) ||
+    'Não identificado'
+
+  return {
+    displayIdentifier,
+    patientName,
+    examesOcr,
+    examesBrnet,
+    tabelaComparacao,
+    examesFaltantes,
+    examesExtras,
+    normalizedPayload: {
+      ...raw,
+      cpf: isPresentString(raw.cpf) ? raw.cpf : displayIdentifier,
+      cpf_processado: isPresentString(raw.cpf_processado) ? raw.cpf_processado : displayIdentifier,
+      identificador_consulta: isPresentString(raw.identificador_consulta)
+        ? raw.identificador_consulta
+        : displayIdentifier,
+      patient_name: patientName,
+      ocr_result: {
+        ...(raw.ocr_result || {}),
+        text: raw.ocr_result?.text || '',
+        exames_extraidos: examesOcr,
+      },
+      brmed_result: {
+        ...(raw.brmed_result || {}),
+        exames_obrigatorios: examesBrnet,
+      },
+      tabela_comparacao: tabelaComparacao,
+    },
+  }
+}
+
 // Funções auxiliares para localStorage
 function loadFromStorage<T>(key: string, defaultValue: T): T {
   if (typeof window === 'undefined') return defaultValue
@@ -879,13 +957,16 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     completionNotifiedRef.current = true
 
     const processResults = processingDocuments.map((doc) => {
-      const tabelaComparacao = doc.result?.tabela_comparacao || []
-      const examesFaltantes = tabelaComparacao.filter(
-        (e) => e.status === 'faltante'
-      ).length
-      const examesExtras = tabelaComparacao.filter(
-        (e) => e.status === 'extra_no_ocr'
-      ).length
+      const {
+        displayIdentifier,
+        patientName,
+        examesOcr,
+        examesBrnet,
+        tabelaComparacao,
+        examesFaltantes,
+        examesExtras,
+        normalizedPayload,
+      } = normalizeProcessingResultPayload(doc.result)
       const analysisDetails = doc.result?.analysis_details
       const normalizedAnalysisDetails =
         analysisDetails?.quality &&
@@ -897,14 +978,12 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
               match_confidence: analysisDetails.match_confidence,
             }
           : undefined
-      const identificadorConsulta = doc.result?.identificador_consulta || doc.result?.cpf_processado || 'N/A'
-      const cpfCompat = doc.result?.cpf_processado || doc.result?.identificador_consulta || ''
       return {
         id: doc.result?.document_id || doc.id,
         batchId: processingProcessId,
         filename: doc.file?.name ?? doc.fileName ?? 'Documento',
-        cpf: identificadorConsulta,
-        patientName: doc.result?.patient_name || 'Não identificado',
+        cpf: displayIdentifier,
+        patientName,
         uploadedAt: new Date(),
         processedAt: new Date(),
         status: doc.error
@@ -916,23 +995,26 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         examesFaltantes,
         examesExtras,
         result: {
-          cpf: cpfCompat,
-          cpf_processado: doc.result?.cpf_processado || undefined,
-          passaporte_processado: doc.result?.passaporte_processado || undefined,
-          cnpj_processado: doc.result?.cnpj_processado || undefined,
-          tipo_identificador_consulta: doc.result?.tipo_identificador_consulta || undefined,
-          identificador_consulta: doc.result?.identificador_consulta || undefined,
-          fonte_exames_obrigatorios: doc.result?.fonte_exames_obrigatorios || undefined,
-          patient_name: doc.result?.patient_name,
+          ...normalizedPayload,
+          cpf: normalizedPayload.cpf,
+          cpf_processado: normalizedPayload.cpf_processado,
+          passaporte_processado: normalizedPayload.passaporte_processado || undefined,
+          cnpj_processado: normalizedPayload.cnpj_processado || undefined,
+          tipo_identificador_consulta: normalizedPayload.tipo_identificador_consulta || undefined,
+          identificador_consulta: normalizedPayload.identificador_consulta,
+          fonte_exames_obrigatorios: normalizedPayload.fonte_exames_obrigatorios || undefined,
+          patient_name: normalizedPayload.patient_name,
           status: doc.error ? ('error' as const) : ('success' as const),
           ocr_result: {
-            text: '',
-            exames_extraidos: doc.result?.exames_ocr || [],
+            ...(normalizedPayload.ocr_result || {}),
+            text: normalizedPayload.ocr_result?.text || '',
+            exames_extraidos: examesOcr,
           },
           brmed_result: {
-            exames_obrigatorios: doc.result?.exames_brnet || [],
+            ...(normalizedPayload.brmed_result || {}),
+            exames_obrigatorios: examesBrnet,
           },
-          tabela_comparacao: doc.result?.tabela_comparacao || [],
+          tabela_comparacao: tabelaComparacao,
           analysis_details: normalizedAnalysisDetails,
           validation_result: {
             exames_faltantes: tabelaComparacao
