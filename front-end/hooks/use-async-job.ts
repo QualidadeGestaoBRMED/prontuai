@@ -9,6 +9,12 @@ import { API_ENDPOINTS } from "@/lib/config"
 import { DocumentProcessingResult } from "@/types/document-processing"
 import { authFetch } from "@/lib/auth-fetch"
 
+interface UploadTokenResponse {
+  upload_token: string
+  expires_in_seconds: number
+  token_type: string
+}
+
 interface UseAsyncJobReturn {
   /**
    * Inicia o processamento de um documento
@@ -57,7 +63,7 @@ export function useAsyncJob(): UseAsyncJobReturn {
   const pollingTimeoutsRef = useRef<Map<string, NodeJS.Timeout>>(new Map())
   const inFlightJobsRef = useRef<Map<string, Promise<string>>>(new Map())
 
-  const fetchWithTimeout = useCallback(
+	  const fetchWithTimeout = useCallback(
     async (input: RequestInfo | URL, init: RequestInit = {}, timeoutMs = 15000) => {
       const controller = new AbortController()
       const timeoutHandle = setTimeout(() => controller.abort(), timeoutMs)
@@ -72,6 +78,37 @@ export function useAsyncJob(): UseAsyncJobReturn {
     },
     []
   )
+
+  const fetchDirectWithTimeout = useCallback(
+    async (input: RequestInfo | URL, init: RequestInit = {}, timeoutMs = 60000) => {
+      const controller = new AbortController()
+      const timeoutHandle = setTimeout(() => controller.abort(), timeoutMs)
+      try {
+        return await fetch(input, {
+          ...init,
+          signal: controller.signal,
+        })
+      } finally {
+        clearTimeout(timeoutHandle)
+      }
+    },
+    []
+  )
+
+  const readErrorDetail = useCallback(async (response: Response) => {
+    const contentType = response.headers.get("content-type") || ""
+    if (contentType.includes("application/json")) {
+      const errorData = await response.json().catch(() => null)
+      if (errorData?.detail) return String(errorData.detail)
+      if (errorData?.message) return String(errorData.message)
+    }
+
+    const text = await response.text().catch(() => "")
+    if (text.trim()) {
+      return text.trim().slice(0, 300)
+    }
+    return `HTTP error! status: ${response.status}`
+  }, [])
 
   /**
    * Limpa timers de polling
@@ -129,14 +166,32 @@ export function useAsyncJob(): UseAsyncJobReturn {
           throw new Error("Sessão inválida. Faça login novamente.")
         }
 
-        const response = await fetchWithTimeout(API_ENDPOINTS.PROCESS_DOCUMENT_ASYNC, {
+        const tokenResponse = await fetchWithTimeout(API_ENDPOINTS.UPLOAD_TOKEN, {
           method: "POST",
+        }, 15000)
+
+        if (!tokenResponse.ok) {
+          throw new Error(await readErrorDetail(tokenResponse))
+        }
+
+        const tokenData: UploadTokenResponse = await tokenResponse.json()
+        if (!tokenData.upload_token) {
+          throw new Error("Token de upload não retornado pelo backend.")
+        }
+        if (!API_ENDPOINTS.PROCESS_DOCUMENT_ASYNC_DIRECT) {
+          throw new Error("NEXT_PUBLIC_API_URL não configurada para upload direto.")
+        }
+
+        const response = await fetchDirectWithTimeout(API_ENDPOINTS.PROCESS_DOCUMENT_ASYNC_DIRECT, {
+          method: "POST",
+          headers: {
+            Authorization: `${tokenData.token_type || "Bearer"} ${tokenData.upload_token}`,
+          },
           body: formData,
-        }, 30000)
+        }, 60000)
 
         if (!response.ok) {
-          const errorData = await response.json().catch(() => ({ detail: "Erro desconhecido" }))
-          throw new Error(errorData.detail || `HTTP error! status: ${response.status}`)
+          throw new Error(await readErrorDetail(response))
         }
 
         const data: CreateJobResponse = await response.json()
@@ -159,7 +214,7 @@ export function useAsyncJob(): UseAsyncJobReturn {
         inFlightJobsRef.current.delete(fileKey)
       }, 15000)
     }
-  }, [fetchWithTimeout, isDevAuthBypass, session?.user?.email])
+  }, [fetchDirectWithTimeout, fetchWithTimeout, isDevAuthBypass, readErrorDetail, session?.user?.email])
 
   /**
    * Consulta o status de um job

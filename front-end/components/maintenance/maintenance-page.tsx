@@ -37,7 +37,7 @@ export function MaintenancePage({ maintenance }: MaintenancePageProps) {
               <span>Manutenção em andamento</span>
               <span>Em progresso</span>
             </div>
-            <Progress value={72} className="h-2 bg-slate-200 dark:bg-slate-800" indicatorClassName="bg-amber-500" />
+            <Progress value={72} className="h-2 bg-slate-200 dark:bg-slate-800" indicatorClassName="bg-blue-600" />
           </div>
 
           {maintenance.eta && (

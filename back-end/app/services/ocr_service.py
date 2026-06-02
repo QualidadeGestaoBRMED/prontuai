@@ -18,7 +18,7 @@ import math
 
 # Importações do AWS Textract (para migração do OCR)
 import boto3
-from botocore.exceptions import ClientError
+from botocore.exceptions import BotoCoreError, ClientError, EndpointConnectionError
 from PyPDF2 import PdfReader, PdfWriter
 
 # Importações condicionais do Docling/PyTorch (apenas se USE_TEXTRACT=false)
@@ -644,6 +644,78 @@ def aguardar_job_textract_com_backoff(job_id: str, max_wait_seconds: int) -> str
     return "SUCCEEDED"
 
 
+_TEXTRACT_RETRYABLE_ERROR_CODES = {
+    "ProvisionedThroughputExceededException",
+    "ThrottlingException",
+    "Throttling",
+    "TooManyRequestsException",
+    "RequestTimeout",
+    "InternalServerError",
+}
+
+
+def _is_retryable_textract_error(error: Exception) -> bool:
+    if isinstance(error, (EndpointConnectionError, BotoCoreError, TimeoutError)):
+        return True
+    if isinstance(error, ClientError):
+        error_code = error.response.get("Error", {}).get("Code", "")
+        return error_code in _TEXTRACT_RETRYABLE_ERROR_CODES
+    return False
+
+
+def _detect_document_text_with_retry(document_bytes: bytes, context: str) -> dict:
+    if textract_client is None:
+        raise RuntimeError("Cliente Textract não foi inicializado")
+
+    max_retries = max(0, settings.TEXTRACT_SYNC_PAGE_RETRY_MAX)
+    base_delay = max(0.0, settings.TEXTRACT_SYNC_RETRY_BASE_DELAY_SECONDS)
+    attempts = max_retries + 1
+    last_error: Exception | None = None
+
+    for attempt in range(1, attempts + 1):
+        try:
+            if attempt > 1:
+                logger.info("[OCR] Retry Textract síncrono %s/%s (%s)", attempt, attempts, context)
+            return textract_client.detect_document_text(
+                Document={"Bytes": document_bytes}
+            )
+        except ClientError as error:
+            last_error = error
+            error_info = error.response.get("Error", {})
+            error_code = error_info.get("Code", "Unknown")
+            error_message = error_info.get("Message", str(error))
+            logger.warning(
+                "[OCR] Textract síncrono falhou (%s) tentativa %s/%s code=%s message=%s",
+                context,
+                attempt,
+                attempts,
+                error_code,
+                error_message,
+            )
+            if attempt >= attempts or not _is_retryable_textract_error(error):
+                raise
+        except (EndpointConnectionError, BotoCoreError, TimeoutError) as error:
+            last_error = error
+            logger.warning(
+                "[OCR] Textract síncrono falhou (%s) tentativa %s/%s type=%s message=%s",
+                context,
+                attempt,
+                attempts,
+                type(error).__name__,
+                error,
+            )
+            if attempt >= attempts:
+                raise
+
+        sleep_seconds = base_delay * (2 ** (attempt - 1))
+        if sleep_seconds > 0:
+            time.sleep(sleep_seconds)
+
+    if last_error:
+        raise last_error
+    raise RuntimeError(f"Textract síncrono falhou sem erro explícito ({context})")
+
+
 def processar_arquivo_textract_sincrono(file_path: str) -> str:
     """
     Processa documento via AWS Textract usando API síncrona (DetectDocumentText).
@@ -686,8 +758,9 @@ def processar_arquivo_textract_sincrono(file_path: str) -> str:
 
         # Chamar API síncrona do Textract
         logger.info(f"[OCR] Chamando detect_document_text (síncrono)...")
-        response = textract_client.detect_document_text(
-            Document={'Bytes': document_bytes}
+        response = _detect_document_text_with_retry(
+            document_bytes,
+            context=f"arquivo={os.path.basename(file_path)} size={tamanho_mb:.2f}MB",
         )
 
         logger.info(f"[OCR] Resposta recebida. Total de blocos: {len(response.get('Blocks', []))}")
@@ -770,10 +843,13 @@ def processar_pdf_textract_sincrono_por_pagina(
                 )
 
             logger.info(f"[OCR] Textract síncrono página {idx}/{total_pages} ({tamanho_mb:.2f} MB)")
-            response = textract_client.detect_document_text(
-                Document={"Bytes": page_bytes}
+            response = _detect_document_text_with_retry(
+                page_bytes,
+                context=f"pagina={idx}/{total_pages} size={tamanho_mb:.2f}MB",
             )
             markdown_parts.append(textract_to_markdown(response))
+            if settings.TEXTRACT_SYNC_PAGE_DELAY_SECONDS > 0 and idx < total_pages:
+                time.sleep(settings.TEXTRACT_SYNC_PAGE_DELAY_SECONDS)
 
         markdown = "\n\n".join(markdown_parts)
         logger.info(f"[OCR] PDF por página concluído. Markdown: {len(markdown)} caracteres")
@@ -1171,6 +1247,17 @@ async def _ocr_pipeline_impl(file, salvar_markdown=True, progress_hook: Optional
                     logger.warning(f"[OCR] {e}. Fallback para OCR local (Docling).")
                     if progress_hook:
                         progress_hook("Fila Textract, usando OCR local.")
+                    markdown = await asyncio.to_thread(
+                        processar_arquivo_docling,
+                        temp_path
+                    )
+                else:
+                    raise
+            except (EndpointConnectionError, BotoCoreError) as e:
+                if settings.TEXTRACT_FALLBACK_TO_LOCAL:
+                    logger.warning(f"[OCR] Falha de conexão Textract: {e}. Fallback para OCR local (Docling).")
+                    if progress_hook:
+                        progress_hook("Falha temporária no Textract, usando OCR local.")
                     markdown = await asyncio.to_thread(
                         processar_arquivo_docling,
                         temp_path
