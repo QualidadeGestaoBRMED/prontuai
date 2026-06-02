@@ -12,6 +12,7 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y \
     wget \
     curl \
+    ghostscript \
     gnupg \
     ca-certificates \
     fonts-liberation \
