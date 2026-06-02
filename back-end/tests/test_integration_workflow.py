@@ -102,8 +102,8 @@ TEST_CASES = [
 # --- Parametrização do Teste ---
 # O pytest executará o teste abaixo uma vez para cada caso em TEST_CASES.
 @pytest.mark.parametrize("test_case", TEST_CASES, ids=[tc["test_id"] for tc in TEST_CASES])
-@patch('app.services.brmed_service.consultar_exames_brmed') # Mock da consulta externa
-def test_full_integration_workflow(mock_brmed, test_case):
+@patch('app.services.brmed_service.consultar_exames_prontuai') # Mock da consulta externa
+def test_full_integration_workflow(mock_prontuai, test_case):
     """
     Testa o fluxo de integração completo de forma parametrizada.
     Este teste usa PDFs reais e valida a integração com Docling e a lógica de validação.
@@ -117,7 +117,7 @@ def test_full_integration_workflow(mock_brmed, test_case):
         patch('app.services.ocr_service.extrair_exames_ia', return_value=test_case["expected_ocr_extraction"]) as mock_exames_ia,
         patch('app.services.ocr_service.extrair_cpf_ia', return_value=test_case["expected_ocr_extraction"]["cpf"]) as mock_cpf_ia,
         patch('app.services.ocr_service.extrair_cpf_regex', return_value=test_case.get("mock_regex_cpf", None)) as mock_regex_cpf,
-        patch('app.services.brmed_service.consultar_exames_brmed', return_value=test_case["mock_brmed_exams"]) as mock_brmed
+        patch('app.services.brmed_service.consultar_exames_prontuai', return_value={**test_case["mock_brmed_exams"], "source": "prontuai_api", "cpf_processado": test_case["expected_ocr_extraction"]["cpf"], "cnpj_processado": "12345678000190"}) as mock_prontuai
     ):
 
         # --- 1. Etapa de Processamento Completo ---
@@ -154,4 +154,4 @@ def test_full_integration_workflow(mock_brmed, test_case):
             mock_cpf_ia.assert_called_once()
         else: # Caso contrário, a IA do CPF não deve ser chamada
             mock_cpf_ia.assert_not_called()
-        mock_brmed.assert_called_once() # A chamada ao BRMED agora é feita pelo workflow
+        mock_prontuai.assert_called_once() # A chamada externa agora é feita pela API ProntuAI
