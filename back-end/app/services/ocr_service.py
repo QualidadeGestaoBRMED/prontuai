@@ -1096,41 +1096,82 @@ def extrair_exames_ia(markdown: str) -> Dict[str, Any]:
     except Exception as e:
         return {"exames": [], "erro": f"Ocorreu um erro inesperado: {e}"}
 
+def _digits_only(value: str | None) -> str:
+    return re.sub(r"\D", "", value or "")
+
+
+def _is_valid_cpf(value: str | None) -> bool:
+    digits = _digits_only(value)
+    if len(digits) != 11 or len(set(digits)) == 1:
+        return False
+
+    numbers = [int(digit) for digit in digits]
+    for index in (9, 10):
+        checksum = sum(numbers[pos] * (index + 1 - pos) for pos in range(index))
+        expected = (checksum * 10) % 11
+        if expected == 10:
+            expected = 0
+        if numbers[index] != expected:
+            return False
+    return True
+
+
+def _is_valid_cnpj(value: str | None) -> bool:
+    digits = _digits_only(value)
+    if len(digits) != 14 or len(set(digits)) == 1:
+        return False
+
+    def _check_digit(numbers: list[int], weights: list[int]) -> int:
+        total = sum(number * weight for number, weight in zip(numbers, weights))
+        remainder = total % 11
+        return 0 if remainder < 2 else 11 - remainder
+
+    numbers = [int(digit) for digit in digits]
+    first = _check_digit(numbers[:12], [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2])
+    second = _check_digit(numbers[:13], [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2])
+    return numbers[12] == first and numbers[13] == second
+
+
+def _line_mentions_any(line: str, labels: tuple[str, ...]) -> bool:
+    upper = line.upper()
+    return any(label in upper for label in labels)
+
+
 def extrair_cpf_regex(markdown: str) -> str:
     if not markdown:
         return None
-
-    def _digits_only(value: str) -> str:
-        return re.sub(r"\D", "", value or "")
 
     # 1) Padrão UF/CPF (ex: CE/12345678900) com tolerância a espaços/pontuação
     uf_cpf_match = re.search(r"\b[A-Z]{2}\s*/\s*([0-9.\-\s]{11,20})\b", markdown)
     if uf_cpf_match:
         digits = _digits_only(uf_cpf_match.group(1))
-        if len(digits) == 11:
+        if _is_valid_cpf(digits):
             return digits
 
     # 2) Linhas contendo "CPF" com tolerância a separadores variados
     cpf_label_match = re.search(r"CPF[^0-9]{0,10}([0-9.\-\s]{11,20})", markdown, flags=re.IGNORECASE)
     if cpf_label_match:
         digits = _digits_only(cpf_label_match.group(1))
-        if len(digits) == 11:
+        if _is_valid_cpf(digits):
             return digits
 
-    # 3) Padrão genérico (com tolerância a múltiplos separadores)
-    generic_cpf_match = re.search(r"\b\d{3}[\.\s-]{0,5}\d{3}[\.\s-]{0,5}\d{3}[\.\s-]{0,5}\d{2}\b", markdown)
-    if generic_cpf_match:
-        digits = _digits_only(generic_cpf_match.group(0))
-        if len(digits) == 11:
-            return digits
-
-    # 4) Fallback por linha: pega 11 dígitos em linhas que citam CPF
+    # 3) Fallback por linha: pega 11 dígitos em linhas que citam CPF
     for line in markdown.splitlines():
         if "CPF" not in line.upper():
             continue
         digits = _digits_only(line)
-        if len(digits) == 11:
+        if _is_valid_cpf(digits):
             return digits
+
+    # 4) Padrão genérico, mas nunca em linhas de passaporte/CNPJ.
+    for line in markdown.splitlines():
+        if _line_mentions_any(line, ("PASSAPORTE", "PASSPORT", "CNPJ")):
+            continue
+        generic_cpf_match = re.search(r"\b\d{3}[\.\s-]{0,5}\d{3}[\.\s-]{0,5}\d{3}[\.\s-]{0,5}\d{2}\b", line)
+        if generic_cpf_match:
+            digits = _digits_only(generic_cpf_match.group(0))
+            if _is_valid_cpf(digits):
+                return digits
 
     return None
 
@@ -1139,20 +1180,20 @@ def extrair_cnpj_regex(markdown: str) -> str:
     if not markdown:
         return None
 
-    def _digits_only(value: str) -> str:
-        return re.sub(r"\D", "", value or "")
-
     cnpj_label_match = re.search(r"CNPJ[^0-9]{0,10}([0-9.\-/\s]{14,24})", markdown, flags=re.IGNORECASE)
     if cnpj_label_match:
         digits = _digits_only(cnpj_label_match.group(1))
-        if len(digits) == 14:
+        if _is_valid_cnpj(digits):
             return digits
 
-    generic_cnpj_match = re.search(r"\b\d{2}[.\s-]?\d{3}[.\s-]?\d{3}[/\s-]?\d{4}[-\s]?\d{2}\b", markdown)
-    if generic_cnpj_match:
-        digits = _digits_only(generic_cnpj_match.group(0))
-        if len(digits) == 14:
-            return digits
+    for line in markdown.splitlines():
+        if _line_mentions_any(line, ("PASSAPORTE", "PASSPORT", "CPF")):
+            continue
+        generic_cnpj_match = re.search(r"\b\d{2}[.\s-]?\d{3}[.\s-]?\d{3}[/\s-]?\d{4}[-\s]?\d{2}\b", line)
+        if generic_cnpj_match:
+            digits = _digits_only(generic_cnpj_match.group(0))
+            if _is_valid_cnpj(digits):
+                return digits
 
     return None
 
@@ -1162,7 +1203,7 @@ def extrair_passaporte_regex(markdown: str) -> str:
         return None
 
     passport_label_match = re.search(
-        r"(?:PASSAPORTE|PASSPORT)[^A-Z0-9]{0,12}([A-Z0-9]{5,20})",
+        r"(?:PASSAPORTE\s*/\s*PASSPORT|PASSPORT\s*/\s*PASSAPORTE|PASSAPORTE|PASSPORT)\s*[:\-]?\s*([A-Z0-9]{5,20})",
         markdown,
         flags=re.IGNORECASE,
     )
@@ -1170,6 +1211,15 @@ def extrair_passaporte_regex(markdown: str) -> str:
         return passport_label_match.group(1).upper()
 
     return None
+
+
+def _same_identifier_value(left: str | None, right: str | None) -> bool:
+    if not left or not right:
+        return False
+    left_clean = re.sub(r"[^A-Z0-9]", "", str(left).upper())
+    right_clean = re.sub(r"[^A-Z0-9]", "", str(right).upper())
+    return bool(left_clean and right_clean and left_clean == right_clean)
+
 
 _OCR_SEMAPHORE = None
 if getattr(settings, "OCR_CONCURRENCY", 0) > 0:
@@ -1302,6 +1352,9 @@ async def _ocr_pipeline_impl(file, salvar_markdown=True, progress_hook: Optional
 
     # Extrair passaporte e CNPJ via regex
     passaporte_extraido = extrair_passaporte_regex(markdown)
+    if _same_identifier_value(cpf_extraido, passaporte_extraido):
+        logger.info("[OCR] Valor extraído como CPF também aparece como passaporte; usando como passaporte.")
+        cpf_extraido = None
     cnpj_extraido = extrair_cnpj_regex(markdown)
     logger.info(f"[OCR] Passaporte extraído: {passaporte_extraido if passaporte_extraido else 'Nenhum passaporte encontrado'}")
     logger.info(f"[OCR] CNPJ extraído: {cnpj_extraido if cnpj_extraido else 'Nenhum CNPJ encontrado'}")
