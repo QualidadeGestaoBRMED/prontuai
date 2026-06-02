@@ -5,6 +5,11 @@
 // URL base da API de backend (uso server-side)
 export const API_URL = process.env.BACKEND_API_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
+// URL pública da API para uploads diretos do browser (evita limite de body do proxy Next/Vercel).
+// Não usa fallback para localhost em produção: se faltar NEXT_PUBLIC_API_URL, o upload deve falhar
+// com mensagem explícita em vez de tentar enviar o PDF para a máquina do usuário.
+export const API_DIRECT_URL = process.env.NEXT_PUBLIC_API_URL || "";
+
 // Base do proxy interno (uso client-side para evitar expor token JWT no browser)
 export const API_PROXY_BASE = process.env.NEXT_PUBLIC_API_PROXY_BASE || "/api/proxy";
 
@@ -26,6 +31,10 @@ export const API_ENDPOINTS = {
 
   // Documents (Async - recomendado)
   PROCESS_DOCUMENT_ASYNC: `${API_PROXY_BASE}/v1/processar-documento-async`,
+  PROCESS_DOCUMENT_ASYNC_DIRECT: API_DIRECT_URL
+    ? `${API_DIRECT_URL}/v1/processar-documento-async`
+    : "",
+  UPLOAD_TOKEN: `${API_PROXY_BASE}/v1/upload-token`,
 
   // Documents list
   DOCUMENTS: `${API_PROXY_BASE}/v1/documents`,
