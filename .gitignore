@@ -47,3 +47,15 @@ RESUMO_PROJETO.md
 miniconda.sh
 
 ops/observability/promtail-positions/
+
+.worktrees/
+.codex
+front-end/.codex
+CONTEXTO.md
+prontuai-security.md
+
+.codex
+front-end/.codex
+CONTEXTO.md
+prontuai-security.md
+.worktrees/
