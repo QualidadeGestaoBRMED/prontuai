@@ -147,3 +147,23 @@ class JobModel(Base):
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     started_at = Column(DateTime, nullable=True)
     completed_at = Column(DateTime, nullable=True)
+
+
+class MaintenanceWindowModel(Base):
+    """Janela operacional de manutenção da aplicação."""
+    __tablename__ = "maintenance_windows"
+
+    id = Column(String, primary_key=True)
+    status = Column(String, nullable=False, default="scheduled", index=True)
+    title = Column(String, nullable=False)
+    message = Column(Text, nullable=False)
+    starts_at = Column(DateTime, nullable=False, index=True)
+    ends_at = Column(DateTime, nullable=True)
+    eta = Column(String, nullable=True)
+    created_by = Column(String, nullable=True)
+    created_by_email = Column(String, nullable=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+    activated_at = Column(DateTime, nullable=True)
+    cancelled_at = Column(DateTime, nullable=True)
+    completed_at = Column(DateTime, nullable=True)

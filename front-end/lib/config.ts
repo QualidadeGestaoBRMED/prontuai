@@ -45,4 +45,11 @@ export const API_ENDPOINTS = {
 
   // Audit Logs
   AUDIT_LOGS: `${API_PROXY_BASE}/v1/audit-logs`,
+
+  // Maintenance
+  MAINTENANCE_STATUS: "/api/maintenance-status",
+  MAINTENANCE_WINDOWS: `${API_PROXY_BASE}/v1/maintenance/windows`,
+  MAINTENANCE_ACTIVATE: (id: string) => `${API_PROXY_BASE}/v1/maintenance/windows/${id}/activate`,
+  MAINTENANCE_CANCEL: (id: string) => `${API_PROXY_BASE}/v1/maintenance/windows/${id}/cancel`,
+  MAINTENANCE_COMPLETE: (id: string) => `${API_PROXY_BASE}/v1/maintenance/windows/${id}/complete`,
 } as const;
