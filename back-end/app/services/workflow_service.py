@@ -719,6 +719,12 @@ async def _processar_documento_completo_impl(
         cnpj_processado = None
     if passaporte_inicial:
         passaporte_inicial = re.sub(r"\s+", "", str(passaporte_inicial)).upper() or None
+    if cpf_inicial and passaporte_inicial:
+        cpf_digits = re.sub(r"\D", "", str(cpf_inicial))
+        passaporte_key = re.sub(r"[^A-Z0-9]", "", str(passaporte_inicial).upper())
+        if cpf_digits and cpf_digits == passaporte_key:
+            logger.info("[WORKFLOW] Mesmo valor extraído como CPF e passaporte; usando passaporte na consulta externa.")
+            cpf_inicial = None
     cpf_consulta = cpf_inicial
     passaporte_consulta = passaporte_inicial
     if cpf_consulta and passaporte_consulta:
