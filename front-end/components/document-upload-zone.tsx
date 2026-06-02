@@ -21,6 +21,8 @@ import {
 import { Button } from "@/components/ui/button"
 import { useEffect, useRef } from "react"
 
+const DEFAULT_MAX_FILE_SIZE = 30 * 1024 * 1024
+
 const getFileIcon = (file: FileWithPreview) => {
   const fileType = file.file instanceof File ? file.file.type : file.file.type
   const fileName = file.file instanceof File ? file.file.name : file.file.name
@@ -66,7 +68,7 @@ interface DocumentUploadZoneProps {
 
 export function DocumentUploadZone({
   onProcessFiles,
-  maxSize = 15 * 1024 * 1024,
+  maxSize = DEFAULT_MAX_FILE_SIZE,
   maxFiles = 3,
   autoOpen = false,
   disabled = false,
