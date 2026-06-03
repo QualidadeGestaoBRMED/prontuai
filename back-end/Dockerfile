@@ -8,32 +8,13 @@ ARG GIT_BRANCH=v1
 
 WORKDIR /app
 
-# Instalar dependências do sistema para Playwright, Nginx e Git
+# Instalar dependências do sistema para OCR, Nginx e Git
 RUN apt-get update && apt-get install -y \
     wget \
     curl \
     ghostscript \
     gnupg \
     ca-certificates \
-    fonts-liberation \
-    libasound2 \
-    libatk-bridge2.0-0 \
-    libatk1.0-0 \
-    libatspi2.0-0 \
-    libcups2 \
-    libdbus-1-3 \
-    libdrm2 \
-    libgbm1 \
-    libgtk-3-0 \
-    libnspr4 \
-    libnss3 \
-    libwayland-client0 \
-    libxcomposite1 \
-    libxdamage1 \
-    libxfixes3 \
-    libxkbcommon0 \
-    libxrandr2 \
-    xdg-utils \
     nginx \
     git \
     && rm -rf /var/lib/apt/lists/*
@@ -59,10 +40,6 @@ RUN if [ "$USE_GIT_CLONE" = "false" ]; then \
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt && \
     pip install --no-cache-dir gunicorn
-
-# Instalar navegador Chromium do Playwright
-RUN playwright install chromium && \
-    playwright install-deps chromium
 
 # Copiar código local se não usou git clone (depois das deps para aproveitar cache)
 RUN if [ "$USE_GIT_CLONE" = "false" ]; then \
