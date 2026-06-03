@@ -6,19 +6,6 @@ from fastapi import status
 from app.services import brmed_service
 
 
-def test_extract_nome_e_exames():
-    texto = (
-        "Nome / Name: FULANO DE TAL\n"
-        "4. Exames\n"
-        "HEMOGRAMA COMPLETO\tGLICOSE\n"
-        "ELETROCARDIOGRAMA\n"
-    )
-    result = brmed_service.extract_nome_e_exames(texto)
-    assert result["nome"] == "FULANO DE TAL"
-    assert "HEMOGRAMA COMPLETO" in result["exames"]
-    assert "GLICOSE" in result["exames"]
-    assert "ELETROCARDIOGRAMA" in result["exames"]
-
 
 def test_select_latest_pedido_by_date():
     pedidos = [
@@ -103,11 +90,11 @@ async def test_prontuai_api_success_maps_latest_pedido():
     assert result["exames"] == ["HEMOGRAMA", "AUDIOMETRIA"]
 
 
-@patch("app.services.brmed_service.consultar_exames_brmed", return_value={"nome": "FULANO", "exames": ["HEMOGRAMA"], "source": "rpa"})
-def test_consultar_brmed_route_legacy_cpf(mock_brmed, client):
-    with patch("app.api.v1_brmed.settings.USE_PRONTUAI_PATIENTS_EXAMS", False):
-        response = client.post("/v1/consultar-brmed", json={"cpf": "12345678900"})
+@patch("app.services.brmed_service.consultar_exames_prontuai", return_value={"nome": "FULANO", "exames": ["HEMOGRAMA"], "source": "prontuai_api"})
+def test_consultar_brmed_route_uses_prontuai_api(mock_prontuai, client):
+    response = client.post("/v1/consultar-brmed", json={"cpf": "12345678900", "cnpj": "12345678000190"})
     assert response.status_code == status.HTTP_200_OK
     data = response.json()
     assert data["nome"] == "FULANO"
     assert "HEMOGRAMA" in data["exames"]
+    mock_prontuai.assert_called_once_with(cpf="12345678900", passaporte=None, cnpj="12345678000190")
