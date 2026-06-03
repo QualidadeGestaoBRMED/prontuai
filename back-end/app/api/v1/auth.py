@@ -5,7 +5,8 @@ from fastapi import APIRouter, HTTPException, status, Depends
 from pydantic import BaseModel, EmailStr
 from google.auth.transport import requests as google_requests
 from google.oauth2 import id_token as google_id_token
-from app.core.auth import create_access_token, get_current_user
+from app.core.auth import create_access_token, create_refresh_token, get_current_user, SECRET_KEY, ALGORITHM
+from jose import JWTError, jwt as jose_jwt
 from app.core.config import settings
 from app.core.database import user_db
 from app.models.user import User
@@ -28,8 +29,19 @@ class GoogleAuthRequest(BaseModel):
 class TokenResponse(BaseModel):
     """Response com token de acesso"""
     access_token: str
+    refresh_token: str
     token_type: str = "bearer"
     user: User
+
+
+class RefreshRequest(BaseModel):
+    refresh_token: str
+
+
+class RefreshResponse(BaseModel):
+    access_token: str
+    refresh_token: str
+    token_type: str = "bearer"
 
 
 @router.post("/google", response_model=TokenResponse)
@@ -96,6 +108,7 @@ async def google_auth(auth_request: GoogleAuthRequest):
         token_data["clinic_id"] = user.clinic_id
 
     access_token = create_access_token(data=token_data)
+    refresh_token = create_refresh_token(data=token_data)
 
     logger.info(
         "Usuário autenticado: %s (role: %s, clinic_id: %s, google_sub: %s)",
@@ -107,7 +120,52 @@ async def google_auth(auth_request: GoogleAuthRequest):
 
     return TokenResponse(
         access_token=access_token,
+        refresh_token=refresh_token,
         user=user
+    )
+
+
+@router.post("/refresh", response_model=RefreshResponse)
+async def refresh_token(body: RefreshRequest):
+    """Renova o access token usando um refresh token válido."""
+    try:
+        payload = jose_jwt.decode(
+            body.refresh_token,
+            SECRET_KEY,
+            algorithms=[ALGORITHM],
+            issuer=settings.JWT_ISSUER,
+            audience=settings.JWT_AUDIENCE,
+        )
+    except JWTError as exc:
+        logger.warning("Refresh token inválido ou expirado: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Refresh token inválido ou expirado",
+        ) from exc
+
+    if payload.get("scope") != "refresh":
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token não é um refresh token",
+        )
+
+    email: str = payload.get("sub", "")
+    user = user_db.get_user_by_email(email)
+    if user is None or not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Usuário não encontrado ou inativo",
+        )
+
+    token_data = {"sub": user.email, "role": user.role.value, "name": user.name}
+    if user.clinic_id:
+        token_data["clinic_id"] = user.clinic_id
+
+    logger.info("Token renovado para: %s", user.email)
+
+    return RefreshResponse(
+        access_token=create_access_token(data=token_data),
+        refresh_token=create_refresh_token(data=token_data),
     )
 
 
