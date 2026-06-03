@@ -178,7 +178,7 @@ jobs:
           AWS_VPS_PORT: ${{ vars.AWS_VPS_PORT || '22' }}
           GHCR_DEPLOY_USERNAME: ${{ secrets.GHCR_DEPLOY_USERNAME }}
           GHCR_DEPLOY_TOKEN: ${{ secrets.GHCR_DEPLOY_TOKEN }}
-          BACKEND_IMAGE: ${{ steps.image.outputs.name }}:${{ github.sha }}
+          BACKEND_IMAGE: ${{ steps.image.outputs.name }}:test-v1
         run: |
           ssh -i ~/.ssh/aws_vps_key -p "$AWS_VPS_PORT" -o StrictHostKeyChecking=accept-new \
             "$AWS_VPS_USER@$AWS_VPS_HOST" \
