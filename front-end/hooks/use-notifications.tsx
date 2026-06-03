@@ -701,7 +701,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
 
       pollJob(jobId, {
         interval: 2000,
-        timeout: 0,
+        timeout: 600000,
         onProgress: (job: Job) => {
           pollingRetryCountRef.current.set(docId, 0)
           const stepToStage: Record<string, ProcessingStage> = {

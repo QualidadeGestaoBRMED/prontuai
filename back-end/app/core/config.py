@@ -77,7 +77,7 @@ class Settings:
     # JWT Authentication
     JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY")
     JWT_ALGORITHM = "HS256"
-    JWT_EXPIRATION_HOURS = int(os.getenv("JWT_EXPIRATION_HOURS", 2))
+    JWT_EXPIRATION_HOURS = int(os.getenv("JWT_EXPIRATION_HOURS", 8))
     JWT_ISSUER = os.getenv("JWT_ISSUER", "prontuai-backend")
     JWT_AUDIENCE = os.getenv("JWT_AUDIENCE", "prontuai-frontend")
     JWT_MIN_SECRET_LENGTH = int(os.getenv("JWT_MIN_SECRET_LENGTH", 32))
