@@ -26,6 +26,8 @@ CLAUDE.md
 .ai/
 .vscode/
 .idea/
+.venv312/
+
 *.code-workspace
 
 proximos.txt
