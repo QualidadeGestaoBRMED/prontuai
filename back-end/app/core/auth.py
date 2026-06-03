@@ -19,6 +19,7 @@ logger = logging.getLogger(__name__)
 # Configurações JWT
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = settings.JWT_EXPIRATION_HOURS * 60
+REFRESH_TOKEN_EXPIRE_DAYS = int(os.getenv("JWT_REFRESH_EXPIRATION_DAYS", 30))
 
 security = HTTPBearer(auto_error=False)
 
@@ -99,6 +100,14 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     )
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
+
+
+def create_refresh_token(data: dict) -> str:
+    """Cria um refresh token JWT de longa duração (scope=refresh)"""
+    return create_access_token(
+        {**data, "scope": "refresh"},
+        expires_delta=timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS),
+    )
 
 
 def create_upload_token(user: User, expires_delta: Optional[timedelta] = None) -> str:

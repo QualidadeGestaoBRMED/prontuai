@@ -4,6 +4,7 @@ import { API_ENDPOINTS } from "@/lib/config";
 
 interface BackendAuthData {
   access_token: string;
+  refresh_token: string;
   user: {
     id: string;
     email: string;
@@ -89,6 +90,7 @@ const authOptions: AuthOptions = {
       if (extendedProfile?.backendData) {
         const backendData = extendedProfile.backendData;
         token.accessToken = backendData.access_token;
+        token.refreshToken = backendData.refresh_token;
         token.user = {
           ...backendData.user,
           image: profilePicture ?? token.user?.image ?? (token as { picture?: string }).picture,
