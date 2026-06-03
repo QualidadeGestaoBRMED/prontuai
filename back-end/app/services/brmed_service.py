@@ -173,7 +173,7 @@ def extract_nome_e_exames(conteudo: str) -> Dict[str, Any]:
 
     # Extrai a seção 4 (Exames) até o final do texto
     exames_texto = ""
-    inicio = re.search(r"4\. Exames / Exams:", conteudo)
+    inicio = re.search(r"4\.\s*Exames(?:\s*/\s*Exams)?[:]?", conteudo)
     if inicio:
         start_idx = inicio.start()
         fim = re.search(r"\n\s*(5\.|6\.)\s", conteudo[start_idx:])
