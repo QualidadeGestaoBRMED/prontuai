@@ -37,11 +37,11 @@ docker compose down
 - Logs: Grafana http://localhost:3001
 
 ## 4) Incidente: API ProntuAI falhando
-Sintoma: prontuai_api_failed ou erro 502 na consulta de exames obrigatórios.
+Sintoma: prontuai_api_failed ou erro 502 na consulta de exames obrigatorios.
 Acoes:
 1) Ver logs da chamada externa e status HTTP retornado
 2) Conferir PRONTUAI_API_BASE_URL, PRONTUAI_SERVICE_TOKEN e PRONTUAI_CLIENT_NAME
-3) Reprocessar após normalização da API externa
+3) Reprocessar apos normalizacao da API externa
 
 ## 5) Incidente: OCR lento
 1) Conferir Textract status

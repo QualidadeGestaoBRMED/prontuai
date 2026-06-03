@@ -74,7 +74,7 @@
     },
     {
       "type": "stat",
-      "title": "RPA failures (req/s - 5m)",
+      "title": "External API failures (req/s - 5m)",
       "datasource": { "type": "loki", "uid": "loki" },
       "gridPos": { "x": 16, "y": 0, "w": 8, "h": 6 },
       "targets": [
