@@ -22,7 +22,7 @@ interface ExtendedProfile {
 const authOptions: AuthOptions = {
   session: {
     strategy: "jwt",
-    maxAge: Number(process.env.NEXTAUTH_SESSION_MAX_AGE || 60 * 60 * 2), // 2h
+    maxAge: Number(process.env.NEXTAUTH_SESSION_MAX_AGE || 60 * 60 * 8), // 8h
   },
   providers: [
     GoogleProvider({
