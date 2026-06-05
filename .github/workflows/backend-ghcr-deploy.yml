@@ -71,6 +71,7 @@ jobs:
         run: |
           owner="$(printf '%s' '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')"
           echo "name=ghcr.io/${owner}/prontuai-backend" >> "$GITHUB_OUTPUT"
+          echo "sha_tag=sha-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -89,6 +90,7 @@ jobs:
           file: back-end/Dockerfile
           push: true
           tags: |
+            ${{ steps.image.outputs.name }}:${{ steps.image.outputs.sha_tag }}
             ${{ steps.image.outputs.name }}:v1
             ${{ steps.image.outputs.name }}:latest
           cache-from: type=gha
@@ -178,7 +180,7 @@ jobs:
           AWS_VPS_PORT: ${{ vars.AWS_VPS_PORT || '22' }}
           GHCR_DEPLOY_USERNAME: ${{ secrets.GHCR_DEPLOY_USERNAME }}
           GHCR_DEPLOY_TOKEN: ${{ secrets.GHCR_DEPLOY_TOKEN }}
-          BACKEND_IMAGE: ${{ steps.image.outputs.name }}:v1
+          BACKEND_IMAGE: ${{ steps.image.outputs.name }}:${{ steps.image.outputs.sha_tag }}
         run: |
           ssh -i ~/.ssh/aws_vps_key -p "$AWS_VPS_PORT" -o StrictHostKeyChecking=accept-new \
             "$AWS_VPS_USER@$AWS_VPS_HOST" \
@@ -209,6 +211,7 @@ jobs:
           health_port="${BACKEND_HTTP_PORT:-8080}"
           for i in $(seq 1 30); do
             if curl -fsS "http://127.0.0.1:${health_port}/health" >/dev/null; then
+              printf '%s\n' "$BACKEND_IMAGE" > .current_backend_image
               docker image prune -f >/dev/null 2>&1 || true
               echo "Deploy OK: $BACKEND_IMAGE"
               exit 0
