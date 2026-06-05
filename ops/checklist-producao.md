@@ -12,7 +12,7 @@
 
 ## Operacao
 - [ ] OCR OK (Textract)
-- [ ] RPA OK (concurrency=1)
+- [ ] API ProntuAI OK
 - [ ] Jobs rodando sem travar fila
 
 ## Observabilidade
