@@ -56,7 +56,7 @@ Identificados ~150 itens divididos em 4 prioridades.
   - Sistema de notificações
   - Tabelas de resultados
   - Modals
-- [ ] Testes E2E com Playwright ou Cypress
+- [ ] Testes E2E
   - Fluxo completo: login → upload → validação → histórico
 
 #### Back-end

@@ -15,7 +15,6 @@ class Settings:
     PRONTUAI_CLIENT_NAME = os.getenv("PRONTUAI_CLIENT_NAME")
     PRONTUAI_API_TIMEOUT_SECONDS = float(os.getenv("PRONTUAI_API_TIMEOUT_SECONDS", "20"))
     USE_PRONTUAI_PATIENTS_EXAMS = os.getenv("USE_PRONTUAI_PATIENTS_EXAMS", "false").lower() == "true"
-    USE_PRONTUAI_API_FALLBACK_RPA = os.getenv("USE_PRONTUAI_API_FALLBACK_RPA", "true").lower() == "true"
     MODELO_GPT = os.getenv("MODELO_GPT", "gpt-4o-mini")
     LOG_FILE = os.getenv("LOG_FILE", "logs/app.log")
     LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
@@ -64,11 +63,6 @@ class Settings:
 
     # Feature Toggle: OCR Engine Selection
     USE_TEXTRACT = os.getenv("USE_TEXTRACT", "false").lower() == "true"
-
-    # BRMED RPA (Playwright) worker pool
-    BRMED_CONSULT_ENABLED = os.getenv("BRMED_CONSULT_ENABLED", "true").lower() == "true"
-    BRMED_RPA_WORKERS = int(os.getenv("BRMED_RPA_WORKERS", 1))
-    BRMED_RPA_CONCURRENCY = int(os.getenv("BRMED_RPA_CONCURRENCY", 1))
 
     # Concurrency limits (0 = sem limite)
     OCR_CONCURRENCY = int(os.getenv("OCR_CONCURRENCY", 2))

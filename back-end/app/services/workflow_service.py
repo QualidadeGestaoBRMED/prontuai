@@ -663,7 +663,7 @@ async def _processar_documento_completo_impl(
     clinic_cnpj: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
-    Orquestra o processo completo de OCR, extração de CPF/exames, consulta BRMED (com fallback)
+    Orquestra o processo completo de OCR, extração de CPF/exames, consulta da API ProntuAI
     e validação de exames.
 
     Args:
@@ -761,184 +761,60 @@ async def _processar_documento_completo_impl(
     fonte_exames_obrigatorios = None
     brmed_resultado = None
     patient_name = patient_name_from_ocr
-    # API-only mode: não permite fluxo legado via RPA.
-    # Se faltar CNPJ ou houver erro técnico, o processamento retorna erro,
-    # mas nunca desvia para automação RPA.
-    use_prontuai_api = True
-
-    if use_prontuai_api:
-        await send_progress(40, "brmed", "Consultando API ProntuAI para exames obrigatórios...")
-        t_brmed = time.perf_counter()
+    # API externa ProntuAI é a única fonte para exames obrigatórios.
+    await send_progress(40, "brmed", "Consultando API ProntuAI para exames obrigatórios...")
+    t_brmed = time.perf_counter()
+    _log_event(
+        "prontuai_api_attempt",
+        run_id=run_id,
+        has_cpf=bool(cpf_consulta),
+        has_passaporte=bool(passaporte_consulta),
+        has_cnpj=bool(cnpj_processado),
+    )
+    brmed_resultado = await brmed_service.consultar_exames_prontuai(
+        cpf=cpf_consulta,
+        passaporte=passaporte_consulta,
+        cnpj=cnpj_processado,
+    )
+    logger.info(f"[WORKFLOW] Consulta fonte externa concluída em {time.perf_counter() - t_brmed:.2f}s")
+    if "erro" not in brmed_resultado:
+        cpf_final = brmed_resultado.get("cpf_processado") or cpf_inicial
+        passaporte_final = brmed_resultado.get("passaporte_processado") or passaporte_inicial
+        tipo_identificador_consulta = brmed_resultado.get("tipo_identificador_consulta")
+        identificador_consulta = brmed_resultado.get("identificador_consulta")
+        fonte_exames_obrigatorios = brmed_resultado.get("source") or "prontuai_api"
+        exames_brnet = brmed_resultado.get("exames", [])
+        patient_name = brmed_resultado.get("nome")
         _log_event(
-            "prontuai_api_attempt",
+            "prontuai_api_success",
             run_id=run_id,
-            has_cpf=bool(cpf_consulta),
-            has_passaporte=bool(passaporte_consulta),
-            has_cnpj=bool(cnpj_processado),
+            source=fonte_exames_obrigatorios,
+            tipo_identificador=tipo_identificador_consulta,
+            pedido_exame_id=brmed_resultado.get("pedido_exame_id"),
+            exames_brnet_count=len(exames_brnet or []),
+            elapsed_seconds=round(time.perf_counter() - t_brmed, 3),
         )
-        brmed_resultado = await brmed_service.consultar_exames_prontuai(
-            cpf=cpf_consulta,
-            passaporte=passaporte_consulta,
-            cnpj=cnpj_processado,
-            allow_rpa_fallback=False,
+        await send_progress(
+            60,
+            "brmed",
+            f"Exames obrigatórios obtidos da fonte {fonte_exames_obrigatorios}: {len(exames_brnet)} exames",
         )
-        logger.info(f"[WORKFLOW] Consulta fonte externa concluída em {time.perf_counter() - t_brmed:.2f}s")
-        if "erro" not in brmed_resultado:
-            cpf_final = brmed_resultado.get("cpf_processado") or cpf_inicial
-            passaporte_final = brmed_resultado.get("passaporte_processado") or passaporte_inicial
-            tipo_identificador_consulta = brmed_resultado.get("tipo_identificador_consulta")
-            identificador_consulta = brmed_resultado.get("identificador_consulta")
-            fonte_exames_obrigatorios = brmed_resultado.get("source") or "prontuai_api"
-            exames_brnet = brmed_resultado.get("exames", [])
-            patient_name = brmed_resultado.get("nome")
-            _log_event(
-                "prontuai_api_success",
-                run_id=run_id,
-                source=fonte_exames_obrigatorios,
-                tipo_identificador=tipo_identificador_consulta,
-                pedido_exame_id=brmed_resultado.get("pedido_exame_id"),
-                exames_brnet_count=len(exames_brnet or []),
-                elapsed_seconds=round(time.perf_counter() - t_brmed, 3),
-            )
-            await send_progress(
-                60,
-                "brmed",
-                f"Exames obrigatórios obtidos da fonte {fonte_exames_obrigatorios}: {len(exames_brnet)} exames",
-            )
-        else:
-            _log_event(
-                "prontuai_api_failed",
-                run_id=run_id,
-                error=brmed_resultado.get("erro"),
-                error_type=brmed_resultado.get("error_type"),
-                source=brmed_resultado.get("source"),
-            )
-            exames_brnet = []
-
-            # No modo API, ao falhar no CPF inicial, tenta CPFs alternativos extraídos do documento.
-            if markdown_content:
-                await send_progress(45, "brmed", "Falha no CPF inicial, buscando CPFs alternativos...")
-                cpfs_alternativos = await ocr_service.extrair_todos_cpfs_ia(markdown_content, exclude_cpf=cpf_inicial)
-                _log_event(
-                    "prontuai_api_cpf_alternatives",
-                    run_id=run_id,
-                    cpf_inicial=cpf_inicial,
-                    cpfs_alternativos=cpfs_alternativos,
-                    cpfs_alternativos_count=len(cpfs_alternativos or []),
-                )
-
-                for idx, alt_cpf in enumerate(cpfs_alternativos):
-                    if alt_cpf in cpfs_tentados:
-                        continue
-                    cpfs_tentados.add(alt_cpf)
-                    await send_progress(46 + (idx * 2), "brmed", f"Tentando CPF alternativo na API ({idx + 1})...")
-                    t_brmed_alt = time.perf_counter()
-                    _log_event(
-                        "prontuai_api_attempt",
-                        run_id=run_id,
-                        has_cpf=True,
-                        has_passaporte=False,
-                        has_cnpj=bool(cnpj_processado),
-                        attempt_type="alternativo",
-                        attempt_index=idx + 1,
-                        cpf=alt_cpf,
-                    )
-                    alt_resultado = await brmed_service.consultar_exames_prontuai(
-                        cpf=alt_cpf,
-                        passaporte=None,
-                        cnpj=cnpj_processado,
-                        allow_rpa_fallback=False,
-                    )
-                    logger.info(f"[WORKFLOW] Consulta API (CPF alternativo) concluída em {time.perf_counter() - t_brmed_alt:.2f}s")
-
-                    if "erro" not in alt_resultado:
-                        brmed_resultado = alt_resultado
-                        cpf_final = brmed_resultado.get("cpf_processado") or alt_cpf
-                        passaporte_final = brmed_resultado.get("passaporte_processado") or passaporte_inicial
-                        tipo_identificador_consulta = brmed_resultado.get("tipo_identificador_consulta")
-                        identificador_consulta = brmed_resultado.get("identificador_consulta")
-                        fonte_exames_obrigatorios = brmed_resultado.get("source") or "prontuai_api"
-                        exames_brnet = brmed_resultado.get("exames", [])
-                        patient_name = brmed_resultado.get("nome")
-                        _log_event(
-                            "prontuai_api_success",
-                            run_id=run_id,
-                            source=fonte_exames_obrigatorios,
-                            tipo_identificador=tipo_identificador_consulta,
-                            pedido_exame_id=brmed_resultado.get("pedido_exame_id"),
-                            exames_brnet_count=len(exames_brnet or []),
-                            elapsed_seconds=round(time.perf_counter() - t_brmed_alt, 3),
-                            attempt_type="alternativo",
-                            attempt_index=idx + 1,
-                            cpf=alt_cpf,
-                        )
-                        await send_progress(
-                            60,
-                            "brmed",
-                            f"Exames obrigatórios obtidos da fonte {fonte_exames_obrigatorios}: {len(exames_brnet)} exames",
-                        )
-                        break
-
-                    _log_event(
-                        "prontuai_api_failed",
-                        run_id=run_id,
-                        error=alt_resultado.get("erro"),
-                        error_type=alt_resultado.get("error_type"),
-                        source=alt_resultado.get("source"),
-                        attempt_type="alternativo",
-                        attempt_index=idx + 1,
-                        cpf=alt_cpf,
-                    )
-
-            if not brmed_resultado or "erro" in brmed_resultado:
-                await send_progress(45, "brmed", "Falha na consulta de exames obrigatórios.")
     else:
-        # Modo legado (RPA), preservando comportamento quando flag da API está desligada
-        if cpf_inicial:
-            await send_progress(40, "brmed", f"Consultando exames obrigatórios (CPF: {cpf_inicial[:3]}***)")
-            t_brmed = time.perf_counter()
-            logger.info(f"[WORKFLOW] Tentando consultar BRMED com CPF inicial: {cpf_inicial}")
-            _log_event("brmed_attempt", run_id=run_id, cpf=cpf_inicial, attempt_type="inicial")
-            brmed_resultado = await brmed_service.consultar_exames_brmed(cpf_inicial)
-            logger.info(f"[WORKFLOW] Consulta BRMED concluída em {time.perf_counter() - t_brmed:.2f}s")
-            if "erro" not in brmed_resultado:
-                cpf_final = cpf_inicial
-                tipo_identificador_consulta = "cpf"
-                identificador_consulta = cpf_inicial
-                fonte_exames_obrigatorios = brmed_resultado.get("source") or "rpa"
-                exames_brnet = brmed_resultado.get("exames", [])
-                patient_name = brmed_resultado.get("nome")
-                _log_event(
-                    "brmed_success",
-                    run_id=run_id,
-                    cpf=cpf_final,
-                    patient_name=patient_name,
-                    exames_brnet=exames_brnet,
-                    exames_brnet_count=len(exames_brnet or []),
-                    elapsed_seconds=round(time.perf_counter() - t_brmed, 3),
-                )
-                await send_progress(60, "brmed", f"Exames obrigatórios obtidos: {len(exames_brnet)} exames")
-            else:
-                logger.warning(f'[WORKFLOW] Consulta BRMED falhou para CPF {cpf_inicial}: {brmed_resultado["erro"]}')
-                _log_event(
-                    "brmed_failed",
-                    run_id=run_id,
-                    cpf=cpf_inicial,
-                    error=brmed_resultado.get("erro"),
-                    elapsed_seconds=round(time.perf_counter() - t_brmed, 3),
-                )
-                await send_progress(45, "brmed", "CPF inicial falhou, buscando CPFs alternativos...")
-        else:
-            await send_progress(40, "brmed", "CPF não encontrado, buscando alternativas...")
+        _log_event(
+            "prontuai_api_failed",
+            run_id=run_id,
+            error=brmed_resultado.get("erro"),
+            error_type=brmed_resultado.get("error_type"),
+            source=brmed_resultado.get("source"),
+        )
+        exames_brnet = []
 
-        exames_brnet = brmed_resultado.get("exames", []) if brmed_resultado else []
-
-        # Se a consulta inicial falhou, tentar CPFs alternativos via IA
-        if not cpf_final and markdown_content:
-            logger.info("[WORKFLOW] CPF inicial falhou ou não encontrado. Buscando CPFs alternativos via IA...")
+        # No modo API, ao falhar no CPF inicial, tenta CPFs alternativos extraídos do documento.
+        if markdown_content:
+            await send_progress(45, "brmed", "Falha no CPF inicial, buscando CPFs alternativos...")
             cpfs_alternativos = await ocr_service.extrair_todos_cpfs_ia(markdown_content, exclude_cpf=cpf_inicial)
             _log_event(
-                "cpf_alternatives",
+                "prontuai_api_cpf_alternatives",
                 run_id=run_id,
                 cpf_inicial=cpf_inicial,
                 cpfs_alternativos=cpfs_alternativos,
@@ -946,48 +822,69 @@ async def _processar_documento_completo_impl(
             )
 
             for idx, alt_cpf in enumerate(cpfs_alternativos):
-                if alt_cpf not in cpfs_tentados:  # Evita tentar o mesmo CPF novamente
-                    await send_progress(45 + (idx * 5), "brmed", f"Tentando CPF alternativo {idx + 1}...")
-                    t_brmed_alt = time.perf_counter()
-                    logger.info(f"[WORKFLOW] Tentando consultar BRMED com CPF alternativo: {alt_cpf}")
+                if alt_cpf in cpfs_tentados:
+                    continue
+                cpfs_tentados.add(alt_cpf)
+                await send_progress(46 + (idx * 2), "brmed", f"Tentando CPF alternativo na API ({idx + 1})...")
+                t_brmed_alt = time.perf_counter()
+                _log_event(
+                    "prontuai_api_attempt",
+                    run_id=run_id,
+                    has_cpf=True,
+                    has_passaporte=False,
+                    has_cnpj=bool(cnpj_processado),
+                    attempt_type="alternativo",
+                    attempt_index=idx + 1,
+                    cpf=alt_cpf,
+                )
+                alt_resultado = await brmed_service.consultar_exames_prontuai(
+                    cpf=alt_cpf,
+                    passaporte=None,
+                    cnpj=cnpj_processado,
+                )
+                logger.info(f"[WORKFLOW] Consulta API (CPF alternativo) concluída em {time.perf_counter() - t_brmed_alt:.2f}s")
+
+                if "erro" not in alt_resultado:
+                    brmed_resultado = alt_resultado
+                    cpf_final = brmed_resultado.get("cpf_processado") or alt_cpf
+                    passaporte_final = brmed_resultado.get("passaporte_processado") or passaporte_inicial
+                    tipo_identificador_consulta = brmed_resultado.get("tipo_identificador_consulta")
+                    identificador_consulta = brmed_resultado.get("identificador_consulta")
+                    fonte_exames_obrigatorios = brmed_resultado.get("source") or "prontuai_api"
+                    exames_brnet = brmed_resultado.get("exames", [])
+                    patient_name = brmed_resultado.get("nome")
                     _log_event(
-                        "brmed_attempt",
+                        "prontuai_api_success",
                         run_id=run_id,
-                        cpf=alt_cpf,
+                        source=fonte_exames_obrigatorios,
+                        tipo_identificador=tipo_identificador_consulta,
+                        pedido_exame_id=brmed_resultado.get("pedido_exame_id"),
+                        exames_brnet_count=len(exames_brnet or []),
+                        elapsed_seconds=round(time.perf_counter() - t_brmed_alt, 3),
                         attempt_type="alternativo",
                         attempt_index=idx + 1,
+                        cpf=alt_cpf,
                     )
-                    brmed_resultado = await brmed_service.consultar_exames_brmed(alt_cpf)
-                    logger.info(f"[WORKFLOW] Consulta BRMED concluída em {time.perf_counter() - t_brmed_alt:.2f}s")
-                    if "erro" not in brmed_resultado:
-                        cpf_final = alt_cpf
-                        tipo_identificador_consulta = "cpf"
-                        identificador_consulta = alt_cpf
-                        fonte_exames_obrigatorios = brmed_resultado.get("source") or "rpa"
-                        exames_brnet = brmed_resultado.get("exames", [])
-                        patient_name = brmed_resultado.get("nome")
-                        _log_event(
-                            "brmed_success",
-                            run_id=run_id,
-                            cpf=cpf_final,
-                            patient_name=patient_name,
-                            exames_brnet=exames_brnet,
-                            exames_brnet_count=len(exames_brnet or []),
-                            elapsed_seconds=round(time.perf_counter() - t_brmed_alt, 3),
-                        )
-                        await send_progress(60, "brmed", f"CPF válido encontrado! {len(exames_brnet)} exames obrigatórios")
-                        break  # Encontrou um CPF válido, sai do loop
-                    else:
-                        logger.warning(f"[WORKFLOW] Consulta BRMED falhou para CPF alternativo {alt_cpf}: {brmed_resultado['erro']}")
-                        _log_event(
-                            "brmed_failed",
-                            run_id=run_id,
-                            cpf=alt_cpf,
-                            error=brmed_resultado.get("erro"),
-                            elapsed_seconds=round(time.perf_counter() - t_brmed_alt, 3),
-                        )
-                    cpfs_tentados.add(alt_cpf)
+                    await send_progress(
+                        60,
+                        "brmed",
+                        f"Exames obrigatórios obtidos da fonte {fonte_exames_obrigatorios}: {len(exames_brnet)} exames",
+                    )
+                    break
 
+                _log_event(
+                    "prontuai_api_failed",
+                    run_id=run_id,
+                    error=alt_resultado.get("erro"),
+                    error_type=alt_resultado.get("error_type"),
+                    source=alt_resultado.get("source"),
+                    attempt_type="alternativo",
+                    attempt_index=idx + 1,
+                    cpf=alt_cpf,
+                )
+
+        if not brmed_resultado or "erro" in brmed_resultado:
+            await send_progress(45, "brmed", "Falha na consulta de exames obrigatórios.")
     # Se nenhum CPF funcionou, retornar erro ou resultado parcial
     if not brmed_resultado or "erro" in brmed_resultado:
         logger.error("[WORKFLOW] Não foi possível consultar exames obrigatórios na fonte configurada.")
@@ -1081,7 +978,7 @@ async def _processar_documento_completo_impl(
 
     exames_brnet = brmed_resultado.get("exames", []) if brmed_resultado else []
     patient_name = patient_name or brmed_resultado.get("nome")
-    fonte_exames_obrigatorios = fonte_exames_obrigatorios or brmed_resultado.get("source") or "rpa"
+    fonte_exames_obrigatorios = fonte_exames_obrigatorios or brmed_resultado.get("source") or "prontuai_api"
 
     # API externa é fonte de verdade quando habilitada. request vira fallback somente quando necessário.
     if settings.USE_PRONTUAI_PATIENTS_EXAMS:
