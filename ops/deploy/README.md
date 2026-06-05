@@ -31,7 +31,7 @@ Os scripts assumem o backend em Docker e geram artefatos em `/tmp`.
 - `BASELINE_IMAGE_FILE` (default: `/tmp/prontuai-baseline.image`)
 - `LOG_FILE` (default: `/tmp/prontuai-release-YYYYMMDD.log`)
 - `CHECK_PUBLIC_HEALTH` (default: `1`)
-- `PUBLIC_HEALTH_URL` (default: `https://api.prontuai.cloud/health`)
+- `PUBLIC_HEALTH_URL` (default: `https://api.prontuai.grupobrmed.com.br/health`)
 
 ## Observacoes
 
