@@ -11,7 +11,7 @@ STAGING_COMPOSE_FILE="${STAGING_COMPOSE_FILE:-/tmp/prontuai-stg.compose.yml}"
 PROD_PIN_FILE="${PROD_PIN_FILE:-/tmp/prontuai-prod.pin.yml}"
 BASELINE_IMAGE_FILE="${BASELINE_IMAGE_FILE:-/tmp/prontuai-baseline.image}"
 STAGING_PROJECT="${STAGING_PROJECT:-prontuai_stg}"
-STAGING_BRANCH="${STAGING_BRANCH:-feat_runbook_staging_$(date +%Y%m%d)}"
+STAGING_BRANCH="${STAGING_BRANCH:-staging}"
 
 log() {
   printf '[%s] %s\n' "$(date -Iseconds)" "$*"

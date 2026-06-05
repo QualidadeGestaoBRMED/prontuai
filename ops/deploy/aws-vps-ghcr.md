@@ -72,6 +72,8 @@ Variable opcional:
 O workflow publica:
 
 - `ghcr.io/<owner>/prontuai-backend:<commit-sha>`
+- `ghcr.io/<owner>/prontuai-backend:staging`
+- `ghcr.io/<owner>/prontuai-backend:v1`
 - `ghcr.io/<owner>/prontuai-backend:latest`
 
 Se o pacote estiver privado, configure `GHCR_DEPLOY_USERNAME` e `GHCR_DEPLOY_TOKEN`.
@@ -79,12 +81,39 @@ Se estiver público, esses secrets podem ficar vazios.
 
 ## Deploy
 
+Fluxo esperado de branches:
+
+- `dev` para desenvolvimento diario
+- `staging` para homologacao
+- `v1` para producao
+
 O deploy automático roda em:
 
 - push na branch `v1`
+- push na branch `staging`
 - execução manual em `Actions -> Backend GHCR Deploy -> Run workflow`
+- execução manual em `Actions -> Backend GHCR Staging Deploy -> Run workflow`
 
-O push em `main` roda os testes, mas o build/push/deploy automático só acontece para `v1` ou execução manual.
+O deploy de produção usa secrets/vars `AWS_VPS_*` e `GHCR_DEPLOY_*`.
+O deploy de staging usa secrets/vars `AWS_STAGING_VPS_*` e `GHCR_STAGING_DEPLOY_*`.
+
+Secrets obrigatórios para staging:
+
+- `AWS_STAGING_VPS_HOST`
+- `AWS_STAGING_VPS_USER`
+- `AWS_STAGING_VPS_SSH_KEY`
+
+Secrets opcionais para staging:
+
+- `GHCR_STAGING_DEPLOY_USERNAME`
+- `GHCR_STAGING_DEPLOY_TOKEN`
+
+Variables opcionais para staging:
+
+- `AWS_STAGING_VPS_PORT`
+- `AWS_STAGING_VPS_DEPLOY_PATH`
+
+O push em outras branches nao faz deploy automatico. Producao so acontece em `v1`; staging so acontece em `staging`; ambos tambem podem ser executados manualmente.
 
 ## Nginx no host para api.prontuai.grupobrmed.com.br
 
