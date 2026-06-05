@@ -23,7 +23,7 @@ Os scripts assumem o backend em Docker e geram artefatos em `/tmp`.
 ## Variaveis uteis
 
 - `WORKTREE_DIR` (default: `.worktrees/prontuai-stg`)
-- `STAGING_BRANCH` (default: `feat_runbook_staging_YYYYMMDD`)
+- `STAGING_BRANCH` (default: `staging`)
 - `STAGING_PROJECT` (default: `prontuai_stg`)
 - `STAGING_OVERRIDE_FILE` (default: `/tmp/prontuai-stg.override.yml`)
 - `STAGING_COMPOSE_FILE` (default: `/tmp/prontuai-stg.compose.yml`)
@@ -35,6 +35,8 @@ Os scripts assumem o backend em Docker e geram artefatos em `/tmp`.
 
 ## Observacoes
 
+- Fluxo esperado de branches: `dev -> staging -> v1`.
+- `dev` e branches de trabalho podem seguir seu padrao normal de commits como `chore`, `fix` e `feat`; isso nao deve ser usado no nome da branch `staging`.
 - `10_prepare_staging.sh` gera `.env.stg` com `DATABASE_URL` placeholder de seguranca.
 - `10_prepare_staging.sh` tambem gera um compose dedicado de staging sem bind na porta 80.
 - Antes de subir staging, ajuste `DATABASE_URL` da `.env.stg` para o banco de homologacao.
