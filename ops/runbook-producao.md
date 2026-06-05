@@ -1,7 +1,7 @@
 # Runbook de producao (ProntuAI)
 
 ## Objetivo
-Guia rapido para operar o backend no notebook local com front na Vercel.
+Guia rapido para operar o backend na VPS com frontend apontando para `api.prontuai.grupobrmed.com.br`.
 
 ## 1) Start/Stop
 ### Backend
@@ -32,7 +32,8 @@ docker compose down
 - OCR_CONCURRENCY=2
 
 ## 3) Health check
-- Backend: http://localhost:8000/health
+- Backend local na VPS: http://127.0.0.1:8080/health
+- Backend público: https://api.prontuai.grupobrmed.com.br/health
 - Logs: Grafana http://localhost:3001
 
 ## 4) Incidente: API ProntuAI falhando
@@ -59,4 +60,3 @@ Acoes:
 ## 8) Rollback
 - Manter zip do backend anterior
 - Se quebra, voltar commit/tag anterior
-
