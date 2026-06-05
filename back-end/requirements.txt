@@ -23,7 +23,6 @@ pandas>=2.0.0  # Usado nos scripts de geração de índices FAISS
 
 # Utilities
 python-dotenv>=1.0.0
-playwright>=1.43.0
 # docling==2.0.0  # OCR - APENAS NECESSÁRIO SE USE_TEXTRACT=false (comentado para economizar espaço)
 tenacity>=8.2.0  # Retry logic para chamadas OpenAI
 python-jose[cryptography]>=3.3.0  # JWT tokens para autenticação
