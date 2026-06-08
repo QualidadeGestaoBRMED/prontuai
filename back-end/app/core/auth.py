@@ -338,7 +338,7 @@ async def get_current_upload_user(
         )
 
     scope = payload.get("scope")
-    if scope not in (None, "upload"):
+    if scope != "upload":
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token não autorizado para upload direto",

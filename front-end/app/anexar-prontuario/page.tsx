@@ -48,7 +48,9 @@ function PageLoading() {
 }
 
 function PageContent() {
-  const isDevAuthBypass = process.env.NEXT_PUBLIC_DEV_AUTH_BYPASS === "true"
+  const isDevAuthBypass =
+    process.env.NODE_ENV !== "production" &&
+    process.env.NEXT_PUBLIC_DEV_AUTH_BYPASS === "true"
   const searchParams = useSearchParams()
   const router = useRouter()
   const autoOpenUpload = searchParams.get("reenviar") === "1"

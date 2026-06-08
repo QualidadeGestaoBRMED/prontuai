@@ -2,7 +2,9 @@ import { NextResponse } from "next/server";
 import type { NextFetchEvent, NextRequest } from "next/server";
 import { withAuth } from "next-auth/middleware";
 
-const bypassAuth = process.env.NEXT_PUBLIC_DEV_AUTH_BYPASS === "true";
+const bypassAuth =
+  process.env.NODE_ENV !== "production" &&
+  process.env.NEXT_PUBLIC_DEV_AUTH_BYPASS === "true";
 
 const authMiddleware = withAuth({
   pages: {
@@ -18,5 +20,5 @@ export default function middleware(req: NextRequest, event: NextFetchEvent) {
 }
 
 export const config = {
-  matcher: ["/anexar-prontuario", "/checagem", "/insights", "/historico", "/pendentes"],
+  matcher: ["/anexar-prontuario", "/checagem", "/insights", "/historico", "/pendentes", "/admin/:path*"],
 };

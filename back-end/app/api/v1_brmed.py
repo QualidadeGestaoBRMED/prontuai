@@ -144,8 +144,11 @@ async def processar_documento_completo_api(
         except Exception as store_error:
             logger.warning(f"[REQUEST] Falha ao salvar arquivo para visualização: {store_error}")
         await arquivo.seek(0)  # Volta ao início para o workflow poder ler
-    except:
-        pass
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.warning("[REQUEST] Falha ao ler arquivo enviado: %s", exc)
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Falha ao ler arquivo enviado.") from exc
 
     logger.info(
         "[REQUEST] Documento recebido uploader_id=%s email=%s role=%s clinic_id=%s file=%s size=%s",
@@ -277,8 +280,11 @@ async def processar_documento_stream_api(
         content = await arquivo.read()
         file_size = f"{len(content) / 1024 / 1024:.2f}MB"
         await arquivo.seek(0)
-    except Exception:
-        content = b""
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.warning("[REQUEST-STREAM] Falha ao ler arquivo enviado: %s", exc)
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Falha ao ler arquivo enviado.") from exc
 
     logger.info(
         "[REQUEST-STREAM] Documento recebido uploader_id=%s email=%s clinic_id=%s file=%s size=%s",
@@ -390,8 +396,11 @@ async def processar_documento_async_api(
         content = await arquivo.read()
         file_size = f"{len(content) / 1024 / 1024:.2f}MB"
         await arquivo.seek(0)
-    except:
-        pass
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.warning("[REQUEST-ASYNC] Falha ao ler arquivo enviado: %s", exc)
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Falha ao ler arquivo enviado.") from exc
 
     logger.info(
         "[REQUEST-ASYNC] Documento recebido uploader_id=%s email=%s role=%s clinic_id=%s file=%s size=%s",
