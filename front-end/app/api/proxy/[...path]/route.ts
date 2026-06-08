@@ -68,7 +68,9 @@ async function proxy(request: NextRequest, context: { params: Promise<{ path: st
 
   const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET })
   const bearerToken = typeof token?.accessToken === "string" ? token.accessToken : undefined
-  const devBypassEnabled = process.env.NEXT_PUBLIC_DEV_AUTH_BYPASS === "true"
+  const devBypassEnabled =
+    process.env.NODE_ENV !== "production" &&
+    process.env.NEXT_PUBLIC_DEV_AUTH_BYPASS === "true"
   if (!bearerToken && !devBypassEnabled) {
     return NextResponse.json(
       {

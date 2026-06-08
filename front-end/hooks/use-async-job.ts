@@ -53,7 +53,9 @@ interface UseAsyncJobReturn {
 }
 
 export function useAsyncJob(): UseAsyncJobReturn {
-  const isDevAuthBypass = process.env.NEXT_PUBLIC_DEV_AUTH_BYPASS === "true"
+  const isDevAuthBypass =
+    process.env.NODE_ENV !== "production" &&
+    process.env.NEXT_PUBLIC_DEV_AUTH_BYPASS === "true"
   const { data: session } = useSession()
   const [currentJob, setCurrentJob] = useState<Job | null>(null)
   const [isPolling, setIsPolling] = useState(false)

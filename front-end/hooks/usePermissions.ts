@@ -35,7 +35,9 @@ export interface PermissionsHook {
 export function usePermissions(): PermissionsHook {
   const { data: session, status } = useSession();
 
-  const bypassAuth = process.env.NEXT_PUBLIC_DEV_AUTH_BYPASS === "true";
+  const bypassAuth =
+    process.env.NODE_ENV !== "production" &&
+    process.env.NEXT_PUBLIC_DEV_AUTH_BYPASS === "true";
   const devRole = (process.env.NEXT_PUBLIC_DEV_ROLE || "ADMIN") as UserRole;
 
   if (bypassAuth) {

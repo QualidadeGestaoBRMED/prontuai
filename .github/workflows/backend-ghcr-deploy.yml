@@ -48,6 +48,12 @@ jobs:
       - name: Install backend dependencies
         run: pip install -r back-end/requirements.txt
 
+      - name: Run backend security tests
+        env:
+          APP_ENV: test
+          OPENAI_API_KEY: test-key
+        run: PYTHONPATH=back-end pytest back-end/tests/test_auth_security.py -q --noconftest
+
       - name: Run focused backend tests
         env:
           APP_ENV: test

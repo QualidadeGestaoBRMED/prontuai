@@ -4,7 +4,7 @@ Endpoints para gerenciamento de documentos.
 from fastapi import APIRouter, HTTPException, status, Depends, Query, Request, BackgroundTasks
 from fastapi.responses import FileResponse
 from typing import List, Any
-from app.core.auth import get_current_user, require_admin
+from app.core.auth import get_current_user, require_admin, require_checker
 from app.core.database import user_db
 from app.models.user import User, UserRole
 from app.models.document import (
@@ -542,25 +542,23 @@ async def update_document(
     document_id: str,
     payload: DocumentUpdate,
     background_tasks: BackgroundTasks,
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_checker)
 ):
     """
     Atualiza status de validação e dados do documento.
 
-    - SENDER: apenas documentos da própria clínica
-    - CHECKER/ADMIN: qualquer documento
+    - CHECKER/ADMIN: atualiza status de validação e payload de revisão
     """
     try:
+        if current_user.role not in [UserRole.CHECKER, UserRole.ADMIN]:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Apenas checadores ou administradores podem atualizar validações",
+            )
+
         document = user_db.get_document_by_id(document_id)
         if not document:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Documento não encontrado")
-
-        # Verificar permissão
-        if current_user.role == UserRole.SENDER:
-            if not current_user.clinic_id:
-                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Usuário SENDER deve estar associado a uma clínica")
-            if document.clinic_id != current_user.clinic_id:
-                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Você não tem permissão para atualizar este documento")
 
         approval_reason = payload.approval_reason
         rejection_reason = payload.rejection_reason
