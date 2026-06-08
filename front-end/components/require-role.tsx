@@ -42,16 +42,16 @@ export function RequireRole({
   redirectTo = "/login"
 }: RequireRoleProps) {
   const { data: session, status } = useSession();
-  const bypassAuth = process.env.NEXT_PUBLIC_DEV_AUTH_BYPASS === "true";
+  const bypassAuth =
+    process.env.NODE_ENV !== "production" &&
+    process.env.NEXT_PUBLIC_DEV_AUTH_BYPASS === "true";
 
   if (bypassAuth) {
     return <>{children}</>;
   }
 
-  // Loading state - render children immediately for better UX
-  // NextAuth will handle redirect if needed
   if (status === "loading") {
-    return <>{children}</>;
+    return fallback ? <>{fallback}</> : null;
   }
 
   // Not authenticated
