@@ -11,7 +11,8 @@ from app.core.logging import (
     was_audit_logged,
     mark_audit_logged,
 )
-from app.core.auth import decode_token, assert_auth_security_configuration
+from jose import JWTError
+from app.core.auth import decode_token, decode_token_claims, assert_auth_security_configuration
 from app.core.config import settings
 from app.core.database import user_db
 from app.models.audit_log import AuditLogCreate
@@ -88,6 +89,24 @@ def _get_client_ip(request: Request) -> str:
     return _normalize_ip(request.client.host if request.client else None)
 
 
+def _get_rate_limit_subject(request: Request) -> str:
+    auth_header = request.headers.get("authorization") or ""
+    if auth_header.lower().startswith("bearer "):
+        token = auth_header[7:].strip()
+        if token:
+            try:
+                claims = decode_token_claims(token)
+                subject = str(claims.get("sub") or "").strip().lower()
+                scope = str(claims.get("scope") or "access").strip().lower()
+                if subject:
+                    return f"user:{scope}:{subject}"
+            except JWTError:
+                pass
+            except Exception:
+                logger.debug("Falha inesperada ao resolver sujeito para rate limit.", exc_info=True)
+    return f"ip:{_get_client_ip(request)}"
+
+
 def _is_recon_path(path: str) -> bool:
     lowered = (path or "").lower()
     return any(marker in lowered for marker in _RECON_PATH_MARKERS)
@@ -98,16 +117,22 @@ def _resolve_rate_limit(path: str) -> tuple[str, int, float]:
     lowered = (path or "").lower()
     if lowered.startswith("/v1/auth/"):
         return "auth", int(os.getenv("RATE_LIMIT_AUTH_PER_MINUTE", "30")), window
+    if lowered.startswith("/v1/jobs/") or lowered == "/v1/jobs":
+        return "jobs", int(os.getenv("RATE_LIMIT_JOBS_PER_MINUTE", "600")), window
+    if lowered.startswith("/v1/notifications"):
+        return "notifications", int(os.getenv("RATE_LIMIT_NOTIFICATIONS_PER_MINUTE", "240")), window
+    if lowered.startswith("/v1/upload-token"):
+        return "upload", int(os.getenv("RATE_LIMIT_UPLOAD_TOKEN_PER_MINUTE", "120")), window
     if _is_recon_path(lowered):
         return "recon", int(os.getenv("RATE_LIMIT_RECON_PER_MINUTE", "5")), window
     return "default", int(os.getenv("RATE_LIMIT_PER_MINUTE", "180")), window
 
 
-def _rate_limit_allowed(client_ip: str, scope: str, limit: int, window: float) -> bool:
+def _rate_limit_allowed(subject: str, scope: str, limit: int, window: float) -> bool:
     if limit <= 0:
         return True
     now = time.monotonic()
-    state_key = f"{scope}:{client_ip}"
+    state_key = f"{scope}:{subject}"
     with _RATE_LIMIT_LOCK:
         start, count = _RATE_LIMIT_STATE.get(state_key, (now, 0))
         if now - start >= window:
@@ -155,6 +180,7 @@ async def cors_preflight_middleware(request: Request, call_next):
 async def rate_limit_middleware(request: Request, call_next):
     if request.method == "OPTIONS" or request.url.path == "/health":
         return await call_next(request)
+    rate_limit_subject = _get_rate_limit_subject(request)
     client_ip = _get_client_ip(request)
     path = request.url.path or "/"
     scope, limit, window = _resolve_rate_limit(path)
@@ -163,12 +189,19 @@ async def rate_limit_middleware(request: Request, call_next):
         logger.warning("recon.path.blocked", extra={"ip": client_ip, "path": path})
         return Response(status_code=404, content="Not Found")
 
-    if not _rate_limit_allowed(client_ip, scope, limit, window):
-        logger.warning("rate.limit.exceeded", extra={"ip": client_ip, "path": path, "scope": scope})
+    if not _rate_limit_allowed(rate_limit_subject, scope, limit, window):
+        logger.warning(
+            "rate.limit.exceeded",
+            extra={"ip": client_ip, "subject": rate_limit_subject, "path": path, "scope": scope},
+        )
         return Response(
             status_code=429,
             content="Rate limit exceeded",
-            headers={"Retry-After": str(int(window)), "X-RateLimit-Scope": scope},
+            headers={
+                "Retry-After": str(int(window)),
+                "X-RateLimit-Scope": scope,
+                "X-RateLimit-Subject": rate_limit_subject.split(":", 1)[0],
+            },
         )
     return await call_next(request)
 
