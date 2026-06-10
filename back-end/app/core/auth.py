@@ -4,7 +4,7 @@ Sistema de autenticação e autorização com JWT.
 from datetime import datetime, timedelta
 import uuid
 import os
-from typing import Optional, List
+from typing import Optional, List, Any
 from jose import JWTError, jwt
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -177,6 +177,28 @@ def decode_token(token: str) -> TokenData:
             detail="Token inválido ou expirado",
             headers={"WWW-Authenticate": "Bearer"},
         )
+
+
+def decode_token_claims(token: str) -> dict[str, Any]:
+    """
+    Decodifica um JWT válido e retorna as claims brutas.
+
+    Usado em middlewares que precisam identificar o chamador sem aplicar as
+    restrições adicionais de rota do `decode_token`, como o bloqueio de
+    `scope=upload`.
+    """
+    try:
+        payload = jwt.decode(
+            token,
+            SECRET_KEY,
+            algorithms=[ALGORITHM],
+            issuer=settings.JWT_ISSUER,
+            audience=settings.JWT_AUDIENCE,
+        )
+    except JWTError as exc:
+        logger.debug("Falha ao decodificar claims do token para uso auxiliar: %s", exc)
+        raise
+    return payload
 
 
 async def get_current_user(
