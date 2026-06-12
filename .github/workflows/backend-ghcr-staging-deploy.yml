@@ -173,7 +173,7 @@ jobs:
             "mkdir -p '$DEPLOY_PATH' '$DEPLOY_PATH/logs' '$DEPLOY_PATH/resultados' '$DEPLOY_PATH/ocr_resultados' '$DEPLOY_PATH/auditoria_validacao' '$DEPLOY_PATH/data/uploads'"
 
           scp -i ~/.ssh/aws_vps_key -P "$AWS_VPS_PORT" -o StrictHostKeyChecking=accept-new \
-            back-end/docker-compose.aws.yml \
+            back-end/docker-compose.stg.yml \
             "$AWS_VPS_USER@$AWS_VPS_HOST:$DEPLOY_PATH/docker-compose.yml"
 
       - name: Deploy on VPS

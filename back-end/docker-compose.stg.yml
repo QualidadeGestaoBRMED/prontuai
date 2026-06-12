@@ -1,0 +1,29 @@
+services:
+  prontuai-backend-stg:
+    image: ${BACKEND_IMAGE:?BACKEND_IMAGE is required}
+    container_name: prontuai-backend-stg
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "${BACKEND_BIND_ADDRESS:-127.0.0.1}:${BACKEND_HTTP_PORT:-8080}:80"
+    environment:
+      # JobManager está em memória; múltiplos workers causam 404 em /v1/jobs.
+      - WORKERS=${WORKERS:-1}
+    volumes:
+      - ./logs:/app/logs
+      - ./resultados:/app/resultados
+      - ./ocr_resultados:/app/ocr_resultados
+      - ./auditoria_validacao:/app/auditoria_validacao
+      - ./data:/app/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
