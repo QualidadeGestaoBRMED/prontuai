@@ -14,7 +14,7 @@ permissions:
   packages: write
 
 env:
-  DEPLOY_PATH: ${{ vars.AWS_STAGING_VPS_DEPLOY_PATH || '/home/ec2-user/prontuai-staging' }}
+  DEPLOY_PATH: ${{ vars.AWS_STAGING_VPS_DEPLOY_PATH || '/home/ubuntu/prontuai-staging' }}
 
 jobs:
   test:
