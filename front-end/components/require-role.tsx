@@ -28,7 +28,7 @@ interface RequireRoleProps {
  * @example
  * ```tsx
  * <RequireRole
- *   allowedRoles={["ADMIN", "CHECKER"]}
+ *   allowedRoles={["ADMIN", "CHECKER", "BOTH"]}
  *   fallback={<div>Você não tem permissão</div>}
  * >
  *   <ValidationPanel />
@@ -67,6 +67,9 @@ export function RequireRole({
       redirect("/checagem");
     }
     if (userRole === "SENDER") {
+      redirect("/anexar-prontuario");
+    }
+    if (userRole === "BOTH") {
       redirect("/anexar-prontuario");
     }
     if (fallback) {

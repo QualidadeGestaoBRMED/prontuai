@@ -52,7 +52,7 @@ class UserModel(Base):
     name = Column(String, nullable=False)
     role = Column(SQLEnum(UserRole), nullable=False, default=UserRole.CHECKER)
     is_active = Column(Boolean, nullable=False, default=True)
-    clinic_id = Column(String, ForeignKey('clinics.id'), nullable=True)  # NULL para CHECKER/ADMIN
+    clinic_id = Column(String, ForeignKey('clinics.id'), nullable=True)  # NULL para roles sem vínculo
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 

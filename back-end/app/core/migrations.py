@@ -50,6 +50,19 @@ def check_if_migration_needed() -> tuple[bool, list[str]]:
             logger.warning("⚠️  Migration 002 necessária: coluna cnpj não existe")
             migrations_needed.append("002_update_clinic_fields.sql")
 
+        # Verificar migration 004: nova role BOTH no enum de usuários
+        cursor.execute("""
+            SELECT 1
+            FROM pg_type t
+            JOIN pg_enum e ON e.enumtypid = t.oid
+            WHERE t.typname = 'userrole'
+              AND e.enumlabel = 'BOTH'
+            LIMIT 1
+        """)
+        if not cursor.fetchone():
+            logger.warning("⚠️  Migration 004 necessária: role BOTH não existe no enum userrole")
+            migrations_needed.append("004_add_both_role.sql")
+
         cursor.close()
         conn.close()
 
@@ -112,8 +125,14 @@ def run_migration(migration_files: list[str]) -> bool:
             with open(migration_path, "r") as f:
                 sql_script = f.read()
 
-            cursor.execute(sql_script)
-            conn.commit()
+            if migration_file == "004_add_both_role.sql":
+                conn.commit()
+                conn.autocommit = True
+                cursor.execute(sql_script)
+                conn.autocommit = False
+            else:
+                cursor.execute(sql_script)
+                conn.commit()
 
             logger.info(f"✅ {migration_file} executada com sucesso!")
 
@@ -166,7 +185,7 @@ def run_data_migration() -> bool:
             default_clinic_id = default_clinic.id
             logger.info(f"✓ Clínica padrão criada: {default_clinic_id}")
 
-        # 2. Migrar usuários SENDER
+        # 2. Migrar usuários SENDER/BOTH
         all_users = user_db.get_all_users()
         senders_updated = 0
 
@@ -175,16 +194,16 @@ def run_data_migration() -> bool:
             if user.clinic_id:
                 continue
 
-            # Associar SENDER à clínica padrão
-            if user.role == UserRole.SENDER:
+            # Associar SENDER/BOTH à clínica padrão
+            if user.role in [UserRole.SENDER, UserRole.BOTH]:
                 user_db.update_user(
                     user_id=user.id,
                     clinic_id=default_clinic_id
                 )
                 senders_updated += 1
-                logger.info(f"  ✓ SENDER {user.email} associado à clínica padrão")
+                logger.info(f"  ✓ {user.role.value} {user.email} associado à clínica padrão")
 
-        logger.info(f"✅ Migração de dados concluída: {senders_updated} SENDERs migrados")
+        logger.info(f"✅ Migração de dados concluída: {senders_updated} usuários com vínculo migrados")
         return True
 
     except Exception as e:

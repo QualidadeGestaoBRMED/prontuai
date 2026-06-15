@@ -27,9 +27,9 @@ fi
 cp "$BACKEND_DIR/.env" "$STAGING_BACKEND_DIR/.env.stg"
 
 if rg -n '^DATABASE_URL=' "$STAGING_BACKEND_DIR/.env.stg" >/dev/null; then
-  sed -i 's|^DATABASE_URL=.*|DATABASE_URL=postgresql://CHANGE_ME_STAGING_USER:CHANGE_ME_STAGING_PASS@127.0.0.1:5433/prontuai_stg|' "$STAGING_BACKEND_DIR/.env.stg"
+  sed -i 's|^DATABASE_URL=.*|DATABASE_URL=postgresql://CHANGE_ME_STAGING_USER:CHANGE_ME_STAGING_PASS@prontuai-postgres-staging:5432/prontuai_stg|' "$STAGING_BACKEND_DIR/.env.stg"
 else
-  printf '\nDATABASE_URL=postgresql://CHANGE_ME_STAGING_USER:CHANGE_ME_STAGING_PASS@127.0.0.1:5433/prontuai_stg\n' >> "$STAGING_BACKEND_DIR/.env.stg"
+  printf '\nDATABASE_URL=postgresql://CHANGE_ME_STAGING_USER:CHANGE_ME_STAGING_PASS@prontuai-postgres-staging:5432/prontuai_stg\n' >> "$STAGING_BACKEND_DIR/.env.stg"
 fi
 
 if rg -n '^NEXT_PUBLIC_API_URL=' "$STAGING_BACKEND_DIR/.env.stg" >/dev/null; then
@@ -74,6 +74,12 @@ services:
       - ./auditoria_validacao-stg:/app/auditoria_validacao
       - ./uploads-stg:/app/uploads-stg
       - ./data:/app/data:ro
+    networks:
+      - prontuai-staging-net
+networks:
+  prontuai-staging-net:
+    external: true
+    name: prontuai-staging-net
 YAML
 
 cat > "$STAGING_COMPOSE_FILE" <<YAML
@@ -94,6 +100,8 @@ services:
       - $STAGING_BACKEND_DIR/auditoria_validacao-stg:/app/auditoria_validacao
       - $STAGING_BACKEND_DIR/uploads-stg:/app/uploads-stg
       - $STAGING_BACKEND_DIR/data:/app/data:ro
+    networks:
+      - prontuai-staging-net
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost/health"]
       interval: 30s
@@ -105,6 +113,10 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+networks:
+  prontuai-staging-net:
+    external: true
+    name: prontuai-staging-net
 YAML
 
 append_log "===== PREPARE STAGING ====="

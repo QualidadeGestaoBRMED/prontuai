@@ -36,26 +36,26 @@ async def create_user(
     """
     Cria um novo usuário (apenas ADMIN).
 
-    - Para role SENDER: clinic_id é OBRIGATÓRIO (deve escolher de uma clínica existente)
+    - Para role SENDER/BOTH: clinic_id é OBRIGATÓRIO (deve escolher de uma clínica existente)
     - Para role CHECKER/ADMIN: clinic_id deve ser NULL
     """
     try:
         clinic_id = user_create.clinic_id
 
-        # Validar clinic_id para SENDER
-        if user_create.role == UserRole.SENDER:
+        # Validar clinic_id para roles que exigem clínica
+        if user_create.role.requires_clinic:
             if not clinic_id:
-                raise ValueError("clinic_id é obrigatório para usuários SENDER. Crie uma clínica primeiro.")
+                raise ValueError(f"clinic_id é obrigatório para usuários {user_create.role.value}. Crie uma clínica primeiro.")
 
             # Verificar se clínica existe
             clinic = user_db.get_clinic_by_id(clinic_id)
             if not clinic:
                 raise ValueError(f"Clínica com ID {clinic_id} não encontrada")
 
-            logger.info(f"Criando usuário SENDER {user_create.email} para clínica {clinic.name} ({clinic_id})")
+            logger.info(f"Criando usuário {user_create.role.value} {user_create.email} para clínica {clinic.name} ({clinic_id})")
 
         # CHECKER e ADMIN não devem ter clinic_id
-        if user_create.role in [UserRole.CHECKER, UserRole.ADMIN]:
+        if not user_create.role.requires_clinic:
             clinic_id = None
 
         user = user_db.create_user(
@@ -104,9 +104,9 @@ async def update_user(
 
     Pode atualizar:
     - **name**: Nome do usuário
-    - **role**: Role (ADMIN, CHECKER, SENDER)
+    - **role**: Role (ADMIN, CHECKER, SENDER, BOTH)
     - **is_active**: Status ativo/inativo
-    - **clinic_id**: Clínica associada (apenas para SENDER)
+    - **clinic_id**: Clínica associada (apenas para SENDER/BOTH)
     """
     try:
         user = user_db.update_user(

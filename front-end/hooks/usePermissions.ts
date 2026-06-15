@@ -2,7 +2,7 @@
 
 import { useSession } from "next-auth/react";
 
-export type UserRole = "ADMIN" | "CHECKER" | "SENDER";
+export type UserRole = "ADMIN" | "CHECKER" | "SENDER" | "BOTH";
 
 export interface PermissionsHook {
   user: any;
@@ -42,8 +42,8 @@ export function usePermissions(): PermissionsHook {
 
   if (bypassAuth) {
     const isAdmin = devRole === "ADMIN";
-    const isChecker = devRole === "CHECKER" || devRole === "ADMIN";
-    const isSender = devRole === "SENDER" || devRole === "ADMIN";
+    const isChecker = devRole === "CHECKER" || devRole === "BOTH" || devRole === "ADMIN";
+    const isSender = devRole === "SENDER" || devRole === "BOTH" || devRole === "ADMIN";
 
     return {
       user: { role: devRole, email: "dev@local" },
@@ -67,13 +67,13 @@ export function usePermissions(): PermissionsHook {
 
   // Verificações de role
   const isAdmin = role === "ADMIN";
-  const isChecker = role === "CHECKER" || role === "ADMIN";
-  const isSender = role === "SENDER" || role === "ADMIN";
+  const isChecker = role === "CHECKER" || role === "BOTH" || role === "ADMIN";
+  const isSender = role === "SENDER" || role === "BOTH" || role === "ADMIN";
 
   // Permissões específicas
   const canManageUsers = isAdmin;
-  const canValidateExams = role === "CHECKER" || role === "ADMIN";
-  const canSendDocuments = role === "SENDER" || role === "ADMIN";
+  const canValidateExams = role === "CHECKER" || role === "BOTH" || role === "ADMIN";
+  const canSendDocuments = role === "SENDER" || role === "BOTH" || role === "ADMIN";
 
   return {
     user,

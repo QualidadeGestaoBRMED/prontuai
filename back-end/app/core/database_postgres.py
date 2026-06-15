@@ -400,7 +400,7 @@ class PostgresUserDatabase:
             if user_id and metadata.get("uploaded_by_user_id") == user_id:
                 return job
             return None
-        if role == UserRole.CHECKER:
+        if role.can_validate_exams:
             if clinic_id and metadata.get("clinic_id") == clinic_id:
                 return job
             return None
@@ -453,7 +453,7 @@ class PostgresUserDatabase:
             metadata = job.get("metadata") if isinstance(job.get("metadata"), dict) else {}
             if role == UserRole.SENDER and user_id and metadata.get("uploaded_by_user_id") == user_id:
                 filtered.append(job)
-            if role == UserRole.CHECKER and clinic_id and metadata.get("clinic_id") == clinic_id:
+            if role.can_validate_exams and clinic_id and metadata.get("clinic_id") == clinic_id:
                 filtered.append(job)
         return filtered
 
@@ -603,6 +603,10 @@ class PostgresUserDatabase:
 
     def create_user(self, email: str, name: str, role: UserRole = UserRole.CHECKER, clinic_id: Optional[str] = None) -> User:
         """Cria um novo usuário."""
+        if role.requires_clinic and not clinic_id:
+            raise ValueError(f"clinic_id é obrigatório para usuários {role.value}")
+        if not role.requires_clinic:
+            clinic_id = None
         session = self._get_session()
         try:
             # Verifica se usuário já existe
@@ -650,6 +654,10 @@ class PostgresUserDatabase:
         clinic_id: Optional[str] = None
     ) -> User:
         """Atualiza usuário."""
+        if role is not None and role.requires_clinic and not clinic_id:
+            raise ValueError(f"clinic_id é obrigatório para usuários {role.value}")
+        if role is not None and not role.requires_clinic:
+            clinic_id = None
         session = self._get_session()
         try:
             user_model = session.query(UserModel).filter(UserModel.id == user_id).first()
@@ -930,7 +938,7 @@ class PostgresUserDatabase:
             session.close()
 
     def get_all_documents(self, use_compact_payload: bool = False) -> List[Document]:
-        """Obtém todos os documentos (para CHECKER/ADMIN)."""
+        """Obtém todos os documentos (para roles com acesso global)."""
         session = self._get_session()
         try:
             t_query = time.perf_counter()
@@ -991,7 +999,7 @@ class PostgresUserDatabase:
 
             base_query = session.query(DocumentModel).options(*query_options)
 
-            if role in [UserRole.CHECKER, UserRole.ADMIN]:
+            if role.can_view_all_documents:
                 scoped_query = base_query
             else:
                 if not clinic_id:
@@ -1065,7 +1073,7 @@ class PostgresUserDatabase:
                 ).label("pending_review"),
             )
 
-            if role in [UserRole.CHECKER, UserRole.ADMIN]:
+            if role.can_view_all_documents:
                 scoped_summary_query = summary_query
             else:
                 if not clinic_id:

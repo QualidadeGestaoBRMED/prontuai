@@ -72,7 +72,7 @@ def _load_documents(
     compact: bool,
     user_id: str | None = None,
 ) -> List[Document]:
-    if role in [UserRole.CHECKER, UserRole.ADMIN]:
+    if role.can_view_all_documents:
         documents = user_db.get_all_documents(use_compact_payload=compact)
         logger.debug(f"[DOCUMENTS] {role.value} listou {len(documents)} documentos (todas clínicas)")
     else:
@@ -320,7 +320,7 @@ async def list_documents(
     Lista documentos processados.
 
     - SENDER: retorna apenas documentos da própria clínica
-    - CHECKER/ADMIN: retorna documentos de todas as clínicas
+    - CHECKER/BOTH/ADMIN: retorna documentos de todas as clínicas
     """
     try:
         client_ip = request.headers.get("x-forwarded-for") or (request.client.host if request.client else "unknown")
@@ -398,7 +398,7 @@ async def get_document(document_id: str, current_user: User = Depends(get_curren
     Obtém detalhes de um documento específico.
 
     - SENDER: apenas se o documento pertencer à sua clínica
-    - CHECKER/ADMIN: qualquer documento
+    - CHECKER/BOTH/ADMIN: qualquer documento
     """
     try:
         document = user_db.get_document_by_id(document_id)
@@ -441,7 +441,7 @@ async def view_document(document_id: str, current_user: User = Depends(get_curre
     Retorna o arquivo original do documento para visualização.
 
     - SENDER: apenas documentos próprios
-    - CHECKER/ADMIN: qualquer documento
+    - CHECKER/BOTH/ADMIN: qualquer documento
     """
     try:
         document = user_db.get_document_by_id(document_id)
@@ -547,13 +547,13 @@ async def update_document(
     """
     Atualiza status de validação e dados do documento.
 
-    - CHECKER/ADMIN: atualiza status de validação e payload de revisão
+    - CHECKER/BOTH/ADMIN: atualiza status de validação e payload de revisão
     """
     try:
-        if current_user.role not in [UserRole.CHECKER, UserRole.ADMIN]:
+        if not current_user.role.can_validate_exams:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Apenas checadores ou administradores podem atualizar validações",
+                detail="Apenas usuários com permissão de checagem podem atualizar validações",
             )
 
         document = user_db.get_document_by_id(document_id)
@@ -585,7 +585,7 @@ async def update_document(
         if not reviewed_at:
             reviewed_at = existing_reviewed_at
 
-        is_human_reviewer = current_user.role in [UserRole.ADMIN, UserRole.CHECKER]
+        is_human_reviewer = current_user.role.can_validate_exams
         effective_status = payload.validation_status or document.validation_status
 
         if effective_status == "validated" and is_human_reviewer and not reviewed_by:

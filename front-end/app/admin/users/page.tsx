@@ -32,7 +32,7 @@ import { Label } from "@/components/ui/label";
 import { API_ENDPOINTS } from "@/lib/config";
 import { authFetch } from "@/lib/auth-fetch";
 
-type UserRole = "ADMIN" | "CHECKER" | "SENDER";
+type UserRole = "ADMIN" | "CHECKER" | "SENDER" | "BOTH";
 
 interface User {
   id: string;
@@ -56,12 +56,14 @@ const roleLabels: Record<UserRole, string> = {
   ADMIN: "Administrador",
   CHECKER: "Checador",
   SENDER: "Enviador",
+  BOTH: "Ambos",
 };
 
 const roleDescriptions: Record<UserRole, string> = {
   ADMIN: "Acesso total + gerenciar usuários",
   CHECKER: "Apenas checagem de exames",
   SENDER: "Apenas enviar documentos",
+  BOTH: "Checagem e envio de documentos",
 };
 
 export default function UsersAdminPage() {
@@ -166,9 +168,9 @@ export default function UsersAdminPage() {
       return;
     }
 
-    // Validar clínica para SENDER
-    if (formRole === "SENDER" && !formClinicId) {
-      toast.error("Selecione uma clínica para usuários SENDER");
+    // Validar clínica para roles que exigem vínculo
+    if ((formRole === "SENDER" || formRole === "BOTH") && !formClinicId) {
+      toast.error("Selecione uma clínica para usuários que enviam documentos");
       return;
     }
 
@@ -192,8 +194,8 @@ export default function UsersAdminPage() {
         role: formRole,
       };
 
-      // Adicionar clinic_id apenas para SENDER
-      if (formRole === "SENDER") {
+      // Adicionar clinic_id para roles que exigem vínculo
+      if (formRole === "SENDER" || formRole === "BOTH") {
         body.clinic_id = formClinicId;
       }
 
@@ -415,11 +417,13 @@ export default function UsersAdminPage() {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <span
-                            className={`px-2 py-1 text-xs rounded-full ${
+                          className={`px-2 py-1 text-xs rounded-full ${
                               user.role === "ADMIN"
                                 ? "bg-purple-100 text-purple-800"
                                 : user.role === "CHECKER"
                                 ? "bg-blue-100 text-blue-800"
+                                : user.role === "BOTH"
+                                ? "bg-amber-100 text-amber-800"
                                 : "bg-green-100 text-green-800"
                             }`}
                           >
@@ -529,11 +533,19 @@ export default function UsersAdminPage() {
                         </div>
                       </div>
                     </SelectItem>
+                    <SelectItem value="BOTH">
+                      <div>
+                        <div className="font-medium">{roleLabels.BOTH}</div>
+                        <div className="text-xs text-gray-500 group-hover:text-white">
+                          {roleDescriptions.BOTH}
+                        </div>
+                      </div>
+                    </SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
-              {formRole === "SENDER" && (
+              {(formRole === "SENDER" || formRole === "BOTH") && (
                 <div>
                   <Label htmlFor="clinic">Clínica *</Label>
                   <Select
@@ -566,7 +578,7 @@ export default function UsersAdminPage() {
                     </SelectContent>
                   </Select>
                   <p className="text-xs text-gray-500 mt-1">
-                    Usuários SENDER devem estar vinculados a uma clínica
+                    Usuários SENDER e BOTH devem estar vinculados a uma clínica
                   </p>
                 </div>
               )}
@@ -591,7 +603,7 @@ export default function UsersAdminPage() {
                   !!emailError ||
                   !formEmail ||
                   !formName ||
-                  (formRole === "SENDER" && !formClinicId)
+                  ((formRole === "SENDER" || formRole === "BOTH") && !formClinicId)
                 }
               >
                 {creating ? "Criando..." : "Criar Usuário"}
@@ -635,6 +647,7 @@ export default function UsersAdminPage() {
                     <SelectItem value="ADMIN">{roleLabels.ADMIN}</SelectItem>
                     <SelectItem value="CHECKER">{roleLabels.CHECKER}</SelectItem>
                     <SelectItem value="SENDER">{roleLabels.SENDER}</SelectItem>
+                    <SelectItem value="BOTH">{roleLabels.BOTH}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

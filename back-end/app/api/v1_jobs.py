@@ -30,7 +30,7 @@ def _can_access_job(current_user: User, job_payload: dict[str, Any]) -> bool:
     if current_user.role == UserRole.SENDER:
         return bool(job_user_id and job_user_id == current_user.id)
 
-    if current_user.role == UserRole.CHECKER:
+    if current_user.role.can_validate_exams:
         # Política mínima: checker só enxerga jobs da própria clínica quando clinic_id existe.
         return bool(current_user.clinic_id and job_clinic_id == current_user.clinic_id)
 

@@ -221,3 +221,51 @@ def test_require_checker_rejects_sender_for_validation_updates(monkeypatch: pyte
 
     assert exc_info.value.status_code == 403
     assert "checadores" in exc_info.value.detail.lower()
+
+
+def test_require_checker_accepts_both(monkeypatch: pytest.MonkeyPatch):
+    auth = load_auth_module(monkeypatch, FakeUserDB())
+    both = User(
+        id="both-1",
+        email="both@grupobrmed.com.br",
+        name="Both",
+        role=UserRole.BOTH,
+        clinic_id="clinic-1",
+    )
+
+    result = asyncio.run(auth.require_checker(both))
+
+    assert result.role == UserRole.BOTH
+
+
+def test_require_sender_accepts_both(monkeypatch: pytest.MonkeyPatch):
+    auth = load_auth_module(monkeypatch, FakeUserDB())
+    both = User(
+        id="both-1",
+        email="both@grupobrmed.com.br",
+        name="Both",
+        role=UserRole.BOTH,
+        clinic_id="clinic-1",
+    )
+
+    result = asyncio.run(auth.require_sender(both))
+
+    assert result.role == UserRole.BOTH
+
+
+def test_require_upload_sender_accepts_both(monkeypatch: pytest.MonkeyPatch):
+    auth = load_auth_module(monkeypatch, FakeUserDB())
+    both = User(
+        id="both-1",
+        email="both@grupobrmed.com.br",
+        name="Both",
+        role=UserRole.BOTH,
+        clinic_id="clinic-1",
+    )
+    token = auth.create_upload_token(both)
+    credentials = HTTPAuthorizationCredentials(scheme="Bearer", credentials=token)
+
+    result = asyncio.run(auth.get_current_upload_user(credentials=credentials))
+    validated = asyncio.run(auth.require_upload_sender(result))
+
+    assert validated.role == UserRole.BOTH

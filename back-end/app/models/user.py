@@ -9,6 +9,23 @@ class UserRole(str, Enum):
     ADMIN = "ADMIN"      # Acesso total + gerenciar usuários
     CHECKER = "CHECKER"  # Apenas checagem de exames
     SENDER = "SENDER"    # Apenas enviar documentos (pendentes)
+    BOTH = "BOTH"  # Envio + checagem
+
+    @property
+    def can_send_documents(self) -> bool:
+        return self in {UserRole.ADMIN, UserRole.SENDER, UserRole.BOTH}
+
+    @property
+    def can_validate_exams(self) -> bool:
+        return self in {UserRole.ADMIN, UserRole.CHECKER, UserRole.BOTH}
+
+    @property
+    def requires_clinic(self) -> bool:
+        return self in {UserRole.SENDER, UserRole.BOTH}
+
+    @property
+    def can_view_all_documents(self) -> bool:
+        return self in {UserRole.ADMIN, UserRole.CHECKER, UserRole.BOTH}
 
 
 class User(BaseModel):
@@ -18,7 +35,7 @@ class User(BaseModel):
     name: str
     role: UserRole = UserRole.CHECKER
     is_active: bool = True
-    clinic_id: Optional[str] = None  # Chave estrangeira para Clinic (NULL para CHECKER/ADMIN)
+    clinic_id: Optional[str] = None  # Chave estrangeira para Clinic (NULL para CHECKER/ADMIN/role sem vínculo)
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
@@ -38,7 +55,7 @@ class UserCreate(BaseModel):
     email: EmailStr
     name: str
     role: UserRole = UserRole.CHECKER
-    clinic_id: Optional[str] = None  # Obrigatório para SENDER, NULL para CHECKER/ADMIN
+    clinic_id: Optional[str] = None  # Obrigatório para SENDER/BOTH, NULL para CHECKER/ADMIN
 
     class Config:
         json_schema_extra = {
@@ -76,4 +93,4 @@ class TokenData(BaseModel):
     email: EmailStr
     role: UserRole
     name: str
-    clinic_id: Optional[str] = None  # NULL para CHECKER/ADMIN
+    clinic_id: Optional[str] = None  # NULL para CHECKER/ADMIN/role sem vínculo

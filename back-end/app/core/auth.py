@@ -394,30 +394,30 @@ async def get_current_upload_user(
 
 
 async def require_checker(current_user: User = Depends(get_current_user)) -> User:
-    """Requer role CHECKER ou ADMIN"""
-    if current_user.role not in [UserRole.CHECKER, UserRole.ADMIN]:
+    """Requer permissão de checagem."""
+    if not current_user.role.can_validate_exams:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Apenas checadores ou administradores podem acessar este recurso"
+            detail="Apenas usuários com permissão de checagem podem acessar este recurso"
         )
     return current_user
 
 
 async def require_sender(current_user: User = Depends(get_current_user)) -> User:
-    """Requer role SENDER ou ADMIN"""
-    if current_user.role not in [UserRole.SENDER, UserRole.ADMIN]:
+    """Requer permissão de envio."""
+    if not current_user.role.can_send_documents:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Apenas enviadores ou administradores podem acessar este recurso"
+            detail="Apenas usuários com permissão de envio podem acessar este recurso"
         )
     return current_user
 
 
 async def require_upload_sender(current_user: User = Depends(get_current_upload_user)) -> User:
-    """Requer token curto de upload para role SENDER ou ADMIN."""
-    if current_user.role not in [UserRole.SENDER, UserRole.ADMIN]:
+    """Requer token curto de upload para quem pode enviar documentos."""
+    if not current_user.role.can_send_documents:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Apenas enviadores ou administradores podem enviar documentos"
+            detail="Apenas usuários com permissão de envio podem enviar documentos"
         )
     return current_user

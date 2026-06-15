@@ -9,7 +9,7 @@ interface BackendAuthData {
     id: string;
     email: string;
     name: string;
-    role: "ADMIN" | "CHECKER" | "SENDER";
+    role: "ADMIN" | "CHECKER" | "SENDER" | "BOTH";
     is_active: boolean;
   };
 }

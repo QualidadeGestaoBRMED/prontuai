@@ -4,7 +4,7 @@ Script de migração de dados do JSON (users.json) para PostgreSQL.
 Este script:
 1. Cria uma clínica padrão "Grupo BRMED - Legado" se não existir
 2. Migra usuários do JSON para PostgreSQL
-3. Associa usuários SENDER à clínica padrão
+3. Associa usuários SENDER/BOTH à clínica padrão
 4. Mantém CHECKER/ADMIN com clinic_id = NULL
 
 Uso:
@@ -91,11 +91,11 @@ def migrate_users_from_json():
                     logger.debug(f"  - {email} ({existing.role.value}): já existe, pulando")
                     continue
 
-                # Se for SENDER, associar à clínica padrão
-                if role == UserRole.SENDER:
+                # Se for SENDER ou BOTH, associar à clínica padrão
+                if role in [UserRole.SENDER, UserRole.BOTH]:
                     user_db.create_user(email=email, name=name, role=role, clinic_id=default_clinic_id)
                     senders_updated += 1
-                    logger.info(f"  ✓ SENDER {email} migrado e associado à clínica padrão")
+                    logger.info(f"  ✓ {role.value} {email} migrado e associado à clínica padrão")
 
                 # Se for CHECKER ou ADMIN, manter clinic_id = NULL
                 elif role in [UserRole.CHECKER, UserRole.ADMIN]:
@@ -111,7 +111,7 @@ def migrate_users_from_json():
         logger.info("\n" + "=" * 60)
         logger.info("RESUMO DA MIGRAÇÃO")
         logger.info("=" * 60)
-        logger.info(f"✓ SENDERS associados à clínica padrão: {senders_updated}")
+        logger.info(f"✓ SENDER/BOTH associados à clínica padrão: {senders_updated}")
         logger.info(f"✓ CHECKERS/ADMINS (sem clínica): {checkers_admins}")
         logger.info(f"- Já migrados (pulados): {already_migrated}")
         logger.info(f"✗ Erros: {errors}")

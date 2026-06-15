@@ -65,7 +65,7 @@ async def create_notification(
             if not recipient_user_email:
                 recipient_user_email = doc.uploaded_by_user_email
 
-        if current_user.role == UserRole.SENDER:
+        if current_user.role.can_send_documents:
             recipient_user_id = current_user.id
             recipient_user_email = current_user.email
             clinic_id = current_user.clinic_id or clinic_id

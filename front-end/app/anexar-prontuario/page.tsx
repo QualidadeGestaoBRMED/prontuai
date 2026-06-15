@@ -197,7 +197,7 @@ function PageContent() {
   }
 
   return (
-    <RequireRole allowedRoles={["SENDER", "ADMIN"]}>
+    <RequireRole allowedRoles={["SENDER", "BOTH", "ADMIN"]}>
     <SidebarProvider>
       {activeProcess && (
         <ProcessProgressBar
