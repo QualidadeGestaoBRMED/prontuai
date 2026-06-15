@@ -220,7 +220,7 @@ def test_require_checker_rejects_sender_for_validation_updates(monkeypatch: pyte
         asyncio.run(auth.require_checker(sender))
 
     assert exc_info.value.status_code == 403
-    assert "checadores" in exc_info.value.detail.lower()
+    assert "checagem" in exc_info.value.detail.lower()
 
 
 def test_require_checker_accepts_both(monkeypatch: pytest.MonkeyPatch):
@@ -254,7 +254,6 @@ def test_require_sender_accepts_both(monkeypatch: pytest.MonkeyPatch):
 
 
 def test_require_upload_sender_accepts_both(monkeypatch: pytest.MonkeyPatch):
-    auth = load_auth_module(monkeypatch, FakeUserDB())
     both = User(
         id="both-1",
         email="both@grupobrmed.com.br",
@@ -262,6 +261,7 @@ def test_require_upload_sender_accepts_both(monkeypatch: pytest.MonkeyPatch):
         role=UserRole.BOTH,
         clinic_id="clinic-1",
     )
+    auth = load_auth_module(monkeypatch, FakeUserDB({both.email: both}))
     token = auth.create_upload_token(both)
     credentials = HTTPAuthorizationCredentials(scheme="Bearer", credentials=token)
 
