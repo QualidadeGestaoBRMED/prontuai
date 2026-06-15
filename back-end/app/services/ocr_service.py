@@ -15,6 +15,8 @@ import uuid
 from datetime import datetime
 import time
 import math
+import threading
+from weakref import WeakKeyDictionary
 
 # Importações do AWS Textract (para migração do OCR)
 import boto3
@@ -1221,9 +1223,22 @@ def _same_identifier_value(left: str | None, right: str | None) -> bool:
     return bool(left_clean and right_clean and left_clean == right_clean)
 
 
-_OCR_SEMAPHORE = None
-if getattr(settings, "OCR_CONCURRENCY", 0) > 0:
-    _OCR_SEMAPHORE = asyncio.Semaphore(settings.OCR_CONCURRENCY)
+_OCR_SEMAPHORES_BY_LOOP: "WeakKeyDictionary[asyncio.AbstractEventLoop, asyncio.Semaphore]" = WeakKeyDictionary()
+_OCR_SEMAPHORES_LOCK = threading.Lock()
+
+
+def _get_ocr_semaphore() -> asyncio.Semaphore | None:
+    concurrency = int(getattr(settings, "OCR_CONCURRENCY", 0) or 0)
+    if concurrency <= 0:
+        return None
+
+    loop = asyncio.get_running_loop()
+    with _OCR_SEMAPHORES_LOCK:
+        semaphore = _OCR_SEMAPHORES_BY_LOOP.get(loop)
+        if semaphore is None:
+            semaphore = asyncio.Semaphore(concurrency)
+            _OCR_SEMAPHORES_BY_LOOP[loop] = semaphore
+        return semaphore
 
 
 async def _ocr_pipeline_impl(file, salvar_markdown=True, progress_hook: Optional[Callable[[str], None]] = None) -> Dict[str, Any]:
@@ -1394,9 +1409,10 @@ async def ocr_pipeline(file, salvar_markdown=True, progress_hook: Optional[Calla
     """
     Wrapper com limite de concorrência para OCR.
     """
-    if _OCR_SEMAPHORE is None:
+    semaphore = _get_ocr_semaphore()
+    if semaphore is None:
         return await _ocr_pipeline_impl(file, salvar_markdown=salvar_markdown, progress_hook=progress_hook)
-    async with _OCR_SEMAPHORE:
+    async with semaphore:
         return await _ocr_pipeline_impl(file, salvar_markdown=salvar_markdown, progress_hook=progress_hook)
 
 PROMPT_EXTRAIR_TODOS_CPFS = """
