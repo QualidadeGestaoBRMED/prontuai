@@ -694,6 +694,24 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     []
   )
 
+  const isRetryablePollingError = useCallback((error: string) => {
+    const normalized = error.trim().toLowerCase()
+    if (!normalized) return false
+
+    return (
+      normalized.includes("timeout") ||
+      normalized.includes("failed to fetch") ||
+      normalized.includes("networkerror") ||
+      normalized.includes("load failed") ||
+      normalized.includes("aborterror") ||
+      normalized.includes("status: 429") ||
+      normalized.includes("status: 500") ||
+      normalized.includes("status: 502") ||
+      normalized.includes("status: 503") ||
+      normalized.includes("status: 504")
+    )
+  }, [])
+
   const startPollingForDocument = useCallback(
     (docId: string, jobId: string) => {
       if (pollingJobsRef.current.has(jobId)) return
@@ -757,7 +775,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
           pollingRetryCountRef.current.set(docId, retries)
           pollingJobsRef.current.delete(jobId)
 
-          if (retries <= 3) {
+          if (isRetryablePollingError(error) && retries <= 3) {
             updateProcessingDocument(docId, (current) => ({
               ...current,
               statusMessage: `Reconectando ao status do processamento... (tentativa ${retries}/3)`,
@@ -778,7 +796,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         pollingJobsRef.current.delete(jobId)
       })
     },
-    [pollJob, updateProcessingDocument]
+    [isRetryablePollingError, pollJob, updateProcessingDocument]
   )
 
   const startBackgroundProcessing = useCallback(
