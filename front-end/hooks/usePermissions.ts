@@ -2,19 +2,41 @@
 
 import { useSession } from "next-auth/react";
 
-export type UserRole = "ADMIN" | "CHECKER" | "SENDER";
+export type UserRole = "ADMIN" | "MANAGER" | "CHECKER" | "SENDER";
 
 export interface PermissionsHook {
   user: any;
   role?: UserRole;
   isAdmin: boolean;
+  /** ADMIN ou MANAGER: acesso administrativo (MANAGER sem operações destrutivas) */
+  isManagement: boolean;
   isChecker: boolean;
   isSender: boolean;
   canManageUsers: boolean;
   canValidateExams: boolean;
   canSendDocuments: boolean;
+  /** Apenas ADMIN: exclusões e operações de sistema */
+  canDelete: boolean;
   isLoading: boolean;
   isAuthenticated: boolean;
+}
+
+function buildPermissions(role: UserRole | undefined) {
+  const isAdmin = role === "ADMIN";
+  const isManagement = role === "ADMIN" || role === "MANAGER";
+  const isChecker = role === "CHECKER" || isManagement;
+  const isSender = role === "SENDER" || isManagement;
+
+  return {
+    isAdmin,
+    isManagement,
+    isChecker,
+    isSender,
+    canManageUsers: isManagement,
+    canValidateExams: isChecker,
+    canSendDocuments: isSender,
+    canDelete: isAdmin,
+  };
 }
 
 /**
@@ -41,19 +63,10 @@ export function usePermissions(): PermissionsHook {
   const devRole = (process.env.NEXT_PUBLIC_DEV_ROLE || "ADMIN") as UserRole;
 
   if (bypassAuth) {
-    const isAdmin = devRole === "ADMIN";
-    const isChecker = devRole === "CHECKER" || devRole === "ADMIN";
-    const isSender = devRole === "SENDER" || devRole === "ADMIN";
-
     return {
       user: { role: devRole, email: "dev@local" },
       role: devRole,
-      isAdmin,
-      isChecker,
-      isSender,
-      canManageUsers: isAdmin,
-      canValidateExams: isChecker,
-      canSendDocuments: isSender,
+      ...buildPermissions(devRole),
       isLoading: false,
       isAuthenticated: true,
     };
@@ -65,25 +78,10 @@ export function usePermissions(): PermissionsHook {
   const isLoading = status === "loading";
   const isAuthenticated = status === "authenticated";
 
-  // Verificações de role
-  const isAdmin = role === "ADMIN";
-  const isChecker = role === "CHECKER" || role === "ADMIN";
-  const isSender = role === "SENDER" || role === "ADMIN";
-
-  // Permissões específicas
-  const canManageUsers = isAdmin;
-  const canValidateExams = role === "CHECKER" || role === "ADMIN";
-  const canSendDocuments = role === "SENDER" || role === "ADMIN";
-
   return {
     user,
     role,
-    isAdmin,
-    isChecker,
-    isSender,
-    canManageUsers,
-    canValidateExams,
-    canSendDocuments,
+    ...buildPermissions(role),
     isLoading,
     isAuthenticated,
   };

@@ -72,7 +72,7 @@ def _load_documents(
     compact: bool,
     user_id: str | None = None,
 ) -> List[Document]:
-    if role in [UserRole.CHECKER, UserRole.ADMIN]:
+    if role in [UserRole.CHECKER, UserRole.ADMIN, UserRole.MANAGER]:
         documents = user_db.get_all_documents(use_compact_payload=compact)
         logger.debug(f"[DOCUMENTS] {role.value} listou {len(documents)} documentos (todas clínicas)")
     else:
@@ -165,6 +165,11 @@ def _in_memory_paged_documents(
 ) -> dict[str, Any]:
     normalized_search = (search or "").strip().lower()
 
+    def _patient_name(doc: Document) -> str:
+        payload = doc.result_payload if isinstance(doc.result_payload, dict) else {}
+        name = payload.get("patient_name") or payload.get("patientName") or ""
+        return name if isinstance(name, str) else ""
+
     filtered = docs
     if normalized_search:
         filtered = [
@@ -172,6 +177,7 @@ def _in_memory_paged_documents(
             if normalized_search in (d.filename or "").lower()
             or normalized_search in (d.cpf or "").lower()
             or normalized_search in (d.uploaded_by_user_email or "").lower()
+            or normalized_search in _patient_name(d).lower()
         ]
 
     summary_counts = {"approved": 0, "rejected": 0, "pending_review": 0, "total": len(filtered)}
@@ -550,10 +556,10 @@ async def update_document(
     - CHECKER/ADMIN: atualiza status de validação e payload de revisão
     """
     try:
-        if current_user.role not in [UserRole.CHECKER, UserRole.ADMIN]:
+        if current_user.role not in [UserRole.CHECKER, UserRole.ADMIN, UserRole.MANAGER]:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Apenas checadores ou administradores podem atualizar validações",
+                detail="Apenas checadores, administradores ou gestores podem atualizar validações",
             )
 
         document = user_db.get_document_by_id(document_id)
@@ -585,7 +591,7 @@ async def update_document(
         if not reviewed_at:
             reviewed_at = existing_reviewed_at
 
-        is_human_reviewer = current_user.role in [UserRole.ADMIN, UserRole.CHECKER]
+        is_human_reviewer = current_user.role in [UserRole.ADMIN, UserRole.CHECKER, UserRole.MANAGER]
         effective_status = payload.validation_status or document.validation_status
 
         if effective_status == "validated" and is_human_reviewer and not reviewed_by:

@@ -1,9 +1,12 @@
 """
-Endpoints de gerenciamento de usuários (apenas ADMIN).
+Endpoints de gerenciamento de usuários (ADMIN e MANAGER).
+
+MANAGER pode listar, criar e editar usuários, mas não pode desativar (delete)
+nem criar/promover usuários ADMIN.
 """
 from fastapi import APIRouter, HTTPException, status, Depends
 from typing import List
-from app.core.auth import require_admin
+from app.core.auth import require_admin, require_management
 from app.core.database import user_db
 from app.models.user import User, UserCreate, UserUpdate, UserRole
 import logging
@@ -13,13 +16,22 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/users", tags=["Usuários"])
 
 
+def _assert_manager_cannot_touch_admin(actor: User, target_role: UserRole | None):
+    """Impede escalada de privilégio: MANAGER só atribui roles CHECKER/SENDER."""
+    if actor.role == UserRole.MANAGER and target_role in (UserRole.ADMIN, UserRole.MANAGER):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Gestores só podem atribuir as roles CHECKER e SENDER"
+        )
+
+
 @router.get("", response_model=List[User])
 async def list_users(
     include_inactive: bool = False,
-    admin: User = Depends(require_admin)
+    admin: User = Depends(require_management)
 ):
     """
-    Lista todos os usuários (apenas ADMIN).
+    Lista todos os usuários (ADMIN/MANAGER).
 
     - **include_inactive**: Se True, inclui usuários inativos
     """
@@ -31,14 +43,15 @@ async def list_users(
 @router.post("", response_model=User, status_code=status.HTTP_201_CREATED)
 async def create_user(
     user_create: UserCreate,
-    admin: User = Depends(require_admin)
+    admin: User = Depends(require_management)
 ):
     """
-    Cria um novo usuário (apenas ADMIN).
+    Cria um novo usuário (ADMIN/MANAGER; MANAGER só cria CHECKER/SENDER).
 
     - Para role SENDER: clinic_id é OBRIGATÓRIO (deve escolher de uma clínica existente)
-    - Para role CHECKER/ADMIN: clinic_id deve ser NULL
+    - Para role CHECKER/ADMIN/MANAGER: clinic_id deve ser NULL
     """
+    _assert_manager_cannot_touch_admin(admin, user_create.role)
     try:
         clinic_id = user_create.clinic_id
 
@@ -54,8 +67,8 @@ async def create_user(
 
             logger.info(f"Criando usuário SENDER {user_create.email} para clínica {clinic.name} ({clinic_id})")
 
-        # CHECKER e ADMIN não devem ter clinic_id
-        if user_create.role in [UserRole.CHECKER, UserRole.ADMIN]:
+        # CHECKER, ADMIN e MANAGER não devem ter clinic_id
+        if user_create.role in [UserRole.CHECKER, UserRole.ADMIN, UserRole.MANAGER]:
             clinic_id = None
 
         user = user_db.create_user(
@@ -77,10 +90,10 @@ async def create_user(
 @router.get("/{user_id}", response_model=User)
 async def get_user(
     user_id: str,
-    admin: User = Depends(require_admin)
+    admin: User = Depends(require_management)
 ):
     """
-    Busca um usuário por ID (apenas ADMIN).
+    Busca um usuário por ID (ADMIN/MANAGER).
     """
     user = user_db.get_user_by_id(user_id)
 
@@ -97,17 +110,26 @@ async def get_user(
 async def update_user(
     user_id: str,
     user_update: UserUpdate,
-    admin: User = Depends(require_admin)
+    admin: User = Depends(require_management)
 ):
     """
-    Atualiza um usuário existente (apenas ADMIN).
+    Atualiza um usuário existente (ADMIN/MANAGER; MANAGER não pode alterar ADMIN).
 
     Pode atualizar:
     - **name**: Nome do usuário
-    - **role**: Role (ADMIN, CHECKER, SENDER)
+    - **role**: Role (ADMIN, MANAGER, CHECKER, SENDER)
     - **is_active**: Status ativo/inativo
     - **clinic_id**: Clínica associada (apenas para SENDER)
     """
+    _assert_manager_cannot_touch_admin(admin, user_update.role)
+    if admin.role == UserRole.MANAGER:
+        target = user_db.get_user_by_id(user_id)
+        if target and target.role == UserRole.ADMIN:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Gestores não podem alterar usuários ADMIN"
+            )
+
     try:
         user = user_db.update_user(
             user_id=user_id,
@@ -157,10 +179,10 @@ async def delete_user(
 @router.get("/email/{email}", response_model=User)
 async def get_user_by_email(
     email: str,
-    admin: User = Depends(require_admin)
+    admin: User = Depends(require_management)
 ):
     """
-    Busca um usuário por email (apenas ADMIN).
+    Busca um usuário por email (ADMIN/MANAGER).
     """
     user = user_db.get_user_by_email(email)
 

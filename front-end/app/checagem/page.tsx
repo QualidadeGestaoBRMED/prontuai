@@ -34,6 +34,10 @@ export default function Page() {
     page,
     setPage,
     totalPages,
+    search,
+    setSearch,
+    statusFilter,
+    setStatusFilter,
     summaryCounts,
     refresh,
   } = useDocumentsPaged({
@@ -43,6 +47,12 @@ export default function Page() {
   })
   const sessionData = useSession()
   const session = sessionData?.data || null
+  // Spinner só no primeiro carregamento: desmontar a tabela em refetches de busca
+  // perderia o texto digitado nos filtros (que vivem no estado interno da tabela).
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(false)
+  useEffect(() => {
+    if (!loading) setHasLoadedOnce(true)
+  }, [loading])
   const dbResults = useMemo(() => documents.map(documentToProcessResult), [documents])
 
   useEffect(() => {
@@ -206,7 +216,7 @@ export default function Page() {
   }
 
   return (
-    <RequireRole allowedRoles={["ADMIN", "CHECKER"]}>
+    <RequireRole allowedRoles={["ADMIN", "MANAGER", "CHECKER"]}>
       <SidebarProvider>
         <AppSidebar />
         <SidebarInset className="bg-sidebar group/sidebar-inset">
@@ -276,7 +286,7 @@ export default function Page() {
               )}
 
               <div className="flex-1 min-h-0 bg-white rounded-lg p-6 shadow-sm overflow-hidden flex flex-col">
-                {loading ? (
+                {loading && !hasLoadedOnce ? (
                   <div className="flex-1 flex items-center justify-center text-muted-foreground gap-3">
                     <Loader2 className="size-4 animate-spin" />
                     <span>Sincronizando documentos com o banco...</span>
@@ -291,6 +301,14 @@ export default function Page() {
                       page,
                       totalPages,
                       onPageChange: setPage,
+                    }}
+                    serverSearch={{
+                      value: search,
+                      onChange: setSearch,
+                    }}
+                    serverStatus={{
+                      value: statusFilter,
+                      onChange: setStatusFilter,
                     }}
                   />
                 )}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import {
   Column,
   ColumnDef,
@@ -63,9 +63,41 @@ type CheckagemTableProps = {
     totalPages: number;
     onPageChange: (nextPage: number) => void;
   };
+  /**
+   * Busca server-side: os filtros de Paciente/CPF são enviados ao backend
+   * (com debounce) para que encontrem resultados em qualquer página.
+   */
+  serverSearch?: {
+    value: string;
+    onChange: (value: string) => void;
+  };
+  /**
+   * Filtro de status server-side: aplicado no banco junto com a busca,
+   * para que a combinação status+busca enxergue todas as páginas.
+   */
+  serverStatus?: {
+    value: "all" | "approved" | "rejected" | "pending_review";
+    onChange: (value: "all" | "approved" | "rejected" | "pending_review") => void;
+  };
 };
 
+const SERVER_STATUS_OPTIONS: Array<{
+  value: "all" | "approved" | "rejected" | "pending_review";
+  label: string;
+}> = [
+  { value: "all", label: "Todos" },
+  { value: "pending_review", label: "Pendente" },
+  { value: "approved", label: "Aprovado" },
+  { value: "rejected", label: "Rejeitado" },
+];
+
 const DAY_IN_MS = 24 * 60 * 60 * 1000;
+
+function formatCPF(cpf: string): string {
+  const cleaned = (cpf || "").replace(/\D/g, "");
+  if (cleaned.length === 11) return cleaned.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4");
+  return cpf;
+}
 
 function parseBrDate(value?: string): Date | null {
   if (!value) return null;
@@ -109,6 +141,8 @@ export function CheckagemTable({
   documentos,
   onViewDetails,
   serverPagination,
+  serverSearch,
+  serverStatus,
 }: CheckagemTableProps) {
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [sorting, setSorting] = useState<SortingState>([]);
@@ -120,12 +154,34 @@ export function CheckagemTable({
     }
   }, [Boolean(serverPagination), documentos.length]);
 
+  const hasServerSearch = Boolean(serverSearch);
+
   useEffect(() => {
-    if (!serverPagination) return;
-    // Em paginação server-side, evita que filtros locais antigos escondam
-    // registros recém-carregados e deem impressão de lista vazia.
+    if (!serverPagination || hasServerSearch) return;
+    // Em paginação server-side sem busca no servidor, evita que filtros locais
+    // antigos escondam registros recém-carregados e deem impressão de lista vazia.
     setColumnFilters([]);
-  }, [serverPagination?.page, documentos.length]);
+  }, [serverPagination?.page, documentos.length, hasServerSearch]);
+
+  // Envia o texto digitado em Paciente/CPF para a busca server-side (debounce),
+  // para que os resultados venham de qualquer página, não só da atual.
+  const pacienteFilter = String(columnFilters.find((f) => f.id === "paciente")?.value ?? "");
+  const cpfFilter = String(columnFilters.find((f) => f.id === "cpf")?.value ?? "");
+  const serverSearchRef = useRef(serverSearch);
+  serverSearchRef.current = serverSearch;
+
+  useEffect(() => {
+    const current = serverSearchRef.current;
+    if (!current) return;
+    // CPF pode ser digitado formatado (999.999.999-99); o banco guarda só dígitos
+    const cpfDigits = cpfFilter.replace(/\D/g, "");
+    const term = (pacienteFilter.trim() || cpfDigits || cpfFilter.trim());
+    if (term === current.value) return;
+    const timeout = window.setTimeout(() => {
+      serverSearchRef.current?.onChange(term);
+    }, 400);
+    return () => window.clearTimeout(timeout);
+  }, [pacienteFilter, cpfFilter]);
 
   const columns = useMemo<ColumnDef<DocumentoChecagem>[]>(
     () => [
@@ -133,8 +189,17 @@ export function CheckagemTable({
         header: "CPF",
         accessorKey: "cpf",
         cell: ({ row }) => (
-          <div className="font-mono text-sm">{row.getValue("cpf")}</div>
+          <div className="font-mono text-sm">{formatCPF(row.getValue("cpf"))}</div>
         ),
+        // Compara só os dígitos: encontra tanto digitando formatado quanto cru
+        filterFn: (row, columnId, filterValue) => {
+          const digits = String(filterValue ?? "").replace(/\D/g, "");
+          const cellDigits = String(row.getValue(columnId) ?? "").replace(/\D/g, "");
+          if (digits) return cellDigits.includes(digits);
+          return String(row.getValue(columnId) ?? "")
+            .toLowerCase()
+            .includes(String(filterValue ?? "").toLowerCase());
+        },
       },
       {
         header: "Paciente",
@@ -319,7 +384,30 @@ export function CheckagemTable({
           <Filter column={table.getColumn("cpf")!} />
         </div>
         <div className="w-36">
-          <Filter column={table.getColumn("status")!} />
+          {serverStatus ? (
+            <div className="space-y-2">
+              <Label htmlFor="server-status-select">Status</Label>
+              <Select
+                value={serverStatus.value}
+                onValueChange={(value) =>
+                  serverStatus.onChange(value as typeof serverStatus.value)
+                }
+              >
+                <SelectTrigger id="server-status-select">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {SERVER_STATUS_OPTIONS.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          ) : (
+            <Filter column={table.getColumn("status")!} />
+          )}
         </div>
       </div>
 

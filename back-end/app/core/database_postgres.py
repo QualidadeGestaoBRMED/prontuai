@@ -71,6 +71,9 @@ class PostgresUserDatabase:
         )
         self.SessionLocal = sessionmaker(bind=self.engine)
 
+        # Enum userrole pode ter sido criado antes da role MANAGER existir
+        self._ensure_role_enum_values()
+
         # Cria tabelas se não existirem
         Base.metadata.create_all(self.engine)
         self._ensure_document_columns()
@@ -79,12 +82,81 @@ class PostgresUserDatabase:
         self._ensure_job_table()
         self._ensure_maintenance_table()
 
+        # Preenche patient_name de documentos antigos (extraído do result_payload)
+        self._backfill_patient_names()
+
         # Cria admin padrão se banco estiver vazio
         self._ensure_default_admin()
 
     def _get_session(self) -> Session:
         """Obtém uma nova sessão do banco de dados."""
         return self.SessionLocal()
+
+    @staticmethod
+    def _extract_patient_name(result_payload) -> Optional[str]:
+        """Extrai o nome do paciente do payload de resultado, se presente."""
+        if not isinstance(result_payload, dict):
+            return None
+        name = result_payload.get("patient_name") or result_payload.get("patientName")
+        if isinstance(name, str) and name.strip():
+            return name.strip()
+        return None
+
+    def _backfill_patient_names(self, batch_size: int = 200) -> None:
+        """Preenche patient_name de documentos criados antes da coluna existir.
+
+        Usa '' como sentinela para payloads sem nome, evitando reprocessar a
+        cada boot. Roda em lotes para não carregar payloads grandes de uma vez.
+        """
+        session = self._get_session()
+        try:
+            total = 0
+            while True:
+                rows = (
+                    session.query(DocumentModel)
+                    .options(defer(DocumentModel.ocr_markdown), defer(DocumentModel.result_payload))
+                    .filter(DocumentModel.patient_name.is_(None))
+                    .filter(
+                        or_(
+                            DocumentModel.result_payload_compact.isnot(None),
+                            DocumentModel.result_payload.isnot(None),
+                        )
+                    )
+                    .limit(batch_size)
+                    .all()
+                )
+                if not rows:
+                    break
+                for model in rows:
+                    raw = model.result_payload_compact or model.result_payload
+                    try:
+                        payload = json.loads(raw) if raw else None
+                    except (TypeError, ValueError):
+                        payload = None
+                    model.patient_name = self._extract_patient_name(payload) or ""
+                session.commit()
+                total += len(rows)
+            if total:
+                logger.info(f"[DB] Backfill de patient_name concluído: {total} documentos atualizados")
+        except Exception as e:
+            session.rollback()
+            logger.error(f"[DB] Erro no backfill de patient_name: {e}")
+        finally:
+            session.close()
+
+    def _ensure_role_enum_values(self) -> None:
+        """Garante que o enum userrole contenha as roles novas (ex.: MANAGER).
+
+        ALTER TYPE ... ADD VALUE precisa rodar fora de transação; em banco novo o
+        tipo ainda não existe e o create_all cria com todos os valores.
+        """
+        with self.engine.connect() as connection:
+            autocommit = connection.execution_options(isolation_level="AUTOCOMMIT")
+            type_exists = autocommit.execute(
+                text("SELECT 1 FROM pg_type WHERE typname = 'userrole'")
+            ).scalar()
+            if type_exists:
+                autocommit.execute(text("ALTER TYPE userrole ADD VALUE IF NOT EXISTS 'MANAGER'"))
 
     def _ensure_document_columns(self) -> None:
         """Garante que colunas novas existam para documentos."""
@@ -104,6 +176,8 @@ class PostgresUserDatabase:
             connection.execute(text("ALTER TABLE documents ADD COLUMN IF NOT EXISTS exams_brnet TEXT[]"))
             connection.execute(text("ALTER TABLE documents ADD COLUMN IF NOT EXISTS content_hash VARCHAR"))
             connection.execute(text("ALTER TABLE documents ADD COLUMN IF NOT EXISTS uploaded_by_user_email VARCHAR"))
+            connection.execute(text("ALTER TABLE documents ADD COLUMN IF NOT EXISTS patient_name VARCHAR"))
+            connection.execute(text("CREATE INDEX IF NOT EXISTS idx_documents_patient_name ON documents(patient_name)"))
             connection.execute(text("CREATE INDEX IF NOT EXISTS idx_documents_content_hash ON documents(content_hash)"))
             connection.execute(text("CREATE INDEX IF NOT EXISTS idx_documents_uploader_email ON documents(uploaded_by_user_email)"))
             connection.execute(text("CREATE INDEX IF NOT EXISTS idx_documents_reviewed_by ON documents(reviewed_by)"))
@@ -396,7 +470,7 @@ class PostgresUserDatabase:
         metadata = job.get("metadata") if isinstance(job.get("metadata"), dict) else {}
         if role == UserRole.ADMIN:
             return job
-        if role == UserRole.SENDER:
+        if role in (UserRole.SENDER, UserRole.MANAGER):
             if user_id and metadata.get("uploaded_by_user_id") == user_id:
                 return job
             return None
@@ -451,7 +525,7 @@ class PostgresUserDatabase:
         filtered = []
         for job in records:
             metadata = job.get("metadata") if isinstance(job.get("metadata"), dict) else {}
-            if role == UserRole.SENDER and user_id and metadata.get("uploaded_by_user_id") == user_id:
+            if role in (UserRole.SENDER, UserRole.MANAGER) and user_id and metadata.get("uploaded_by_user_id") == user_id:
                 filtered.append(job)
             if role == UserRole.CHECKER and clinic_id and metadata.get("clinic_id") == clinic_id:
                 filtered.append(job)
@@ -991,7 +1065,7 @@ class PostgresUserDatabase:
 
             base_query = session.query(DocumentModel).options(*query_options)
 
-            if role in [UserRole.CHECKER, UserRole.ADMIN]:
+            if role in [UserRole.CHECKER, UserRole.ADMIN, UserRole.MANAGER]:
                 scoped_query = base_query
             else:
                 if not clinic_id:
@@ -1008,6 +1082,7 @@ class PostgresUserDatabase:
                         DocumentModel.cpf.ilike(like),
                         DocumentModel.filename.ilike(like),
                         DocumentModel.uploaded_by_user_email.ilike(like),
+                        DocumentModel.patient_name.ilike(like),
                     )
                 )
 
@@ -1065,7 +1140,7 @@ class PostgresUserDatabase:
                 ).label("pending_review"),
             )
 
-            if role in [UserRole.CHECKER, UserRole.ADMIN]:
+            if role in [UserRole.CHECKER, UserRole.ADMIN, UserRole.MANAGER]:
                 scoped_summary_query = summary_query
             else:
                 if not clinic_id:
@@ -1081,6 +1156,7 @@ class PostgresUserDatabase:
                         DocumentModel.cpf.ilike(like),
                         DocumentModel.filename.ilike(like),
                         DocumentModel.uploaded_by_user_email.ilike(like),
+                        DocumentModel.patient_name.ilike(like),
                     )
                 )
 
@@ -1187,6 +1263,7 @@ class PostgresUserDatabase:
                 filename=filename,
                 file_path=file_path,
                 cpf=cpf,
+                patient_name=self._extract_patient_name(result_payload) or "",
                 uploaded_at=datetime.utcnow(),
                 exams_found=exams_found,
                 exams_ocr=exams_ocr,
@@ -1267,6 +1344,9 @@ class PostgresUserDatabase:
                 doc_model.result_payload = json.dumps(result_payload, ensure_ascii=False)
                 compact_payload = self._compact_payload_for_storage(result_payload)
                 doc_model.result_payload_compact = json.dumps(compact_payload, ensure_ascii=False) if compact_payload is not None else None
+                extracted_name = self._extract_patient_name(result_payload)
+                if extracted_name:
+                    doc_model.patient_name = extracted_name
                 if reviewed_by is None and isinstance(result_payload, dict):
                     payload_reviewed_by = result_payload.get("reviewed_by") or result_payload.get("reviewedBy")
                     if payload_reviewed_by:

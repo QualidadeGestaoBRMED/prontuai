@@ -4,7 +4,7 @@ Apenas administradores podem gerenciar clínicas.
 """
 from fastapi import APIRouter, HTTPException, status, Depends
 from typing import List
-from app.core.auth import require_admin
+from app.core.auth import require_management
 from app.core.database import user_db
 from app.models.user import User
 from app.models.clinic import Clinic, ClinicCreate, ClinicUpdate
@@ -16,7 +16,7 @@ router = APIRouter(prefix="/clinics", tags=["Clínicas"])
 
 
 @router.get("/test-auth")
-async def test_auth(current_user: User = Depends(require_admin)):
+async def test_auth(current_user: User = Depends(require_management)):
     """Endpoint de teste para verificar autenticação admin"""
     return {
         "authenticated": True,
@@ -32,7 +32,7 @@ async def test_auth(current_user: User = Depends(require_admin)):
 @router.post("/test-create")
 async def test_create(
     name: str,
-    current_user: User = Depends(require_admin)
+    current_user: User = Depends(require_management)
 ):
     """Endpoint de teste simplificado para criar clínica"""
     try:
@@ -54,7 +54,7 @@ async def test_create(
 @router.get("", response_model=List[Clinic])
 async def list_clinics(
     include_inactive: bool = False,
-    current_user: User = Depends(require_admin)
+    current_user: User = Depends(require_management)
 ):
     """
     Lista todas as clínicas credenciadas.
@@ -75,7 +75,7 @@ async def list_clinics(
 @router.get("/{clinic_id}", response_model=Clinic)
 async def get_clinic(
     clinic_id: str,
-    current_user: User = Depends(require_admin)
+    current_user: User = Depends(require_management)
 ):
     """
     Obtém detalhes de uma clínica específica.
@@ -106,7 +106,7 @@ async def get_clinic(
 @router.post("", response_model=Clinic, status_code=status.HTTP_201_CREATED)
 async def create_clinic(
     clinic_data: ClinicCreate,
-    current_user: User = Depends(require_admin)
+    current_user: User = Depends(require_management)
 ):
     """
     Cria uma nova clínica credenciada.
@@ -152,7 +152,7 @@ async def create_clinic(
 async def update_clinic(
     clinic_id: str,
     clinic_data: ClinicUpdate,
-    current_user: User = Depends(require_admin)
+    current_user: User = Depends(require_management)
 ):
     """
     Atualiza dados de uma clínica.

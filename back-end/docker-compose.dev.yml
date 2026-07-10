@@ -1,0 +1,66 @@
+# Docker Compose para desenvolvimento local
+#
+# Uso:
+#   docker compose -f docker-compose.dev.yml up --build
+#
+# - API em http://localhost:${BACKEND_DEV_PORT:-8010} (uvicorn com hot-reload, sem nginx)
+#   (8010 por padrão: a porta 8000 costuma estar ocupada por outros stacks: document-generator-api e pgr-backend)
+# - Postgres local em localhost:${POSTGRES_HOST_PORT:-5433} (evita conflito com Postgres nativo na 5432)
+# - Código montado no container: edições em app/ e main.py recarregam automaticamente
+# - Segredos (OPENAI_API_KEY etc.) continuam vindo do .env; DATABASE_URL é
+#   forçado para o Postgres do compose para nunca apontar para produção por engano.
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: prontuai-db-dev
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: prontuai
+      POSTGRES_PASSWORD: prontuai
+      POSTGRES_DB: prontuai
+    ports:
+      - "127.0.0.1:${POSTGRES_HOST_PORT:-5433}:5432"
+    volumes:
+      - pgdata-dev:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U prontuai -d prontuai"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: prontuai-backend-dev
+    restart: unless-stopped
+    env_file: .env
+    depends_on:
+      db:
+        condition: service_healthy
+    # Em dev não usamos o entrypoint (nginx + gunicorn); uvicorn direto com reload.
+    entrypoint: []
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+    ports:
+      - "127.0.0.1:${BACKEND_DEV_PORT:-8010}:8000"
+    environment:
+      # Sobrescreve o .env: schema é criado automaticamente no startup.
+      - DATABASE_URL=postgresql://prontuai:prontuai@db:5432/prontuai
+      - APP_ENV=local
+      - LOG_LEVEL=${LOG_LEVEL:-DEBUG}
+      - USE_TEXTRACT=${USE_TEXTRACT:-false}
+      - GOOGLE_DRIVE_ENABLED=${GOOGLE_DRIVE_ENABLED:-false}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:3000,http://localhost}
+    volumes:
+      # Hot-reload: código-fonte montado por cima da imagem
+      - .:/app
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+volumes:
+  pgdata-dev:

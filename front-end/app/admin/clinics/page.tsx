@@ -216,7 +216,7 @@ export default function ClinicsAdminPage() {
   };
 
   return (
-    <RequireRole allowedRoles={["ADMIN"]}>
+    <RequireRole allowedRoles={["ADMIN", "MANAGER"]}>
       <SidebarProvider>
         <AppSidebar />
         <SidebarInset className="bg-sidebar">
