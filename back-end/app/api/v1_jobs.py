@@ -27,7 +27,8 @@ def _can_access_job(current_user: User, job_payload: dict[str, Any]) -> bool:
     job_user_id = metadata.get("uploaded_by_user_id")
     job_clinic_id = metadata.get("clinic_id")
 
-    if current_user.role == UserRole.SENDER:
+    if current_user.role in (UserRole.SENDER, UserRole.MANAGER):
+        # MANAGER só enxerga/cancela os próprios jobs (não é role destrutiva)
         return bool(job_user_id and job_user_id == current_user.id)
 
     if current_user.role == UserRole.CHECKER:

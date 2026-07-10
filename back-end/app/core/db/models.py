@@ -69,6 +69,8 @@ class DocumentModel(Base):
     filename = Column(String, nullable=False)
     file_path = Column(String, nullable=True)
     cpf = Column(String, nullable=True)
+    # Extraído de result_payload.patient_name para permitir busca server-side
+    patient_name = Column(String, nullable=True, index=True)
     uploaded_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     exams_found = Column(ARRAY(String), nullable=True)
     exams_ocr = Column(ARRAY(String), nullable=True)

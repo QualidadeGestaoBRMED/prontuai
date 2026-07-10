@@ -31,8 +31,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { API_ENDPOINTS } from "@/lib/config";
 import { authFetch } from "@/lib/auth-fetch";
+import { usePermissions } from "@/hooks/usePermissions";
 
-type UserRole = "ADMIN" | "CHECKER" | "SENDER";
+type UserRole = "ADMIN" | "MANAGER" | "CHECKER" | "SENDER";
 
 interface User {
   id: string;
@@ -54,18 +55,22 @@ interface Clinic {
 
 const roleLabels: Record<UserRole, string> = {
   ADMIN: "Administrador",
+  MANAGER: "Gestor",
   CHECKER: "Checador",
   SENDER: "Enviador",
 };
 
 const roleDescriptions: Record<UserRole, string> = {
   ADMIN: "Acesso total + gerenciar usuários",
+  MANAGER: "Gerencia clínicas e usuários",
   CHECKER: "Apenas checagem de exames",
   SENDER: "Apenas enviar documentos",
 };
 
 export default function UsersAdminPage() {
   const { data: session } = useSession();
+  // MANAGER pode gerenciar usuários, mas só atribui roles CHECKER/SENDER
+  const { isAdmin: canAssignAdmin } = usePermissions();
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [createModalOpen, setCreateModalOpen] = useState(false);
@@ -324,7 +329,7 @@ export default function UsersAdminPage() {
   };
 
   return (
-    <RequireRole allowedRoles={["ADMIN"]}>
+    <RequireRole allowedRoles={["ADMIN", "MANAGER"]}>
       <SidebarProvider>
         <AppSidebar />
         <SidebarInset className="bg-sidebar">
@@ -418,6 +423,8 @@ export default function UsersAdminPage() {
                             className={`px-2 py-1 text-xs rounded-full ${
                               user.role === "ADMIN"
                                 ? "bg-purple-100 text-purple-800"
+                                : user.role === "MANAGER"
+                                ? "bg-amber-100 text-amber-800"
                                 : user.role === "CHECKER"
                                 ? "bg-blue-100 text-blue-800"
                                 : "bg-green-100 text-green-800"
@@ -505,14 +512,26 @@ export default function UsersAdminPage() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="ADMIN">
-                      <div>
-                        <div className="font-medium">{roleLabels.ADMIN}</div>
-                        <div className="text-xs text-gray-500 group-hover:text-white">
-                          {roleDescriptions.ADMIN}
+                    {canAssignAdmin && (
+                      <SelectItem value="ADMIN">
+                        <div>
+                          <div className="font-medium">{roleLabels.ADMIN}</div>
+                          <div className="text-xs text-gray-500 group-hover:text-white">
+                            {roleDescriptions.ADMIN}
+                          </div>
                         </div>
-                      </div>
-                    </SelectItem>
+                      </SelectItem>
+                    )}
+                    {canAssignAdmin && (
+                      <SelectItem value="MANAGER">
+                        <div>
+                          <div className="font-medium">{roleLabels.MANAGER}</div>
+                          <div className="text-xs text-gray-500 group-hover:text-white">
+                            {roleDescriptions.MANAGER}
+                          </div>
+                        </div>
+                      </SelectItem>
+                    )}
                     <SelectItem value="CHECKER">
                       <div>
                         <div className="font-medium">{roleLabels.CHECKER}</div>
@@ -632,7 +651,12 @@ export default function UsersAdminPage() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="ADMIN">{roleLabels.ADMIN}</SelectItem>
+                    {canAssignAdmin && (
+                      <SelectItem value="ADMIN">{roleLabels.ADMIN}</SelectItem>
+                    )}
+                    {canAssignAdmin && (
+                      <SelectItem value="MANAGER">{roleLabels.MANAGER}</SelectItem>
+                    )}
                     <SelectItem value="CHECKER">{roleLabels.CHECKER}</SelectItem>
                     <SelectItem value="SENDER">{roleLabels.SENDER}</SelectItem>
                   </SelectContent>

@@ -319,11 +319,21 @@ def require_roles(allowed_roles: List[UserRole]):
 
 # Helpers específicos para cada role
 async def require_admin(current_user: User = Depends(get_current_user)) -> User:
-    """Requer role ADMIN"""
+    """Requer role ADMIN. Reservado a operações destrutivas/de sistema (exclusões, migrações)."""
     if current_user.role != UserRole.ADMIN:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Apenas administradores podem acessar este recurso"
+        )
+    return current_user
+
+
+async def require_management(current_user: User = Depends(get_current_user)) -> User:
+    """Requer role ADMIN ou MANAGER (gestão administrativa sem operações destrutivas)."""
+    if current_user.role not in [UserRole.ADMIN, UserRole.MANAGER]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Apenas administradores ou gestores podem acessar este recurso"
         )
     return current_user
 
@@ -394,8 +404,8 @@ async def get_current_upload_user(
 
 
 async def require_checker(current_user: User = Depends(get_current_user)) -> User:
-    """Requer role CHECKER ou ADMIN"""
-    if current_user.role not in [UserRole.CHECKER, UserRole.ADMIN]:
+    """Requer role CHECKER, ADMIN ou MANAGER"""
+    if current_user.role not in [UserRole.CHECKER, UserRole.ADMIN, UserRole.MANAGER]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Apenas checadores ou administradores podem acessar este recurso"
@@ -404,8 +414,8 @@ async def require_checker(current_user: User = Depends(get_current_user)) -> Use
 
 
 async def require_sender(current_user: User = Depends(get_current_user)) -> User:
-    """Requer role SENDER ou ADMIN"""
-    if current_user.role not in [UserRole.SENDER, UserRole.ADMIN]:
+    """Requer role SENDER, ADMIN ou MANAGER"""
+    if current_user.role not in [UserRole.SENDER, UserRole.ADMIN, UserRole.MANAGER]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Apenas enviadores ou administradores podem acessar este recurso"
@@ -414,8 +424,8 @@ async def require_sender(current_user: User = Depends(get_current_user)) -> User
 
 
 async def require_upload_sender(current_user: User = Depends(get_current_upload_user)) -> User:
-    """Requer token curto de upload para role SENDER ou ADMIN."""
-    if current_user.role not in [UserRole.SENDER, UserRole.ADMIN]:
+    """Requer token curto de upload para role SENDER, ADMIN ou MANAGER."""
+    if current_user.role not in [UserRole.SENDER, UserRole.ADMIN, UserRole.MANAGER]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Apenas enviadores ou administradores podem enviar documentos"
