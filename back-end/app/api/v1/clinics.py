@@ -4,9 +4,9 @@ Apenas administradores podem gerenciar clínicas.
 """
 from fastapi import APIRouter, HTTPException, status, Depends
 from typing import List
-from app.core.auth import require_management
+from app.core.auth import require_management, get_current_user
 from app.core.database import user_db
-from app.models.user import User
+from app.models.user import User, UserRole
 from app.models.clinic import Clinic, ClinicCreate, ClinicUpdate
 import logging
 
@@ -69,6 +69,34 @@ async def list_clinics(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Erro ao listar clínicas: {str(e)}"
+        )
+
+
+@router.get("/options")
+async def list_clinic_options(current_user: User = Depends(get_current_user)):
+    """
+    Lista enxuta (id + nome) das clínicas ativas para preencher filtros/combobox.
+    Disponível a ADMIN, MANAGER e CHECKER — não expõe CNPJ, telefone ou endereço.
+    """
+    try:
+        if current_user.role not in [UserRole.ADMIN, UserRole.MANAGER, UserRole.CHECKER]:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Sem permissão para listar opções de clínicas",
+            )
+        clinics = user_db.get_all_clinics(include_inactive=False)
+        options = sorted(
+            ({"id": c.id, "name": c.name} for c in clinics),
+            key=lambda option: (option["name"] or "").lower(),
+        )
+        return options
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"Erro ao listar opções de clínicas: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Erro ao listar opções de clínicas"
         )
 
 

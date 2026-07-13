@@ -24,6 +24,7 @@ export const API_ENDPOINTS = {
 
   // Clinics
   CLINICS: `${API_PROXY_BASE}/v1/clinics`,
+  CLINIC_OPTIONS: `${API_PROXY_BASE}/v1/clinics/options`,
   CLINIC_BY_ID: (id: string) => `${API_PROXY_BASE}/v1/clinics/${id}`,
 
   // Documents (Legacy - pode dar timeout)

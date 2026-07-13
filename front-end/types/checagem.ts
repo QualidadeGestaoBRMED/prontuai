@@ -2,6 +2,7 @@ export type StatusDocumento = "pendente" | "aprovado" | "rejeitado";
 
 export type DocumentoChecagem = {
   id: string;
+  clinicName?: string;
   cpf: string;
   paciente: string;
   dataUpload: string;

@@ -13,6 +13,7 @@ class Document(BaseModel):
     """Modelo de documento processado no sistema"""
     id: Optional[str] = None
     clinic_id: str  # Chave estrangeira para Clinic
+    clinic_name: Optional[str] = None
     uploaded_by_user_id: str  # Chave estrangeira para User
     uploaded_by_user_email: Optional[str] = None
     file_path: Optional[str] = Field(default=None, exclude=True)

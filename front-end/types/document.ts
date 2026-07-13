@@ -1,6 +1,7 @@
 export type DocumentApi = {
   id: string
   clinic_id: string
+  clinic_name?: string | null
   uploaded_by_user_id: string
   uploaded_by_user_email?: string | null
   filename: string

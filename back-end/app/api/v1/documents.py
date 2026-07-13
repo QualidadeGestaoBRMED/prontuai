@@ -162,6 +162,7 @@ def _in_memory_paged_documents(
     search: str | None,
     sort_by: str,
     sort_dir: str,
+    filter_clinic_id: str | None = None,
 ) -> dict[str, Any]:
     normalized_search = (search or "").strip().lower()
 
@@ -171,6 +172,8 @@ def _in_memory_paged_documents(
         return name if isinstance(name, str) else ""
 
     filtered = docs
+    if filter_clinic_id:
+        filtered = [d for d in filtered if d.clinic_id == filter_clinic_id]
     if normalized_search:
         filtered = [
             d for d in filtered
@@ -238,6 +241,21 @@ def _in_memory_paged_documents(
     }
 
 
+def _attach_clinic_names(documents: list[Document]) -> None:
+    """Preenche clinic_name sem expor dados administrativos da clínica."""
+    if not documents or not hasattr(user_db, "get_clinic_by_id"):
+        return
+
+    clinic_name_cache: dict[str, str | None] = {}
+    for doc in documents:
+        if getattr(doc, "clinic_name", None) or not getattr(doc, "clinic_id", None):
+            continue
+        if doc.clinic_id not in clinic_name_cache:
+            clinic = user_db.get_clinic_by_id(doc.clinic_id)
+            clinic_name_cache[doc.clinic_id] = clinic.name if clinic else None
+        doc.clinic_name = clinic_name_cache.get(doc.clinic_id)
+
+
 @router.get("/paged", response_model=PaginatedDocumentsResponse)
 async def list_documents_paged(
     current_user: User = Depends(get_current_user),
@@ -249,6 +267,7 @@ async def list_documents_paged(
     status_filter: str | None = Query(None, pattern="^(approved|rejected|pending_review)$"),
     sort_by: str = Query("uploaded_at", pattern="^(uploaded_at|updated_at|filename|cpf|status)$"),
     sort_dir: str = Query("desc", pattern="^(asc|desc)$"),
+    filter_clinic_id: str | None = Query(None, alias="clinic_id", description="Filtra documentos de uma clínica específica"),
 ):
     """
     Lista documentos com paginação e filtros server-side.
@@ -257,6 +276,10 @@ async def list_documents_paged(
         role = current_user.role
         user_id = current_user.id if role == UserRole.SENDER else None
         clinic_id = current_user.clinic_id
+
+        # SENDER já é limitado à própria clínica; ignora filtro externo
+        if role == UserRole.SENDER:
+            filter_clinic_id = None
 
         if hasattr(user_db, "list_documents_paged"):
             payload = user_db.list_documents_paged(
@@ -271,6 +294,7 @@ async def list_documents_paged(
                 status_filter=status_filter,
                 sort_by=sort_by,
                 sort_dir=sort_dir,
+                filter_clinic_id=filter_clinic_id,
             )
         else:
             docs = _load_documents(
@@ -288,9 +312,12 @@ async def list_documents_paged(
                 search=search,
                 sort_by=sort_by,
                 sort_dir=sort_dir,
+                filter_clinic_id=filter_clinic_id,
             )
 
         items = payload.get("items", [])
+        _attach_clinic_names(items)
+
         if role == UserRole.SENDER and current_user.email:
             for doc in items:
                 if doc.uploaded_by_user_id == current_user.id and not doc.uploaded_by_user_email:
@@ -373,6 +400,7 @@ async def list_documents(
             compact,
             user_id=current_user.id if current_user.role == UserRole.SENDER else None,
         )
+        _attach_clinic_names(documents)
 
         if current_user.role == UserRole.SENDER and current_user.email:
             for doc in documents:

@@ -27,6 +27,7 @@ export function useDocumentsPaged(options: UseDocumentsPagedOptions) {
   const [hasNext, setHasNext] = useState(false)
   const [search, setSearch] = useState("")
   const [statusFilter, setStatusFilter] = useState<"all" | "approved" | "rejected" | "pending_review">("all")
+  const [clinicFilter, setClinicFilter] = useState("all")
   const [summaryCounts, setSummaryCounts] = useState<DocumentSummaryCounts>({
     approved: 0,
     rejected: 0,
@@ -52,6 +53,7 @@ export function useDocumentsPaged(options: UseDocumentsPagedOptions) {
         url.searchParams.set("sort_dir", "desc")
         if (search.trim()) url.searchParams.set("search", search.trim())
         if (statusFilter !== "all") url.searchParams.set("status_filter", statusFilter)
+        if (clinicFilter !== "all") url.searchParams.set("clinic_id", clinicFilter)
 
         const response = await authFetch(url.toString(), { cache: "no-store" })
         if (!response.ok) {
@@ -94,7 +96,7 @@ export function useDocumentsPaged(options: UseDocumentsPagedOptions) {
         if (!silent) setRefreshing(false)
       }
     },
-    [session?.user?.email, queue, page, pageSize, compact, search, statusFilter],
+    [session?.user?.email, queue, page, pageSize, compact, search, statusFilter, clinicFilter],
   )
 
   useEffect(() => {
@@ -111,7 +113,7 @@ export function useDocumentsPaged(options: UseDocumentsPagedOptions) {
 
   useEffect(() => {
     setPage(1)
-  }, [queue, search, statusFilter, pageSize])
+  }, [queue, search, statusFilter, clinicFilter, pageSize])
 
   return {
     documents,
@@ -127,6 +129,8 @@ export function useDocumentsPaged(options: UseDocumentsPagedOptions) {
     setSearch,
     statusFilter,
     setStatusFilter,
+    clinicFilter,
+    setClinicFilter,
     summaryCounts,
     refresh: fetchPage,
   }

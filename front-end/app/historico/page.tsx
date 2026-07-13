@@ -13,6 +13,7 @@ import { NotificationBell } from "@/components/notification-bell"
 import { NotificationCenter } from "@/components/notification-center"
 import { useNotifications } from "@/hooks/use-notifications"
 import { useDocuments } from "@/hooks/use-documents"
+import { useClinicOptions } from "@/hooks/use-clinic-options"
 import { documentToProcessResult } from "@/lib/document-mapper"
 import { ProcessProgressBar } from "@/components/process-progress-bar"
 import { ResultsTable } from "@/components/results-table"
@@ -27,6 +28,11 @@ function HistoricoContent() {
   const [detailsModalOpen, setDetailsModalOpen] = useState(false)
   const { unreadCount, activeProcess, setNotificationCenterOpen, processResults } = useNotifications()
   const { documents, loading, refreshing, hasLoaded, lastUpdatedAt } = useDocuments()
+  const {
+    options: clinicOptions,
+    loading: clinicOptionsLoading,
+    enabled: canFilterByClinic,
+  } = useClinicOptions()
   const dbResults = documents.map(documentToProcessResult)
   const sortedResults = useMemo(() => {
     const baseResults = hasLoaded ? dbResults : (loading ? [] : processResults)
@@ -118,6 +124,9 @@ function HistoricoContent() {
                 ) : (
                   <ResultsTable
                     results={sortedResults}
+                    clinicOptions={clinicOptions}
+                    clinicOptionsLoading={clinicOptionsLoading}
+                    showClinicFilter={canFilterByClinic}
                   onViewDetails={(result) => {
                     console.log('[DEBUG] Opening modal for result:', result)
                     console.log('[DEBUG] Result exists?', !!result)
