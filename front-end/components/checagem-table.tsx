@@ -45,6 +45,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import type { DocumentoChecagem, StatusDocumento } from "@/types/checagem";
+import { ClinicFilter } from "@/components/clinic-filter";
+import type { ClinicOption } from "@/hooks/use-clinic-options";
 
 declare module "@tanstack/react-table" {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -78,6 +80,12 @@ type CheckagemTableProps = {
   serverStatus?: {
     value: "all" | "approved" | "rejected" | "pending_review";
     onChange: (value: "all" | "approved" | "rejected" | "pending_review") => void;
+  };
+  serverClinic?: {
+    value: string;
+    onChange: (value: string) => void;
+    options: ClinicOption[];
+    loading?: boolean;
   };
 };
 
@@ -143,10 +151,12 @@ export function CheckagemTable({
   serverPagination,
   serverSearch,
   serverStatus,
+  serverClinic,
 }: CheckagemTableProps) {
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [sorting, setSorting] = useState<SortingState>([]);
   const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 10 });
+  const selectedClinicName = serverClinic?.options.find((option) => option.id === serverClinic.value)?.name;
 
   useEffect(() => {
     if (serverPagination) {
@@ -206,6 +216,15 @@ export function CheckagemTable({
         accessorKey: "paciente",
         cell: ({ row }) => (
           <div className="font-medium">{row.getValue("paciente")}</div>
+        ),
+      },
+      {
+        header: "Clínica",
+        accessorKey: "clinicName",
+        cell: ({ row }) => (
+          <div className="max-w-[180px] truncate text-sm text-muted-foreground">
+            {row.original.clinicName || "-"}
+          </div>
         ),
       },
       {
@@ -409,6 +428,15 @@ export function CheckagemTable({
             <Filter column={table.getColumn("status")!} />
           )}
         </div>
+        {serverClinic ? (
+          <ClinicFilter
+            value={serverClinic.value}
+            onChange={serverClinic.onChange}
+            options={serverClinic.options}
+            loading={serverClinic.loading}
+            showActiveChip
+          />
+        ) : null}
       </div>
 
       {/* Tabela */}
@@ -508,7 +536,9 @@ export function CheckagemTable({
                   colSpan={columns.length}
                   className="h-24 text-center"
                 >
-                  Nenhum documento encontrado.
+                  {serverClinic?.value && serverClinic.value !== "all"
+                    ? `Nenhum atendimento da ${selectedClinicName || "clínica selecionada"} com os filtros atuais.`
+                    : "Nenhum documento encontrado."}
                 </TableCell>
               </TableRow>
             )}

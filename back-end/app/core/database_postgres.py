@@ -181,6 +181,7 @@ class PostgresUserDatabase:
             connection.execute(text("CREATE INDEX IF NOT EXISTS idx_documents_content_hash ON documents(content_hash)"))
             connection.execute(text("CREATE INDEX IF NOT EXISTS idx_documents_uploader_email ON documents(uploaded_by_user_email)"))
             connection.execute(text("CREATE INDEX IF NOT EXISTS idx_documents_reviewed_by ON documents(reviewed_by)"))
+            connection.execute(text("CREATE INDEX IF NOT EXISTS idx_documents_clinic_id ON documents(clinic_id)"))
 
     def _ensure_notification_columns(self) -> None:
         """Garante que colunas novas existam para notificações."""
@@ -932,6 +933,7 @@ class PostgresUserDatabase:
         return Document(
             id=model.id,
             clinic_id=model.clinic_id,
+            clinic_name=getattr(model, "clinic_name", None),
             uploaded_by_user_id=model.uploaded_by_user_id,
             uploaded_by_user_email=getattr(model, "uploaded_by_user_email", None),
             content_hash=getattr(model, "content_hash", None),
@@ -1053,6 +1055,7 @@ class PostgresUserDatabase:
         status_filter: Optional[str] = None,
         sort_by: str = "uploaded_at",
         sort_dir: str = "desc",
+        filter_clinic_id: Optional[str] = None,
     ) -> dict:
         """
         Lista documentos paginados com escopo por role e filtros de fila.
@@ -1073,6 +1076,9 @@ class PostgresUserDatabase:
                 scoped_query = base_query.filter(DocumentModel.clinic_id == clinic_id)
                 if user_id:
                     scoped_query = scoped_query.filter(DocumentModel.uploaded_by_user_id == user_id)
+
+            if filter_clinic_id:
+                scoped_query = scoped_query.filter(DocumentModel.clinic_id == filter_clinic_id)
 
             normalized_search = (search or "").strip()
             if normalized_search:
@@ -1149,6 +1155,9 @@ class PostgresUserDatabase:
                 if user_id:
                     scoped_summary_query = scoped_summary_query.filter(DocumentModel.uploaded_by_user_id == user_id)
 
+            if filter_clinic_id:
+                scoped_summary_query = scoped_summary_query.filter(DocumentModel.clinic_id == filter_clinic_id)
+
             if normalized_search:
                 like = f"%{normalized_search}%"
                 scoped_summary_query = scoped_summary_query.filter(
@@ -1184,14 +1193,23 @@ class PostgresUserDatabase:
                 scoped_query = scoped_query.offset((safe_page - 1) * page_size).limit(page_size)
 
             models = scoped_query.all()
-            items = [
-                self._model_to_document(
-                    m,
+            clinic_ids = sorted({m.clinic_id for m in models if m.clinic_id})
+            clinic_names = {}
+            if clinic_ids:
+                clinic_names = dict(
+                    session.query(ClinicModel.id, ClinicModel.name)
+                    .filter(ClinicModel.id.in_(clinic_ids))
+                    .all()
+                )
+            items = []
+            for model in models:
+                document = self._model_to_document(
+                    model,
                     include_ocr_markdown=False,
                     use_compact_payload=use_compact_payload,
                 )
-                for m in models
-            ]
+                document.clinic_name = clinic_names.get(model.clinic_id)
+                items.append(document)
 
             return {
                 "items": items,

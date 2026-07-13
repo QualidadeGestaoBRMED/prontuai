@@ -69,6 +69,8 @@ export interface ProcessResult {
   id: string
   batchId: string  // Agrupa documentos do mesmo upload
   filename: string
+  clinicId?: string
+  clinicName?: string
   cpf: string
   patientName: string
   uploadedAt: Date

@@ -9,6 +9,7 @@ import { NotificationBell } from "@/components/notification-bell"
 import { NotificationCenter } from "@/components/notification-center"
 import { useNotifications } from "@/hooks/use-notifications"
 import { useDocumentsPaged } from "@/hooks/use-documents-paged"
+import { useClinicOptions } from "@/hooks/use-clinic-options"
 import { documentToProcessResult } from "@/lib/document-mapper"
 import { ProcessProgressBar } from "@/components/process-progress-bar"
 import { ResultsTable } from "@/components/results-table"
@@ -35,12 +36,19 @@ function PendentesContent() {
     setSearch,
     statusFilter,
     setStatusFilter,
+    clinicFilter,
+    setClinicFilter,
     summaryCounts,
   } = useDocumentsPaged({
     queue: "pendentes",
     pageSize: 10,
     refreshIntervalMs: 0,
   })
+  const {
+    options: clinicOptions,
+    loading: clinicOptionsLoading,
+    enabled: canFilterByClinic,
+  } = useClinicOptions()
 
   const displayResults = useMemo(() => documents.map(documentToProcessResult), [documents])
   const pendingResults = displayResults
@@ -48,6 +56,10 @@ function PendentesContent() {
   const totalPendentes = summaryCounts.pending_review
   const totalAprovados = summaryCounts.approved
   const totalRejeitados = summaryCounts.rejected
+
+  useEffect(() => {
+    if (!canFilterByClinic) setClinicFilter("all")
+  }, [canFilterByClinic, setClinicFilter])
 
   useEffect(() => {
     const viewId = searchParams.get("viewId")
@@ -160,6 +172,11 @@ function PendentesContent() {
                     onSearchQueryChange={setSearch}
                     statusFilter={statusFilter}
                     onStatusFilterChange={setStatusFilter}
+                    clinicFilter={clinicFilter}
+                    onClinicFilterChange={setClinicFilter}
+                    clinicOptions={clinicOptions}
+                    clinicOptionsLoading={clinicOptionsLoading}
+                    showClinicFilter={canFilterByClinic}
                     currentPage={page}
                     totalPages={totalPages}
                     totalItems={totalItems}

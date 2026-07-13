@@ -81,6 +81,8 @@ export const documentToProcessResult = (doc: DocumentApi): ProcessResult => {
     id: doc.id,
     batchId: doc.id,
     filename: doc.filename,
+    clinicId: doc.clinic_id,
+    clinicName: doc.clinic_name || undefined,
     cpf: displayIdentifier,
     patientName,
     uploadedAt: toDate(doc.uploaded_at),

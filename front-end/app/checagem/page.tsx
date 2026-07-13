@@ -15,6 +15,7 @@ import { ProcessResult } from "@/types/process"
 import { DocumentDetailsModalChecagem } from "@/components/document-details-modal-checagem"
 import { RequireRole } from "@/components/require-role"
 import { useDocumentsPaged } from "@/hooks/use-documents-paged"
+import { useClinicOptions } from "@/hooks/use-clinic-options"
 import { documentToProcessResult } from "@/lib/document-mapper"
 import { API_ENDPOINTS } from "@/lib/config"
 import { Loader2 } from "lucide-react"
@@ -38,6 +39,8 @@ export default function Page() {
     setSearch,
     statusFilter,
     setStatusFilter,
+    clinicFilter,
+    setClinicFilter,
     summaryCounts,
     refresh,
   } = useDocumentsPaged({
@@ -47,6 +50,21 @@ export default function Page() {
   })
   const sessionData = useSession()
   const session = sessionData?.data || null
+  const {
+    options: clinicOptions,
+    loading: clinicOptionsLoading,
+    error: clinicOptionsError,
+    enabled: canFilterByClinic,
+  } = useClinicOptions()
+
+  useEffect(() => {
+    if (!canFilterByClinic) setClinicFilter("all")
+  }, [canFilterByClinic, setClinicFilter])
+
+  useEffect(() => {
+    if (clinicOptionsError) toast.error("Não foi possível carregar o filtro de clínicas.")
+  }, [clinicOptionsError])
+
   // Spinner só no primeiro carregamento: desmontar a tabela em refetches de busca
   // perderia o texto digitado nos filtros (que vivem no estado interno da tabela).
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false)
@@ -58,6 +76,7 @@ export default function Page() {
   useEffect(() => {
     const pendingDocs: DocumentoChecagem[] = dbResults.map((result) => ({
       id: result.id,
+      clinicName: result.clinicName,
       cpf: result.cpf,
       paciente: result.patientName,
       dataUpload: new Date(result.uploadedAt).toISOString(),
@@ -310,6 +329,16 @@ export default function Page() {
                       value: statusFilter,
                       onChange: setStatusFilter,
                     }}
+                    serverClinic={
+                      canFilterByClinic
+                        ? {
+                            value: clinicFilter,
+                            onChange: setClinicFilter,
+                            options: clinicOptions,
+                            loading: clinicOptionsLoading,
+                          }
+                        : undefined
+                    }
                   />
                 )}
               </div>

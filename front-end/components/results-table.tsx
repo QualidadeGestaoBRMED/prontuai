@@ -24,6 +24,8 @@ import {
 import { ProcessResult } from "@/types/process"
 import { Download, Eye, Search, FileDown } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { ClinicFilter } from "@/components/clinic-filter"
+import type { ClinicOption } from "@/hooks/use-clinic-options"
 
 type StatusFilter = "all" | "approved" | "rejected" | "pending_review"
 
@@ -37,6 +39,11 @@ interface ResultsTableProps {
   onSearchQueryChange?: (value: string) => void
   statusFilter?: StatusFilter
   onStatusFilterChange?: (value: StatusFilter) => void
+  clinicFilter?: string
+  onClinicFilterChange?: (value: string) => void
+  clinicOptions?: ClinicOption[]
+  clinicOptionsLoading?: boolean
+  showClinicFilter?: boolean
   currentPage?: number
   totalPages?: number
   totalItems?: number
@@ -46,10 +53,11 @@ interface ResultsTableProps {
 }
 
 const exportToCSV = (results: ProcessResult[]) => {
-  const headers = ["CPF", "Paciente", "Data Upload", "Status", "Exames Faltantes", "Enviado Por"]
+  const headers = ["CPF", "Paciente", "Clínica", "Data Upload", "Status", "Exames Faltantes", "Enviado Por"]
   const rows = results.map((r) => [
     r.cpf,
     r.patientName,
+    r.clinicName || "",
     format(r.uploadedAt, "dd/MM/yyyy HH:mm", { locale: ptBR }),
     r.status === "approved" ? "Aprovado" : r.status === "rejected" ? "Rejeitado" : "Pendente",
     r.examesFaltantes.toString(),
@@ -77,6 +85,11 @@ export function ResultsTable({
   onSearchQueryChange,
   statusFilter: controlledStatusFilter,
   onStatusFilterChange,
+  clinicFilter: controlledClinicFilter,
+  onClinicFilterChange,
+  clinicOptions = [],
+  clinicOptionsLoading = false,
+  showClinicFilter = false,
   currentPage: controlledCurrentPage,
   totalPages: controlledTotalPages,
   totalItems: controlledTotalItems,
@@ -86,6 +99,7 @@ export function ResultsTable({
 }: ResultsTableProps) {
   const [searchQuery, setSearchQuery] = useState(initialSearch ?? "")
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all")
+  const [clinicFilter, setClinicFilter] = useState("all")
   const [currentPage, setCurrentPage] = useState(1)
   const defaultPageSize = 10
 
@@ -97,8 +111,10 @@ export function ResultsTable({
 
   const effectiveSearch = serverMode ? (controlledSearchQuery ?? "") : searchQuery
   const effectiveStatusFilter = serverMode ? (controlledStatusFilter ?? "all") : statusFilter
+  const effectiveClinicFilter = serverMode ? (controlledClinicFilter ?? "all") : clinicFilter
   const effectiveCurrentPage = serverMode ? (controlledCurrentPage ?? 1) : currentPage
   const effectivePageSize = serverMode ? (controlledPageSize ?? defaultPageSize) : defaultPageSize
+  const selectedClinicName = clinicOptions.find((option) => option.id === effectiveClinicFilter)?.name
 
   const filteredResults = serverMode
     ? results
@@ -113,7 +129,8 @@ export function ResultsTable({
           : false
         const matchesSearch = rawQuery ? matchesCPF || matchesText : true
         const matchesStatus = statusFilter === "all" ? true : result.status === statusFilter
-        return matchesSearch && matchesStatus
+        const matchesClinic = clinicFilter === "all" ? true : result.clinicId === clinicFilter
+        return matchesSearch && matchesStatus && matchesClinic
       })
 
   const totalPages = serverMode
@@ -146,7 +163,7 @@ export function ResultsTable({
     return <Badge variant="secondary">{status}</Badge>
   }
 
-  if (results.length === 0) {
+  if (results.length === 0 && !serverMode) {
     return (
       <div className={cn("text-center py-12 border rounded-lg", className)}>
         <p className="text-muted-foreground">
@@ -160,7 +177,7 @@ export function ResultsTable({
 
   return (
     <div className={cn("flex h-full min-h-0 flex-col gap-4", className)}>
-      <div className="flex flex-col sm:flex-row gap-4">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-end">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
           <Input
@@ -200,6 +217,24 @@ export function ResultsTable({
             <SelectItem value="pending_review">Pendentes</SelectItem>
           </SelectContent>
         </Select>
+        {showClinicFilter ? (
+          <ClinicFilter
+            value={effectiveClinicFilter}
+            onChange={(value) => {
+              if (serverMode) {
+                onClinicFilterChange?.(value)
+                onPageChange?.(1)
+              } else {
+                setClinicFilter(value)
+                setCurrentPage(1)
+              }
+            }}
+            options={clinicOptions}
+            loading={clinicOptionsLoading}
+            showActiveChip
+            className="lg:w-auto"
+          />
+        ) : null}
         <Button
           variant="outline"
           size="default"
@@ -218,6 +253,7 @@ export function ResultsTable({
             <TableRow>
               <TableHead>CPF</TableHead>
               <TableHead>Paciente</TableHead>
+              <TableHead>Clínica</TableHead>
               <TableHead>Data</TableHead>
               <TableHead>Status</TableHead>
               <TableHead className="text-center">Faltantes</TableHead>
@@ -228,8 +264,10 @@ export function ResultsTable({
           <TableBody>
             {paginatedResults.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
-                  Nenhum resultado encontrado com os filtros selecionados.
+                <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                  {effectiveClinicFilter !== "all"
+                    ? `Nenhum atendimento da ${selectedClinicName || "clínica selecionada"} com os filtros atuais.`
+                    : "Nenhum resultado encontrado com os filtros selecionados."}
                 </TableCell>
               </TableRow>
             ) : (
@@ -241,6 +279,9 @@ export function ResultsTable({
                 >
                   <TableCell className="font-mono text-sm">{formatCPF(result.cpf)}</TableCell>
                   <TableCell>{result.patientName}</TableCell>
+                  <TableCell className="max-w-[180px] truncate text-sm text-muted-foreground">
+                    {result.clinicName || "-"}
+                  </TableCell>
                   <TableCell className="text-sm text-muted-foreground">
                     {format(result.uploadedAt, "dd/MM/yyyy HH:mm", { locale: ptBR })}
                   </TableCell>
