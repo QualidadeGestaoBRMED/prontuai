@@ -6,6 +6,7 @@ from typing import Dict, Any, Optional, List
 from fastapi import UploadFile
 from app.services import ocr_service, brmed_service, validacao_service
 from app.core.config import settings
+from app.core import metrics
 import logging
 import json
 import asyncio
@@ -1123,6 +1124,8 @@ async def _processar_documento_completo_impl(
         status=resposta_final.get("status"),
         elapsed_seconds=round(time.perf_counter() - start_total, 3),
     )
+    metrics.DOCUMENTOS_PROCESSADOS.labels(status=resposta_final.get("status") or "desconhecido").inc()
+    metrics.WORKFLOW_DURACAO.observe(time.perf_counter() - start_total)
 
     return resposta_final
 

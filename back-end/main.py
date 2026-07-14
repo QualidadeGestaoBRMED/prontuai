@@ -160,6 +160,18 @@ if os.getenv("SENTRY_DSN"):
 app = FastAPI(title="API BR MED - Exames e Validação")
 setup_telemetry(app=app, engine=getattr(user_db, "engine", None))
 
+if os.getenv("METRICS_ENABLED", "false").lower() == "true":
+    try:
+        from prometheus_fastapi_instrumentator import Instrumentator
+
+        Instrumentator(
+            should_group_status_codes=False,
+            excluded_handlers=["/metrics", "/health"],
+        ).instrument(app).expose(app, include_in_schema=False)
+        logger.info("Métricas Prometheus habilitadas em /metrics")
+    except Exception as e:
+        logger.warning(f"Falha ao habilitar métricas Prometheus: {e}")
+
 @app.middleware("http")
 async def cors_preflight_middleware(request: Request, call_next):
     if request.method == "OPTIONS":

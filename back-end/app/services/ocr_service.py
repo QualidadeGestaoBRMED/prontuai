@@ -36,6 +36,7 @@ except ImportError:
     torch = None
 
 from app.core.config import settings
+from app.core import metrics
 
 logger = logging.getLogger(__name__)
 
@@ -1255,6 +1256,7 @@ async def _ocr_pipeline_impl(file, salvar_markdown=True, progress_hook: Optional
     # Determinar qual motor usar
     usar_textract = settings.USE_TEXTRACT and textract_client is not None
     motor_ocr = "AWS Textract" if usar_textract else "Docling (local)"
+    motor_metrica = "textract" if usar_textract else "docling"
     logger.info(f"[OCR] Motor selecionado: {motor_ocr}")
 
     # Corrige o manuseio de UploadFile do FastAPI
@@ -1308,10 +1310,13 @@ async def _ocr_pipeline_impl(file, salvar_markdown=True, progress_hook: Optional
                     progress_hook
                 )
             except TimeoutError as e:
+                metrics.TEXTRACT_TIMEOUT.inc()
                 if settings.TEXTRACT_FALLBACK_TO_LOCAL:
                     logger.warning(f"[OCR] {e}. Fallback para OCR local (Docling).")
                     if progress_hook:
                         progress_hook("Fila Textract, usando OCR local.")
+                    metrics.OCR_FALLBACK_DOCLING.inc()
+                    motor_metrica = "docling_fallback"
                     markdown = await asyncio.to_thread(
                         processar_arquivo_docling,
                         temp_path
@@ -1323,6 +1328,8 @@ async def _ocr_pipeline_impl(file, salvar_markdown=True, progress_hook: Optional
                     logger.warning(f"[OCR] Falha de conexão Textract: {e}. Fallback para OCR local (Docling).")
                     if progress_hook:
                         progress_hook("Falha temporária no Textract, usando OCR local.")
+                    metrics.OCR_FALLBACK_DOCLING.inc()
+                    motor_metrica = "docling_fallback"
                     markdown = await asyncio.to_thread(
                         processar_arquivo_docling,
                         temp_path
@@ -1340,6 +1347,7 @@ async def _ocr_pipeline_impl(file, salvar_markdown=True, progress_hook: Optional
         # Remover arquivo temporário original
         if os.path.exists(temp_path):
             os.remove(temp_path)
+        metrics.OCR_DURACAO.labels(motor=motor_metrica).observe(time.perf_counter() - start_total)
         logger.info(f"[OCR] Pipeline OCR finalizado em {time.perf_counter() - start_total:.2f}s")
 
     # Salvar markdown

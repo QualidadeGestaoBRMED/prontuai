@@ -38,6 +38,9 @@ sqlalchemy>=2.0.0  # ORM para PostgreSQL
 psycopg2-binary>=2.9.0  # PostgreSQL driver
 asyncpg>=0.29.0  # Async PostgreSQL driver (futuro)
 
+# Observability (Prometheus)
+prometheus-fastapi-instrumentator>=7.0.0  # Métricas HTTP em /metrics (habilitar via METRICS_ENABLED=true)
+
 # Observability (OpenTelemetry)
 opentelemetry-api>=1.24.0
 opentelemetry-sdk>=1.24.0
