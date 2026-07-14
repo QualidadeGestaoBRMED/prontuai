@@ -5,6 +5,7 @@ import logging
 import time
 import httpx
 from app.core.config import settings
+from app.core import metrics
 
 logger = logging.getLogger(__name__)
 
@@ -238,4 +239,6 @@ async def consultar_exames_prontuai(
     passaporte: Optional[str] = None,
     cnpj: Optional[str] = None,
 ) -> Dict[str, Any]:
-    return await consultar_exames_prontuai_api(cpf=cpf, passaporte=passaporte, cnpj=cnpj)
+    resultado = await consultar_exames_prontuai_api(cpf=cpf, passaporte=passaporte, cnpj=cnpj)
+    metrics.PRONTUAI_API_CONSULTAS.labels(resultado="falha" if "erro" in resultado else "sucesso").inc()
+    return resultado
