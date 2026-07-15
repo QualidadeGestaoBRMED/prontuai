@@ -7,6 +7,7 @@ from fastapi import UploadFile
 from app.services import ocr_service, brmed_service, validacao_service
 from app.core.config import settings
 from app.core import metrics
+from app.core.pii import mask_cpf, mask_identifier, mask_name
 import logging
 import json
 import asyncio
@@ -739,15 +740,15 @@ async def _processar_documento_completo_impl(
     _log_event(
         "ocr_completed",
         run_id=run_id,
-        cpf_extraido=cpf_inicial,
-        passaporte_extraido=passaporte_inicial,
-        cnpj_extraido=cnpj_extraido,
-        cnpj_processado=cnpj_processado,
+        cpf_extraido=mask_cpf(cpf_inicial),
+        passaporte_extraido=mask_identifier(passaporte_inicial),
+        cnpj_extraido=mask_identifier(cnpj_extraido),
+        cnpj_processado=mask_identifier(cnpj_processado),
         exames_ocr=exames_enviados,
         exames_ocr_count=len(exames_enviados or []),
         markdown_chars=len(markdown_content or ""),
         markdown_lines=len((markdown_content or "").splitlines()),
-        patient_name_from_ocr=patient_name_from_ocr,
+        patient_name_from_ocr=mask_name(patient_name_from_ocr),
         elapsed_seconds=round(time.perf_counter() - t_ocr, 3),
     )
 
@@ -817,8 +818,8 @@ async def _processar_documento_completo_impl(
             _log_event(
                 "prontuai_api_cpf_alternatives",
                 run_id=run_id,
-                cpf_inicial=cpf_inicial,
-                cpfs_alternativos=cpfs_alternativos,
+                cpf_inicial=mask_cpf(cpf_inicial),
+                cpfs_alternativos=[mask_cpf(c) for c in (cpfs_alternativos or [])],
                 cpfs_alternativos_count=len(cpfs_alternativos or []),
             )
 
@@ -836,7 +837,7 @@ async def _processar_documento_completo_impl(
                     has_cnpj=bool(cnpj_processado),
                     attempt_type="alternativo",
                     attempt_index=idx + 1,
-                    cpf=alt_cpf,
+                    cpf=mask_cpf(alt_cpf),
                 )
                 alt_resultado = await brmed_service.consultar_exames_prontuai(
                     cpf=alt_cpf,
@@ -864,7 +865,7 @@ async def _processar_documento_completo_impl(
                         elapsed_seconds=round(time.perf_counter() - t_brmed_alt, 3),
                         attempt_type="alternativo",
                         attempt_index=idx + 1,
-                        cpf=alt_cpf,
+                        cpf=mask_cpf(alt_cpf),
                     )
                     await send_progress(
                         60,
@@ -881,7 +882,7 @@ async def _processar_documento_completo_impl(
                     source=alt_resultado.get("source"),
                     attempt_type="alternativo",
                     attempt_index=idx + 1,
-                    cpf=alt_cpf,
+                    cpf=mask_cpf(alt_cpf),
                 )
 
         if not brmed_resultado or "erro" in brmed_resultado:
@@ -995,11 +996,11 @@ async def _processar_documento_completo_impl(
     await send_progress(70, "validacao", "Validando exames com IA...")
     t_validacao = time.perf_counter()
     identificador_validacao = cpf_final or passaporte_final or "NAO_ENCONTRADO"
-    logger.info(f"[WORKFLOW] Realizando validação para identificador: {identificador_validacao}")
+    logger.info(f"[WORKFLOW] Realizando validação para identificador: {mask_identifier(identificador_validacao)}")
     _log_event(
         "validacao_start",
         run_id=run_id,
-        identificador=identificador_validacao,
+        identificador=mask_identifier(identificador_validacao),
         tipo_identificador=tipo_identificador_consulta,
         exames_obrigatorios=exames_obrigatorios_final,
         exames_obrigatorios_count=len(exames_obrigatorios_final or []),
