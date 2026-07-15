@@ -28,8 +28,8 @@ services:
       # Rate limit compartilhado (contadores sobrevivem a restart e valem
       # para todas as instâncias)
       - REDIS_URL=${REDIS_URL:-redis://prontuai-redis:6379/0}
-      # Headers CF-Connecting-IP/X-Forwarded-For só são aceitos vindos destas
-      # origens (cloudflared fala com o backend pela rede interna do Docker)
+      # Headers X-Forwarded-For/X-Real-IP só são aceitos vindos destas origens
+      # (nginx no host chega ao container pelo gateway da rede do Docker)
       - TRUSTED_PROXY_IPS=${TRUSTED_PROXY_IPS:-127.0.0.1,::1,172.16.0.0/12}
     depends_on:
       - prontuai-redis
@@ -71,14 +71,3 @@ services:
       options:
         max-size: "5m"
         max-file: "2"
-
-  cloudflared:
-    image: cloudflare/cloudflared:latest
-    container_name: prontuai-cloudflared
-    restart: unless-stopped
-    command: tunnel --no-autoupdate run
-    user: "0:0"
-    depends_on:
-      - prontuai-backend
-    volumes:
-      - ./cloudflared:/etc/cloudflared:ro

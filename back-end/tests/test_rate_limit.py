@@ -53,7 +53,7 @@ def test_client_ip_uses_cf_header_from_trusted_peer(monkeypatch):
     monkeypatch.setenv("TRUSTED_PROXY_IPS", "127.0.0.1,::1,172.16.0.0/12")
     monkeypatch.setattr(main, "_TRUSTED_PROXY_NETWORKS", main._parse_trusted_proxies())
 
-    # cloudflared na rede interna do Docker repassa o IP real do visitante.
+    # Proxy confiável na rede interna do Docker repassa o IP real do visitante.
     request = _fake_request(
         peer_ip="172.18.0.5",
         headers={"cf-connecting-ip": "198.51.100.7"},

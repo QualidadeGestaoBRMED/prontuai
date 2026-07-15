@@ -91,11 +91,12 @@ def _get_client_ip(request: Request) -> str:
     peer_ip = _normalize_ip(request.client.host if request.client else None)
 
     # Headers de proxy só são confiáveis quando a conexão TCP vem de um
-    # proxy conhecido (cloudflared/nginx); caso contrário são spoofáveis.
+    # proxy conhecido (nginx no host); caso contrário são spoofáveis.
     if not _is_trusted_proxy(peer_ip):
         return peer_ip
 
-    # Cloudflare preserva o IP original neste header.
+    # Cloudflare preserva o IP original neste header (mantido por
+    # compatibilidade caso um proxy da Cloudflare volte a ser usado).
     cf_ip = _normalize_ip(request.headers.get("cf-connecting-ip"))
     if cf_ip != "unknown":
         return cf_ip

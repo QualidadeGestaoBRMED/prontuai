@@ -12,8 +12,8 @@ services:
       - WORKERS=${WORKERS:-1}
       # Rate limit compartilhado entre instâncias
       - REDIS_URL=${REDIS_URL:-redis://prontuai-redis:6379/0}
-      # Headers de proxy (CF-Connecting-IP/X-Forwarded-For) só são aceitos
-      # vindos destas origens
+      # Headers X-Forwarded-For/X-Real-IP só são aceitos vindos destas origens
+      # (nginx no host chega ao container pelo gateway da rede do Docker)
       - TRUSTED_PROXY_IPS=${TRUSTED_PROXY_IPS:-127.0.0.1,::1,172.16.0.0/12}
     depends_on:
       - prontuai-redis
