@@ -37,6 +37,7 @@ except ImportError:
 
 from app.core.config import settings
 from app.core import metrics
+from app.core.pii import mask_cpf, mask_identifier
 
 logger = logging.getLogger(__name__)
 
@@ -1371,7 +1372,7 @@ async def _ocr_pipeline_impl(file, salvar_markdown=True, progress_hook: Optional
             cpf_extraido = await asyncio.to_thread(extrair_cpf_ia, markdown)
         except Exception as e:
             logger.warning(f"[OCR] Falha ao extrair CPF via IA: {e}")
-    logger.info(f"[OCR] CPF extraído: {cpf_extraido if cpf_extraido else 'Nenhum CPF encontrado'}")
+    logger.info(f"[OCR] CPF extraído: {mask_cpf(cpf_extraido) if cpf_extraido else 'Nenhum CPF encontrado'}")
 
     # Extrair passaporte e CNPJ via regex
     passaporte_extraido = extrair_passaporte_regex(markdown)
@@ -1379,8 +1380,8 @@ async def _ocr_pipeline_impl(file, salvar_markdown=True, progress_hook: Optional
         logger.info("[OCR] Valor extraído como CPF também aparece como passaporte; usando como passaporte.")
         cpf_extraido = None
     cnpj_extraido = extrair_cnpj_regex(markdown)
-    logger.info(f"[OCR] Passaporte extraído: {passaporte_extraido if passaporte_extraido else 'Nenhum passaporte encontrado'}")
-    logger.info(f"[OCR] CNPJ extraído: {cnpj_extraido if cnpj_extraido else 'Nenhum CNPJ encontrado'}")
+    logger.info(f"[OCR] Passaporte extraído: {mask_identifier(passaporte_extraido) if passaporte_extraido else 'Nenhum passaporte encontrado'}")
+    logger.info(f"[OCR] CNPJ extraído: {mask_identifier(cnpj_extraido) if cnpj_extraido else 'Nenhum CNPJ encontrado'}")
 
     # Extrair exames via IA
     logger.info("[OCR] Iniciando extração de exames via OpenAI GPT...")
