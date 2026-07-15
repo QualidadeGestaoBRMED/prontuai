@@ -64,3 +64,5 @@ prontuai-security.md
 .worktrees/
 
 /JOSE EVERTON DAMASCENO.pdf
+
+back-end/cloudflared/*.json
