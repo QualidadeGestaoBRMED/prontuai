@@ -3,12 +3,14 @@ node_modules
 .env
 .md
 /auditoria_validacao/
+**/auditoria_validacao/
 /ocr_resultados/
 /resultados/
 /.pytest_cache/
 /__pycache__/
 /venv/
 /logs/
+**/logs/
 /api/
 
 /.claude/
