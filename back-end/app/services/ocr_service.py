@@ -36,6 +36,7 @@ except ImportError:
     torch = None
 
 from app.core.config import settings
+from app.services.patient_name_extractor import extract_patient_name_from_markdown
 
 logger = logging.getLogger(__name__)
 
@@ -1374,6 +1375,11 @@ async def _ocr_pipeline_impl(file, salvar_markdown=True, progress_hook: Optional
     logger.info(f"[OCR] Passaporte extraído: {passaporte_extraido if passaporte_extraido else 'Nenhum passaporte encontrado'}")
     logger.info(f"[OCR] CNPJ extraído: {cnpj_extraido if cnpj_extraido else 'Nenhum CNPJ encontrado'}")
 
+    patient_name = extract_patient_name_from_markdown(markdown)
+    logger.info(
+        f"[OCR] Nome do paciente extraído: {patient_name if patient_name else 'Nenhum nome encontrado'}"
+    )
+
     # Extrair exames via IA
     logger.info("[OCR] Iniciando extração de exames via OpenAI GPT...")
     exames_info = await asyncio.to_thread(extrair_exames_ia, markdown)
@@ -1385,8 +1391,9 @@ async def _ocr_pipeline_impl(file, salvar_markdown=True, progress_hook: Optional
         "passaporte": passaporte_extraido,
         "passport": passaporte_extraido,  # alias para compatibilidade com integração externa
         "cnpj": cnpj_extraido,
+        "patient_name": patient_name,
         "exames": exames_extraidos,
-        "markdown_content": markdown # Adiciona o markdown para o orquestrador usar
+        "markdown_content": markdown,  # Adiciona o markdown para o orquestrador usar
     }
 
     if "erro" in exames_info:
