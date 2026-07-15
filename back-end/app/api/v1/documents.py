@@ -15,6 +15,7 @@ from app.models.document import (
 )
 from app.core.logging import set_audit_context
 from app.core.config import settings
+from app.core import metrics
 from app.services import drive_service
 import logging
 import time
@@ -666,6 +667,14 @@ async def update_document(
                 approval_reason=approval_reason,
                 rejection_reason=rejection_reason,
             )
+        # Métrica de qualidade: decisão humana só conta quando o status muda
+        if (
+            payload.validation_status in ("validated", "rejected")
+            and payload.validation_status != document.validation_status
+        ):
+            metrics.REVISAO_HUMANA.labels(
+                decisao="aprovado" if payload.validation_status == "validated" else "rejeitado"
+            ).inc()
         payload_reviewed_by = None
         if isinstance(payload_result, dict):
             payload_reviewed_by = payload_result.get("reviewed_by") or payload_result.get("reviewedBy")
