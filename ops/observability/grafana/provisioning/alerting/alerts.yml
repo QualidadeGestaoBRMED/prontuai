@@ -215,6 +215,47 @@ groups:
         labels:
           severity: warning
 
+      - uid: prontuai-qualidade
+        title: Qualidade de entrega degradada (score de confiança baixo)
+        condition: C
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            relativeTimeRange:
+              from: 3600
+              to: 0
+            model:
+              datasource:
+                type: prometheus
+                uid: prometheus
+              expr: "histogram_quantile(0.50, sum by (le) (rate(prontuai_confianca_score_bucket[1h])))"
+              refId: A
+              queryType: range
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              type: classic_conditions
+              conditions:
+                - evaluator:
+                    type: lt
+                    params:
+                      - 60
+                  operator:
+                    type: and
+                  reducer:
+                    type: last
+                  query:
+                    params:
+                      - A
+        for: 30m
+        noDataState: OK
+        execErrState: Error
+        annotations:
+          summary: "Mediana do score de confiança dos documentos abaixo de 60"
+          description: "Documentos sendo entregues com baixa qualidade (OCR ruim ou exames obrigatórios não encontrados). Verifique fallback Docling, clínicas com scans fora do padrão e a API externa."
+        labels:
+          severity: warning
+
       - uid: prontuai-disco
         title: Disco acima de 85%
         condition: C

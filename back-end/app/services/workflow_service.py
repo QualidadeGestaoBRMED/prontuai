@@ -931,6 +931,8 @@ async def _processar_documento_completo_impl(
             if business_error
             else "Não foi possível consultar exames obrigatórios."
         )
+        metrics.DOCUMENTOS_PROCESSADOS.labels(status="error").inc()
+        metrics.WORKFLOW_DURACAO.observe(time.perf_counter() - start_total)
         return {
             "status": "error",
             "cpf": cpf_fallback,
@@ -1126,6 +1128,12 @@ async def _processar_documento_completo_impl(
     )
     metrics.DOCUMENTOS_PROCESSADOS.labels(status=resposta_final.get("status") or "desconhecido").inc()
     metrics.WORKFLOW_DURACAO.observe(time.perf_counter() - start_total)
+    if resposta_final.get("status") == "success":
+        metrics.CONFIANCA_SCORE.observe(confiabilidade_score)
+        exames_faltantes = resposta_final["validation_result"]["exames_faltantes"]
+        metrics.VALIDACAO_DOCUMENTOS.labels(
+            resultado="exames_faltantes" if exames_faltantes else "completo"
+        ).inc()
 
     return resposta_final
 
@@ -1136,18 +1144,23 @@ async def processar_documento_completo(
     progress_callback=None,
     clinic_cnpj: Optional[str] = None,
 ) -> Dict[str, Any]:
-    processing_semaphore = _get_processing_semaphore()
-    if processing_semaphore is None:
-        return await _processar_documento_completo_impl(
-            arquivo,
-            exames_obrigatorios,
-            progress_callback=progress_callback,
-            clinic_cnpj=clinic_cnpj,
-        )
-    async with processing_semaphore:
-        return await _processar_documento_completo_impl(
-            arquivo,
-            exames_obrigatorios,
-            progress_callback=progress_callback,
-            clinic_cnpj=clinic_cnpj,
-        )
+    try:
+        processing_semaphore = _get_processing_semaphore()
+        if processing_semaphore is None:
+            return await _processar_documento_completo_impl(
+                arquivo,
+                exames_obrigatorios,
+                progress_callback=progress_callback,
+                clinic_cnpj=clinic_cnpj,
+            )
+        async with processing_semaphore:
+            return await _processar_documento_completo_impl(
+                arquivo,
+                exames_obrigatorios,
+                progress_callback=progress_callback,
+                clinic_cnpj=clinic_cnpj,
+            )
+    except Exception:
+        # Falhas não tratadas também contam como documento processado (com erro)
+        metrics.DOCUMENTOS_PROCESSADOS.labels(status="exception").inc()
+        raise

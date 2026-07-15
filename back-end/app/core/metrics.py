@@ -46,6 +46,24 @@ try:
         ["resultado"],
     )
 
+    CONFIANCA_SCORE = Histogram(
+        "prontuai_confianca_score",
+        "Score de confiança do documento (0-100): qualidade do OCR + cobertura dos exames obrigatórios",
+        buckets=(10, 20, 30, 40, 50, 60, 70, 80, 90, 100),
+    )
+
+    VALIDACAO_DOCUMENTOS = Counter(
+        "prontuai_validacao_documentos_total",
+        "Resultado da validação automática (completo | exames_faltantes)",
+        ["resultado"],
+    )
+
+    REVISAO_HUMANA = Counter(
+        "prontuai_revisao_humana_total",
+        "Decisões do revisor humano sobre documentos (aprovado | rejeitado)",
+        ["decisao"],
+    )
+
 except ImportError:  # pragma: no cover - ambiente sem prometheus_client
     logger.warning("prometheus_client não instalado; métricas de negócio desabilitadas")
 
@@ -65,3 +83,6 @@ except ImportError:  # pragma: no cover - ambiente sem prometheus_client
     TEXTRACT_TIMEOUT = _NoopMetric()
     OCR_FALLBACK_DOCLING = _NoopMetric()
     PRONTUAI_API_CONSULTAS = _NoopMetric()
+    CONFIANCA_SCORE = _NoopMetric()
+    VALIDACAO_DOCUMENTOS = _NoopMetric()
+    REVISAO_HUMANA = _NoopMetric()

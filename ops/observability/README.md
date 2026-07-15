@@ -83,9 +83,11 @@ Alternativa: publicar o Grafana atrás do nginx existente com HTTPS + autentica�
 ## 4. Dashboards provisionados
 
 - **ProntuAI - Logs & Auditoria** — busca de logs com filtros `user_email`/`request_id`
-- **ProntuAI - Métricas (API / Negócio / Infra)** — RPS, latência p95, 5xx,
+- **ProntuAI - Aplicação (API / Negócio / Qualidade)** — RPS, latência p95, 5xx,
   documentos processados/hora, duração do OCR por motor, timeouts/fallbacks do
-  Textract, consultas à API externa, CPU/RAM/disco e memória por container
+  Textract, consultas à API externa e qualidade de entrega (score de confiança,
+  exames faltantes, aprovação/rejeição na revisão humana)
+- **ProntuAI - Infra (EC2)** — CPU/RAM/disco da máquina e memória por container
 
 ## 5. Alertas provisionados
 
@@ -96,6 +98,7 @@ Alternativa: publicar o Grafana atrás do nginx existente com HTTPS + autentica�
 | Taxa de 5xx | > 5% por 5 min | critical |
 | OCR degradado | p95 > 5 min por 10 min | warning |
 | Fallback Docling | qualquer ocorrência na última hora | warning |
+| Qualidade degradada | mediana do score de confiança < 60 por 30 min | warning |
 | Disco | > 85% por 5 min | warning |
 | Memória | > 90% por 5 min | critical |
 
