@@ -5,13 +5,22 @@ from fastapi import APIRouter, HTTPException, status, Depends
 from pydantic import BaseModel, EmailStr
 from google.auth.transport import requests as google_requests
 from google.oauth2 import id_token as google_id_token
-from app.core.auth import create_access_token, create_refresh_token, get_current_user, SECRET_KEY, ALGORITHM
+from app.core.auth import (
+    create_access_token,
+    create_refresh_token,
+    get_current_user,
+    hash_refresh_jti,
+    SECRET_KEY,
+    ALGORITHM,
+)
 from jose import JWTError, jwt as jose_jwt
 from app.core.config import settings
 from app.core.database import user_db
 from app.models.user import User
+from datetime import datetime
 from typing import Optional
 import logging
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -108,7 +117,13 @@ async def google_auth(auth_request: GoogleAuthRequest):
         token_data["clinic_id"] = user.clinic_id
 
     access_token = create_access_token(data=token_data)
-    refresh_token = create_refresh_token(data=token_data)
+    refresh_token, refresh_jti, family_id, refresh_expires_at = create_refresh_token(data=token_data)
+    user_db.create_refresh_session(
+        jti_hash=hash_refresh_jti(refresh_jti),
+        user_email=user.email,
+        family_id=family_id,
+        expires_at=refresh_expires_at,
+    )
 
     logger.info(
         "Usuário autenticado: %s (role: %s, clinic_id: %s, google_sub: %s)",
@@ -125,12 +140,44 @@ async def google_auth(auth_request: GoogleAuthRequest):
     )
 
 
-@router.post("/refresh", response_model=RefreshResponse)
-async def refresh_token(body: RefreshRequest):
-    """Renova o access token usando um refresh token válido."""
+# Reuso de um token rotacionado há poucos segundos costuma ser corrida benigna
+# (duas abas renovando juntas), não roubo; nesse caso só nega sem derrubar a família.
+REFRESH_REUSE_GRACE_SECONDS = int(os.getenv("REFRESH_REUSE_GRACE_SECONDS", "30"))
+
+
+def _handle_refresh_reuse(session_row: dict) -> None:
+    """Trata reuso de um refresh token já rotacionado/revogado.
+
+    Dentro da janela de graça (rotação recente e legítima), apenas nega a
+    requisição. Fora dela, presume roubo e revoga a família inteira.
+    """
+    revoked_at = session_row.get("revoked_at")
+    was_rotated = session_row.get("replaced_by_jti_hash") is not None
+    age_seconds = (
+        (datetime.utcnow() - revoked_at).total_seconds() if revoked_at is not None else None
+    )
+    if was_rotated and age_seconds is not None and age_seconds <= REFRESH_REUSE_GRACE_SECONDS:
+        logger.info(
+            "Refresh token rotacionado em corrida recente; negando sem revogar família.",
+            extra={"family_id": session_row["family_id"]},
+        )
+    else:
+        revoked = user_db.revoke_refresh_family(session_row["family_id"])
+        logger.warning(
+            "Reuso de refresh token detectado; família revogada.",
+            extra={"family_id": session_row["family_id"], "sessions_revoked": revoked},
+        )
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Sessão inválida. Faça login novamente.",
+    )
+
+
+def _decode_refresh_payload(refresh_token: str) -> dict:
+    """Valida assinatura/expiração e scope de um refresh token."""
     try:
         payload = jose_jwt.decode(
-            body.refresh_token,
+            refresh_token,
             SECRET_KEY,
             algorithms=[ALGORITHM],
             issuer=settings.JWT_ISSUER,
@@ -148,6 +195,38 @@ async def refresh_token(body: RefreshRequest):
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token não é um refresh token",
         )
+    return payload
+
+
+@router.post("/refresh", response_model=RefreshResponse)
+async def refresh_token(body: RefreshRequest):
+    """Renova o access token usando um refresh token válido.
+
+    Rotação de uso único: cada refresh token só pode ser usado uma vez.
+    Reuso de um token já rotacionado indica roubo e revoga a família
+    inteira de tokens (todas as rotações derivadas do mesmo login).
+    """
+    payload = _decode_refresh_payload(body.refresh_token)
+
+    jti = str(payload.get("jti") or "")
+    if not jti:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Refresh token inválido ou expirado",
+        )
+
+    session_row = user_db.get_refresh_session(hash_refresh_jti(jti))
+    if session_row is None:
+        # Token assinado mas sem sessão persistida: emitido antes da rotação
+        # de uso único existir, ou de uma família já purgada. Exige novo login.
+        logger.warning("Refresh token sem sessão registrada; exigindo novo login.")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Sessão expirada. Faça login novamente.",
+        )
+
+    if session_row["revoked_at"] is not None:
+        _handle_refresh_reuse(session_row)
 
     email: str = payload.get("sub", "")
     user = user_db.get_user_by_email(email)
@@ -161,12 +240,43 @@ async def refresh_token(body: RefreshRequest):
     if user.clinic_id:
         token_data["clinic_id"] = user.clinic_id
 
+    new_refresh_token, new_jti, family_id, new_expires_at = create_refresh_token(
+        data=token_data, family_id=session_row["family_id"]
+    )
+    rotated = user_db.rotate_refresh_session(
+        old_jti_hash=session_row["jti_hash"],
+        new_jti_hash=hash_refresh_jti(new_jti),
+        user_email=user.email,
+        family_id=family_id,
+        expires_at=new_expires_at,
+    )
+    if not rotated:
+        # Outra requisição rotacionou este mesmo token em corrida.
+        refreshed_row = user_db.get_refresh_session(session_row["jti_hash"]) or session_row
+        _handle_refresh_reuse(refreshed_row)
+
     logger.info("Token renovado para: %s", user.email)
 
     return RefreshResponse(
         access_token=create_access_token(data=token_data),
-        refresh_token=create_refresh_token(data=token_data),
+        refresh_token=new_refresh_token,
     )
+
+
+@router.post("/logout")
+async def logout(body: RefreshRequest):
+    """Revoga a sessão de refresh token (e toda a família de rotação)."""
+    payload = _decode_refresh_payload(body.refresh_token)
+    jti = str(payload.get("jti") or "")
+    if jti:
+        session_row = user_db.get_refresh_session(hash_refresh_jti(jti))
+        if session_row is not None:
+            revoked = user_db.revoke_refresh_family(session_row["family_id"])
+            logger.info(
+                "Logout: família de refresh tokens revogada.",
+                extra={"family_id": session_row["family_id"], "sessions_revoked": revoked},
+            )
+    return {"success": True}
 
 
 @router.get("/me", response_model=User)

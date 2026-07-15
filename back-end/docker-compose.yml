@@ -25,6 +25,14 @@ services:
       # JobManager está em memória; múltiplos workers causam 404 em /v1/jobs
       - WORKERS=${WORKERS:-1}
       - ALLOWED_ORIGINS=${ALLOWED_ORIGINS}
+      # Rate limit compartilhado (contadores sobrevivem a restart e valem
+      # para todas as instâncias)
+      - REDIS_URL=${REDIS_URL:-redis://prontuai-redis:6379/0}
+      # Headers CF-Connecting-IP/X-Forwarded-For só são aceitos vindos destas
+      # origens (cloudflared fala com o backend pela rede interna do Docker)
+      - TRUSTED_PROXY_IPS=${TRUSTED_PROXY_IPS:-127.0.0.1,::1,172.16.0.0/12}
+    depends_on:
+      - prontuai-redis
     volumes:
       # Persistir logs e resultados
       - ./logs:/app/logs
@@ -46,6 +54,23 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+
+  prontuai-redis:
+    image: redis:7-alpine
+    container_name: prontuai-redis
+    restart: unless-stopped
+    # Sem porta publicada: acessível apenas pela rede interna do Docker.
+    command: redis-server --maxmemory 64mb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "2"
 
   cloudflared:
     image: cloudflare/cloudflared:latest

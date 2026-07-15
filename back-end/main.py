@@ -17,19 +17,19 @@ from app.core.config import settings
 from app.core.database import user_db
 from app.models.audit_log import AuditLogCreate
 from app.core.telemetry import setup_telemetry
+from app.core.rate_limit import create_rate_limiter
+import ipaddress
 import logging
 import os
 import time
 import asyncio
-import threading
 from uuid import uuid4
 
 logger = logging.getLogger(__name__)
 
 setup_logging(settings.LOG_FILE)
 
-_RATE_LIMIT_LOCK = threading.Lock()
-_RATE_LIMIT_STATE: dict[str, tuple[float, int]] = {}
+_RATE_LIMITER = create_rate_limiter()
 
 _RECON_PATH_MARKERS = (
     "/.env",
@@ -60,7 +60,41 @@ def _normalize_ip(raw_ip: str | None) -> str:
     return candidate or "unknown"
 
 
+def _parse_trusted_proxies() -> list:
+    """Lê TRUSTED_PROXY_IPS aceitando IPs simples e faixas CIDR."""
+    networks = []
+    for item in os.getenv("TRUSTED_PROXY_IPS", "127.0.0.1,::1").split(","):
+        candidate = item.strip()
+        if not candidate:
+            continue
+        try:
+            networks.append(ipaddress.ip_network(candidate, strict=False))
+        except ValueError:
+            logger.warning("TRUSTED_PROXY_IPS contém entrada inválida ignorada: %s", candidate)
+    return networks
+
+
+_TRUSTED_PROXY_NETWORKS = _parse_trusted_proxies()
+
+
+def _is_trusted_proxy(ip: str) -> bool:
+    if ip == "unknown":
+        return False
+    try:
+        address = ipaddress.ip_address(ip)
+    except ValueError:
+        return False
+    return any(address in network for network in _TRUSTED_PROXY_NETWORKS)
+
+
 def _get_client_ip(request: Request) -> str:
+    peer_ip = _normalize_ip(request.client.host if request.client else None)
+
+    # Headers de proxy só são confiáveis quando a conexão TCP vem de um
+    # proxy conhecido (cloudflared/nginx); caso contrário são spoofáveis.
+    if not _is_trusted_proxy(peer_ip):
+        return peer_ip
+
     # Cloudflare preserva o IP original neste header.
     cf_ip = _normalize_ip(request.headers.get("cf-connecting-ip"))
     if cf_ip != "unknown":
@@ -71,14 +105,9 @@ def _get_client_ip(request: Request) -> str:
         candidates = [_normalize_ip(item) for item in x_forwarded_for.split(",") if item.strip()]
         candidates = [candidate for candidate in candidates if candidate != "unknown"]
         if candidates:
-            trusted_proxies = {
-                _normalize_ip(item)
-                for item in os.getenv("TRUSTED_PROXY_IPS", "127.0.0.1,::1").split(",")
-                if item.strip()
-            }
             # Seleciona o último IP não confiável para reduzir spoofing via XFF.
             for candidate in reversed(candidates):
-                if candidate not in trusted_proxies:
+                if not _is_trusted_proxy(candidate):
                     return candidate
             return candidates[0]
 
@@ -86,7 +115,7 @@ def _get_client_ip(request: Request) -> str:
     if x_real_ip != "unknown":
         return x_real_ip
 
-    return _normalize_ip(request.client.host if request.client else None)
+    return peer_ip
 
 
 def _get_rate_limit_subject(request: Request) -> str:
@@ -129,18 +158,7 @@ def _resolve_rate_limit(path: str) -> tuple[str, int, float]:
 
 
 def _rate_limit_allowed(subject: str, scope: str, limit: int, window: float) -> bool:
-    if limit <= 0:
-        return True
-    now = time.monotonic()
-    state_key = f"{scope}:{subject}"
-    with _RATE_LIMIT_LOCK:
-        start, count = _RATE_LIMIT_STATE.get(state_key, (now, 0))
-        if now - start >= window:
-            start, count = now, 0
-        if count >= limit:
-            return False
-        _RATE_LIMIT_STATE[state_key] = (start, count + 1)
-    return True
+    return _RATE_LIMITER.allow(f"{scope}:{subject}", limit, window)
 
 if os.getenv("SENTRY_DSN"):
     try:
@@ -329,6 +347,14 @@ async def startup_event():
     except Exception as e:
         logger.error(f"Erro durante auto-migração: {e}")
         # Não interromper o startup - a aplicação pode funcionar mesmo sem migração
+
+    # Housekeeping de sessões de refresh token expiradas
+    try:
+        purged = user_db.purge_expired_refresh_sessions()
+        if purged:
+            logger.info(f"Sessões de refresh token expiradas removidas: {purged}")
+    except Exception as e:
+        logger.warning(f"Falha ao limpar sessões de refresh expiradas: {e}")
 
     # Warmup de cache de documentos (não bloqueia o startup)
     try:

@@ -2,6 +2,7 @@
 Sistema de autenticação e autorização com JWT.
 """
 from datetime import datetime, timedelta
+import hashlib
 import uuid
 import os
 from typing import Optional, List, Any
@@ -95,19 +96,33 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
             "nbf": now,
             "iss": settings.JWT_ISSUER,
             "aud": settings.JWT_AUDIENCE,
-            "jti": str(uuid.uuid4()),
         }
     )
+    # Refresh tokens passam jti explícito para permitir sessão persistida.
+    to_encode.setdefault("jti", str(uuid.uuid4()))
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
 
-def create_refresh_token(data: dict) -> str:
-    """Cria um refresh token JWT de longa duração (scope=refresh)"""
-    return create_access_token(
-        {**data, "scope": "refresh"},
+def hash_refresh_jti(jti: str) -> str:
+    """Hash SHA-256 do jti para armazenamento (nunca persistir o valor cru)."""
+    return hashlib.sha256(jti.encode("utf-8")).hexdigest()
+
+
+def create_refresh_token(data: dict, family_id: Optional[str] = None) -> tuple[str, str, str, datetime]:
+    """Cria um refresh token JWT de longa duração (scope=refresh).
+
+    Retorna (token, jti, family_id, expires_at) para que o chamador persista a
+    sessão e faça rotação de uso único com detecção de reuso.
+    """
+    jti = str(uuid.uuid4())
+    family_id = family_id or str(uuid.uuid4())
+    expires_at = datetime.utcnow() + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
+    token = create_access_token(
+        {**data, "scope": "refresh", "jti": jti},
         expires_delta=timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS),
     )
+    return token, jti, family_id, expires_at
 
 
 def create_upload_token(user: User, expires_delta: Optional[timedelta] = None) -> str:

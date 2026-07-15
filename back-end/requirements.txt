@@ -36,6 +36,7 @@ google-auth-httplib2>=0.2.0  # Transporte HTTP para Google APIs
 # Database
 sqlalchemy>=2.0.0  # ORM para PostgreSQL
 psycopg2-binary>=2.9.0  # PostgreSQL driver
+redis>=5.0.0  # Rate limit compartilhado entre instâncias (REDIS_URL)
 asyncpg>=0.29.0  # Async PostgreSQL driver (futuro)
 
 # Observability (Prometheus)

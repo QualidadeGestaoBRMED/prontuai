@@ -10,6 +10,12 @@ services:
     environment:
       # JobManager está em memória; múltiplos workers causam 404 em /v1/jobs.
       - WORKERS=${WORKERS:-1}
+      # Rate limit compartilhado entre instâncias
+      - REDIS_URL=${REDIS_URL:-redis://prontuai-redis-stg:6379/0}
+      # Headers de proxy só são aceitos vindos destas origens
+      - TRUSTED_PROXY_IPS=${TRUSTED_PROXY_IPS:-127.0.0.1,::1,172.16.0.0/12}
+    depends_on:
+      - prontuai-redis-stg
     volumes:
       - ./logs:/app/logs
       - ./resultados:/app/resultados
@@ -27,3 +33,20 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+
+  prontuai-redis-stg:
+    image: redis:7-alpine
+    container_name: prontuai-redis-stg
+    restart: unless-stopped
+    # Sem porta publicada: acessível apenas pela rede interna do Docker.
+    command: redis-server --maxmemory 64mb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "2"

@@ -28,6 +28,7 @@ from app.core.db.models import (
     AuditLogModel,
     JobModel,
     MaintenanceWindowModel,
+    RefreshTokenModel,
 )
 
 logger = logging.getLogger(__name__)
@@ -351,6 +352,123 @@ class PostgresUserDatabase:
                 query = query.filter(AuditLogModel.created_at >= since)
             models = query.order_by(AuditLogModel.created_at.desc()).limit(limit).all()
             return [self._model_to_audit_log(model) for model in models]
+        finally:
+            session.close()
+
+    # =============== MÉTODOS DE REFRESH TOKEN (SESSÕES) ===============
+
+    def create_refresh_session(
+        self,
+        jti_hash: str,
+        user_email: str,
+        family_id: str,
+        expires_at: datetime,
+    ) -> None:
+        """Registra uma nova sessão de refresh token."""
+        session = self._get_session()
+        try:
+            session.add(
+                RefreshTokenModel(
+                    jti_hash=jti_hash,
+                    user_email=user_email,
+                    family_id=family_id,
+                    expires_at=expires_at,
+                    created_at=datetime.utcnow(),
+                )
+            )
+            session.commit()
+        finally:
+            session.close()
+
+    def get_refresh_session(self, jti_hash: str) -> Optional[dict]:
+        """Busca uma sessão de refresh token pelo hash do jti."""
+        session = self._get_session()
+        try:
+            model = session.query(RefreshTokenModel).filter(
+                RefreshTokenModel.jti_hash == jti_hash
+            ).first()
+            if model is None:
+                return None
+            return {
+                "jti_hash": model.jti_hash,
+                "user_email": model.user_email,
+                "family_id": model.family_id,
+                "expires_at": model.expires_at,
+                "created_at": model.created_at,
+                "revoked_at": model.revoked_at,
+                "replaced_by_jti_hash": model.replaced_by_jti_hash,
+            }
+        finally:
+            session.close()
+
+    def rotate_refresh_session(
+        self,
+        old_jti_hash: str,
+        new_jti_hash: str,
+        user_email: str,
+        family_id: str,
+        expires_at: datetime,
+    ) -> bool:
+        """Rotaciona uma sessão de refresh token de forma atômica.
+
+        Revoga a sessão antiga e cria a nova na mesma família em uma única
+        transação. Retorna False se a sessão antiga já estava revogada ou não
+        existe (o UPDATE condicional impede uso duplo em corrida).
+        """
+        session = self._get_session()
+        try:
+            rows = session.query(RefreshTokenModel).filter(
+                RefreshTokenModel.jti_hash == old_jti_hash,
+                RefreshTokenModel.revoked_at.is_(None),
+            ).update(
+                {
+                    "revoked_at": datetime.utcnow(),
+                    "replaced_by_jti_hash": new_jti_hash,
+                },
+                synchronize_session=False,
+            )
+            if rows != 1:
+                session.rollback()
+                return False
+            session.add(
+                RefreshTokenModel(
+                    jti_hash=new_jti_hash,
+                    user_email=user_email,
+                    family_id=family_id,
+                    expires_at=expires_at,
+                    created_at=datetime.utcnow(),
+                )
+            )
+            session.commit()
+            return True
+        except Exception:
+            session.rollback()
+            raise
+        finally:
+            session.close()
+
+    def revoke_refresh_family(self, family_id: str) -> int:
+        """Revoga todas as sessões ativas de uma família de rotação."""
+        session = self._get_session()
+        try:
+            rows = session.query(RefreshTokenModel).filter(
+                RefreshTokenModel.family_id == family_id,
+                RefreshTokenModel.revoked_at.is_(None),
+            ).update({"revoked_at": datetime.utcnow()}, synchronize_session=False)
+            session.commit()
+            return rows
+        finally:
+            session.close()
+
+    def purge_expired_refresh_sessions(self) -> int:
+        """Remove sessões expiradas (housekeeping)."""
+        session = self._get_session()
+        try:
+            rows = session.query(RefreshTokenModel).filter(
+                RefreshTokenModel.expires_at < datetime.utcnow()
+            ).delete(synchronize_session=False)
+            session.commit()
+            return rows
         finally:
             session.close()
 

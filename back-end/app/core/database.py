@@ -66,6 +66,20 @@ class UserDatabaseProtocol(Protocol):
         request_id: Optional[str] = None,
         since: Optional[datetime] = None,
     ) -> List[AuditLog]: ...
+    def create_refresh_session(
+        self, jti_hash: str, user_email: str, family_id: str, expires_at: datetime
+    ) -> None: ...
+    def get_refresh_session(self, jti_hash: str) -> Optional[dict]: ...
+    def rotate_refresh_session(
+        self,
+        old_jti_hash: str,
+        new_jti_hash: str,
+        user_email: str,
+        family_id: str,
+        expires_at: datetime,
+    ) -> bool: ...
+    def revoke_refresh_family(self, family_id: str) -> int: ...
+    def purge_expired_refresh_sessions(self) -> int: ...
 
 
 def get_user_database() -> UserDatabaseProtocol:

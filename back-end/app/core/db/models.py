@@ -151,6 +151,24 @@ class JobModel(Base):
     completed_at = Column(DateTime, nullable=True)
 
 
+class RefreshTokenModel(Base):
+    """Sessão de refresh token (rotação de uso único com detecção de reuso).
+
+    Armazena apenas o hash SHA-256 do `jti` — nunca o token em si. Tokens da
+    mesma cadeia de rotação compartilham `family_id`; reuso de um jti já
+    rotacionado revoga a família inteira.
+    """
+    __tablename__ = "refresh_tokens"
+
+    jti_hash = Column(String, primary_key=True)
+    user_email = Column(String, nullable=False, index=True)
+    family_id = Column(String, nullable=False, index=True)
+    expires_at = Column(DateTime, nullable=False)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    revoked_at = Column(DateTime, nullable=True)
+    replaced_by_jti_hash = Column(String, nullable=True)
+
+
 class MaintenanceWindowModel(Base):
     """Janela operacional de manutenção da aplicação."""
     __tablename__ = "maintenance_windows"
