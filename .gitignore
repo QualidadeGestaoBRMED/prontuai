@@ -70,3 +70,5 @@ prontuai-security.md
 back-end/cloudflared/*.json
 
 /pasta_teste/
+
+back-end/logs_teste_pii/
