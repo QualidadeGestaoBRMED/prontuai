@@ -68,6 +68,24 @@ try:
         ["decisao", "clinica_id", "clinica_nome"],
     )
 
+    DOCUMENTOS_ENVIADOS = Counter(
+        "prontuai_documentos_enviados_total",
+        "Documentos recebidos no upload, antes do processamento (workflow pode falhar depois)",
+        ["clinica_id", "clinica_nome"],
+    )
+
+    CLINICAS_CRIADAS = Counter(
+        "prontuai_clinicas_criadas_total",
+        "Clínicas cadastradas no sistema",
+    )
+
+    # role: bounded a ADMIN/MANAGER/CHECKER/SENDER — não é PII, é papel do usuário.
+    USUARIOS_CRIADOS = Counter(
+        "prontuai_usuarios_criados_total",
+        "Usuários cadastrados no sistema",
+        ["role"],
+    )
+
 except ImportError:  # pragma: no cover - ambiente sem prometheus_client
     logger.warning("prometheus_client não instalado; métricas de negócio desabilitadas")
 
@@ -90,3 +108,6 @@ except ImportError:  # pragma: no cover - ambiente sem prometheus_client
     CONFIANCA_SCORE = _NoopMetric()
     VALIDACAO_DOCUMENTOS = _NoopMetric()
     REVISAO_HUMANA = _NoopMetric()
+    DOCUMENTOS_ENVIADOS = _NoopMetric()
+    CLINICAS_CRIADAS = _NoopMetric()
+    USUARIOS_CRIADOS = _NoopMetric()

@@ -64,6 +64,54 @@
   },
   "panels": [
     {
+      "type": "row",
+      "title": "Atividade",
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "collapsed": false
+    },
+    {
+      "type": "stat",
+      "title": "Usuários ativos (24h)",
+      "description": "Usuários distintos com pelo menos uma requisição autenticada nas últimas 24h.",
+      "gridPos": {
+        "h": 4,
+        "w": 24,
+        "x": 0,
+        "y": 1
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "targets": [
+        {
+          "expr": "count(count by (user_email) (count_over_time({job=\"prontuai-backend\"} | json | user_email!=\"\" [24h])))",
+          "legendFormat": "usuários ativos",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "value",
+        "graphMode": "none"
+      }
+    },
+    {
       "type": "stat",
       "title": "Requests (req/s - 5m)",
       "datasource": {
@@ -72,7 +120,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 0,
+        "y": 5,
         "w": 8,
         "h": 6
       },
@@ -100,7 +148,7 @@
       },
       "gridPos": {
         "x": 8,
-        "y": 0,
+        "y": 5,
         "w": 8,
         "h": 6
       },
@@ -128,7 +176,7 @@
       },
       "gridPos": {
         "x": 16,
-        "y": 0,
+        "y": 5,
         "w": 8,
         "h": 6
       },
@@ -156,7 +204,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 6,
+        "y": 11,
         "w": 24,
         "h": 12
       },
@@ -182,7 +230,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 18,
+        "y": 23,
         "w": 24,
         "h": 10
       },
@@ -206,7 +254,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 28
+        "y": 33
       },
       "collapsed": false
     },
@@ -217,7 +265,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 29
+        "y": 34
       },
       "datasource": {
         "type": "loki",
@@ -254,7 +302,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 29
+        "y": 34
       },
       "datasource": {
         "type": "loki",

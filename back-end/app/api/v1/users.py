@@ -8,6 +8,7 @@ from fastapi import APIRouter, HTTPException, status, Depends
 from typing import List
 from app.core.auth import require_admin, require_management
 from app.core.database import user_db
+from app.core import metrics
 from app.models.user import User, UserCreate, UserUpdate, UserRole
 import logging
 
@@ -78,6 +79,7 @@ async def create_user(
             clinic_id=clinic_id
         )
         logger.info(f"Admin {admin.email} criou usuário {user.email} com role {user.role.value} (clinic_id: {clinic_id})")
+        metrics.USUARIOS_CRIADOS.labels(role=user.role.value).inc()
         return user
 
     except ValueError as e:

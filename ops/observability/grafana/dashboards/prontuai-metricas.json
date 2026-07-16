@@ -209,7 +209,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 18
+        "y": 26
       },
       "datasource": {
         "type": "prometheus",
@@ -246,7 +246,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 18
+        "y": 26
       },
       "datasource": {
         "type": "prometheus",
@@ -278,7 +278,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 26
+        "y": 34
       },
       "collapsed": false
     },
@@ -289,7 +289,7 @@
         "h": 8,
         "w": 6,
         "x": 0,
-        "y": 27
+        "y": 35
       },
       "datasource": {
         "type": "prometheus",
@@ -322,7 +322,7 @@
         "h": 8,
         "w": 6,
         "x": 6,
-        "y": 27
+        "y": 35
       },
       "datasource": {
         "type": "prometheus",
@@ -364,7 +364,7 @@
         "h": 8,
         "w": 6,
         "x": 12,
-        "y": 27
+        "y": 35
       },
       "datasource": {
         "type": "prometheus",
@@ -396,7 +396,7 @@
         "h": 8,
         "w": 6,
         "x": 18,
-        "y": 27
+        "y": 35
       },
       "datasource": {
         "type": "prometheus",
@@ -424,7 +424,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 35
+        "y": 43
       },
       "collapsed": false
     },
@@ -435,7 +435,7 @@
         "h": 8,
         "w": 6,
         "x": 0,
-        "y": 36
+        "y": 44
       },
       "datasource": {
         "type": "prometheus",
@@ -475,7 +475,7 @@
         "h": 8,
         "w": 6,
         "x": 6,
-        "y": 36
+        "y": 44
       },
       "datasource": {
         "type": "prometheus",
@@ -516,7 +516,7 @@
         "h": 8,
         "w": 6,
         "x": 12,
-        "y": 36
+        "y": 44
       },
       "datasource": {
         "type": "prometheus",
@@ -557,7 +557,7 @@
         "h": 8,
         "w": 6,
         "x": 18,
-        "y": 36
+        "y": 44
       },
       "datasource": {
         "type": "prometheus",
@@ -587,6 +587,152 @@
             "axisSoftMin": 0
           },
           "max": 100
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Documentos enviados por hora (upload)",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 18
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "sum(increase(prontuai_documentos_enviados_total[1h]))",
+          "legendFormat": "enviados/h",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "row",
+      "title": "Cadastros",
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 52
+      },
+      "collapsed": false
+    },
+    {
+      "type": "stat",
+      "title": "Clínicas criadas (30d)",
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 53
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "sum(increase(prontuai_clinicas_criadas_total[30d]))",
+          "legendFormat": "clínicas",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "value",
+        "graphMode": "none"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Usuários criados (30d)",
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 53
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "sum(increase(prontuai_usuarios_criados_total[30d]))",
+          "legendFormat": "usuários",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "value",
+        "graphMode": "none"
+      }
+    },
+    {
+      "type": "barchart",
+      "title": "Usuários criados por papel (30d)",
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 53
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "sum by (role) (increase(prontuai_usuarios_criados_total[30d]))",
+          "legendFormat": "{{role}}",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "orientation": "horizontal",
+        "legend": {
+          "showLegend": false
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "continuous-blues"
+          }
         },
         "overrides": []
       }

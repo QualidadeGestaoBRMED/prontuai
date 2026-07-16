@@ -83,15 +83,19 @@ Alternativa: publicar o Grafana atrás do nginx existente com HTTPS + autentica�
 ## 4. Dashboards provisionados
 
 - **ProntuAI - Logs & Auditoria** — busca de logs com filtros `user_email`/`request_id`;
+  row **Atividade** com usuários ativos (24h, distintos por `user_email` no Loki);
   row **Por Usuário** com ranking de documentos processados e falhas nas últimas 24h
   (via Loki, `topk` sobre `count_over_time`)
 - **ProntuAI - Aplicação (API / Negócio / Qualidade)** — RPS, latência p95, 5xx,
-  documentos processados/hora, duração do OCR por motor, timeouts/fallbacks do
-  Textract, consultas à API externa e qualidade de entrega (score de confiança,
-  exames faltantes, aprovação/rejeição na revisão humana); row **Por Clínica** com
-  volume, taxa de erro, score de confiança médio e taxa de rejeição na revisão,
-  cada um quebrado por `clinica_nome` (Prometheus)
-- **ProntuAI - Infra (EC2)** — CPU/RAM/disco da máquina e memória por container
+  documentos enviados e processados por hora, duração do OCR por motor,
+  timeouts/fallbacks do Textract, consultas à API externa e qualidade de entrega
+  (score de confiança, exames faltantes, aprovação/rejeição na revisão humana);
+  row **Por Clínica** com volume, taxa de erro, score de confiança médio e taxa
+  de rejeição na revisão, cada um quebrado por `clinica_nome` (Prometheus); row
+  **Cadastros** com clínicas e usuários criados (30d, por papel)
+- **ProntuAI - Infra (EC2)** — CPU/RAM/disco da máquina, memória por container e
+  row **Picos & Armazenamento** (pico de RAM/disco no período selecionado,
+  armazenamento usado em GB)
 
 ### Por que clínica é label Prometheus e usuário não
 

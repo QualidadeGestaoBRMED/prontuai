@@ -8,6 +8,7 @@ from app.core.database import user_db
 from app.core.logging import set_audit_context
 from app.models.audit_log import AuditLogCreate
 from app.core.config import settings
+from app.core import metrics
 from pydantic import BaseModel
 import logging
 import json
@@ -171,6 +172,10 @@ async def processar_documento_completo_api(
         arquivo.filename,
         file_size,
     )
+    metrics.DOCUMENTOS_ENVIADOS.labels(
+        clinica_id=current_user.clinic_id or "desconhecida",
+        clinica_nome=_get_clinic_name(current_user.clinic_id) or "desconhecida",
+    ).inc()
 
     try:
         # Converte a string JSON de exames_obrigatorios para lista
@@ -308,6 +313,10 @@ async def processar_documento_stream_api(
         arquivo.filename,
         file_size,
     )
+    metrics.DOCUMENTOS_ENVIADOS.labels(
+        clinica_id=current_user.clinic_id or "desconhecida",
+        clinica_nome=_get_clinic_name(current_user.clinic_id) or "desconhecida",
+    ).inc()
 
     dedup_window = int(os.getenv("UPLOAD_DEDUP_WINDOW_SECONDS", "0"))
     if dedup_window > 0 and content:
@@ -427,6 +436,10 @@ async def processar_documento_async_api(
         arquivo.filename,
         file_size,
     )
+    metrics.DOCUMENTOS_ENVIADOS.labels(
+        clinica_id=current_user.clinic_id or "desconhecida",
+        clinica_nome=_get_clinic_name(current_user.clinic_id) or "desconhecida",
+    ).inc()
 
     # Parse exames obrigatórios
     try:

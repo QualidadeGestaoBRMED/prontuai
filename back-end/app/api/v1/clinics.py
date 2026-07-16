@@ -6,6 +6,7 @@ from fastapi import APIRouter, HTTPException, status, Depends
 from typing import List
 from app.core.auth import require_management, get_current_user
 from app.core.database import user_db
+from app.core import metrics
 from app.models.user import User, UserRole
 from app.models.clinic import Clinic, ClinicCreate, ClinicUpdate
 import logging
@@ -164,6 +165,7 @@ async def create_clinic(
         )
 
         logger.info(f"[CLINICS] Admin {current_user.email} criou clínica {clinic.id} ({clinic.name})")
+        metrics.CLINICAS_CRIADAS.inc()
         return clinic
 
     except HTTPException:
