@@ -58,7 +58,7 @@ try:
 
     VALIDACAO_DOCUMENTOS = Counter(
         "prontuai_validacao_documentos_total",
-        "Resultado da validação automática (completo | exames_faltantes)",
+        "Resultado da validação automática pela IA (aprovado | rejeitado por exames faltantes)",
         ["resultado", "clinica_id", "clinica_nome"],
     )
 

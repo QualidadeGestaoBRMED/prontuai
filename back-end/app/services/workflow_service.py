@@ -1117,7 +1117,7 @@ async def _processar_documento_completo_impl(
         metrics.CONFIANCA_SCORE.labels(**clinica_labels).observe(confiabilidade_score)
         exames_faltantes = resposta_final["validation_result"]["exames_faltantes"]
         metrics.VALIDACAO_DOCUMENTOS.labels(
-            resultado="exames_faltantes" if exames_faltantes else "completo",
+            resultado="rejeitado" if exames_faltantes else "aprovado",
             **clinica_labels,
         ).inc()
 

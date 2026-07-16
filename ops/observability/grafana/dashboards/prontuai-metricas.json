@@ -317,7 +317,7 @@
     },
     {
       "type": "timeseries",
-      "title": "Validação automática: completos x exames faltantes (por hora)",
+      "title": "Validação automática (IA): aprovados x rejeitados (por hora)",
       "gridPos": {
         "h": 8,
         "w": 6,
@@ -330,13 +330,13 @@
       },
       "targets": [
         {
-          "expr": "sum(increase(prontuai_validacao_documentos_total{resultado=\"completo\"}[1h]))",
-          "legendFormat": "completos",
+          "expr": "sum(increase(prontuai_validacao_documentos_total{resultado=\"aprovado\"}[1h]))",
+          "legendFormat": "aprovados",
           "refId": "A"
         },
         {
-          "expr": "sum(increase(prontuai_validacao_documentos_total{resultado=\"exames_faltantes\"}[1h]))",
-          "legendFormat": "exames faltantes",
+          "expr": "sum(increase(prontuai_validacao_documentos_total{resultado=\"rejeitado\"}[1h]))",
+          "legendFormat": "rejeitados",
           "refId": "B"
         }
       ],
