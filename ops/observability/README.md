@@ -107,11 +107,20 @@ Alerting → Contact points → default.
 
 ## 6. Checklist de implantação na EC2
 
+O deploy desta pasta é automático: o workflow `observability-deploy.yml` roda a
+cada push na `v1` que toque `ops/observability/**`, sincroniza os arquivos para
+`/home/ec2-user/prontuai-observability` e recarrega o stack (dashboards e
+alertas incluídos). Só o passo 4 (criar o `.env` no servidor) é manual e feito
+uma única vez — sem ele o workflow falha com mensagem explicando o que criar.
+
 1. [ ] `LOG_FORMAT=json` + `METRICS_ENABLED=true` no `.env` do backend; reiniciar
 2. [ ] Criar projeto no sentry.io e setar `SENTRY_DSN`
 3. [ ] Rebuild/pull da imagem do backend (nova dependência de métricas)
-4. [ ] Criar `ops/observability/.env` com `BACKEND_LOGS_PATH` e senha do Grafana
-5. [ ] `docker compose up -d` em `ops/observability`
+4. [ ] Criar `.env` em `/home/ec2-user/prontuai-observability` na EC2 com
+       `BACKEND_LOGS_PATH=/home/ec2-user/prontuai/logs`,
+       `BACKEND_DOCKER_NETWORK=prontuai_default` (confirme com
+       `docker inspect prontuai-backend`) e `GRAFANA_ADMIN_PASSWORD`
+5. [ ] Rodar o workflow **Observability Deploy** (push ou `workflow_dispatch`)
 6. [ ] Conferir targets em http://localhost:9090/targets (todos UP)
 7. [ ] Bloquear `/metrics` no nginx público, se houver proxy para o backend
 8. [ ] Configurar contact point (e-mail/Slack) no Grafana Alerting
