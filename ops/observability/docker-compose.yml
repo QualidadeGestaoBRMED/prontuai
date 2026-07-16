@@ -1,13 +1,21 @@
-version: "3.8"
+# Stack de observabilidade ProntuAI (logs + métricas)
+#
+# Variáveis de ambiente (crie um .env nesta pasta ou exporte):
+#   BACKEND_LOGS_PATH    caminho dos logs do backend (padrão: ../../back-end/logs)
+#   GRAFANA_ADMIN_PASSWORD  senha do admin do Grafana (padrão: admin — TROQUE em produção)
+#   OBS_BIND_ADDRESS     endereço de bind das portas (padrão: 127.0.0.1; nunca exponha publicamente)
+#
+# Acesso na EC2: túnel SSH (ssh -L 3001:127.0.0.1:3001 ...) ou proxy nginx com HTTPS.
 
 services:
   loki:
     image: grafana/loki:2.9.8
     command: -config.file=/etc/loki/loki.yml
     ports:
-      - "3100:3100"
+      - "${OBS_BIND_ADDRESS:-127.0.0.1}:3100:3100"
     volumes:
       - ./loki-config.yml:/etc/loki/loki.yml:ro
+      - loki-data:/loki
     restart: unless-stopped
 
   promtail:
@@ -15,19 +23,69 @@ services:
     command: -config.file=/etc/promtail/config.yml
     volumes:
       - ./promtail-config.yml:/etc/promtail/config.yml:ro
-      - ../../back-end/logs:/var/log/prontuai:ro
+      - ${BACKEND_LOGS_PATH:-../../back-end/logs}:/var/log/prontuai:ro
       - ./promtail-positions:/tmp/positions
     restart: unless-stopped
     depends_on:
       - loki
 
+  prometheus:
+    image: prom/prometheus:v2.53.0
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=30d
+    ports:
+      - "${OBS_BIND_ADDRESS:-127.0.0.1}:9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - default
+      - backend
+
+  node_exporter:
+    image: prom/node-exporter:v1.8.1
+    command:
+      - --path.rootfs=/host
+    pid: host
+    network_mode: host
+    volumes:
+      - /:/host:ro,rslave
+    restart: unless-stopped
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.52.1
+    # Necessário no cgroup v2 para enxergar os cgroups dos demais containers
+    cgroup: host
+    # LIMITAÇÃO: se o Docker do host usar containerd-snapshotter
+    # (docker info -> "io.containerd.snapshotter.v1"), o cAdvisor não consegue
+    # criar os handlers dos containers e o painel "Memória por container" fica
+    # sem dados. O Docker padrão da EC2 (overlay2) funciona normalmente.
+    command:
+      - --docker_only=true
+    ports:
+      - "${OBS_BIND_ADDRESS:-127.0.0.1}:8081:8080"
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    devices:
+      - /dev/kmsg
+    privileged: true
+    restart: unless-stopped
+
   grafana:
     image: grafana/grafana:10.4.3
     ports:
-      - "3001:3000"
+      - "${OBS_BIND_ADDRESS:-127.0.0.1}:3001:3000"
     environment:
-      GF_SECURITY_ADMIN_USER: admin
-      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
       GF_AUTH_ANONYMOUS_ENABLED: "false"
       GF_USERS_ALLOW_SIGN_UP: "false"
     volumes:
@@ -37,6 +95,19 @@ services:
     restart: unless-stopped
     depends_on:
       - loki
+      - prometheus
 
 volumes:
   grafana-data:
+  loki-data:
+  prometheus-data:
+
+networks:
+  default: {}
+  # Rede do compose do backend, para o Prometheus coletar /metrics direto do
+  # container (a porta do backend fica publicada só em 127.0.0.1 no host).
+  # Ajuste BACKEND_DOCKER_NETWORK se o compose do backend rodar em outra pasta:
+  #   docker inspect prontuai-backend --format '{{range $k, $v := .NetworkSettings.Networks}}{{$k}}{{end}}'
+  backend:
+    external: true
+    name: ${BACKEND_DOCKER_NETWORK:-back-end_default}

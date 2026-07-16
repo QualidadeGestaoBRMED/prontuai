@@ -1,5 +1,9 @@
 apiVersion: 1
 
+# Regras de alerta provisionadas.
+# Configure o destino (e-mail/Slack) em Alerting > Contact points no Grafana,
+# ou provisione um contact point neste diretório.
+
 groups:
   - orgId: 1
     name: prontuai-alerts
@@ -46,3 +50,290 @@ groups:
           description: "Check Loki logs for error details."
         labels:
           severity: warning
+
+      - uid: prontuai-backend-down
+        title: Backend sem scrape (fora do ar?)
+        condition: C
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            relativeTimeRange:
+              from: 300
+              to: 0
+            model:
+              datasource:
+                type: prometheus
+                uid: prometheus
+              expr: "up{job=\"prontuai-backend\"}"
+              refId: A
+              queryType: range
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              type: classic_conditions
+              conditions:
+                - evaluator:
+                    type: lt
+                    params:
+                      - 1
+                  operator:
+                    type: and
+                  reducer:
+                    type: last
+                  query:
+                    params:
+                      - A
+        for: 2m
+        noDataState: Alerting
+        execErrState: Error
+        annotations:
+          summary: "Prometheus não consegue coletar /metrics do backend"
+          description: "Backend fora do ar, sem METRICS_ENABLED=true ou porta inacessível."
+        labels:
+          severity: critical
+
+      - uid: prontuai-5xx-rate
+        title: Taxa de erros 5xx acima de 5%
+        condition: C
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            relativeTimeRange:
+              from: 300
+              to: 0
+            model:
+              datasource:
+                type: prometheus
+                uid: prometheus
+              expr: "100 * sum(rate(http_requests_total{job=\"prontuai-backend\", status=~\"5..\"}[5m])) / sum(rate(http_requests_total{job=\"prontuai-backend\"}[5m]))"
+              refId: A
+              queryType: range
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              type: classic_conditions
+              conditions:
+                - evaluator:
+                    type: gt
+                    params:
+                      - 5
+                  operator:
+                    type: and
+                  reducer:
+                    type: last
+                  query:
+                    params:
+                      - A
+        for: 5m
+        noDataState: OK
+        execErrState: Error
+        annotations:
+          summary: "Mais de 5% das requisições retornando 5xx"
+          description: "Verifique logs no Loki e erros no Sentry."
+        labels:
+          severity: critical
+
+      - uid: prontuai-ocr-lento
+        title: OCR degradado (p95 > 5 min)
+        condition: C
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            relativeTimeRange:
+              from: 1800
+              to: 0
+            model:
+              datasource:
+                type: prometheus
+                uid: prometheus
+              expr: "histogram_quantile(0.95, sum by (le) (rate(prontuai_ocr_duracao_segundos_bucket[30m])))"
+              refId: A
+              queryType: range
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              type: classic_conditions
+              conditions:
+                - evaluator:
+                    type: gt
+                    params:
+                      - 300
+                  operator:
+                    type: and
+                  reducer:
+                    type: last
+                  query:
+                    params:
+                      - A
+        for: 10m
+        noDataState: OK
+        execErrState: Error
+        annotations:
+          summary: "p95 do OCR acima de 5 minutos"
+          description: "Possível fila no Textract ou uso do fallback Docling."
+        labels:
+          severity: warning
+
+      - uid: prontuai-fallback-docling
+        title: Fallback Docling ativado
+        condition: C
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            relativeTimeRange:
+              from: 3600
+              to: 0
+            model:
+              datasource:
+                type: prometheus
+                uid: prometheus
+              expr: "increase(prontuai_ocr_fallback_docling_total[1h])"
+              refId: A
+              queryType: range
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              type: classic_conditions
+              conditions:
+                - evaluator:
+                    type: gt
+                    params:
+                      - 0
+                  operator:
+                    type: and
+                  reducer:
+                    type: last
+                  query:
+                    params:
+                      - A
+        for: 0m
+        noDataState: OK
+        execErrState: Error
+        annotations:
+          summary: "Textract indisponível; documentos processados com OCR local (Docling)"
+          description: "Qualidade do OCR pode degradar. Verifique timeouts do Textract."
+        labels:
+          severity: warning
+
+      - uid: prontuai-qualidade
+        title: Qualidade de entrega degradada (score de confiança baixo)
+        condition: C
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            relativeTimeRange:
+              from: 3600
+              to: 0
+            model:
+              datasource:
+                type: prometheus
+                uid: prometheus
+              expr: "histogram_quantile(0.50, sum by (le) (rate(prontuai_confianca_score_bucket[1h])))"
+              refId: A
+              queryType: range
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              type: classic_conditions
+              conditions:
+                - evaluator:
+                    type: lt
+                    params:
+                      - 60
+                  operator:
+                    type: and
+                  reducer:
+                    type: last
+                  query:
+                    params:
+                      - A
+        for: 30m
+        noDataState: OK
+        execErrState: Error
+        annotations:
+          summary: "Mediana do score de confiança dos documentos abaixo de 60"
+          description: "Documentos sendo entregues com baixa qualidade (OCR ruim ou exames obrigatórios não encontrados). Verifique fallback Docling, clínicas com scans fora do padrão e a API externa."
+        labels:
+          severity: warning
+
+      - uid: prontuai-disco
+        title: Disco acima de 85%
+        condition: C
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            relativeTimeRange:
+              from: 300
+              to: 0
+            model:
+              datasource:
+                type: prometheus
+                uid: prometheus
+              expr: "100 * (1 - node_filesystem_avail_bytes{mountpoint=\"/\", fstype!~\"tmpfs|overlay\"} / node_filesystem_size_bytes{mountpoint=\"/\", fstype!~\"tmpfs|overlay\"})"
+              refId: A
+              queryType: range
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              type: classic_conditions
+              conditions:
+                - evaluator:
+                    type: gt
+                    params:
+                      - 85
+                  operator:
+                    type: and
+                  reducer:
+                    type: last
+                  query:
+                    params:
+                      - A
+        for: 5m
+        noDataState: OK
+        execErrState: Error
+        annotations:
+          summary: "Disco da EC2 acima de 85%"
+          description: "Logs, resultados de OCR e volumes Docker podem estar crescendo. Limpe ou expanda o disco."
+        labels:
+          severity: warning
+
+      - uid: prontuai-ram
+        title: Memória acima de 90%
+        condition: C
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            relativeTimeRange:
+              from: 300
+              to: 0
+            model:
+              datasource:
+                type: prometheus
+                uid: prometheus
+              expr: "100 * (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)"
+              refId: A
+              queryType: range
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              type: classic_conditions
+              conditions:
+                - evaluator:
+                    type: gt
+                    params:
+                      - 90
+                  operator:
+                    type: and
+                  reducer:
+                    type: last
+                  query:
+                    params:
+                      - A
+        for: 5m
+        noDataState: OK
+        execErrState: Error
+        annotations:
+          summary: "Memória da EC2 acima de 90%"
+          description: "Risco de OOM kill do backend/OCR. Verifique consumo por container no dashboard."
+        labels:
+          severity: critical
