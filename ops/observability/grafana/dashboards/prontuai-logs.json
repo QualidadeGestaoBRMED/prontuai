@@ -9,39 +9,56 @@
     "list": [
       {
         "name": "user_email",
-        "type": "query",
-        "datasource": { "type": "loki", "uid": "loki" },
-        "query": "label_values({job=\"prontuai-backend\"}, user_email)",
-        "includeAll": true,
-        "allValue": ".*",
-        "refresh": 2,
-        "current": { "text": "All", "value": ".*" }
+        "label": "E-mail do usuário",
+        "type": "textbox",
+        "hide": 0,
+        "query": ".*",
+        "current": {
+          "selected": false,
+          "text": ".*",
+          "value": ".*"
+        },
+        "options": [],
+        "description": "Regex sobre o campo JSON (ex.: .*maria.* ou valor exato). Use .* para todos."
       },
       {
         "name": "cpf",
-        "type": "query",
-        "datasource": { "type": "loki", "uid": "loki" },
-        "query": "label_values({job=\"prontuai-backend\"}, cpf)",
-        "includeAll": true,
-        "allValue": ".*",
-        "refresh": 2,
-        "current": { "text": "All", "value": ".*" }
+        "label": "CPF",
+        "type": "textbox",
+        "hide": 0,
+        "query": ".*",
+        "current": {
+          "selected": false,
+          "text": ".*",
+          "value": ".*"
+        },
+        "options": [],
+        "description": "Regex sobre o campo JSON (ex.: .*maria.* ou valor exato). Use .* para todos."
       },
       {
         "name": "document_id",
-        "type": "query",
-        "datasource": { "type": "loki", "uid": "loki" },
-        "query": "label_values({job=\"prontuai-backend\"}, document_id)",
-        "includeAll": true,
-        "allValue": ".*",
-        "refresh": 2,
-        "current": { "text": "All", "value": ".*" }
+        "label": "Documento",
+        "type": "textbox",
+        "hide": 0,
+        "query": ".*",
+        "current": {
+          "selected": false,
+          "text": ".*",
+          "value": ".*"
+        },
+        "options": [],
+        "description": "Regex sobre o campo JSON (ex.: .*maria.* ou valor exato). Use .* para todos."
       },
       {
         "name": "request_id",
         "type": "textbox",
-        "query": "",
-        "current": { "text": "", "value": "" }
+        "query": ".*",
+        "current": {
+          "selected": false,
+          "text": ".*",
+          "value": ".*"
+        },
+        "description": "Regex sobre o campo JSON (ex.: .*maria.* ou valor exato). Use .* para todos."
       }
     ]
   },
@@ -49,51 +66,104 @@
     {
       "type": "stat",
       "title": "Requests (req/s - 5m)",
-      "datasource": { "type": "loki", "uid": "loki" },
-      "gridPos": { "x": 0, "y": 0, "w": 8, "h": 6 },
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 8,
+        "h": 6
+      },
       "targets": [
         {
           "refId": "A",
           "expr": "sum(rate({job=\"prontuai-backend\"} |= \"request.completed\" [5m]))"
         }
       ],
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "" } }
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        }
+      }
     },
     {
       "type": "stat",
       "title": "Errors (req/s - 5m)",
-      "datasource": { "type": "loki", "uid": "loki" },
-      "gridPos": { "x": 8, "y": 0, "w": 8, "h": 6 },
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "gridPos": {
+        "x": 8,
+        "y": 0,
+        "w": 8,
+        "h": 6
+      },
       "targets": [
         {
           "refId": "A",
           "expr": "sum(rate({job=\"prontuai-backend\", level=\"ERROR\"}[5m]))"
         }
       ],
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "" } }
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        }
+      }
     },
     {
       "type": "stat",
       "title": "External API failures (req/s - 5m)",
-      "datasource": { "type": "loki", "uid": "loki" },
-      "gridPos": { "x": 16, "y": 0, "w": 8, "h": 6 },
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 0,
+        "w": 8,
+        "h": 6
+      },
       "targets": [
         {
           "refId": "A",
           "expr": "sum(rate({job=\"prontuai-backend\"} |= \"brmed_failed\" [5m]))"
         }
       ],
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "" } }
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        }
+      }
     },
     {
       "type": "logs",
       "title": "Logs (filtrados)",
-      "datasource": { "type": "loki", "uid": "loki" },
-      "gridPos": { "x": 0, "y": 6, "w": 24, "h": 12 },
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 6,
+        "w": 24,
+        "h": 12
+      },
       "targets": [
         {
           "refId": "A",
-          "expr": "{job=\"prontuai-backend\", user_email=~\"$user_email\", cpf=~\"$cpf\", document_id=~\"$document_id\", request_id=~\"${request_id:regex}\"}"
+          "expr": "{job=\"prontuai-backend\"} | json | user_email=~\"$user_email\" | cpf=~\"$cpf\" | document_id=~\"$document_id\" | request_id=~\"$request_id\" | line_format \"{{.message}}\""
         }
       ],
       "options": {
@@ -106,12 +176,20 @@
     {
       "type": "logs",
       "title": "Logs (raw)",
-      "datasource": { "type": "loki", "uid": "loki" },
-      "gridPos": { "x": 0, "y": 18, "w": 24, "h": 10 },
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 18,
+        "w": 24,
+        "h": 10
+      },
       "targets": [
         {
           "refId": "A",
-          "expr": "{job=\"prontuai-backend\"}"
+          "expr": "{job=\"prontuai-backend\"} | json | line_format \"{{.message}}\""
         }
       ],
       "options": {

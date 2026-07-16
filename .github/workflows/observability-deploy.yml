@@ -73,9 +73,10 @@ jobs:
 
           docker compose pull -q
           docker compose up -d --remove-orphans
-          # Dashboards recarregam sozinhos; alertas/datasources provisionados
-          # só são relidos na inicialização do Grafana.
-          docker compose restart grafana
+          # Configs montadas como arquivo (loki/promtail/prometheus) e
+          # alertas/datasources provisionados só são relidos na inicialização —
+          # `up -d` não recria container quando só o conteúdo do volume mudou.
+          docker compose restart loki promtail prometheus grafana
 
           docker compose ps
           echo "Observability deploy OK"
