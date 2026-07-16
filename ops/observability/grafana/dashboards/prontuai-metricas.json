@@ -224,7 +224,17 @@
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "short"
+          "unit": "short",
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 100,
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            },
+            "barWidthFactor": 0.8,
+            "axisSoftMin": 0
+          }
         },
         "overrides": []
       }
@@ -332,7 +342,17 @@
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "short"
+          "unit": "short",
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 100,
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            },
+            "barWidthFactor": 0.8,
+            "axisSoftMin": 0
+          }
         },
         "overrides": []
       }
