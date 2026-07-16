@@ -89,17 +89,6 @@ Alternativa: publicar o Grafana atrás do nginx existente com HTTPS + autentica�
   exames faltantes, aprovação/rejeição na revisão humana)
 - **ProntuAI - Infra (EC2)** — CPU/RAM/disco da máquina e memória por container
 
-### Responsável por cada row
-
-Cada row do dashboard de Aplicação (e a única row do de Infra) tem no título um
-marcador de cor + o time que deve olhar primeiro num incidente:
-
-| Marcador | Time | Rows |
-|---|---|---|
-| 🔵 | DevOps | Infra (EC2) |
-| 🟢 | Backend | API, Negócio |
-| 🟣 | Produto/QA | Qualidade da entrega |
-
 ## 5. Alertas provisionados
 
 | Alerta | Condição | Severidade |
