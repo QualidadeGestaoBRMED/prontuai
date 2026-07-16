@@ -28,6 +28,13 @@ services:
       # Rate limit compartilhado (contadores sobrevivem a restart e valem
       # para todas as instâncias)
       - REDIS_URL=${REDIS_URL:-redis://prontuai-redis:6379/0}
+      # Limites por minuto (auth conta por IP; os demais por usuário logado).
+      # Auth folgado: clínicas inteiras atrás do mesmo NAT fazem login no mesmo minuto.
+      - RATE_LIMIT_AUTH_PER_MINUTE=${RATE_LIMIT_AUTH_PER_MINUTE:-120}
+      - RATE_LIMIT_PER_MINUTE=${RATE_LIMIT_PER_MINUTE:-300}
+      - RATE_LIMIT_JOBS_PER_MINUTE=${RATE_LIMIT_JOBS_PER_MINUTE:-600}
+      - RATE_LIMIT_NOTIFICATIONS_PER_MINUTE=${RATE_LIMIT_NOTIFICATIONS_PER_MINUTE:-240}
+      - RATE_LIMIT_UPLOAD_TOKEN_PER_MINUTE=${RATE_LIMIT_UPLOAD_TOKEN_PER_MINUTE:-240}
       # Headers X-Forwarded-For/X-Real-IP só são aceitos vindos destas origens
       # (nginx no host chega ao container pelo gateway da rede do Docker)
       - TRUSTED_PROXY_IPS=${TRUSTED_PROXY_IPS:-127.0.0.1,::1,172.16.0.0/12}
