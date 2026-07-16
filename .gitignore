@@ -4,10 +4,10 @@ node_modules
 .md
 /auditoria_validacao/
 **/auditoria_validacao/
-/ocr_resultados/
-/resultados/
+**/ocr_resultados/
+**/resultados/
 /.pytest_cache/
-/__pycache__/
+**/__pycache__/
 /venv/
 /logs/
 **/logs/
