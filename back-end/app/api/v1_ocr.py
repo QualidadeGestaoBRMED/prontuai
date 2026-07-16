@@ -7,7 +7,8 @@ import logging
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
-@router.post("/ocr", summary="Processar documento via OCR e extrair exames/CPF")
+
+@router.post("/ocr", summary="Processar documento via OCR e extrair identificação e exames")
 async def processar_ocr(
     arquivo: UploadFile = File(...),
     current_user: User = Depends(require_sender)  # Apenas SENDER ou ADMIN
@@ -24,4 +25,4 @@ async def processar_ocr(
         return resultado
     except Exception as e:
         logger.exception(f"Erro inesperado no OCR: {e}")
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Erro inesperado no processamento do OCR.") 
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Erro inesperado no processamento do OCR.")

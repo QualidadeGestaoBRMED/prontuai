@@ -226,30 +226,6 @@ def _is_no_open_exam_order_error(error_payload: Any) -> bool:
     return "expedicao em aberto nao encontrada" in normalized_error
 
 
-def _extract_patient_name_from_markdown(markdown: str) -> Optional[str]:
-    if not markdown:
-        return None
-    patterns = [
-        r"(?im)^\s*nome\s*/\s*name\s*:\s*([^\n\r]+)",
-        r"(?im)^\s*nome(?:\s+do\s+paciente)?\s*:\s*([^\n\r]+)",
-        r"(?im)^\s*paciente\s*:\s*([^\n\r]+)",
-    ]
-    for pattern in patterns:
-        match = re.search(pattern, markdown)
-        if not match:
-            continue
-        candidate = re.sub(r"\s+", " ", (match.group(1) or "").strip())
-        candidate = re.sub(r"[|/\\]+$", "", candidate).strip(" -:\t")
-        if not candidate:
-            continue
-        upper_candidate = candidate.upper()
-        if upper_candidate in {"PACIENTE", "NOME", "NAME", "N/A", "NA"}:
-            continue
-        if len(candidate) < 4:
-            continue
-        return candidate
-    return None
-
 def _extrair_linhas_markdown(markdown: str) -> list[tuple[str, str]]:
     linhas = []
     for linha in markdown.splitlines():
@@ -736,7 +712,7 @@ async def _processar_documento_completo_impl(
         passaporte_consulta = None
     exames_enviados = ocr_resultado.get("exames", [])
     markdown_content = ocr_resultado.get("markdown_content", "")
-    patient_name_from_ocr = _extract_patient_name_from_markdown(markdown_content or "")
+    patient_name_from_ocr = ocr_resultado.get("patient_name")
     _log_event(
         "ocr_completed",
         run_id=run_id,
