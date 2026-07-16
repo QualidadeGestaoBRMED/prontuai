@@ -91,6 +91,18 @@ def _get_clinic_cnpj(clinic_id: str | None) -> str | None:
         return None
 
 
+def _get_clinic_name(clinic_id: str | None) -> str | None:
+    """Nome da clínica para rotular métricas por clínica (Grafana)."""
+    if not clinic_id:
+        return None
+    try:
+        clinic = user_db.get_clinic_by_id(clinic_id)
+        return getattr(clinic, "name", None) if clinic else None
+    except Exception as exc:
+        logger.warning(f"[CLINIC] Falha ao obter nome da clínica {clinic_id}: {exc}")
+        return None
+
+
 @router.post("/upload-token", response_model=UploadTokenResponse, summary="Gerar token curto para upload direto")
 async def create_direct_upload_token(current_user: User = Depends(require_sender)):
     """
@@ -174,6 +186,8 @@ async def processar_documento_completo_api(
             arquivo,
             exames_obrigatorios_list,
             clinic_cnpj=clinic_cnpj,
+            clinic_id=current_user.clinic_id,
+            clinic_name=_get_clinic_name(current_user.clinic_id),
         )
         logger.info(f"[REQUEST] Processamento concluído com sucesso para: {arquivo.filename}")
 
@@ -342,6 +356,8 @@ async def processar_documento_stream_api(
                 exames_obrigatorios_list,
                 progress_callback=progress_callback,
                 clinic_cnpj=_get_clinic_cnpj(current_user.clinic_id),
+                clinic_id=current_user.clinic_id,
+                clinic_name=_get_clinic_name(current_user.clinic_id),
             )
 
             # Yield todos os eventos coletados
@@ -590,6 +606,7 @@ async def processar_documento_async_api(
             "uploaded_by_user_id": current_user.id,
             "clinic_id": current_user.clinic_id,
             "clinic_cnpj": _get_clinic_cnpj(current_user.clinic_id),
+            "clinic_name": _get_clinic_name(current_user.clinic_id),
             "uploaded_by_user_email": current_user.email,
             "content_hash": content_hash,
         }
@@ -637,7 +654,8 @@ async def process_document_background(
     clinic_id: str | None,
     clinic_cnpj: str | None,
     uploaded_by_user_email: str,
-    content_hash: str | None
+    content_hash: str | None,
+    clinic_name: str | None = None,
 ):
     """
     Processa documento em background task.
@@ -685,6 +703,8 @@ async def process_document_background(
             exames_obrigatorios,
             progress_callback=progress_callback,
             clinic_cnpj=clinic_cnpj,
+            clinic_id=clinic_id,
+            clinic_name=clinic_name,
         )
 
         # Salvar documento no banco

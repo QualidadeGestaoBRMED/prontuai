@@ -11,10 +11,13 @@ logger = logging.getLogger(__name__)
 try:
     from prometheus_client import Counter, Histogram
 
+    # clinica_id/clinica_nome: cardinalidade limitada ao número de clínicas
+    # credenciadas (dezenas, não milhares) — diferente de request_id/user_email,
+    # que são por requisição e nunca devem virar label (ver promtail-config.yml).
     DOCUMENTOS_PROCESSADOS = Counter(
         "prontuai_documentos_processados_total",
         "Documentos processados pelo workflow completo",
-        ["status"],
+        ["status", "clinica_id", "clinica_nome"],
     )
 
     WORKFLOW_DURACAO = Histogram(
@@ -49,19 +52,20 @@ try:
     CONFIANCA_SCORE = Histogram(
         "prontuai_confianca_score",
         "Score de confiança do documento (0-100): qualidade do OCR + cobertura dos exames obrigatórios",
+        ["clinica_id", "clinica_nome"],
         buckets=(10, 20, 30, 40, 50, 60, 70, 80, 90, 100),
     )
 
     VALIDACAO_DOCUMENTOS = Counter(
         "prontuai_validacao_documentos_total",
         "Resultado da validação automática (completo | exames_faltantes)",
-        ["resultado"],
+        ["resultado", "clinica_id", "clinica_nome"],
     )
 
     REVISAO_HUMANA = Counter(
         "prontuai_revisao_humana_total",
         "Decisões do revisor humano sobre documentos (aprovado | rejeitado)",
-        ["decisao"],
+        ["decisao", "clinica_id", "clinica_nome"],
     )
 
 except ImportError:  # pragma: no cover - ambiente sem prometheus_client

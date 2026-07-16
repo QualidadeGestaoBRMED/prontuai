@@ -672,8 +672,14 @@ async def update_document(
             payload.validation_status in ("validated", "rejected")
             and payload.validation_status != document.validation_status
         ):
+            clinica_nome = getattr(document, "clinic_name", None)
+            if not clinica_nome and getattr(document, "clinic_id", None):
+                clinica = user_db.get_clinic_by_id(document.clinic_id)
+                clinica_nome = clinica.name if clinica else None
             metrics.REVISAO_HUMANA.labels(
-                decisao="aprovado" if payload.validation_status == "validated" else "rejeitado"
+                decisao="aprovado" if payload.validation_status == "validated" else "rejeitado",
+                clinica_id=document.clinic_id or "desconhecida",
+                clinica_nome=clinica_nome or "desconhecida",
             ).inc()
         payload_reviewed_by = None
         if isinstance(payload_result, dict):

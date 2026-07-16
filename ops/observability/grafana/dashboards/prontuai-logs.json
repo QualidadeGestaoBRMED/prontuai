@@ -198,6 +198,91 @@
         "wrapLogMessage": true,
         "enableLogDetails": true
       }
+    },
+    {
+      "type": "row",
+      "title": "Por Usuário",
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 28
+      },
+      "collapsed": false
+    },
+    {
+      "type": "barchart",
+      "title": "Documentos processados por usuário (24h)",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 29
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "targets": [
+        {
+          "expr": "topk(15, sum by (user_email) (count_over_time({job=\"prontuai-backend\"} |= \"workflow_completed\" | json [24h])))",
+          "legendFormat": "{{user_email}}",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "orientation": "horizontal",
+        "xTickLabelRotation": 0,
+        "legend": {
+          "showLegend": false
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "continuous-blues"
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "barchart",
+      "title": "Falhas de processamento por usuário (24h)",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 29
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "targets": [
+        {
+          "expr": "topk(15, sum by (user_email) (count_over_time({job=\"prontuai-backend\"} |= \"workflow_failed\" | json [24h])))",
+          "legendFormat": "{{user_email}}",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "orientation": "horizontal",
+        "xTickLabelRotation": 0,
+        "legend": {
+          "showLegend": false
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "continuous-reds"
+          }
+        },
+        "overrides": []
+      }
     }
   ]
 }

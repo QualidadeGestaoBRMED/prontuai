@@ -639,6 +639,8 @@ async def _processar_documento_completo_impl(
     exames_obrigatorios: list[str],
     progress_callback=None,
     clinic_cnpj: Optional[str] = None,
+    clinic_id: Optional[str] = None,
+    clinic_name: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Orquestra o processo completo de OCR, extração de CPF/exames, consulta da API ProntuAI
@@ -650,6 +652,10 @@ async def _processar_documento_completo_impl(
         progress_callback: Callback opcional para enviar progresso (SSE)
     """
     run_id = uuid.uuid4().hex
+    clinica_labels = {
+        "clinica_id": clinic_id or "desconhecida",
+        "clinica_nome": clinic_name or "desconhecida",
+    }
     logger.info(f"[WORKFLOW] Iniciando processamento completo para: {arquivo.filename}")
     _log_event(
         "workflow_start",
@@ -908,7 +914,7 @@ async def _processar_documento_completo_impl(
             if business_error
             else "Não foi possível consultar exames obrigatórios."
         )
-        metrics.DOCUMENTOS_PROCESSADOS.labels(status="error").inc()
+        metrics.DOCUMENTOS_PROCESSADOS.labels(status="error", **clinica_labels).inc()
         metrics.WORKFLOW_DURACAO.observe(time.perf_counter() - start_total)
         return {
             "status": "error",
@@ -1103,13 +1109,16 @@ async def _processar_documento_completo_impl(
         status=resposta_final.get("status"),
         elapsed_seconds=round(time.perf_counter() - start_total, 3),
     )
-    metrics.DOCUMENTOS_PROCESSADOS.labels(status=resposta_final.get("status") or "desconhecido").inc()
+    metrics.DOCUMENTOS_PROCESSADOS.labels(
+        status=resposta_final.get("status") or "desconhecido", **clinica_labels
+    ).inc()
     metrics.WORKFLOW_DURACAO.observe(time.perf_counter() - start_total)
     if resposta_final.get("status") == "success":
-        metrics.CONFIANCA_SCORE.observe(confiabilidade_score)
+        metrics.CONFIANCA_SCORE.labels(**clinica_labels).observe(confiabilidade_score)
         exames_faltantes = resposta_final["validation_result"]["exames_faltantes"]
         metrics.VALIDACAO_DOCUMENTOS.labels(
-            resultado="exames_faltantes" if exames_faltantes else "completo"
+            resultado="exames_faltantes" if exames_faltantes else "completo",
+            **clinica_labels,
         ).inc()
 
     return resposta_final
@@ -1120,6 +1129,8 @@ async def processar_documento_completo(
     exames_obrigatorios: list[str],
     progress_callback=None,
     clinic_cnpj: Optional[str] = None,
+    clinic_id: Optional[str] = None,
+    clinic_name: Optional[str] = None,
 ) -> Dict[str, Any]:
     try:
         processing_semaphore = _get_processing_semaphore()
@@ -1129,6 +1140,8 @@ async def processar_documento_completo(
                 exames_obrigatorios,
                 progress_callback=progress_callback,
                 clinic_cnpj=clinic_cnpj,
+                clinic_id=clinic_id,
+                clinic_name=clinic_name,
             )
         async with processing_semaphore:
             return await _processar_documento_completo_impl(
@@ -1136,8 +1149,14 @@ async def processar_documento_completo(
                 exames_obrigatorios,
                 progress_callback=progress_callback,
                 clinic_cnpj=clinic_cnpj,
+                clinic_id=clinic_id,
+                clinic_name=clinic_name,
             )
     except Exception:
         # Falhas não tratadas também contam como documento processado (com erro)
-        metrics.DOCUMENTOS_PROCESSADOS.labels(status="exception").inc()
+        metrics.DOCUMENTOS_PROCESSADOS.labels(
+            status="exception",
+            clinica_id=clinic_id or "desconhecida",
+            clinica_nome=clinic_name or "desconhecida",
+        ).inc()
         raise

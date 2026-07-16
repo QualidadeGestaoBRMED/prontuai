@@ -416,6 +416,180 @@
         },
         "overrides": []
       }
+    },
+    {
+      "type": "row",
+      "title": "Por Clínica",
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 35
+      },
+      "collapsed": false
+    },
+    {
+      "type": "barchart",
+      "title": "Documentos processados por clínica (24h)",
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 0,
+        "y": 36
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "sum by (clinica_nome) (increase(prontuai_documentos_processados_total[24h]))",
+          "legendFormat": "{{clinica_nome}}",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "orientation": "horizontal",
+        "xTickLabelRotation": 0,
+        "legend": {
+          "showLegend": false
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "continuous-blues"
+          },
+          "custom": {
+            "axisSoftMin": 0
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "barchart",
+      "title": "Taxa de erro por clínica (24h)",
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 6,
+        "y": 36
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "100 * sum by (clinica_nome) (increase(prontuai_documentos_processados_total{status=~\"error|exception\"}[24h])) / clamp_min(sum by (clinica_nome) (increase(prontuai_documentos_processados_total[24h])), 1)",
+          "legendFormat": "{{clinica_nome}}",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "orientation": "horizontal",
+        "xTickLabelRotation": 0,
+        "legend": {
+          "showLegend": false
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "color": {
+            "mode": "continuous-reds"
+          },
+          "custom": {
+            "axisSoftMin": 0
+          },
+          "max": 100
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "barchart",
+      "title": "Score de confiança médio por clínica (24h)",
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 12,
+        "y": 36
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "sum by (clinica_nome) (increase(prontuai_confianca_score_sum[24h])) / clamp_min(sum by (clinica_nome) (increase(prontuai_confianca_score_count[24h])), 1)",
+          "legendFormat": "{{clinica_nome}}",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "orientation": "horizontal",
+        "xTickLabelRotation": 0,
+        "legend": {
+          "showLegend": false
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "continuous-greens"
+          },
+          "custom": {
+            "axisSoftMin": 0
+          },
+          "max": 100
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "barchart",
+      "title": "Taxa de rejeição na revisão humana por clínica (24h)",
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 18,
+        "y": 36
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "100 * sum by (clinica_nome) (increase(prontuai_revisao_humana_total{decisao=\"rejeitado\"}[24h])) / clamp_min(sum by (clinica_nome) (increase(prontuai_revisao_humana_total[24h])), 1)",
+          "legendFormat": "{{clinica_nome}}",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "orientation": "horizontal",
+        "xTickLabelRotation": 0,
+        "legend": {
+          "showLegend": false
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "color": {
+            "mode": "continuous-reds"
+          },
+          "custom": {
+            "axisSoftMin": 0
+          },
+          "max": 100
+        },
+        "overrides": []
+      }
     }
   ]
 }
