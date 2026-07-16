@@ -75,3 +75,6 @@ back-end/logs_teste_pii/
 
 # PDFs de exames nunca devem ser versionados
 *.pdf
+
+# Dumps de banco nunca devem ser versionados
+**/backups/
