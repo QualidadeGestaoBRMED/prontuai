@@ -37,6 +37,8 @@ except ImportError:
 
 from app.core.config import settings
 from app.services.patient_name_extractor import extract_patient_name_from_markdown
+from app.core import metrics
+from app.core.pii import mask_cpf, mask_identifier
 
 logger = logging.getLogger(__name__)
 
@@ -1256,6 +1258,7 @@ async def _ocr_pipeline_impl(file, salvar_markdown=True, progress_hook: Optional
     # Determinar qual motor usar
     usar_textract = settings.USE_TEXTRACT and textract_client is not None
     motor_ocr = "AWS Textract" if usar_textract else "Docling (local)"
+    motor_metrica = "textract" if usar_textract else "docling"
     logger.info(f"[OCR] Motor selecionado: {motor_ocr}")
 
     # Corrige o manuseio de UploadFile do FastAPI
@@ -1309,10 +1312,13 @@ async def _ocr_pipeline_impl(file, salvar_markdown=True, progress_hook: Optional
                     progress_hook
                 )
             except TimeoutError as e:
+                metrics.TEXTRACT_TIMEOUT.inc()
                 if settings.TEXTRACT_FALLBACK_TO_LOCAL:
                     logger.warning(f"[OCR] {e}. Fallback para OCR local (Docling).")
                     if progress_hook:
                         progress_hook("Fila Textract, usando OCR local.")
+                    metrics.OCR_FALLBACK_DOCLING.inc()
+                    motor_metrica = "docling_fallback"
                     markdown = await asyncio.to_thread(
                         processar_arquivo_docling,
                         temp_path
@@ -1324,6 +1330,8 @@ async def _ocr_pipeline_impl(file, salvar_markdown=True, progress_hook: Optional
                     logger.warning(f"[OCR] Falha de conexão Textract: {e}. Fallback para OCR local (Docling).")
                     if progress_hook:
                         progress_hook("Falha temporária no Textract, usando OCR local.")
+                    metrics.OCR_FALLBACK_DOCLING.inc()
+                    motor_metrica = "docling_fallback"
                     markdown = await asyncio.to_thread(
                         processar_arquivo_docling,
                         temp_path
@@ -1341,6 +1349,7 @@ async def _ocr_pipeline_impl(file, salvar_markdown=True, progress_hook: Optional
         # Remover arquivo temporário original
         if os.path.exists(temp_path):
             os.remove(temp_path)
+        metrics.OCR_DURACAO.labels(motor=motor_metrica).observe(time.perf_counter() - start_total)
         logger.info(f"[OCR] Pipeline OCR finalizado em {time.perf_counter() - start_total:.2f}s")
 
     # Salvar markdown
@@ -1364,7 +1373,7 @@ async def _ocr_pipeline_impl(file, salvar_markdown=True, progress_hook: Optional
             cpf_extraido = await asyncio.to_thread(extrair_cpf_ia, markdown)
         except Exception as e:
             logger.warning(f"[OCR] Falha ao extrair CPF via IA: {e}")
-    logger.info(f"[OCR] CPF extraído: {cpf_extraido if cpf_extraido else 'Nenhum CPF encontrado'}")
+    logger.info(f"[OCR] CPF extraído: {mask_cpf(cpf_extraido) if cpf_extraido else 'Nenhum CPF encontrado'}")
 
     # Extrair passaporte e CNPJ via regex
     passaporte_extraido = extrair_passaporte_regex(markdown)
@@ -1372,8 +1381,8 @@ async def _ocr_pipeline_impl(file, salvar_markdown=True, progress_hook: Optional
         logger.info("[OCR] Valor extraído como CPF também aparece como passaporte; usando como passaporte.")
         cpf_extraido = None
     cnpj_extraido = extrair_cnpj_regex(markdown)
-    logger.info(f"[OCR] Passaporte extraído: {passaporte_extraido if passaporte_extraido else 'Nenhum passaporte encontrado'}")
-    logger.info(f"[OCR] CNPJ extraído: {cnpj_extraido if cnpj_extraido else 'Nenhum CNPJ encontrado'}")
+    logger.info(f"[OCR] Passaporte extraído: {mask_identifier(passaporte_extraido) if passaporte_extraido else 'Nenhum passaporte encontrado'}")
+    logger.info(f"[OCR] CNPJ extraído: {mask_identifier(cnpj_extraido) if cnpj_extraido else 'Nenhum CNPJ encontrado'}")
 
     patient_name = extract_patient_name_from_markdown(markdown)
     logger.info(

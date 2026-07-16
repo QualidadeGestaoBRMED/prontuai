@@ -1,0 +1,25 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  # Backend ProntuAI (FastAPI /metrics).
+  # Coleta direto do container pela rede docker compartilhada (ver "networks"
+  # no docker-compose.yml). O container escuta na porta 80 interna.
+  - job_name: prontuai-backend
+    static_configs:
+      - targets: ["prontuai-backend:80"]
+
+  # Métricas da máquina EC2 (CPU, RAM, disco). node_exporter roda em network_mode: host.
+  - job_name: node
+    static_configs:
+      - targets: ["host.docker.internal:9100"]
+
+  # Métricas por container (memória/CPU do backend, OCR etc).
+  - job_name: cadvisor
+    static_configs:
+      - targets: ["cadvisor:8080"]
+
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
