@@ -90,9 +90,12 @@ Alternativa: publicar o Grafana atrás do nginx existente com HTTPS + autentica�
   documentos enviados e processados por hora, duração do OCR por motor,
   timeouts/fallbacks do Textract, consultas à API externa e qualidade de entrega
   (score de confiança, exames faltantes, aprovação/rejeição na revisão humana);
-  row **Por Clínica** com volume, taxa de erro, score de confiança médio e taxa
-  de rejeição na revisão, cada um quebrado por `clinica_nome` (Prometheus); row
-  **Cadastros** com clínicas e usuários criados (30d, por papel)
+  row **Por Clínica** com volume, taxa de erro, score de confiança médio, taxa
+  de rejeição na revisão e usuários criados, cada um quebrado por `clinica_nome`
+  (Prometheus); row **Cadastros** com totais de clínicas/usuários criados (30d,
+  por papel). Use o filtro **Clínica** no topo do dashboard para restringir
+  todos os painéis de "Por Clínica" a uma ou mais clínicas específicas
+  (ex.: selecionar só "BRMED" mostra apenas os números dela)
 - **ProntuAI - Infra (EC2)** — CPU/RAM/disco da máquina, memória por container e
   row **Picos & Armazenamento** (pico de RAM/disco no período selecionado,
   armazenamento usado em GB)

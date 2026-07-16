@@ -55,6 +55,7 @@ async def create_user(
     _assert_manager_cannot_touch_admin(admin, user_create.role)
     try:
         clinic_id = user_create.clinic_id
+        clinic_name = None
 
         # Validar clinic_id para SENDER
         if user_create.role == UserRole.SENDER:
@@ -65,6 +66,7 @@ async def create_user(
             clinic = user_db.get_clinic_by_id(clinic_id)
             if not clinic:
                 raise ValueError(f"Clínica com ID {clinic_id} não encontrada")
+            clinic_name = clinic.name
 
             logger.info(f"Criando usuário SENDER {user_create.email} para clínica {clinic.name} ({clinic_id})")
 
@@ -79,7 +81,11 @@ async def create_user(
             clinic_id=clinic_id
         )
         logger.info(f"Admin {admin.email} criou usuário {user.email} com role {user.role.value} (clinic_id: {clinic_id})")
-        metrics.USUARIOS_CRIADOS.labels(role=user.role.value).inc()
+        metrics.USUARIOS_CRIADOS.labels(
+            role=user.role.value,
+            clinica_id=clinic_id or "sem_clinica",
+            clinica_nome=clinic_name or "sem_clinica",
+        ).inc()
         return user
 
     except ValueError as e:

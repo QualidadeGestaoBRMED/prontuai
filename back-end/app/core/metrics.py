@@ -80,10 +80,11 @@ try:
     )
 
     # role: bounded a ADMIN/MANAGER/CHECKER/SENDER — não é PII, é papel do usuário.
+    # clinica_id/clinica_nome: "sem_clinica" para ADMIN/MANAGER/CHECKER (não têm clínica).
     USUARIOS_CRIADOS = Counter(
         "prontuai_usuarios_criados_total",
         "Usuários cadastrados no sistema",
-        ["role"],
+        ["role", "clinica_id", "clinica_nome"],
     )
 
 except ImportError:  # pragma: no cover - ambiente sem prometheus_client
