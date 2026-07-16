@@ -14,7 +14,7 @@
   "panels": [
     {
       "type": "row",
-      "title": "API",
+      "title": "🟢 API — Backend",
       "gridPos": {
         "h": 1,
         "w": 24,
@@ -107,7 +107,7 @@
     },
     {
       "type": "row",
-      "title": "Negócio",
+      "title": "🟢 Negócio — Backend",
       "gridPos": {
         "h": 1,
         "w": 24,
@@ -263,7 +263,7 @@
     },
     {
       "type": "row",
-      "title": "Qualidade da entrega",
+      "title": "🟣 Qualidade da entrega — Produto/QA",
       "gridPos": {
         "h": 1,
         "w": 24,
