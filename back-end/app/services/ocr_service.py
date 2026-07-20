@@ -1147,14 +1147,18 @@ def extrair_cpf_regex(markdown: str) -> str:
         return None
 
     # 1) Padrão UF/CPF (ex: CE/12345678900) com tolerância a espaços/pontuação
-    uf_cpf_match = re.search(r"\b[A-Z]{2}\s*/\s*([0-9.\-\s]{11,20})\b", markdown)
+    # (captura restrita à mesma linha: \s cruzaria quebras de linha do
+    # markdown e vazaria para o conteúdo seguinte, corrompendo o valor)
+    uf_cpf_match = re.search(r"\b[A-Z]{2}[ \t]*/[ \t]*([0-9.\- ]{11,20})\b", markdown)
     if uf_cpf_match:
         digits = _digits_only(uf_cpf_match.group(1))
         if _is_valid_cpf(digits):
             return digits
 
     # 2) Linhas contendo "CPF" com tolerância a separadores variados
-    cpf_label_match = re.search(r"CPF[^0-9]{0,10}([0-9.\-\s]{11,20})", markdown, flags=re.IGNORECASE)
+    # (captura restrita à mesma linha: \s cruzaria quebras de linha do
+    # markdown e vazaria para o conteúdo seguinte, corrompendo o valor)
+    cpf_label_match = re.search(r"CPF[^0-9]{0,10}([0-9.\- ]{11,20})", markdown, flags=re.IGNORECASE)
     if cpf_label_match:
         digits = _digits_only(cpf_label_match.group(1))
         if _is_valid_cpf(digits):
@@ -1185,7 +1189,12 @@ def extrair_cnpj_regex(markdown: str) -> str:
     if not markdown:
         return None
 
-    cnpj_label_match = re.search(r"CNPJ[^0-9]{0,10}([0-9.\-/\s]{14,24})", markdown, flags=re.IGNORECASE)
+    # Captura restrita à mesma linha: \s cruzaria quebras de linha do markdown
+    # e vazaria para o conteúdo seguinte, corrompendo o valor (dígito
+    # verificador passa a falhar e o rótulo correto acaba descartado, caindo
+    # no fallback genérico que pode pegar o CNPJ de outra empresa citada
+    # antes no documento).
+    cnpj_label_match = re.search(r"CNPJ[^0-9]{0,10}([0-9.\-/ ]{14,24})", markdown, flags=re.IGNORECASE)
     if cnpj_label_match:
         digits = _digits_only(cnpj_label_match.group(1))
         if _is_valid_cnpj(digits):
