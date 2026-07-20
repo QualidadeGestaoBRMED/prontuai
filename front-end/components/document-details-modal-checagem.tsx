@@ -143,7 +143,8 @@ export function DocumentDetailsModalChecagem({
   }
 
   const isPending = !result.reviewedBy
-  const requiresApprovalReason = result.status === "pending_review"
+  const requiresApprovalReason =
+    isPending && (result.status === "pending_review" || result.status === "rejected")
   const handleApproveDialogChange = (open: boolean) => {
     setShowApproveDialog(open)
     if (!open) {

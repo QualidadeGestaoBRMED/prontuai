@@ -18,7 +18,7 @@ function ErrorContent() {
         return {
           title: "Acesso Negado",
           description: "Você não tem permissão para acessar esta aplicação.",
-          details: "A aplicação é de uso exclusivo da BR MED. Se você acha que isso está errado, entre em contato com o time de On Going para verificar suas permissões de acesso.",
+          details: "A aplicação é de uso exclusivo da BR MED. Se você acha que isso está errado, entre em contato com o time de Credenciados BR MED para verificar suas permissões de acesso.",
         };
       case "Configuration":
         return {
