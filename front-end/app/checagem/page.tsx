@@ -142,6 +142,7 @@ export default function Page() {
         headers,
         body: JSON.stringify({
           validation_status: "validated",
+          approval_reason: approvalReasonNormalized,
           result_payload: {
             ...(result?.result || {}),
             reviewed_by: session?.user?.email || "revisor@grupobrmed.com.br",
