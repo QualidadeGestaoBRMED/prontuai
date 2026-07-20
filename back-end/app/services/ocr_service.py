@@ -1147,7 +1147,9 @@ def extrair_cpf_regex(markdown: str) -> str:
         return None
 
     # 1) Padrão UF/CPF (ex: CE/12345678900) com tolerância a espaços/pontuação
-    uf_cpf_match = re.search(r"\b[A-Z]{2}\s*/\s*([0-9.\-\s]{11,20})\b", markdown)
+    # (captura restrita à mesma linha: \s cruzaria quebras de linha do
+    # markdown e vazaria para o conteúdo seguinte, corrompendo o valor)
+    uf_cpf_match = re.search(r"\b[A-Z]{2}[ \t]*/[ \t]*([0-9.\- ]{11,20})\b", markdown)
     if uf_cpf_match:
         digits = _digits_only(uf_cpf_match.group(1))
         if _is_valid_cpf(digits):
