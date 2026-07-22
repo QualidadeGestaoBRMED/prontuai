@@ -2,6 +2,7 @@ import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
 import { Providers } from "@/components/providers";
 import type { Metadata, Viewport } from "next";
+import { Analytics } from "@vercel/analytics/next";
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://prontuai.grupobrmed.com.br'),
@@ -62,6 +63,7 @@ export default function RootLayout({
         <Providers>
           {children}
           <Toaster />
+          <Analytics />
         </Providers>
       </body>
     </html>
