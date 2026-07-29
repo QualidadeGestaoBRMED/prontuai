@@ -24,6 +24,8 @@ import threading
 import mimetypes
 import os
 import re
+import unicodedata
+from urllib.parse import quote
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
@@ -553,13 +555,18 @@ async def view_document(document_id: str, current_user: User = Depends(get_curre
         except Exception as update_error:
             logger.warning(f"Falha ao atualizar file_path do documento {document_id}: {update_error}")
 
-        media_type, _ = mimetypes.guess_type(document.filename)
+        display_filename = unicodedata.normalize("NFC", document.filename or "documento")
+        media_type, _ = mimetypes.guess_type(display_filename)
         response = FileResponse(
             resolved_path,
             media_type=media_type or "application/octet-stream",
-            filename=document.filename,
+            filename=display_filename,
         )
-        response.headers["Content-Disposition"] = f'inline; filename="{document.filename}"'
+        ascii_fallback = re.sub(r'[^\x20-\x7e]', "_", display_filename).replace('"', "_").replace("\\", "_") or "documento"
+        response.headers["Content-Disposition"] = (
+            f'inline; filename="{ascii_fallback}"; '
+            f"filename*=UTF-8''{quote(display_filename, safe='')}"
+        )
         return response
 
     except HTTPException:
