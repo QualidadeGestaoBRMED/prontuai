@@ -562,10 +562,10 @@ async def view_document(document_id: str, current_user: User = Depends(get_curre
             media_type=media_type or "application/octet-stream",
             filename=display_filename,
         )
-        ascii_fallback = re.sub(r'[^\x20-\x7e]', "_", display_filename).replace('"', "_") or "documento"
+        ascii_fallback = re.sub(r'[^\x20-\x7e]', "_", display_filename).replace('"', "_").replace("\\", "_") or "documento"
         response.headers["Content-Disposition"] = (
             f'inline; filename="{ascii_fallback}"; '
-            f"filename*=UTF-8''{quote(display_filename)}"
+            f"filename*=UTF-8''{quote(display_filename, safe='')}"
         )
         return response
 
