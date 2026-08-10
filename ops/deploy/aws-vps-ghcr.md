@@ -40,12 +40,113 @@ chmod 600 /opt/prontuai/back-end/.env
 Obrigatórios em produção:
 
 - `DATABASE_URL`
+- `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` (container `prontuai-db`)
 - `OPENAI_API_KEY`
 - `JWT_SECRET_KEY`
 - `PRONTUAI_SERVICE_TOKEN`
 - `PRONTUAI_CLIENT_NAME`
 - `USE_PRONTUAI_PATIENTS_EXAMS=true`
 - `ALLOWED_ORIGINS`
+
+Para o backup automático (ver seção "Postgres" abaixo, compatível com AWS S3
+ou Cloudflare R2): `BACKUP_S3_BUCKET`, `BACKUP_S3_PREFIX`,
+`BACKUP_S3_ENDPOINT_URL`, `BACKUP_S3_REGION`, `BACKUP_S3_SSE`,
+`BACKUP_S3_ACCESS_KEY_ID`, `BACKUP_S3_SECRET_ACCESS_KEY`,
+`BACKUP_RETENTION_DAYS`.
+
+## Postgres na mesma VPS (container `prontuai-db`)
+
+O Postgres vive em **pasta própria na VPS, `/home/ec2-user/prontuai-db`**,
+com seu próprio `docker-compose.db.yml` e seu próprio `.env` — nem o compose
+nem o `.env` são compartilhados com o backend (`/home/ec2-user/prontuai`).
+Os scripts de backup/restore/migração vivem em
+`/home/ec2-user/prontuai-db/script/`. De propósito: assim uma manutenção
+grande do backend — deploy, rollback, panic-restore, `docker compose down`
+do stack, edição do `docker-compose.yml` — nunca arrasta o banco junto, nem
+por acidente de estarem na mesma pasta. Os dois compose files só se
+conectam pela rede Docker externa `prontuai-db-net` (criada por
+`docker-compose.db.yml`, referenciada como `external: true` em
+`docker-compose.aws.yml`). A 5432 fica em bind só de loopback (`127.0.0.1`,
+nunca `0.0.0.0`) — nunca abra 5432 na security group da instância, isso é
+independente do bind local. Acesso de fora da VPS exige túnel SSH (ver seção
+"Acesso ao banco" abaixo).
+
+Nenhum workflow de CI toca nesta pasta — nem o `backend-ghcr-deploy.yml` (só
+dá `up`/`pull` no serviço `prontuai-backend`, dentro de `docker-compose.yml`)
+nem nenhum outro. Tudo aqui é cópia manual, uma única vez (ou de novo,
+manualmente, sempre que algum desses arquivos for editado no repo):
+
+```bash
+mkdir -p /home/ec2-user/prontuai-db/script
+cp back-end/docker-compose.db.yml /home/ec2-user/prontuai-db/
+cp ops/deploy/backup_postgres.sh ops/deploy/restore_postgres.sh \
+   ops/deploy/60_migrate_neon_to_ec2.sh ops/deploy/lib.sh \
+   /home/ec2-user/prontuai-db/script/
+```
+
+Antes do primeiro `up`, prepare um volume dedicado para o dado do banco
+(dado de saúde: CPF, laudos — mantenha separado do volume raiz e
+criptografado):
+
+```bash
+# Confirme que a criptografia default de EBS está habilitada na conta/região
+# antes de criar o volume (Console -> EC2 -> Configurações da conta).
+# Anexe/monte o volume dedicado no path abaixo antes de subir o container:
+sudo mkdir -p /home/ec2-user/prontuai-db/pgdata
+# (montar o EBS dedicado em /home/ec2-user/prontuai-db/pgdata, via /etc/fstab)
+sudo chown -R 999:999 /home/ec2-user/prontuai-db/pgdata   # uid/gid do postgres na imagem alpine
+```
+
+Crie `/home/ec2-user/prontuai-db/.env` (próprio, não é o `.env` do backend)
+com `POSTGRES_USER`, uma `POSTGRES_PASSWORD` forte (32+ caracteres),
+`POSTGRES_DB` e os `BACKUP_S3_*` (ver `back-end/.env.example`). Depois:
+
+```bash
+cd /home/ec2-user/prontuai-db
+docker compose -f docker-compose.db.yml up -d
+```
+
+No `.env` do backend (`/home/ec2-user/prontuai/.env`), aponte `DATABASE_URL`
+para o nome do serviço, não para localhost — usando o **mesmo**
+usuário/senha/banco que você colocou no `.env` do banco (os dois arquivos
+não se leem automaticamente, o valor precisa estar escrito nos dois):
+
+```
+DATABASE_URL=postgresql://<POSTGRES_USER>:<POSTGRES_PASSWORD>@prontuai-db:5432/<POSTGRES_DB>
+```
+
+Como a rede `prontuai-db-net` é criada pelo `docker-compose.db.yml`, ele
+precisa subir **antes** da primeira vez que o backend sobe apontando pro
+banco local (senão o `docker compose up` do backend falha por rede externa
+inexistente).
+
+### Acesso ao banco (só via túnel SSH)
+
+Enquanto o setup estiver em teste, o único jeito de conectar num cliente
+(psql, DBeaver, pgAdmin) a partir da sua máquina é via túnel SSH — não existe
+(nem deve existir) caminho público até a porta 5432:
+
+```bash
+ssh -L 5433:127.0.0.1:5432 usuario@ec2-host -N
+# noutro terminal / no seu cliente de banco:
+psql "postgresql://<POSTGRES_USER>:<POSTGRES_PASSWORD>@localhost:5433/<POSTGRES_DB>"
+```
+
+Isso funciona porque a 5432 do container está mapeada em `127.0.0.1:5432` no
+host (`DB_BIND_ADDRESS`/`DB_HOST_PORT` em `docker-compose.db.yml`) — o túnel
+SSH só repassa uma porta local sua até essa porta de loopback da VPS; sem
+chave SSH válida não há como alcançar o Postgres de jeito nenhum, nem de
+dentro da própria rede da AWS. Quando parar de precisar desse acesso direto,
+remova o bloco `ports:` do `docker-compose.db.yml` — o backend continua
+funcionando normalmente porque ele fala com `prontuai-db:5432` pela rede
+Docker interna, não pela porta do host.
+
+Backup automático diário (systemd timer) e restore/drill: ver
+`ops/deploy/systemd/README.md` e os scripts já copiados para
+`/home/ec2-user/prontuai-db/script/` (`backup_postgres.sh`,
+`restore_postgres.sh`). Migração inicial do Neon para este Postgres:
+`/home/ec2-user/prontuai-db/script/60_migrate_neon_to_ec2.sh` (ver
+`ops/deploy/README.md`).
 
 ## Secrets/vars no GitHub
 

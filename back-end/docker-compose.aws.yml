@@ -23,7 +23,17 @@ services:
       # (nginx no host chega ao container pelo gateway da rede do Docker)
       - TRUSTED_PROXY_IPS=${TRUSTED_PROXY_IPS:-127.0.0.1,::1,172.16.0.0/12}
     depends_on:
-      - prontuai-redis
+      prontuai-redis:
+        condition: service_started
+    # prontuai-db vive num compose file separado (docker-compose.db.yml) com
+    # ciclo de vida proprio — nao pode estar em depends_on aqui porque
+    # depends_on so enxerga servicos do mesmo arquivo/projeto. O container so
+    # precisa estar de pe (subido uma vez, ver docker-compose.db.yml) antes do
+    # primeiro deploy do backend; connect_timeout + pool_pre_ping no
+    # SQLAlchemy cobrem reconexoes.
+    networks:
+      - default
+      - prontuai-db-net
     volumes:
       - ./logs:/app/logs
       - ./resultados:/app/resultados
@@ -58,3 +68,12 @@ services:
       options:
         max-size: "5m"
         max-file: "2"
+
+# prontuai-db NAO vive aqui de proposito: ver docker-compose.db.yml. Isso
+# evita que uma manutencao grande no backend (down do stack todo, edicao
+# deste arquivo, rollback, panic-restore) arraste o banco junto. A rede
+# abaixo e criada pelo docker-compose.db.yml e so referenciada aqui.
+networks:
+  default: {}
+  prontuai-db-net:
+    external: true

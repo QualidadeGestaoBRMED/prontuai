@@ -1,0 +1,11 @@
+[Unit]
+Description=Dispara o backup diario do Postgres do ProntuAI (ver prontuai-db-backup.service)
+
+[Timer]
+# Horario de baixo trafego, fuso do sistema (ajuste se necessario).
+OnCalendar=*-*-* 03:15:00
+Persistent=true
+RandomizedDelaySec=300
+
+[Install]
+WantedBy=timers.target

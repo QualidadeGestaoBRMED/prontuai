@@ -50,7 +50,7 @@ class PostgresUserDatabase:
         if not self.database_url:
             raise ValueError("DATABASE_URL not set")
 
-        # Neon usa postgresql:// mas SQLAlchemy 2.0 requer postgresql+psycopg2://
+        # DATABASE_URL padrão usa postgresql:// mas SQLAlchemy 2.0 requer postgresql+psycopg2://
         if self.database_url.startswith("postgresql://"):
             self.database_url = self.database_url.replace("postgresql://", "postgresql+psycopg2://", 1)
 

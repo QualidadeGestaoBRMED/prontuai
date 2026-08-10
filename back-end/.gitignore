@@ -8,6 +8,7 @@
 /venv/
 /logs/
 /data/uploads/
+/pgdata/
 /api/
 
 /.claude/

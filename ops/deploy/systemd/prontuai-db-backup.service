@@ -1,0 +1,12 @@
+[Unit]
+Description=Backup diario do Postgres do ProntuAI para S3
+Wants=network-online.target
+After=network-online.target docker.service
+
+[Service]
+Type=oneshot
+# Ajuste os caminhos abaixo se as pastas do banco/scripts nao estiverem aqui.
+EnvironmentFile=/home/ec2-user/prontuai-db/.env
+ExecStart=/home/ec2-user/prontuai-db/script/backup_postgres.sh
+# O usuario precisa estar no grupo `docker` para falar com o daemon sem sudo.
+User=ec2-user

@@ -54,8 +54,27 @@ Acoes:
 3) Reduzir concorrencia temporariamente
 
 ## 7) Backup e recovery
-- Backup do banco Neon (manual via painel)
-- Export periodico de documentos, logs e auditoria
+- Banco Postgres roda na propria VPS (container `prontuai-db`), num compose
+  file **separado** do backend (`back-end/docker-compose.db.yml`, nao
+  `docker-compose.aws.yml`) para que deploy/rollback/panic-restore do backend
+  nunca derrubem o banco junto. Acessivel pela rede interna do Docker (rede
+  externa `prontuai-db-net`); a 5432 tambem tem bind de teste em
+  `127.0.0.1` no host (nunca `0.0.0.0`, nunca aberta na security group) so
+  para permitir acesso via tunel SSH enquanto o setup esta em validacao —
+  ver "Acesso ao banco" em `ops/deploy/aws-vps-ghcr.md`.
+- Backup automatico diario via systemd timer (`ops/deploy/systemd/`), rodando
+  `ops/deploy/backup_postgres.sh`: `pg_dump -Fc` do container -> upload para
+  bucket S3-compativel (AWS S3 ou Cloudflare R2 — mesma API), com checksum.
+  Ver `ops/deploy/systemd/README.md` para instalar/verificar.
+- Restore/drill: `ops/deploy/restore_postgres.sh <s3://.../arquivo.dump>`
+  restaura por padrao num banco descartavel (`<db>_restore_drill`), nunca em
+  producao, a menos que rode com `RESTORE_INTO_PROD=1 ... --into-prod` e
+  confirmacao explicita. Fazer esse drill pelo menos trimestralmente.
+- Retencao: local (`BACKUP_RETENTION_DAYS`, default 35 dias) + lifecycle rule
+  no bucket (configurar manualmente, o script nao apaga nada remoto).
+- Export periodico de documentos, logs e auditoria (mantido como antes).
+- Volume de dados do Postgres (`./pgdata` no compose) deve ficar num device/EBS
+  dedicado e criptografado, separado do volume raiz da instancia.
 
 ## 8) Rollback
 - Manter zip do backend anterior

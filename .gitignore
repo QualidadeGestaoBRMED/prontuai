@@ -78,3 +78,7 @@ back-end/logs_teste_pii/
 
 # Dumps de banco nunca devem ser versionados
 **/backups/
+
+# Dado do Postgres (bind mount de docker-compose.db.yml) nunca deve ser versionado
+/pgdata/
+**/pgdata/
