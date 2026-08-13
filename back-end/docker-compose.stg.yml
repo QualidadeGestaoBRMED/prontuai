@@ -22,6 +22,7 @@ services:
       - TRUSTED_PROXY_IPS=${TRUSTED_PROXY_IPS:-127.0.0.1,::1,172.16.0.0/12}
     depends_on:
       - prontuai-redis-stg
+      - prontuai-db-stg
     volumes:
       - ./logs:/app/logs
       - ./resultados:/app/resultados
@@ -34,6 +35,35 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Postgres proprio do staging. Fica neste compose (e nao separado como o
+  # prontuai-db de producao) para que o `up -d prontuai-backend-stg` do deploy
+  # o suba junto via depends_on. Mesmo compose = mesma rede default, entao o
+  # backend resolve o host "prontuai-db-stg" pelo nome do servico.
+  prontuai-db-stg:
+    image: postgres:17-alpine
+    container_name: prontuai-db-stg
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:?POSTGRES_USER is required}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      - POSTGRES_DB=${POSTGRES_DB:-prontuai}
+    # Sem porta publicada: o banco de staging so e acessivel pela rede interna.
+    # Para inspecionar do host: docker exec -it prontuai-db-stg psql -U prontuai
+    volumes:
+      - ./pgdata-stg:/var/lib/postgresql/data
+    mem_limit: ${POSTGRES_MEM_LIMIT:-512m}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-prontuai} -d ${POSTGRES_DB:-prontuai}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
     logging:
       driver: "json-file"
       options:
