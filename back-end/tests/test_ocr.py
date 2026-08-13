@@ -1,8 +1,68 @@
+import io
 from unittest.mock import patch
 
 from fastapi import status
+from PyPDF2 import PdfReader, PdfWriter
+from PyPDF2.generic import (
+    DecodedStreamObject,
+    DictionaryObject,
+    NameObject,
+    NumberObject,
+)
 
 from app.services import ocr_service
+
+
+def _pdf_uma_pagina_com_imagem(resources_indireto: bool) -> bytes:
+    """PDF de 1 página com um XObject de imagem, com /Resources direto ou indireto."""
+    writer = PdfWriter()
+    writer.add_blank_page(612, 792)
+
+    imagem = DecodedStreamObject()
+    imagem.set_data(b"\xff")
+    imagem.update(
+        {
+            NameObject("/Type"): NameObject("/XObject"),
+            NameObject("/Subtype"): NameObject("/Image"),
+            NameObject("/Width"): NumberObject(1),
+            NameObject("/Height"): NumberObject(1),
+            NameObject("/ColorSpace"): NameObject("/DeviceGray"),
+            NameObject("/BitsPerComponent"): NumberObject(8),
+        }
+    )
+    resources = DictionaryObject(
+        {
+            NameObject("/XObject"): DictionaryObject(
+                {NameObject("/I0"): writer._add_object(imagem)}
+            )
+        }
+    )
+
+    page = writer.pages[0]
+    page[NameObject("/Resources")] = (
+        writer._add_object(resources) if resources_indireto else resources
+    )
+
+    buffer = io.BytesIO()
+    writer.write(buffer)
+    return buffer.getvalue()
+
+
+def test_pagina_tem_imagem_com_resources_direto():
+    pdf = PdfReader(io.BytesIO(_pdf_uma_pagina_com_imagem(resources_indireto=False)))
+    assert ocr_service._pagina_tem_imagem(pdf.pages[0]) is True
+
+
+def test_pagina_tem_imagem_com_resources_indireto():
+    """
+    PDFs gerados por PDFium apontam /Resources por referência indireta. O PyPDF2
+    não faz proxy de `in`/`.get()` em IndirectObject, então sem resolver o objeto
+    a página era lida como "sem imagem": o scan caía na trilha "digital" e era
+    recomprimido pelo Ghostscript com /screen (300 -> 72 dpi), corrompendo o OCR
+    de nome e CNPJ.
+    """
+    pdf = PdfReader(io.BytesIO(_pdf_uma_pagina_com_imagem(resources_indireto=True)))
+    assert ocr_service._pagina_tem_imagem(pdf.pages[0]) is True
 
 
 def test_extrair_cpf_regex():
