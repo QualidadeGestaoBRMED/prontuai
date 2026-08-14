@@ -1,0 +1,15 @@
+[Unit]
+Description=Purga semanal de registros transitorios do Postgres do ProntuAI
+Wants=network-online.target
+After=network-online.target docker.service
+# Nao deve concorrer com o dump: um DELETE grande durante o pg_dump so gera
+# trabalho extra de MVCC, e o dump ja nao enxergaria as linhas removidas.
+Conflicts=prontuai-db-backup.service
+
+[Service]
+Type=oneshot
+# Ajuste os caminhos abaixo se as pastas do banco/scripts nao estiverem aqui.
+EnvironmentFile=/home/ec2-user/prontuai-db/.env
+ExecStart=/home/ec2-user/prontuai-db/script/purge_old_records.sh
+# O usuario precisa estar no grupo `docker` para falar com o daemon sem sudo.
+User=ec2-user

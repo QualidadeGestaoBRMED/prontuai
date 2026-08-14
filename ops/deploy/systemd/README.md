@@ -25,14 +25,35 @@ de crontab do usuario (sobrevive a reboot, tem logs no journal, e retry via
 # copie os scripts + lib.sh para a pasta dedicada na VPS (uma vez, e de novo
 # sempre que editar os scripts — nao ha CI para isso ainda):
 mkdir -p /home/ec2-user/prontuai-db/script
-cp ops/deploy/backup_postgres.sh ops/deploy/restore_postgres.sh ops/deploy/lib.sh \
+cp ops/deploy/backup_postgres.sh ops/deploy/restore_postgres.sh \
+   ops/deploy/purge_old_records.sh ops/deploy/lib.sh \
   /home/ec2-user/prontuai-db/script/
 
 sudo cp ops/deploy/systemd/prontuai-db-backup.service /etc/systemd/system/
 sudo cp ops/deploy/systemd/prontuai-db-backup.timer /etc/systemd/system/
+sudo cp ops/deploy/systemd/prontuai-db-purge.service /etc/systemd/system/
+sudo cp ops/deploy/systemd/prontuai-db-purge.timer /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable --now prontuai-db-backup.timer
+sudo systemctl enable --now prontuai-db-purge.timer
 ```
+
+## Purga semanal (`prontuai-db-purge.timer`)
+
+Roda domingo 02:00, uma hora antes do backup, removendo dado transitorio que
+inflava todo dump diario: `jobs` finalizados (o `result_json` duplica o que ja
+esta em `documents.result_payload`), notificacoes **ja lidas** antigas e
+refresh tokens expirados. Nao toca em `audit_logs` nem em `documents`.
+
+Simule antes de habilitar — nada e apagado com `PURGE_DRY_RUN`:
+
+```bash
+PURGE_DRY_RUN=true /home/ec2-user/prontuai-db/script/purge_old_records.sh
+```
+
+Janelas configuraveis por `PURGE_JOBS_DAYS` (default 7) e
+`PURGE_NOTIFICATIONS_DAYS` (default 90). O unit declara
+`Conflicts=prontuai-db-backup.service` para nunca concorrer com o dump.
 
 ## Verificar
 
