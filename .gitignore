@@ -1,11 +1,22 @@
 CLAUDE.md
 node_modules
 .env
+.env.*
+!.env.example
 .md
 /auditoria_validacao/
 **/auditoria_validacao/
 **/ocr_resultados/
 **/resultados/
+# Variantes por ambiente (-stg-local, -dev, ...): contem PII de paciente.
+# Os padroes acima nao cobrem sufixos, entao cada familia precisa do glob.
+**/auditoria_validacao-*/
+**/ocr_resultados-*/
+**/resultados-*/
+**/logs-*/
+# Volumes de dados do Postgres montados como bind (docker-compose.db/stg).
+**/pgdata/
+**/pgdata-*/
 /.pytest_cache/
 **/__pycache__/
 /venv/

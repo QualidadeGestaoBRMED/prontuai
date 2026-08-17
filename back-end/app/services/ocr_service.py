@@ -275,32 +275,46 @@ def reparar_pdf_para_textract(file_path: str) -> str:
         return file_path
 
 
+def _resolver_objeto_pdf(obj):
+    """
+    Resolve referências indiretas do PDF (IndirectObject) para o objeto real.
+
+    PDFs gerados por PDFium (e outros) apontam /Resources, /XObject etc. por
+    referência indireta. O PyPDF2 não faz proxy transparente de `in`/`.get()`
+    nesses objetos, então acessá-los sem resolver levanta TypeError/AttributeError
+    e a página passa a ser lida como "sem imagem".
+    """
+    return obj.get_object() if hasattr(obj, "get_object") else obj
+
+
 def _pagina_tem_imagem(page, depth: int = 0) -> bool:
     if depth > 2:
         return False
     try:
-        resources = page.get("/Resources") if hasattr(page, "get") else None
+        resources = _resolver_objeto_pdf(page.get("/Resources")) if hasattr(page, "get") else None
         if resources is None:
             resources = page if isinstance(page, dict) else {}
         if "/XObject" not in resources:
-            resources = resources.get("/Resources") if isinstance(resources, dict) else resources
+            resources = _resolver_objeto_pdf(resources.get("/Resources")) if isinstance(resources, dict) else resources
             if resources is None:
                 resources = {}
-        xobject = resources.get("/XObject") or {}
+        xobject = _resolver_objeto_pdf(resources.get("/XObject")) or {}
         for obj in xobject.values():
             try:
-                resolved = obj.get_object() if hasattr(obj, "get_object") else obj
+                resolved = _resolver_objeto_pdf(obj)
                 subtype = resolved.get("/Subtype")
                 if subtype == "/Image":
                     return True
                 if subtype == "/Form":
-                    form_resources = resolved.get("/Resources") or {}
+                    form_resources = _resolver_objeto_pdf(resolved.get("/Resources")) or {}
                     if form_resources.get("/XObject"):
                         if _pagina_tem_imagem(form_resources, depth + 1):
                             return True
-            except Exception:
+            except Exception as e:
+                logger.debug(f"[OCR] Falha ao inspecionar XObject da página: {e}")
                 continue
-    except Exception:
+    except Exception as e:
+        logger.debug(f"[OCR] Falha ao inspecionar recursos da página: {e}")
         return False
     return False
 

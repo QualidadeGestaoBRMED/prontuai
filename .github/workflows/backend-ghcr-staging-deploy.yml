@@ -79,6 +79,12 @@ jobs:
           echo "name=ghcr.io/${owner}/prontuai-backend-stg" >> "$GITHUB_OUTPUT"
           echo "sha_tag=sha-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
 
+      # Runner e amd64; a VPS de staging e arm64 (Graviton). O QEMU permite
+      # emular aarch64 no build. Build leve: torch/docling estao comentados
+      # no requirements.txt e numpy/pandas tem wheels aarch64 prontas.
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -95,6 +101,7 @@ jobs:
           context: back-end
           file: back-end/Dockerfile
           push: true
+          platforms: linux/amd64,linux/arm64
           tags: |
             ${{ steps.image.outputs.name }}:${{ steps.image.outputs.sha_tag }}
             ${{ steps.image.outputs.name }}:staging
