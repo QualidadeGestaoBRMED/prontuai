@@ -70,8 +70,12 @@ JOBS_WHERE="status IN ('completed','failed','cancelled','error')
 NOTIFICATIONS_WHERE="read = true
                      AND created_at < now() - interval '$PURGE_NOTIFICATIONS_DAYS days'"
 
-# Tokens expirados ou revogados nao servem nem para deteccao de reuso.
-TOKENS_WHERE="expires_at < now() OR revoked_at IS NOT NULL"
+# Somente EXPIRADOS. Linhas revogadas precisam sobreviver ate a expiracao:
+# sao elas que permitem a _handle_refresh_reuse (api/v1/auth.py) detectar reuso
+# de refresh token e revogar a familia inteira. Apagando-as, um token roubado
+# cairia em "sessao nao encontrada" e a deteccao de roubo silenciaria. Mesmo
+# criterio do housekeeping da aplicacao (purge_expired_refresh_sessions).
+TOKENS_WHERE="expires_at < now()"
 
 log "Banco antes da purga: $(db_size)"
 
@@ -98,7 +102,7 @@ purge_table() {
 
 purge_table "jobs"           "$JOBS_WHERE"          "finalizados ha mais de ${PURGE_JOBS_DAYS}d"
 purge_table "notifications"  "$NOTIFICATIONS_WHERE" "lidas ha mais de ${PURGE_NOTIFICATIONS_DAYS}d"
-purge_table "refresh_tokens" "$TOKENS_WHERE"        "expirados ou revogados"
+purge_table "refresh_tokens" "$TOKENS_WHERE"        "expirados"
 
 if [ "$PURGE_DRY_RUN" = "true" ]; then
   log "dry-run: nada foi alterado."
