@@ -707,8 +707,15 @@ async def _processar_documento_completo_impl(
         cpf_digits = re.sub(r"\D", "", str(cpf_inicial))
         passaporte_key = re.sub(r"[^A-Z0-9]", "", str(passaporte_inicial).upper())
         if cpf_digits and cpf_digits == passaporte_key:
-            logger.info("[WORKFLOW] Mesmo valor extraído como CPF e passaporte; usando passaporte na consulta externa.")
-            cpf_inicial = None
+            # Documentos da BR MED trazem o campo combinado "CPF / Passport", então
+            # o mesmo valor chega nos dois campos. Se passa no dígito verificador é
+            # CPF: consultar por ?passport= nunca encontra o paciente.
+            if ocr_service._is_valid_cpf(cpf_digits):
+                logger.info("[WORKFLOW] Mesmo valor extraído como CPF e passaporte, mas é CPF válido; priorizando CPF.")
+                passaporte_inicial = None
+            else:
+                logger.info("[WORKFLOW] Mesmo valor extraído como CPF e passaporte; usando passaporte na consulta externa.")
+                cpf_inicial = None
     cpf_consulta = cpf_inicial
     passaporte_consulta = passaporte_inicial
     if cpf_consulta and passaporte_consulta:

@@ -66,18 +66,52 @@ def test_pagina_tem_imagem_com_resources_indireto():
 
 
 def test_extrair_cpf_regex():
-    markdown = "Paciente: Fulano\nCPF: 111.222.333-44\n"
-    assert ocr_service.extrair_cpf_regex(markdown) == "11122233344"
+    # CPF com dígito verificador válido: extrair_cpf_regex valida o checksum.
+    markdown = "Paciente: Fulano\nCPF: 104.134.126-10\n"
+    assert ocr_service.extrair_cpf_regex(markdown) == "10413412610"
 
 
 def test_extrair_cnpj_regex():
-    markdown = "Empresa XYZ\nCNPJ: 12.345.678/0001-90\n"
-    assert ocr_service.extrair_cnpj_regex(markdown) == "12345678000190"
+    # CNPJ com dígito verificador válido: extrair_cnpj_regex valida o checksum.
+    markdown = "Empresa XYZ\nCNPJ: 12.345.678/0001-95\n"
+    assert ocr_service.extrair_cnpj_regex(markdown) == "12345678000195"
 
 
 def test_extrair_passaporte_regex():
     markdown = "Dados do paciente\nPassaporte: ab123456\n"
     assert ocr_service.extrair_passaporte_regex(markdown) == "AB123456"
+
+
+def test_extrair_cpf_regex_rotulo_combinado_cpf_passport():
+    """Voucher/ASO da BR MED imprimem um campo único "CPF / Passport".
+
+    O rótulo tem 13 caracteres entre "CPF" e o número, acima da tolerância de
+    10 do passo por rótulo, então sem tratamento próprio o CPF só era achado
+    pelo fallback por linha - que falha quando o OCR funde as colunas.
+    """
+    markdown = "Nome / Name: PATRICIA\nCPF / Passport: 10413412610\n"
+    assert ocr_service.extrair_cpf_regex(markdown) == "10413412610"
+
+    fundido = "CPF / Passport: 10413412610 Identidade / ID Number: 16041755\n"
+    assert ocr_service.extrair_cpf_regex(fundido) == "10413412610"
+
+
+def test_extrair_passaporte_regex_ignora_cpf_em_rotulo_combinado():
+    """CPF válido no campo "CPF / Passport" não é passaporte.
+
+    Tratá-lo como passaporte fazia a consulta externa sair por ?passport= e o
+    paciente nunca era encontrado ("Paciente não encontrado para o CNPJ, CPF ou
+    Passaporte informados"), porque o desempate descartava o CPF correto.
+    """
+    markdown = "Nome / Name: PATRICIA\nCPF / Passport: 10413412610\n"
+    assert ocr_service.extrair_passaporte_regex(markdown) is None
+
+
+def test_extrair_passaporte_regex_aceita_passaporte_em_rotulo_combinado():
+    """Estrangeiro: o mesmo campo traz um passaporte de verdade."""
+    markdown = "Nome / Name: JOHN SMITH\nCPF / Passport: ab123456\n"
+    assert ocr_service.extrair_passaporte_regex(markdown) == "AB123456"
+    assert ocr_service.extrair_cpf_regex(markdown) is None
 
 
 @patch(

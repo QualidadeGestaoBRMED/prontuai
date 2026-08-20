@@ -1156,6 +1156,10 @@ def _line_mentions_any(line: str, labels: tuple[str, ...]) -> bool:
     return any(label in upper for label in labels)
 
 
+# Termo do rótulo de passaporte nas duas línguas usadas nos documentos da BR MED.
+_PASSPORT_WORD = r"PASSPORT|PASSAPORTE"
+
+
 def extrair_cpf_regex(markdown: str) -> str:
     if not markdown:
         return None
@@ -1169,7 +1173,21 @@ def extrair_cpf_regex(markdown: str) -> str:
         if _is_valid_cpf(digits):
             return digits
 
-    # 2) Linhas contendo "CPF" com tolerância a separadores variados
+    # 2) Rótulo bilíngue "CPF / Passport" (voucher e ASO da BR MED). O campo é
+    # único e o valor impresso é o CPF do paciente; sem este passo o rótulo não
+    # cabe na tolerância de 10 caracteres do passo 3 e a captura só sobrevive
+    # por acidente (linha isolada), quebrando quando o OCR junta colunas.
+    cpf_passport_label_match = re.search(
+        rf"CPF[ \t]*/[ \t]*(?:{_PASSPORT_WORD})[^0-9]{{0,6}}([0-9.\- ]{{11,20}})",
+        markdown,
+        flags=re.IGNORECASE,
+    )
+    if cpf_passport_label_match:
+        digits = _digits_only(cpf_passport_label_match.group(1))
+        if _is_valid_cpf(digits):
+            return digits
+
+    # 3) Linhas contendo "CPF" com tolerância a separadores variados
     # (captura restrita à mesma linha: \s cruzaria quebras de linha do
     # markdown e vazaria para o conteúdo seguinte, corrompendo o valor)
     cpf_label_match = re.search(r"CPF[^0-9]{0,10}([0-9.\- ]{11,20})", markdown, flags=re.IGNORECASE)
@@ -1178,7 +1196,7 @@ def extrair_cpf_regex(markdown: str) -> str:
         if _is_valid_cpf(digits):
             return digits
 
-    # 3) Fallback por linha: pega 11 dígitos em linhas que citam CPF
+    # 4) Fallback por linha: pega 11 dígitos em linhas que citam CPF
     for line in markdown.splitlines():
         if "CPF" not in line.upper():
             continue
@@ -1186,7 +1204,7 @@ def extrair_cpf_regex(markdown: str) -> str:
         if _is_valid_cpf(digits):
             return digits
 
-    # 4) Padrão genérico, mas nunca em linhas de passaporte/CNPJ.
+    # 5) Padrão genérico, mas nunca em linhas de passaporte/CNPJ.
     for line in markdown.splitlines():
         if _line_mentions_any(line, ("PASSAPORTE", "PASSPORT", "CNPJ")):
             continue
@@ -1230,13 +1248,21 @@ def extrair_passaporte_regex(markdown: str) -> str:
     if not markdown:
         return None
 
-    passport_label_match = re.search(
-        r"(?:PASSAPORTE\s*/\s*PASSPORT|PASSPORT\s*/\s*PASSAPORTE|PASSAPORTE|PASSPORT)\s*[:\-]?\s*([A-Z0-9]{5,20})",
+    for match in re.finditer(
+        rf"(?P<rotulo_cpf>CPF[ \t]*/[ \t]*)?"
+        rf"(?:PASSAPORTE\s*/\s*PASSPORT|PASSPORT\s*/\s*PASSAPORTE|PASSAPORTE|PASSPORT)"
+        rf"\s*[:\-]?\s*(?P<valor>[A-Z0-9]{{5,20}})",
         markdown,
         flags=re.IGNORECASE,
-    )
-    if passport_label_match:
-        return passport_label_match.group(1).upper()
+    ):
+        valor = match.group("valor").upper()
+        # O voucher/ASO da BR MED imprime um campo único "CPF / Passport", então
+        # o valor pode ser CPF ou passaporte. Quando é um CPF válido, tratá-lo
+        # como passaporte faz a consulta externa sair por ?passport= e o paciente
+        # nunca é encontrado (o desempate abaixo descartava o CPF correto).
+        if match.group("rotulo_cpf") and _is_valid_cpf(valor):
+            continue
+        return valor
 
     return None
 
@@ -1401,8 +1427,14 @@ async def _ocr_pipeline_impl(file, salvar_markdown=True, progress_hook: Optional
     # Extrair passaporte e CNPJ via regex
     passaporte_extraido = extrair_passaporte_regex(markdown)
     if _same_identifier_value(cpf_extraido, passaporte_extraido):
-        logger.info("[OCR] Valor extraído como CPF também aparece como passaporte; usando como passaporte.")
-        cpf_extraido = None
+        # Rede de segurança para rótulos combinados que escapem do extrator:
+        # um valor que passa no dígito verificador é CPF, não passaporte.
+        if _is_valid_cpf(cpf_extraido):
+            logger.info("[OCR] Valor extraído como passaporte é um CPF válido; mantendo como CPF.")
+            passaporte_extraido = None
+        else:
+            logger.info("[OCR] Valor extraído como CPF também aparece como passaporte; usando como passaporte.")
+            cpf_extraido = None
     cnpj_extraido = extrair_cnpj_regex(markdown)
     logger.info(f"[OCR] Passaporte extraído: {mask_identifier(passaporte_extraido) if passaporte_extraido else 'Nenhum passaporte encontrado'}")
     logger.info(f"[OCR] CNPJ extraído: {mask_identifier(cnpj_extraido) if cnpj_extraido else 'Nenhum CNPJ encontrado'}")
