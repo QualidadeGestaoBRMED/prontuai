@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { formatDistanceToNow } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
@@ -259,18 +259,6 @@ export function NotificationCenter() {
     clearHistory,
     activeProcess,
   } = useNotifications()
-
-  // Atualiza automaticamente quando aberto (a cada 5 segundos)
-  useEffect(() => {
-    if (!notificationCenterOpen) return
-
-    const interval = setInterval(() => {
-      // Força re-renderização para atualizar timestamps relativos
-      // Em uma aplicação real, isso também buscaria novas notificações do servidor
-    }, 5000)
-
-    return () => clearInterval(interval)
-  }, [notificationCenterOpen])
 
   // Group notifications
   const now = new Date()

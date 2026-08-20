@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { useSession } from "next-auth/react"
 import { API_ENDPOINTS } from "@/lib/config"
 import { authFetch } from "@/lib/auth-fetch"
+import { useVisibleInterval } from "@/hooks/use-visible-interval"
 import { DocumentApi, DocumentQueue, DocumentSummaryCounts, PaginatedDocumentsResponse } from "@/types/document"
 
 type UseDocumentsPagedOptions = {
@@ -103,13 +104,11 @@ export function useDocumentsPaged(options: UseDocumentsPagedOptions) {
     fetchPage(false)
   }, [fetchPage])
 
-  useEffect(() => {
-    if (refreshIntervalMs <= 0) return
-    const interval = window.setInterval(() => {
-      fetchPage(true)
-    }, refreshIntervalMs)
-    return () => window.clearInterval(interval)
-  }, [fetchPage, refreshIntervalMs])
+  const refreshSilently = useCallback(() => {
+    fetchPage(true)
+  }, [fetchPage])
+
+  useVisibleInterval(refreshSilently, refreshIntervalMs)
 
   useEffect(() => {
     setPage(1)
