@@ -18,10 +18,29 @@ receivers:
         endpoint: 0.0.0.0:4317
         auth:
           authenticator: bearertokenauth
+        tls: &tls_publica
+          # TLS nao é opcional aqui. Esta porta fica na internet publica e o que
+          # atravessa é dado de saude: os LogRecords levam e-mail do usuario, e
+          # ha CPF em linha de log. Sem TLS o proprio bearer token viaja em
+          # claro, ficando capturavel e reutilizavel — autenticar o coletor nao
+          # protege de quem esta no caminho.
+          #
+          # Caminhos FIXOS de proposito, montados como volume. A variante com
+          # ${env:...} foi testada e falha ABERTA: com a variavel indefinida o
+          # coletor sobe com cert vazio e serve a porta em texto claro (medido:
+          # POST em http:// responde 400). Com caminho fixo e arquivo ausente
+          # ele se recusa a iniciar, que é o comportamento correto.
+          cert_file: /etc/otel/certs/fullchain.pem
+          key_file: /etc/otel/certs/privkey.pem
+          min_version: "1.2"
+          # Certificado publico (Let's Encrypt) renova a cada 90 dias; o coletor
+          # le os arquivos de novo neste intervalo, sem precisar de restart.
+          reload_interval: 24h
       http:
         endpoint: 0.0.0.0:4318
         auth:
           authenticator: bearertokenauth
+        tls: *tls_publica
 
 processors:
   # Primeiro da lista de proposito: começa a recusar lotes antes de o coletor

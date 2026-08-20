@@ -22,8 +22,15 @@ EC2 (backend)                          VPS Oracle (dashboard)
 └────────────────────────────┘
 ```
 
-Esta pasta contém **só o lado da EC2**. A configuração do lado Oracle está em
-`otel/` na raiz do repo, montada pelo `docker-compose.yml` da raiz.
+Esta pasta contém **só o lado da EC2**. Os arquivos do lado Oracle estão em
+`otel/` na raiz do repo (config do coletor, Prometheus, Tempo, provisionamento do
+Grafana, dashboards e alertas).
+
+> **O compose da VPS Oracle não está neste repo** — ele é compartilhado entre os
+> projetos e vive no repo de infraestrutura. Este repo contribui os arquivos de
+> `otel/`, e **nenhum workflow os implanta**: hoje alguém precisa copiá-los para a
+> VPS junto do compose. Enquanto isso não existir, o backend manda telemetria e
+> ela chega, mas sem painel para mostrá-la.
 
 ## Por que ainda existe um agente aqui
 
@@ -45,6 +52,38 @@ dos painéis de infra e de Postgres, cortando o histórico. Com o receiver
 
 O agente tem **fila em disco** (`file_storage`): se o link com a Oracle cair, ele
 segura os pontos em vez de descartar.
+
+## TLS é obrigatório neste caminho
+
+O canal atravessa a internet pública e carrega **dado de saúde**: cada linha de
+log leva `user_email`/`user_id`, e há CPF sem máscara em log de nível INFO. Sem
+TLS o próprio bearer token viaja em claro — fica capturável e reutilizável, e
+autenticar o coletor não protege de quem está no caminho.
+
+Na VPS Oracle, o coletor exige o certificado montado em caminho fixo:
+
+```
+/etc/otel/certs/fullchain.pem
+/etc/otel/certs/privkey.pem
+```
+
+Os caminhos são fixos de propósito. A variante com `${env:...}` foi testada e
+**falha aberta**: com a variável indefinida o coletor sobe com certificado vazio
+e serve a porta em texto claro (medido: `POST` em `http://` responde 400). Com
+caminho fixo e arquivo ausente ele se recusa a iniciar. Renovação do Let's
+Encrypt é relida a cada 24 h, sem restart.
+
+Nos clientes:
+
+- **backend** — `OTEL_EXPORTER_OTLP_ENDPOINT` com esquema `https://`. É o esquema
+  que faz o SDK abrir canal com TLS; com `http://` ele usa canal em claro.
+- **agente** — `tls: insecure: false` explícito no exporter. Deixar implícito foi
+  o que produziu o descasamento anterior: receiver em texto claro contra exporter
+  em TLS dá `first record does not look like a TLS handshake`, e nenhuma série
+  `node_*`/`container_*`/`pg_*` chega.
+
+Com certificado de CA pública a validação usa as raízes do sistema. Para CA
+interna, aponte `OTEL_EXPORTER_OTLP_CERTIFICATE` (backend) e `ca_file` (agente).
 
 ## Configuração
 
@@ -128,6 +167,25 @@ Depois de subir, confirme na Oracle:
 
 Se não, os logs do backend dizem o motivo: `setup_telemetry` loga por que
 desistiu. E `docker compose logs otel-agent` mostra falha de auth ou de rede.
+
+## Rollback
+
+A stack antiga (Grafana + Loki + Prometheus + promtail nesta máquina) é
+recuperável, mas não por `git revert` sozinho:
+
+1. `git revert` do commit restaura **todos** os arquivos de config apagados
+   (`loki-config.yml`, `prometheus.yml`, `promtail-config.yml`, o
+   provisionamento e os dashboards) — eles estão no histórico.
+2. O `.env` desta pasta **não volta**, porque nunca esteve em git: recrie
+   `BACKEND_LOGS_PATH`, `BACKEND_DOCKER_NETWORK` e `GRAFANA_ADMIN_PASSWORD`.
+3. Rode o workflow. O `--remove-orphans` derruba o `otel-agent` e sobe a stack
+   antiga.
+4. No backend, `OTEL_SDK_DISABLED=true` interrompe a exportação sem redeploy —
+   é o corte mais rápido se o problema for a telemetria em si, e não exige
+   reverter nada.
+
+Os dados já enviados à Oracle permanecem lá; os dois lados coexistem sem
+conflito durante a transição.
 
 ## Workers do gunicorn
 

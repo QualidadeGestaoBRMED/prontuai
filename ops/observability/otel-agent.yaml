@@ -58,6 +58,18 @@ exporters:
     endpoint: "${env:OTEL_GATEWAY_ENDPOINT}"
     headers:
       authorization: "Bearer ${env:OTEL_AUTH_TOKEN}"
+    # TLS explicito, ainda que insecure: false seja o default do exporter — o
+    # par receiver/exporter tem que ser lido junto, e deixar implicito foi o que
+    # produziu o descasamento anterior (receiver em texto claro + exporter em
+    # TLS = "first record does not look like a TLS handshake", e nenhuma serie
+    # node_*/container_*/pg_* chegando).
+    #
+    # Com certificado de CA publica a validacao usa as raizes do sistema e nao
+    # precisa de mais nada. Para CA interna, monte o PEM e aponte ca_file.
+    tls:
+      insecure: false
+      min_version: "1.2"
+      # ca_file: /etc/otel/certs/ca.pem
     # Fila em disco: se o link com a Oracle cair, o agente segura os pontos em
     # vez de descartar. É a vantagem principal de ter um agente aqui em vez de
     # cada exporter falar direto com a outra VPS.
