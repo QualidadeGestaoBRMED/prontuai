@@ -20,6 +20,38 @@ Os scripts assumem o backend em Docker e geram artefatos em `/tmp`.
 ./ops/deploy/50_rollback.sh
 ```
 
+## Staging na VPS sem GitHub Actions
+
+Quando a cota do Actions estoura (ou o workflow esta indisponivel),
+`deploy_staging_vps.sh` faz o que o `backend-ghcr-staging-deploy.yml` faz:
+
+```bash
+STAGING_HOST=1.2.3.4 ./ops/deploy/deploy_staging_vps.sh
+STAGING_HOST=1.2.3.4 ./ops/deploy/deploy_staging_vps.sh --ref staging --skip-tests
+```
+
+Duas diferencas em relacao ao workflow, ambas deliberadas:
+
+- **Builda na VPS**, arm64 nativo, em vez de emular aarch64 com QEMU num runner
+  amd64. Sem registry no caminho, entao nao precisa de PAT do GHCR.
+- **Envia o conteudo de um commit** (`git archive`), nao a arvore de trabalho.
+  Nada de `.env`, `__pycache__`, log ou compose local vaza para o servidor — por
+  construcao. O script avisa e pede confirmacao se houver alteracao em
+  `back-end/` que nao entrara no deploy.
+
+Roda os mesmos testes do CI antes de subir (`--skip-tests` para pular), grava
+`.current_backend_image` na VPS e, se o health check falhar, **reverte sozinho**
+para a imagem anterior. O `.current_backend_image` nao e sobrescrito por um
+deploy que falhou, entao o ponto de rollback continua valido.
+
+Nao faz dump do banco: staging tem Postgres proprio e descartavel. Producao
+continua pelo runbook numerado acima, que trata disso.
+
+> O `/health` do backend e estatico — responde 200 sem tocar em banco. Health
+> check verde nao substitui olhar o log do container (o script imprime o comando)
+> e exercitar um endpoint `/v1/` autenticado. Lembre que `auto_migrate()` roda no
+> startup, e voltar a imagem nao desfaz mudanca de schema.
+
 ## Banco de dados (Postgres self-hosted na VPS)
 
 O Postgres roda numa **pasta propria na VPS**, `/home/ec2-user/prontuai-db`
