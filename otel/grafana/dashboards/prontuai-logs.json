@@ -90,7 +90,7 @@
       },
       "targets": [
         {
-          "expr": "count(count by (user_email) (count_over_time({job=\"prontuai-backend\"} | json | user_email!=\"\" [24h])))",
+          "expr": "count(count by (attributes_user_email) (count_over_time({job=\"prontuai-backend\"} | json | attributes_user_email!=\"\" [24h])))",
           "legendFormat": "usuários ativos",
           "refId": "A"
         }
@@ -211,7 +211,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "{job=\"prontuai-backend\"} | json | user_email=~\"$user_email\" | cpf=~\"$cpf\" | document_id=~\"$document_id\" | request_id=~\"$request_id\" | line_format \"{{.message}}\""
+          "expr": "{job=\"prontuai-backend\"} | json | attributes_user_email=~\"$user_email\" | attributes_cpf=~\"$cpf\" | attributes_document_id=~\"$document_id\" | attributes_request_id=~\"$request_id\" | line_format \"{{.body}}\""
         }
       ],
       "options": {
@@ -237,7 +237,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "{job=\"prontuai-backend\"} | json | line_format \"{{.message}}\""
+          "expr": "{job=\"prontuai-backend\"} | json | line_format \"{{.body}}\""
         }
       ],
       "options": {
@@ -273,8 +273,8 @@
       },
       "targets": [
         {
-          "expr": "topk(15, sum by (user_email) (count_over_time({job=\"prontuai-backend\"} |= \"workflow_completed\" | json [24h])))",
-          "legendFormat": "{{user_email}}",
+          "expr": "topk(15, sum by (attributes_user_email) (count_over_time({job=\"prontuai-backend\"} |= \"workflow_completed\" | json [24h])))",
+          "legendFormat": "{{attributes_user_email}}",
           "refId": "A"
         }
       ],
@@ -311,8 +311,8 @@
       },
       "targets": [
         {
-          "expr": "topk(15, sum by (user_email) (count_over_time({job=\"prontuai-backend\"} |= \"workflow_failed\" | json [24h])))",
-          "legendFormat": "{{user_email}}",
+          "expr": "topk(15, sum by (attributes_user_email) (count_over_time({job=\"prontuai-backend\"} |= \"workflow_failed\" | json [24h])))",
+          "legendFormat": "{{attributes_user_email}}",
           "refId": "A"
         }
       ],

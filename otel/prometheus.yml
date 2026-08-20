@@ -1,0 +1,28 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  # Toda a telemetria de metrica entra por aqui: o otel-collector republica em
+  # :8889 tudo que recebeu por OTLP, de todos os projetos.
+  #
+  # honor_labels é OBRIGATORIO. O coletor já rotula cada serie com o job vindo
+  # do service.name do app (job="prontuai-backend") e o instance vindo do
+  # service.instance.id. Sem honor_labels o Prometheus renomearia esses rotulos
+  # para exported_job/exported_instance e sobrescreveria job com "otel-collector"
+  # — o que quebraria todo seletor {job="prontuai-backend"} dos paineis e, pior,
+  # colapsaria projetos diferentes num job só.
+  - job_name: otel-collector-otlp
+    honor_labels: true
+    static_configs:
+      - targets: ["otel-collector:8889"]
+
+  # Saude do proprio coletor: com o modelo de push ele é o unico caminho das
+  # metricas de todos os projetos, entao precisa ser monitorado separadamente.
+  - job_name: otel-collector
+    static_configs:
+      - targets: ["otel-collector:8888"]
+
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]

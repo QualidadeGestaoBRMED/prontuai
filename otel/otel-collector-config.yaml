@@ -1,0 +1,97 @@
+# Coletor OTel da VPS Oracle: recebe metricas, traces e logs de vários projetos
+# por OTLP autenticado e distribui para Tempo, Prometheus e Loki.
+#
+# É a única porta de entrada da telemetria. Os apps (em outras máquinas) só
+# alcançam este coletor pela porta publicada no host, com o token certo — por
+# isso a autenticação não é opcional aqui: sem ela, qualquer um que descobrisse
+# o endereço mandaria telemetria se passando por outro projeto.
+
+extensions:
+  bearertokenauth:
+    scheme: "Bearer"
+    token: "${env:OTEL_AUTH_TOKEN}"
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+        auth:
+          authenticator: bearertokenauth
+      http:
+        endpoint: 0.0.0.0:4318
+        auth:
+          authenticator: bearertokenauth
+
+processors:
+  # Primeiro da lista de proposito: começa a recusar lotes antes de o coletor
+  # estourar a memoria da VPS e ser morto pelo OOM killer.
+  memory_limiter:
+    check_interval: 5s
+    limit_mib: 400
+    spike_limit_mib: 100
+
+  batch:
+    timeout: 10s
+    send_batch_size: 1024
+
+  # Só no pipeline de logs. O exporter do Loki promove service.instance.id ao
+  # label "instance", e o nosso vale <host>-<pid>: cada deploy (e cada worker do
+  # gunicorn) viraria um stream novo, que é exatamente o que estoura o Loki.
+  # As metricas continuam com o instance, onde ele é necessario para os workers
+  # nao colidirem numa serie só.
+  resource/logs:
+    attributes:
+      - key: service.instance.id
+        action: delete
+
+exporters:
+  otlp/tempo:
+    endpoint: tempo:4317
+    tls:
+      insecure: true
+
+  prometheus:
+    endpoint: 0.0.0.0:8889
+    # send_timestamps fica false (o default). Com timestamp explicito na
+    # exposicao, o Prometheus desliga o tratamento de staleness dessas series:
+    # quando um app cai e a serie expira aqui, o Prometheus continuaria
+    # devolvendo o ultimo valor por até 5 min (lookback delta) em vez de
+    # marcá-la ausente — e os alertas de "sem metricas" nunca disparariam.
+    #
+    # Quanto tempo uma serie sobrevive sem receber ponto novo. Com os apps
+    # exportando a cada 15s, 90s dá folga para uma exportacao falhar e ainda
+    # assim as series sumirem rapido quando o app cai de verdade.
+    metric_expiration: 90s
+    # Acrescenta _total aos contadores e o sufixo de unidade aos histogramas.
+    # As metricas de negocio do prontuai já nascem nomeadas contando com isso.
+    add_metric_suffixes: true
+    # Os atributos de resource já viram job/instance; converter o resto
+    # (telemetry.sdk.*, deployment.environment.name) só inflaria os rotulos.
+    # Eles continuam consultaveis pela metrica sintetica target_info.
+    resource_to_telemetry_conversion:
+      enabled: false
+
+  loki:
+    endpoint: http://loki:3100/loki/api/v1/push
+
+service:
+  extensions: [bearertokenauth]
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [otlp/tempo]
+    metrics:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [prometheus]
+    logs:
+      receivers: [otlp]
+      processors: [memory_limiter, resource/logs, batch]
+      exporters: [loki]
+  telemetry:
+    metrics:
+      # Metricas do proprio coletor (pontos recebidos, recusados, falhas de
+      # exportacao), coletadas pelo job "otel-collector" do prometheus.yml.
+      address: 0.0.0.0:8888

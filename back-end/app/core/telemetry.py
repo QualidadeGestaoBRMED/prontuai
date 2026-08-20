@@ -130,6 +130,14 @@ def _span_exporter():
     return OTLPSpanExporter()
 
 
+def _log_exporter():
+    if _usa_grpc():
+        from opentelemetry.exporter.otlp.proto.grpc._log_exporter import OTLPLogExporter
+    else:
+        from opentelemetry.exporter.otlp.proto.http._log_exporter import OTLPLogExporter
+    return OTLPLogExporter()
+
+
 def _metric_exporter():
     if _usa_grpc():
         from opentelemetry.exporter.otlp.proto.grpc.metric_exporter import OTLPMetricExporter
@@ -204,6 +212,35 @@ def _setup_metrics(resource) -> None:
     logger.info("OTEL métricas exportando via OTLP")
 
 
+def _setup_logs(resource) -> None:
+    """Exporta os logs por OTLP, sem parar de escrever o arquivo local.
+
+    Os dois caminhos coexistem de proposito: o arquivo é a fonte operacional
+    (e pega log de crash, que nao sobrevive ao flush do exportador), e o OTLP é
+    o caminho correlacionado, que chega ao Loki com trace_id. Ninguem le o
+    arquivo — nao ha promtail/filelog — entao um app.log grande nao pesa mais
+    na maquina, so ocupa disco (limitado por LOG_FILE_MAX_BYTES).
+
+    O nivel deste handler é independente do arquivo: subir OTEL_LOG_LEVEL é o
+    botao para cortar volume na rede sem perder detalhe no disco.
+    """
+    import logging as _logging
+
+    from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler
+    from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
+
+    provider = LoggerProvider(resource=resource)
+    provider.add_log_record_processor(BatchLogRecordProcessor(_log_exporter()))
+
+    nivel = os.getenv("OTEL_LOG_LEVEL", os.getenv("LOG_LEVEL", "INFO")).upper()
+    handler = LoggingHandler(
+        level=getattr(_logging, nivel, _logging.INFO), logger_provider=provider
+    )
+    _logging.getLogger().addHandler(handler)
+    _providers.append(provider)
+    logger.info(f"OTEL logs exportando via OTLP (nivel {nivel})")
+
+
 def setup_telemetry(app=None, engine=None) -> None:
     global _otel_initialized
     if _otel_initialized:
@@ -233,6 +270,10 @@ def setup_telemetry(app=None, engine=None) -> None:
             _setup_metrics(resource)
         else:
             logger.info("OTEL métricas desligadas por OTEL_METRICS_EXPORTER=none")
+        if _exportador_ligado("LOGS"):
+            _setup_logs(resource)
+        else:
+            logger.info("OTEL logs desligados por OTEL_LOGS_EXPORTER=none")
         _otel_initialized = True
     except Exception as e:
         logger.warning(f"Falha ao inicializar OpenTelemetry: {e}")

@@ -39,15 +39,18 @@ jobs:
         run: |
           ssh -i ~/.ssh/aws_vps_key -p "$AWS_VPS_PORT" -o StrictHostKeyChecking=accept-new \
             "$AWS_VPS_USER@$AWS_VPS_HOST" \
-            "mkdir -p '$OBS_DEPLOY_PATH/promtail-positions'"
+            "mkdir -p '$OBS_DEPLOY_PATH'"
 
-          # Remove configs antigos antes de extrair para não deixar dashboards
-          # deletados no repo sobrando no servidor. Preserva .env, positions e volumes.
+          # Remove configs antigos antes de extrair, para não deixar arquivo
+          # deletado no repo sobrando no servidor. Preserva .env e volumes.
+          # A lista inclui os arquivos da stack completa que rodava aqui antes
+          # da migração para o coletor da Oracle (Grafana/Loki/Prometheus/
+          # promtail): sem isso eles ficariam órfãos na EC2.
           ssh -i ~/.ssh/aws_vps_key -p "$AWS_VPS_PORT" -o StrictHostKeyChecking=accept-new \
             "$AWS_VPS_USER@$AWS_VPS_HOST" \
-            "cd '$OBS_DEPLOY_PATH' && rm -rf grafana docker-compose.yml loki-config.yml prometheus.yml promtail-config.yml otel-collector.yml README.md backend-env.example"
+            "cd '$OBS_DEPLOY_PATH' && rm -rf grafana promtail-positions docker-compose.yml otel-agent.yaml loki-config.yml prometheus.yml promtail-config.yml otel-collector.yml README.md backend-env.example"
 
-          tar -C ops/observability --exclude='promtail-positions' -czf - . |
+          tar -C ops/observability -czf - . |
             ssh -i ~/.ssh/aws_vps_key -p "$AWS_VPS_PORT" -o StrictHostKeyChecking=accept-new \
               "$AWS_VPS_USER@$AWS_VPS_HOST" \
               "tar -C '$OBS_DEPLOY_PATH' -xzf -"
@@ -67,16 +70,18 @@ jobs:
 
           if [ ! -f .env ]; then
             echo "Missing $OBS_DEPLOY_PATH/.env on VPS." >&2
-            echo "Create it once with BACKEND_LOGS_PATH, BACKEND_DOCKER_NETWORK and GRAFANA_ADMIN_PASSWORD (see ops/observability/README.md)." >&2
+            echo "Create it once with OTEL_GATEWAY_ENDPOINT and OTEL_AUTH_TOKEN (see ops/observability/README.md)." >&2
             exit 1
           fi
 
           docker compose pull -q
+          # --remove-orphans derruba os containers da stack antiga (grafana,
+          # loki, prometheus, promtail) que não existem mais neste compose.
           docker compose up -d --remove-orphans
-          # Configs montadas como arquivo (loki/promtail/prometheus) e
-          # alertas/datasources provisionados só são relidos na inicialização —
-          # `up -d` não recria container quando só o conteúdo do volume mudou.
-          docker compose restart loki promtail prometheus grafana otel-collector
+          # A config do agente é montada como arquivo e só é relida na
+          # inicialização — `up -d` não recria o container quando muda apenas o
+          # conteúdo do arquivo montado.
+          docker compose restart otel-agent
 
           docker compose ps
           echo "Observability deploy OK"

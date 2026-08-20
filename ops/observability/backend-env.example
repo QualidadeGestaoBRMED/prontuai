@@ -2,87 +2,81 @@
 LOG_FORMAT=json
 LOG_FILE=logs/app.log
 LOG_LEVEL=INFO
+# Rotacao do arquivo de log local. Ele deixou de ser lido por promtail (os logs
+# vao por OTLP), mas continua sendo a fonte operacional e os logs de crash —
+# e antes disto crescia sem limite (o app.log local chegou a dezenas de MB).
+LOG_FILE_MAX_BYTES=52428800
+LOG_FILE_BACKUP_COUNT=5
 
 # --- OpenTelemetry ---------------------------------------------------------
-# O backend não expõe mais /metrics: empurra métricas (e traces, se ligadas)
-# por OTLP para o otel-collector, que as republica em :8889/metrics para o
-# Prometheus. Variáveis padrão do OTel — nenhuma é específica do ProntuAI.
+# Toda a telemetria (metricas, traces e logs) sai por um unico canal OTLP
+# autenticado para o otel-collector da VPS Oracle, onde ficam Tempo, Loki,
+# Prometheus e o Grafana. O backend nao expoe /metrics e nada nesta maquina le
+# os logs.
 
-# Identidade. service.name vira o rótulo job= das séries no Prometheus, então
-# mudá-lo quebra os seletores dos painéis.
+# Identidade. service.name vira o rotulo job= das series no Prometheus E o
+# label job= dos streams no Loki, entao mudar quebra paineis e alertas.
 #
-# service.namespace fica DE FORA de propósito: o exporter Prometheus do
-# collector monta o rótulo job como "<namespace>/<name>", então definir
-# namespace=brmed viraria job="brmed/prontuai-backend" e nenhum painel ou
-# alerta encontraria as séries. (No caminho OTLP-nativo do Prometheus 3.x,
-# namespace viraria um label próprio via promote_resource_attributes — mas
-# esta stack usa scrape, não OTLP direto no Prometheus.) Os demais atributos
-# de resource não afetam job: vão para a métrica sintética target_info.
+# service.namespace fica DE FORA de proposito: o exporter Prometheus do coletor
+# monta o rotulo job como "<namespace>/<name>", entao definir namespace viraria
+# job="brmed/prontuai-backend" e nenhum painel encontraria as series. Os demais
+# atributos de resource nao afetam job — vao para a metrica sintetica
+# target_info.
 OTEL_SERVICE_NAME=prontuai-backend
 OTEL_RESOURCE_ATTRIBUTES=deployment.environment.name=production,service.version=2.0.0
 
-# Destino: endpoint BASE, SEM /v1/metrics (o SDK completa o caminho sozinho).
-# Já as variáveis por sinal (OTEL_EXPORTER_OTLP_METRICS_ENDPOINT) exigem o
-# caminho completo — misturar as duas formas dá 404 silencioso.
-# "otel-collector" só resolve se o backend estiver na mesma rede docker da
-# stack de observabilidade; rodando direto no host, use http://127.0.0.1:4318.
-OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
-OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
+# Destino: o coletor da Oracle. gRPC na 4317 (o padrao dos outros projetos).
+# O token é o mesmo OTEL_AUTH_TOKEN configurado no coletor de lá; note o %20,
+# que é o espaco depois de "Bearer" — sem o URL-encoding o header sai quebrado
+# e o coletor responde 401.
+OTEL_EXPORTER_OTLP_ENDPOINT=http://obs.exemplo.com:4317
+OTEL_EXPORTER_OTLP_PROTOCOL=grpc
+OTEL_EXPORTER_OTLP_HEADERS=Authorization=Bearer%20<token>
 OTEL_EXPORTER_OTLP_COMPRESSION=gzip
 OTEL_EXPORTER_OTLP_TIMEOUT=10000
 
-# Sinais ligados.
-#
-# traces=none enquanto não houver Tempo/Jaeger na stack: o pipeline de traces do
-# collector termina no exporter "debug", então o backend serializaria protobuf e
-# mandaria pela rede só para o collector descartar — e em Python essa
-# serialização disputa o GIL com a aplicação. Os spans continuam sendo criados
-# em memória (o TracerProvider é registrado de todo jeito), que é de onde sai o
-# trace_id dos logs. Para ligar de verdade: suba um Tempo, troque o exporter de
-# traces em otel-collector.yml e ponha otlp aqui.
-#
-# logs=none é DECLARATIVO: o backend não monta LoggerProvider, então esta
-# variável não tem efeito nenhum no código — está aqui para registrar a decisão
-# de arquitetura. Os logs chegam ao Loki pelo promtail lendo o arquivo JSON
-# (caminho B do guia). Mudar para otlp não faria nada, e o Loki desta stack
-# (2.9.8) não tem ingestão OTLP nativa de todo modo — isso é Loki 3.x.
+# Os tres sinais ligados: Tempo, Prometheus e Loki existem na Oracle.
 OTEL_METRICS_EXPORTER=otlp
-OTEL_TRACES_EXPORTER=none
-OTEL_LOGS_EXPORTER=none
+OTEL_TRACES_EXPORTER=otlp
+OTEL_LOGS_EXPORTER=otlp
 
-# Sampling das traces (métricas nunca são amostradas). always_on é a
-# recomendação de fase 1: como as traces não são exportadas hoje, o custo é só
-# o span em memória — e cada trace_id que aparece nos logs continua válido no
-# dia em que um Tempo entrar na stack. Com amostragem de 10%, 90% dos trace_id
-# logados virariam link morto.
+# Sampling das traces (metricas e logs nunca sao amostrados). always_on é a
+# recomendacao de fase 1 e garante que todo trace_id que aparece num log
+# corresponda a uma trace que existe no Tempo — com 10%, 90% dos links do
+# Grafana morreriam.
 OTEL_TRACES_SAMPLER=parentbased_always_on
 
-# Correlação de logs: injeta trace_id/span_id em cada linha de log dentro de
-# uma requisição, ao lado do request_id que já existia. É o que permite pular
-# de um trace para as linhas de log daquela requisição no Grafana.
-# ATENÇÃO: o backend passa set_logging_format=False ao instrumentor de
-# propósito — sem isso ele chamaria logging.basicConfig e destruiria o formato
-# JSON que o promtail/Loki consomem.
+# Correlacao de logs: injeta trace_id/span_id em cada linha dentro de uma
+# requisicao, ao lado do request_id. É o que liga log a trace no Grafana.
+# ATENCAO: o backend passa set_logging_format=False ao instrumentor de
+# proposito — sem isso ele chamaria logging.basicConfig e destruiria o formato
+# JSON do arquivo local.
 OTEL_PYTHON_LOG_CORRELATION=true
 
-# Batching. O intervalo de métricas casa com o scrape_interval do Prometheus;
-# o default do OTel (60s) faria o Prometheus coletar 4x o mesmo valor.
+# Nivel dos logs que vao PELA REDE, independente do arquivo local. Este é o
+# botao para cortar volume sem perder detalhe no disco: OTEL_LOG_LEVEL=WARNING
+# manda so warning/error para a Oracle e mantem INFO em app.log. Cuidado: o
+# dashboard de exploracao filtra linhas INFO (request.completed,
+# workflow_completed), que sumiriam.
+OTEL_LOG_LEVEL=INFO
+
+# Batching. O intervalo de metricas casa com o scrape_interval do Prometheus da
+# Oracle; o default do OTel (60s) faria o Prometheus coletar 4x o mesmo valor.
 OTEL_METRIC_EXPORT_INTERVAL=15000
 OTEL_BSP_SCHEDULE_DELAY=5000
 OTEL_BSP_MAX_QUEUE_SIZE=2048
 OTEL_BSP_MAX_EXPORT_BATCH_SIZE=512
 
-# Limites contra explosão de dados
+# Limites contra explosao de dados
 OTEL_ATTRIBUTE_COUNT_LIMIT=128
 OTEL_ATTRIBUTE_VALUE_LENGTH_LIMIT=4096
 OTEL_SPAN_EVENT_COUNT_LIMIT=128
 
-# Rotas fora da instrumentação: o healthcheck do container bate /health a cada
+# Rotas fora da instrumentacao: o healthcheck do container bate /health a cada
 # 30s e viraria a rota mais movimentada do painel.
 OTEL_PYTHON_EXCLUDED_URLS=health,healthz,readyz,livez,metrics
 
-# Kill switch: true desliga toda a telemetria sem redeploy de código. Tenha
-# isso mapeado como variável de deploy desde o dia 1.
+# Kill switch: true desliga toda a telemetria sem redeploy de codigo.
 OTEL_SDK_DISABLED=false
 
 # Audit

@@ -1,0 +1,84 @@
+# Agente OTel da EC2 (a maquina do backend).
+#
+# Nao existe mais Grafana/Loki/Prometheus aqui: este agente é a unica peca de
+# observabilidade da EC2, e o unico caminho de saida da telemetria é OTLP
+# autenticado para o coletor da VPS Oracle.
+#
+# Ele existe porque tres fontes de metrica NAO vem do app e nao teriam como
+# sair por OTLP sozinhas: node_exporter (CPU/RAM/disco da maquina), cAdvisor
+# (memoria por container) e o prontuai-db-exporter (Postgres, que roda junto do
+# banco em back-end/docker-compose.db.yml).
+#
+# Por que o receiver "prometheus" e nao os receivers nativos (hostmetrics,
+# docker_stats, postgresql): os nativos emitiriam nomes de semconv OTel
+# (system.filesystem.*, postgresql.*), obrigando a reescrever as 16 queries dos
+# paineis de infra e de Postgres e cortando o historico. Fazendo scrape local
+# dos exporters e encaminhando por OTLP, os nomes chegam identicos ao Prometheus
+# da Oracle (node_*, container_*, pg_*) — verificado num round-trip completo,
+# inclusive o `up`, de que depende o alerta "Postgres sem scrape".
+#
+# Os logs do backend NAO passam por aqui: o proprio backend os exporta por OTLP
+# (OTEL_LOGS_EXPORTER=otlp). Nada le o arquivo app.log, que continua sendo
+# escrito localmente como fonte operacional — foi o que tirou o peso de um
+# promtail seguindo um arquivo de dezenas de MB.
+
+receivers:
+  prometheus:
+    config:
+      global:
+        scrape_interval: 15s
+      scrape_configs:
+        # node_exporter roda em network_mode: host, entao é alcancado pelo host.
+        - job_name: node
+          static_configs:
+            - targets: ["host.docker.internal:9100"]
+
+        - job_name: cadvisor
+          static_configs:
+            - targets: ["cadvisor:8080"]
+
+        # Exporter do Postgres, alcancado pela rede "db"
+        # (back-end/docker-compose.db.yml).
+        - job_name: postgres
+          static_configs:
+            - targets: ["prontuai-db-exporter:9187"]
+
+processors:
+  memory_limiter:
+    check_interval: 5s
+    limit_mib: 160
+    spike_limit_mib: 40
+
+  batch:
+    timeout: 10s
+    send_batch_size: 1024
+
+exporters:
+  otlp:
+    endpoint: "${env:OTEL_GATEWAY_ENDPOINT}"
+    headers:
+      authorization: "Bearer ${env:OTEL_AUTH_TOKEN}"
+    # Fila em disco: se o link com a Oracle cair, o agente segura os pontos em
+    # vez de descartar. É a vantagem principal de ter um agente aqui em vez de
+    # cada exporter falar direto com a outra VPS.
+    sending_queue:
+      enabled: true
+      storage: file_storage
+    retry_on_failure:
+      enabled: true
+      max_elapsed_time: 300s
+
+extensions:
+  file_storage:
+    directory: /var/lib/otelcol
+    # O compose monta um volume aqui; create_directory cobre o primeiro boot,
+    # quando o volume ainda esta vazio.
+    create_directory: true
+
+service:
+  extensions: [file_storage]
+  pipelines:
+    metrics:
+      receivers: [prometheus]
+      processors: [memory_limiter, batch]
+      exporters: [otlp]
