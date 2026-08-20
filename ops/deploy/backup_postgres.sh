@@ -37,6 +37,10 @@ source "$SCRIPT_DIR/lib.sh"
 
 require_cmd docker sha256sum
 
+# Nao concorre com a purga. Espera ate 1h; se nao conseguir, FALHA — backup do
+# dia que nao acontece precisa aparecer como unit falho no journal.
+db_maintenance_lock "${DB_LOCK_WAIT:-3600}" fail
+
 # Via systemd, POSTGRES_USER/etc chegam pelo EnvironmentFile. Rodando na mao,
 # carrega do .env do banco automaticamente se ainda nao estiver no ambiente.
 DB_DEPLOY_DIR="${DB_DEPLOY_DIR:-/home/ec2-user/prontuai-db}"

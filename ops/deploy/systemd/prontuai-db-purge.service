@@ -2,9 +2,14 @@
 Description=Purga semanal de registros transitorios do Postgres do ProntuAI
 Wants=network-online.target
 After=network-online.target docker.service
-# Nao deve concorrer com o dump: um DELETE grande durante o pg_dump so gera
-# trabalho extra de MVCC, e o dump ja nao enxergaria as linhas removidas.
-Conflicts=prontuai-db-backup.service
+# A serializacao com o backup e feita por flock dentro dos scripts
+# (db_maintenance_lock em lib.sh), NAO com Conflicts= aqui. Conflicts e
+# bidirecional e da terminacao mutua: iniciar a purga PARARIA o backup e
+# vice-versa. Com Persistent=true nos dois timers, um reboot que atrase ambos
+# dispara os dois recuperando o horario, e um mataria o outro — pg_dump morto no
+# meio significa o backup do dia perdido. O flock faz o segundo esperar.
+# Bonus: o lock tambem vale para execucao manual dos scripts, que o unit nao
+# cobriria.
 
 [Service]
 Type=oneshot

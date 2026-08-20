@@ -31,6 +31,12 @@ source "$SCRIPT_DIR/lib.sh"
 
 require_cmd docker
 
+# Nao concorre com o dump: um DELETE grande durante o pg_dump so gera trabalho
+# extra de MVCC, e o dump ja nao enxergaria as linhas removidas. Espera ate
+# 30min; se o backup ainda estiver rodando, PULA — a purga e semanal e perder
+# uma execucao nao tem consequencia, ao contrario de perder um backup.
+db_maintenance_lock "${DB_LOCK_WAIT:-1800}" skip
+
 DB_DEPLOY_DIR="${DB_DEPLOY_DIR:-/home/ec2-user/prontuai-db}"
 if [ -z "${POSTGRES_USER:-}" ] && [ -f "$DB_DEPLOY_DIR/.env" ]; then
   set -a
