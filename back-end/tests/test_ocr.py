@@ -77,6 +77,43 @@ def test_extrair_cnpj_regex():
     assert ocr_service.extrair_cnpj_regex(markdown) == "12345678000195"
 
 
+def test_extrair_cnpj_regex_prioriza_voucher():
+    """O CNPJ do voucher da BR MED vence o de laudos anexados ao mesmo PDF.
+
+    O voucher origina o agendamento no BR NET, então o CNPJ dele é o cadastro
+    que a API externa reconhece. Laudos de terceiros imprimem o CNPJ do
+    contratante ou da própria clínica e vêm antes no markdown, então venciam por
+    ordem de aparição e a consulta falhava com "Paciente não encontrado".
+    """
+    markdown = (
+        "RESULTADO DE EXAMES\n"
+        "Unidade: TERMINAL LOGISTICO DO VALE DO PARAIBA\n"
+        "CNPJ: 11.243.246/0001-00\n"
+        "CNPJ: 36.182.482/0001-95 / E-mail: atendimento@n1med.com.br\n"
+        "\n## VOUCHER\n\n"
+        "TERMINAL LOGISTICO DO VALE DO PARAIBA - PORTO VALE - TIPI\n"
+        "CNPJ: 03.214.786/0004-80\n"
+        "1. Identificacao / Identification:\n"
+    )
+    assert ocr_service.extrair_cnpj_regex(markdown) == "03214786000480"
+
+
+def test_extrair_cnpj_regex_sem_voucher_mantem_ordem_de_aparicao():
+    markdown = "Unidade: EMPRESA X\nCNPJ: 12.345.678/0001-95\n"
+    assert ocr_service.extrair_cnpj_regex(markdown) == "12345678000195"
+
+
+def test_extrair_cnpj_do_voucher_ignora_cnpj_fora_do_cabecalho():
+    """Só o CNPJ entre o cabeçalho "VOUCHER" e a seção 1 é o da empresa."""
+    markdown = (
+        "## VOUCHER\n"
+        "EMPRESA X\n"
+        "1. Identificacao / Identification:\n"
+        "CNPJ: 03.214.786/0004-80\n"
+    )
+    assert ocr_service._extrair_cnpj_do_voucher(markdown) is None
+
+
 def test_extrair_passaporte_regex():
     markdown = "Dados do paciente\nPassaporte: ab123456\n"
     assert ocr_service.extrair_passaporte_regex(markdown) == "AB123456"

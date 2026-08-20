@@ -1217,9 +1217,47 @@ def extrair_cpf_regex(markdown: str) -> str:
     return None
 
 
+# Cabeçalho da página de voucher da BR MED. O Textract transforma texto curto em
+# maiúsculas em header markdown ("## VOUCHER"), daí a tolerância a "#" e ênfase.
+_VOUCHER_ANCHOR_RE = re.compile(r"^[#>*\s]*VOUCHER\b", flags=re.IGNORECASE)
+# O CNPJ do voucher fica entre o cabeçalho e a seção "1. Identificação".
+_VOUCHER_CNPJ_MAX_LINES = 25
+_VOUCHER_CNPJ_STOP_RE = re.compile(r"IDENTIFICA[ÇC][ÃA]O|IDENTIFICATION", flags=re.IGNORECASE)
+_CNPJ_LABEL_RE = re.compile(r"CNPJ[^0-9]{0,10}([0-9.\-/ ]{14,24})", flags=re.IGNORECASE)
+
+
+def _extrair_cnpj_do_voucher(markdown: str) -> Optional[str]:
+    """CNPJ impresso na página de voucher da BR MED.
+
+    O voucher é o documento que origina o agendamento no BR NET, então o CNPJ
+    dele é o cadastro que a API externa reconhece. Laudos de terceiros anexados
+    ao mesmo PDF (laboratório, clínica parceira) imprimem outro CNPJ — o do
+    contratante ou o da própria clínica — e costumam vir antes no markdown, de
+    modo que o CNPJ errado ganhava por ordem de aparição e a consulta falhava
+    com "Paciente não encontrado".
+    """
+    linhas = markdown.splitlines()
+    for idx, linha in enumerate(linhas):
+        if not _VOUCHER_ANCHOR_RE.match(linha):
+            continue
+        for linha_janela in linhas[idx:idx + _VOUCHER_CNPJ_MAX_LINES]:
+            if _VOUCHER_CNPJ_STOP_RE.search(linha_janela):
+                break
+            match = _CNPJ_LABEL_RE.search(linha_janela)
+            if match:
+                digits = _digits_only(match.group(1))
+                if _is_valid_cnpj(digits):
+                    return digits
+    return None
+
+
 def extrair_cnpj_regex(markdown: str) -> str:
     if not markdown:
         return None
+
+    cnpj_voucher = _extrair_cnpj_do_voucher(markdown)
+    if cnpj_voucher:
+        return cnpj_voucher
 
     # Captura restrita à mesma linha: \s cruzaria quebras de linha do markdown
     # e vazaria para o conteúdo seguinte, corrompendo o valor (dígito
