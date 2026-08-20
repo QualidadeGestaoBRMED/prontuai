@@ -62,12 +62,26 @@ SHORT="${SHA:0:7}"
 TAG="sha-$SHORT"
 log "Commit a implantar: $SHORT ($(git log -1 --format=%s "$SHA" | cut -c1-60))"
 
-# A arvore suja nao vai para o servidor. Avisa alto, porque a diferenca entre
-# "testei local" e "esta rodando na VPS" nasce exatamente aqui.
-DIRTY="$(git status --porcelain -- back-end | head -20)"
-if [ -n "$DIRTY" ]; then
-  log "AVISO: ha alteracoes em back-end/ que NAO serao implantadas (o deploy usa o commit $SHORT):"
-  printf '%s\n' "$DIRTY" | sed 's/^/    /'
+# A arvore de trabalho nao vai para o servidor; so o commit. Duas situacoes bem
+# diferentes se escondem em "git status", e tratar as duas igual gera ruido:
+#
+#   - arquivo VERSIONADO modificado: alguem pode achar que a mudanca subiu.
+#     Isso merece parar e confirmar.
+#   - arquivo NAO versionado: git archive nunca o enviaria, e neste repo eles sao
+#     rotineiramente locais de proposito (compose override, dump, docs). Vira
+#     nota, nao pergunta.
+TRACKED="$(git status --porcelain --untracked-files=no -- back-end | head -20)"
+UNTRACKED="$(git ls-files --others --exclude-standard -- back-end | head -10)"
+
+if [ -n "$UNTRACKED" ]; then
+  log "Nota: arquivos nao versionados em back-end/ nao entram no deploy (esperado):"
+  printf '%s\n' "$UNTRACKED" | sed 's/^/    /'
+fi
+
+if [ -n "$TRACKED" ]; then
+  log "AVISO: ha alteracoes em arquivos versionados de back-end/ que NAO serao"
+  log "       implantadas, porque o deploy usa o commit $SHORT:"
+  printf '%s\n' "$TRACKED" | sed 's/^/    /'
   if [ "$ASSUME_YES" -ne 1 ]; then
     printf 'Continuar assim mesmo? [s/N] '
     read -r resposta
@@ -77,8 +91,35 @@ fi
 
 # ------------------------------------------------------------------ 2. testes
 if [ "$RUN_TESTS" -eq 1 ]; then
-  require_cmd pytest
-  log "Rodando os testes que o CI roda antes do deploy"
+  # pytest raramente esta no PATH global. Procura nos lugares plausiveis antes
+  # de desistir, e se nao achar da a instrucao em vez de "Missing command".
+  PYTEST_CMD=()
+  if [ -n "${PYTEST:-}" ]; then
+    read -r -a PYTEST_CMD <<< "$PYTEST"
+  elif command -v pytest >/dev/null 2>&1; then
+    PYTEST_CMD=(pytest)
+  elif [ -x "$ROOT_DIR/back-end/.venv/bin/pytest" ]; then
+    PYTEST_CMD=("$ROOT_DIR/back-end/.venv/bin/pytest")
+  elif [ -x "$ROOT_DIR/.venv/bin/pytest" ]; then
+    PYTEST_CMD=("$ROOT_DIR/.venv/bin/pytest")
+  elif python3 -c 'import pytest' >/dev/null 2>&1; then
+    PYTEST_CMD=(python3 -m pytest)
+  else
+    die "pytest nao encontrado. Escolha um caminho:
+
+  1) Criar o venv uma vez (o CI faz o equivalente a cada run):
+       python3 -m venv back-end/.venv
+       back-end/.venv/bin/pip install -r back-end/requirements.txt
+     O script encontra back-end/.venv/bin/pytest sozinho nas proximas vezes.
+
+  2) Apontar um pytest existente:
+       PYTEST=/caminho/para/pytest $0 ...
+
+  3) Pular os testes, se voce ja os rodou em outro lugar:
+       $0 --skip-tests ...
+     Sem CI, ninguem mais vai roda-los."
+  fi
+  log "Rodando os testes que o CI roda antes do deploy (${PYTEST_CMD[*]})"
   PG_NAME="prontuai-pg-deploytest-$$"
   docker run -d --rm --name "$PG_NAME" \
     -e POSTGRES_USER=prontuai -e POSTGRES_PASSWORD=prontuai -e POSTGRES_DB=prontuai_test \
@@ -90,13 +131,13 @@ if [ "$RUN_TESTS" -eq 1 ]; then
   done
 
   ( cd "$ROOT_DIR" && APP_ENV=test OPENAI_API_KEY=test-key \
-      PYTHONPATH=back-end pytest back-end/tests/test_auth_security.py -q --noconftest ) \
+      PYTHONPATH=back-end "${PYTEST_CMD[@]}" back-end/tests/test_auth_security.py -q --noconftest ) \
     || die "test_auth_security falhou; deploy abortado"
 
   ( cd "$ROOT_DIR" && APP_ENV=test DEV_AUTH_BYPASS=true OPENAI_API_KEY=test-key \
       USE_PRONTUAI_PATIENTS_EXAMS=true \
       DATABASE_URL=postgresql://prontuai:prontuai@127.0.0.1:55432/prontuai_test \
-      pytest back-end/tests/test_brmed.py -q ) \
+      "${PYTEST_CMD[@]}" back-end/tests/test_brmed.py -q ) \
     || die "test_brmed falhou; deploy abortado"
 
   docker rm -f "$PG_NAME" >/dev/null 2>&1 || true
@@ -107,9 +148,21 @@ else
 fi
 
 # ------------------------------------------------------------- 3. transferencia
-log "Verificando a VPS e o .env"
+log "Verificando acesso a VPS"
+# Checa a conexao ANTES de qualquer teste remoto. Sem isso, qualquer falha de
+# SSH (host errado, chave, firewall) sai como "falta o .env", mandando quem le
+# procurar no lugar errado.
+remote true >/dev/null 2>&1 \
+  || die "Nao consegui conectar em $TARGET na porta $STAGING_PORT.
+  Verifique STAGING_HOST/STAGING_USER/STAGING_PORT e a chave (STAGING_SSH_KEY).
+  Teste com: ssh ${STAGING_SSH_KEY:+-i $STAGING_SSH_KEY }-p $STAGING_PORT $TARGET true"
+
 remote "test -f '$STAGING_DEPLOY_PATH/.env'" \
-  || die "Falta $STAGING_DEPLOY_PATH/.env na VPS. Crie a partir de back-end/.env.example antes."
+  || die "Conectei na VPS, mas falta $STAGING_DEPLOY_PATH/.env. Crie a partir de back-end/.env.example antes."
+
+# O build e o health check rodam la; falhar aqui e melhor que falhar no meio.
+remote "command -v docker >/dev/null && docker compose version >/dev/null 2>&1 && command -v curl >/dev/null && command -v tar >/dev/null" \
+  || die "A VPS precisa de docker (com o plugin compose), curl e tar."
 
 PREV_IMAGE="$(remote "cat '$STAGING_DEPLOY_PATH/.current_backend_image' 2>/dev/null || true")"
 [ -n "$PREV_IMAGE" ] && log "Imagem atual (ponto de rollback): $PREV_IMAGE" \

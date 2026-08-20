@@ -39,7 +39,17 @@ Duas diferencas em relacao ao workflow, ambas deliberadas:
   construcao. O script avisa e pede confirmacao se houver alteracao em
   `back-end/` que nao entrara no deploy.
 
-Roda os mesmos testes do CI antes de subir (`--skip-tests` para pular), grava
+Roda os mesmos testes do CI antes de subir. `pytest` costuma nao estar no PATH:
+o script procura em `$PYTEST`, no PATH, em `back-end/.venv/bin/pytest`, em
+`.venv/bin/pytest` e em `python3 -m pytest`, nessa ordem. Se nao achar, ele diz
+como resolver — o caminho mais direto e criar o venv uma vez:
+
+```bash
+python3 -m venv back-end/.venv
+back-end/.venv/bin/pip install -r back-end/requirements.txt
+```
+
+`--skip-tests` pula, e avisa que sem CI ninguem mais vai roda-los. Grava
 `.current_backend_image` na VPS e, se o health check falhar, **reverte sozinho**
 para a imagem anterior. O `.current_backend_image` nao e sobrescrito por um
 deploy que falhou, entao o ponto de rollback continua valido.
