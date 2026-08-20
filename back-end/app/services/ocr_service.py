@@ -1251,13 +1251,24 @@ def _extrair_cnpj_do_voucher(markdown: str) -> Optional[str]:
     return None
 
 
+def _log_cnpj_extraido(cnpj: str, fonte: str) -> str:
+    """Registra de onde saiu o CNPJ, para validar a prioridade do voucher.
+
+    fonte=voucher: cabeçalho da página de voucher da BR MED (o cadastro que a
+    API externa reconhece). fonte=documento_*: fallback por ordem de aparição,
+    que pode trazer o CNPJ de um laudo de terceiro anexado ao mesmo PDF.
+    """
+    logger.info("[OCR] CNPJ extraído via regex: %s fonte=%s", mask_identifier(cnpj), fonte)
+    return cnpj
+
+
 def extrair_cnpj_regex(markdown: str) -> str:
     if not markdown:
         return None
 
     cnpj_voucher = _extrair_cnpj_do_voucher(markdown)
     if cnpj_voucher:
-        return cnpj_voucher
+        return _log_cnpj_extraido(cnpj_voucher, "voucher")
 
     # Captura restrita à mesma linha: \s cruzaria quebras de linha do markdown
     # e vazaria para o conteúdo seguinte, corrompendo o valor (dígito
@@ -1268,7 +1279,7 @@ def extrair_cnpj_regex(markdown: str) -> str:
     if cnpj_label_match:
         digits = _digits_only(cnpj_label_match.group(1))
         if _is_valid_cnpj(digits):
-            return digits
+            return _log_cnpj_extraido(digits, "documento_rotulo")
 
     for line in markdown.splitlines():
         if _line_mentions_any(line, ("PASSAPORTE", "PASSPORT", "CPF")):
@@ -1277,7 +1288,7 @@ def extrair_cnpj_regex(markdown: str) -> str:
         if generic_cnpj_match:
             digits = _digits_only(generic_cnpj_match.group(0))
             if _is_valid_cnpj(digits):
-                return digits
+                return _log_cnpj_extraido(digits, "documento_generico")
 
     return None
 

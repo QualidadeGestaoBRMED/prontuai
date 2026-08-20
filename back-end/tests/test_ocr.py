@@ -1,4 +1,5 @@
 import io
+import logging
 from unittest.mock import patch
 
 from fastapi import status
@@ -112,6 +113,27 @@ def test_extrair_cnpj_do_voucher_ignora_cnpj_fora_do_cabecalho():
         "CNPJ: 03.214.786/0004-80\n"
     )
     assert ocr_service._extrair_cnpj_do_voucher(markdown) is None
+
+
+def test_extrair_cnpj_regex_loga_a_fonte(caplog):
+    """O campo fonte= permite validar no log se o CNPJ veio do voucher."""
+    voucher = (
+        "CNPJ: 11.243.246/0001-00\n"
+        "\n## VOUCHER\n\n"
+        "EMPRESA X\n"
+        "CNPJ: 03.214.786/0004-80\n"
+        "1. Identificacao / Identification:\n"
+    )
+    with caplog.at_level(logging.INFO, logger="app.services.ocr_service"):
+        assert ocr_service.extrair_cnpj_regex(voucher) == "03214786000480"
+    assert "fonte=voucher" in caplog.text
+    # O CNPJ nunca vai em claro para o log.
+    assert "03214786000480" not in caplog.text
+
+    caplog.clear()
+    with caplog.at_level(logging.INFO, logger="app.services.ocr_service"):
+        assert ocr_service.extrair_cnpj_regex("EMPRESA X\nCNPJ: 12.345.678/0001-95\n") == "12345678000195"
+    assert "fonte=documento_rotulo" in caplog.text
 
 
 def test_extrair_passaporte_regex():
