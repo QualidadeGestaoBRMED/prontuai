@@ -84,6 +84,15 @@ Nos clientes:
 
 Com certificado de CA pública a validação usa as raízes do sistema. Para CA
 interna, aponte `OTEL_EXPORTER_OTLP_CERTIFICATE` (backend) e `ca_file` (agente).
+Há uma trava no código, não só na documentação: se o endpoint for `http://`
+para host **remoto**, `setup_telemetry()` **recusa exportar** e loga em ERROR.
+É a mesma política do outro lado do canal — o coletor se recusa a subir sem
+certificado em vez de servir a porta em claro. O custo de recusar é perder
+telemetria, não disponibilidade: a aplicação segue normalmente.
+
+`http://localhost` continua valendo (coletor no mesmo host, dev). Em rede
+privada, onde texto claro é aceitável, reconheça explicitamente com
+`OTEL_ALLOW_INSECURE_ENDPOINT=true` — aí passa, com aviso.
 
 ## Configuração
 
@@ -101,7 +110,7 @@ DB_DOCKER_NETWORK=prontuai-db-net
 Bloco `OTEL_*` completo em `backend-env.example`. O mínimo:
 
 ```
-OTEL_EXPORTER_OTLP_ENDPOINT=http://obs.exemplo.com:4317
+OTEL_EXPORTER_OTLP_ENDPOINT=https://obs.exemplo.com:4317
 OTEL_EXPORTER_OTLP_PROTOCOL=grpc
 OTEL_EXPORTER_OTLP_HEADERS=Authorization=Bearer%20<token>
 OTEL_METRICS_EXPORTER=otlp

@@ -78,6 +78,29 @@ def _desligado(variavel: str, padrao: str = "false") -> bool:
     return os.getenv(variavel, padrao).strip().lower() == "true"
 
 
+_HOSTS_LOCAIS = ("localhost", "127.0.0.1", "::1", "[::1]", "0.0.0.0")
+
+
+def _endpoint_em_claro() -> str | None:
+    """Devolve o endpoint se ele for http:// para um host remoto.
+
+    O payload que sai daqui leva e-mail de usuário nos LogRecords e há CPF em
+    linha de log de nível INFO. Em http:// isso atravessa a rede sem cifra, e o
+    bearer token vai junto — capturável e reutilizável. Autenticar o coletor não
+    protege de quem está no caminho.
+
+    http:// para localhost é legítimo (coletor no mesmo host, dev) e não conta.
+    """
+    for var in _ENDPOINT_VARS:
+        valor = (os.getenv(var) or "").strip()
+        if not valor.lower().startswith("http://"):
+            continue
+        host = valor[len("http://"):].split("/")[0].split(":")[0]
+        if host.lower() not in _HOSTS_LOCAIS:
+            return f"{var}={valor}"
+    return None
+
+
 def _desabilitadas() -> set[str]:
     """Nomes listados em OTEL_PYTHON_DISABLED_INSTRUMENTATIONS.
 
@@ -262,6 +285,27 @@ def setup_telemetry(app=None, engine=None) -> None:
     if not any(os.getenv(var) for var in _ENDPOINT_VARS):
         logger.warning("OTEL_EXPORTER_OTLP_ENDPOINT não definido; traces e métricas não serão exportados")
         return
+
+    # Falha fechada: não exporta em texto claro para host remoto. É a mesma
+    # política do outro lado do canal — o coletor se recusa a subir sem
+    # certificado em vez de servir a porta em claro. Aqui o custo de recusar é
+    # perder telemetria, não disponibilidade: a aplicação segue normalmente.
+    em_claro = _endpoint_em_claro()
+    if em_claro and not _desligado("OTEL_ALLOW_INSECURE_ENDPOINT"):
+        logger.error(
+            "OTEL desabilitado: endpoint em texto claro para host remoto (%s). "
+            "A telemetria carrega e-mail de usuário e CPF em log; use https:// "
+            "(o esquema é o que faz o SDK abrir canal com TLS). Em rede privada, "
+            "onde isso é aceitável, reconheça com OTEL_ALLOW_INSECURE_ENDPOINT=true.",
+            em_claro,
+        )
+        return
+    if em_claro:
+        logger.warning(
+            "OTEL exportando em TEXTO CLARO para %s "
+            "(OTEL_ALLOW_INSECURE_ENDPOINT=true); só faça isso em rede privada.",
+            em_claro,
+        )
 
     try:
         resource = _build_resource()

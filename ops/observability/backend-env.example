@@ -41,6 +41,9 @@ OTEL_RESOURCE_ATTRIBUTES=deployment.environment.name=production,service.version=
 # que é o espaco depois de "Bearer" — sem o URL-encoding o header sai quebrado
 # e o coletor responde 401.
 OTEL_EXPORTER_OTLP_ENDPOINT=https://obs.exemplo.com:4317
+# Endpoint http:// para host remoto e RECUSADO pelo backend (a telemetria
+# nao sobe, a aplicacao sim). Em rede privada, reconheca com:
+# OTEL_ALLOW_INSECURE_ENDPOINT=true
 # OTEL_EXPORTER_OTLP_CERTIFICATE=/etc/ssl/certs/ca-interna.pem
 OTEL_EXPORTER_OTLP_PROTOCOL=grpc
 OTEL_EXPORTER_OTLP_HEADERS=Authorization=Bearer%20<token>
