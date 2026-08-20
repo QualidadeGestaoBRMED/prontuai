@@ -1,0 +1,78 @@
+# OpenTelemetry Collector do ProntuAI.
+#
+# Recebe métricas (e traces) do backend por OTLP e republica as métricas em
+# :8889/metrics, no formato Prometheus, para o Prometheus desta mesma stack
+# coletar. Substitui o /metrics que o prometheus-fastapi-instrumentator
+# expunha direto na API.
+
+receivers:
+  otlp:
+    protocols:
+      http:
+        endpoint: 0.0.0.0:4318
+      grpc:
+        endpoint: 0.0.0.0:4317
+
+processors:
+  # Precisa ser o primeiro da lista: começa a rejeitar lotes antes de o
+  # collector estourar a memória da EC2 e ser morto pelo OOM killer.
+  memory_limiter:
+    check_interval: 5s
+    limit_mib: 160
+    spike_limit_mib: 40
+
+  batch:
+    timeout: 10s
+    send_batch_size: 1024
+
+exporters:
+  prometheus:
+    endpoint: 0.0.0.0:8889
+    # Precisa ficar false. Com timestamps explícitos na exposição, o Prometheus
+    # desliga o tratamento de staleness para essas séries: quando o backend cai
+    # e o collector expira a série, o Prometheus continua devolvendo o último
+    # valor por até 5 min (lookback delta) em vez de marcá-la ausente — e o
+    # alerta "backend sem métricas" nunca dispararia. O custo é o timestamp
+    # virar o instante do scrape em vez do instante da medição: um desvio de no
+    # máximo um intervalo de exportação (15s), irrelevante nesta resolução.
+    send_timestamps: false
+    # Quanto tempo uma série sobrevive sem receber novos pontos. Com o backend
+    # exportando a cada 15s, 90s dá folga para uma exportação falhar e ainda
+    # assim as séries sumirem rápido quando o backend cai de verdade — é o que
+    # dispara o alerta "backend fora do ar" (ver alerts.yml).
+    metric_expiration: 90s
+    # Acrescenta _total aos contadores e o sufixo de unidade aos histogramas.
+    # As métricas de negócio já nascem nomeadas contando com isso
+    # (back-end/app/core/metrics.py).
+    add_metric_suffixes: true
+    # Os atributos de resource viram job/instance automaticamente; converter o
+    # resto (telemetry.sdk.*, deployment.environment) só inflaria os rótulos.
+    resource_to_telemetry_conversion:
+      enabled: false
+
+  # Traces: o backend já sabe exportá-las, mas ainda não há backend de traces
+  # (Tempo/Jaeger) nesta stack. Enquanto não houver, elas são descartadas aqui
+  # em vez de ficarem acumulando retry no backend.
+  debug:
+    verbosity: basic
+
+service:
+  pipelines:
+    metrics:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [prometheus]
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [debug]
+  telemetry:
+    metrics:
+      # Métricas do próprio collector (pontos recebidos, recusados, falhas de
+      # exportação), coletadas pelo job "otel-collector" do prometheus.yml.
+      readers:
+        - pull:
+            exporter:
+              prometheus:
+                host: 0.0.0.0
+                port: 8888

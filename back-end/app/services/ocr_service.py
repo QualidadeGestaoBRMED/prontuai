@@ -1335,12 +1335,12 @@ async def _ocr_pipeline_impl(file, salvar_markdown=True, progress_hook: Optional
                     progress_hook
                 )
             except TimeoutError as e:
-                metrics.TEXTRACT_TIMEOUT.inc()
+                metrics.TEXTRACT_TIMEOUT.add(1)
                 if settings.TEXTRACT_FALLBACK_TO_LOCAL:
                     logger.warning(f"[OCR] {e}. Fallback para OCR local (Docling).")
                     if progress_hook:
                         progress_hook("Fila Textract, usando OCR local.")
-                    metrics.OCR_FALLBACK_DOCLING.inc()
+                    metrics.OCR_FALLBACK_DOCLING.add(1)
                     motor_metrica = "docling_fallback"
                     markdown = await asyncio.to_thread(
                         processar_arquivo_docling,
@@ -1353,7 +1353,7 @@ async def _ocr_pipeline_impl(file, salvar_markdown=True, progress_hook: Optional
                     logger.warning(f"[OCR] Falha de conexão Textract: {e}. Fallback para OCR local (Docling).")
                     if progress_hook:
                         progress_hook("Falha temporária no Textract, usando OCR local.")
-                    metrics.OCR_FALLBACK_DOCLING.inc()
+                    metrics.OCR_FALLBACK_DOCLING.add(1)
                     motor_metrica = "docling_fallback"
                     markdown = await asyncio.to_thread(
                         processar_arquivo_docling,
@@ -1372,7 +1372,7 @@ async def _ocr_pipeline_impl(file, salvar_markdown=True, progress_hook: Optional
         # Remover arquivo temporário original
         if os.path.exists(temp_path):
             os.remove(temp_path)
-        metrics.OCR_DURACAO.labels(motor=motor_metrica).observe(time.perf_counter() - start_total)
+        metrics.OCR_DURACAO.record(time.perf_counter() - start_total, {"motor": motor_metrica})
         logger.info(f"[OCR] Pipeline OCR finalizado em {time.perf_counter() - start_total:.2f}s")
 
     # Salvar markdown

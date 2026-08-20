@@ -3,12 +3,25 @@ global:
   evaluation_interval: 15s
 
 scrape_configs:
-  # Backend ProntuAI (FastAPI /metrics).
-  # Coleta direto do container pela rede docker compartilhada (ver "networks"
-  # no docker-compose.yml). O container escuta na porta 80 interna.
+  # Backend ProntuAI, agora via OpenTelemetry: o backend empurra as métricas
+  # por OTLP para o otel-collector, que as republica em :8889/metrics.
+  #
+  # honor_labels é obrigatório aqui: o collector já rotula cada série com
+  # job="prontuai-backend" e instance=<host>-<pid> (vindos do resource OTel do
+  # processo). Sem ele o Prometheus renomearia esses rótulos para
+  # exported_job/exported_instance e sobrescreveria job com o nome do scrape —
+  # o que quebraria todo seletor {job="prontuai-backend"} dos painéis, e ainda
+  # colapsaria os workers do gunicorn numa série só.
   - job_name: prontuai-backend
+    honor_labels: true
     static_configs:
-      - targets: ["prontuai-backend:80"]
+      - targets: ["otel-collector:8889"]
+
+  # Saúde do próprio collector: com o modelo de push ele é o único caminho das
+  # métricas do backend, então precisa ser monitorado separadamente.
+  - job_name: otel-collector
+    static_configs:
+      - targets: ["otel-collector:8888"]
 
   # Métricas da máquina EC2 (CPU, RAM, disco). node_exporter roda em network_mode: host.
   - job_name: node
@@ -19,6 +32,14 @@ scrape_configs:
   - job_name: cadvisor
     static_configs:
       - targets: ["cadvisor:8080"]
+
+  # Métricas do Postgres (conexões, transações, cache hit ratio, tamanho do
+  # banco, deadlocks). Exporter roda junto do banco em
+  # back-end/docker-compose.db.yml, coletado pela rede "db" (ver networks
+  # no docker-compose.yml desta pasta).
+  - job_name: postgres
+    static_configs:
+      - targets: ["prontuai-db-exporter:9187"]
 
   - job_name: prometheus
     static_configs:

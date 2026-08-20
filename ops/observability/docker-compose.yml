@@ -4,8 +4,12 @@
 #   BACKEND_LOGS_PATH    caminho dos logs do backend (padrão: ../../back-end/logs)
 #   GRAFANA_ADMIN_PASSWORD  senha do admin do Grafana (padrão: admin — TROQUE em produção)
 #   OBS_BIND_ADDRESS     endereço de bind das portas (padrão: 127.0.0.1; nunca exponha publicamente)
+#   BACKEND_DOCKER_NETWORK  rede do compose do backend (padrão: back-end_default)
+#   DB_DOCKER_NETWORK    rede do docker-compose.db.yml (padrão: prontuai-db-net, raramente precisa mudar)
 #
 # Acesso na EC2: túnel SSH (ssh -L 3001:127.0.0.1:3001 ...) ou proxy nginx com HTTPS.
+# Requer back-end/docker-compose.db.yml já rodando antes de subir esta stack
+# (a rede externa "prontuai-db-net" precisa existir).
 
 services:
   loki:
@@ -29,6 +33,25 @@ services:
     depends_on:
       - loki
 
+  # Recebe métricas do backend por OTLP e as republica em :8889/metrics para o
+  # Prometheus. Substituiu o /metrics que o backend expunha via
+  # prometheus-fastapi-instrumentator.
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.119.0
+    command: ["--config=/etc/otelcol-contrib/config.yaml"]
+    volumes:
+      - ./otel-collector.yml:/etc/otelcol-contrib/config.yaml:ro
+    ports:
+      # OTLP/HTTP publicado só no loopback, para um backend rodando direto no
+      # host (dev). O backend em container fala com "otel-collector:4318" pela
+      # rede "backend" e não precisa desta porta.
+      - "${OBS_BIND_ADDRESS:-127.0.0.1}:4318:4318"
+    mem_limit: 256m
+    restart: unless-stopped
+    networks:
+      - default
+      - backend
+
   prometheus:
     image: prom/prometheus:v2.53.0
     command:
@@ -44,7 +67,7 @@ services:
       - "host.docker.internal:host-gateway"
     networks:
       - default
-      - backend
+      - db
 
   node_exporter:
     image: prom/node-exporter:v1.8.1
@@ -109,10 +132,17 @@ volumes:
 
 networks:
   default: {}
-  # Rede do compose do backend, para o Prometheus coletar /metrics direto do
-  # container (a porta do backend fica publicada só em 127.0.0.1 no host).
+  # Rede do compose do backend, para o backend alcançar o otel-collector pelo
+  # nome do serviço ("otel-collector:4318") sem publicar porta no host.
   # Ajuste BACKEND_DOCKER_NETWORK se o compose do backend rodar em outra pasta:
   #   docker inspect prontuai-backend --format '{{range $k, $v := .NetworkSettings.Networks}}{{$k}}{{end}}'
   backend:
     external: true
     name: ${BACKEND_DOCKER_NETWORK:-back-end_default}
+  # Rede do docker-compose.db.yml (Postgres), pro Prometheus coletar
+  # /metrics do prontuai-db-exporter direto pelo container. Nome fixo
+  # (definido em back-end/docker-compose.db.yml), normalmente nao precisa
+  # de override.
+  db:
+    external: true
+    name: ${DB_DOCKER_NETWORK:-prontuai-db-net}

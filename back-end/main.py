@@ -16,7 +16,7 @@ from app.core.auth import decode_token, decode_token_claims, assert_auth_securit
 from app.core.config import settings
 from app.core.database import user_db
 from app.models.audit_log import AuditLogCreate
-from app.core.telemetry import setup_telemetry
+from app.core.telemetry import setup_telemetry, shutdown_telemetry
 from app.core.rate_limit import create_rate_limiter
 import ipaddress
 import logging
@@ -178,18 +178,6 @@ if os.getenv("SENTRY_DSN"):
 
 app = FastAPI(title="API BR MED - Exames e Validação")
 setup_telemetry(app=app, engine=getattr(user_db, "engine", None))
-
-if os.getenv("METRICS_ENABLED", "false").lower() == "true":
-    try:
-        from prometheus_fastapi_instrumentator import Instrumentator
-
-        Instrumentator(
-            should_group_status_codes=False,
-            excluded_handlers=["/metrics", "/health"],
-        ).instrument(app).expose(app, include_in_schema=False)
-        logger.info("Métricas Prometheus habilitadas em /metrics")
-    except Exception as e:
-        logger.warning(f"Falha ao habilitar métricas Prometheus: {e}")
 
 @app.middleware("http")
 async def cors_preflight_middleware(request: Request, call_next):
@@ -371,6 +359,12 @@ async def startup_event():
         asyncio.create_task(job_watchdog_loop())
     except Exception as e:
         logger.warning(f"Job watchdog falhou ao iniciar: {e}")
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Descarrega métricas/spans pendentes para não perder o último intervalo."""
+    shutdown_telemetry()
 
 # Configuração de CORS usando variáveis de ambiente
 # Permite configurar origens dinamicamente para diferentes ambientes (dev, staging, prod)

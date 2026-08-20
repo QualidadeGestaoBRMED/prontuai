@@ -83,6 +83,18 @@ class JsonFormatter(logging.Formatter):
         "process",
     }
 
+    # Campos que o LoggingInstrumentor injeta em todo LogRecord. São tratados à
+    # parte (renomeados para trace_id/span_id, e descartados quando não há span
+    # ativo) em vez de caírem no loop genérico abaixo, que os copiaria crus:
+    # otelTraceID="0" e otelTraceSampled=false em cada linha, mais um
+    # otelServiceName que só repete o label job= do Loki.
+    OTEL_CAMPOS = {
+        "otelTraceID": "trace_id",
+        "otelSpanID": "span_id",
+        "otelTraceSampled": None,
+        "otelServiceName": None,
+    }
+
     def format(self, record: logging.LogRecord) -> str:
         payload = {
             "timestamp": datetime.utcfromtimestamp(record.created).isoformat() + "Z",
@@ -99,6 +111,13 @@ class JsonFormatter(logging.Formatter):
                 payload[key] = value
         for key, value in record.__dict__.items():
             if key in self.RESERVED or key.startswith("_"):
+                continue
+            if key in self.OTEL_CAMPOS:
+                destino = self.OTEL_CAMPOS[key]
+                # "0" é o valor que o instrumentor usa quando não há span ativo
+                # (log de startup, background job fora de requisição).
+                if destino and value and value != "0":
+                    payload[destino] = value
                 continue
             payload[key] = value
         if record.exc_info:

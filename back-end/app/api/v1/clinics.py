@@ -165,7 +165,7 @@ async def create_clinic(
         )
 
         logger.info(f"[CLINICS] Admin {current_user.email} criou clínica {clinic.id} ({clinic.name})")
-        metrics.CLINICAS_CRIADAS.inc()
+        metrics.CLINICAS_CRIADAS.add(1)
         return clinic
 
     except HTTPException:

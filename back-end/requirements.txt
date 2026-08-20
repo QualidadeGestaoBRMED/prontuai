@@ -39,15 +39,41 @@ psycopg2-binary>=2.9.0  # PostgreSQL driver
 redis>=5.0.0  # Rate limit compartilhado entre instâncias (REDIS_URL)
 asyncpg>=0.29.0  # Async PostgreSQL driver (futuro)
 
-# Observability (Prometheus)
-prometheus-fastapi-instrumentator>=7.0.0  # Métricas HTTP em /metrics (habilitar via METRICS_ENABLED=true)
-
 # Observability (OpenTelemetry)
-opentelemetry-api>=1.24.0
-opentelemetry-sdk>=1.24.0
-opentelemetry-exporter-otlp>=1.24.0
-opentelemetry-instrumentation-fastapi>=0.45b0
-opentelemetry-instrumentation-sqlalchemy>=0.45b0
+# Traces e métricas saem por OTLP para o otel-collector (ops/observability);
+# o backend não expõe mais /metrics — o collector republica em :8889.
+# Pisos: 0.50b0 é a primeira versão verificada que, com
+# OTEL_SEMCONV_STABILITY_OPT_IN=http, emite http.server.request.duration
+# rotulada por http.route (e não pelo caminho cru em http.target).
+# Mantenha api/sdk/exporter na mesma versão minor, e as instrumentações na
+# versão 0.x correspondente: misturar minors causa erros obscuros de import.
+opentelemetry-api>=1.29.0
+opentelemetry-sdk>=1.29.0
+opentelemetry-exporter-otlp>=1.29.0
+opentelemetry-instrumentation-fastapi>=0.50b0
+opentelemetry-instrumentation-sqlalchemy>=0.50b0
+# Injeta trace_id/span_id nos LogRecords, para casar linha de log com o
+# trace no Grafana (ver app/core/logging.py).
+opentelemetry-instrumentation-logging>=0.50b0
+# Lista obtida com `opentelemetry-bootstrap -a requirements` rodado sobre este
+# mesmo requirements.txt (nunca `-a install`: resolve versão em runtime e quebra
+# build reproduzível). Ficaram de fora de propósito: psycopg2 (duplicaria os
+# spans do SQLAlchemy), starlette/asgi (já vêm com o de fastapi) e urllib3
+# (o de requests já cobre a mesma chamada).
+#
+# requests/httpx dão retorno imediato: emitem a métrica
+# http.client.request.duration, visível no Prometheus sem depender de traces.
+opentelemetry-instrumentation-requests>=0.50b0
+opentelemetry-instrumentation-httpx>=0.50b0
+# botocore (AWS Textract) e redis só produzem spans: o retorno vem quando as
+# traces passarem a ser exportadas (OTEL_TRACES_EXPORTER=otlp + Tempo).
+opentelemetry-instrumentation-botocore>=0.50b0
+opentelemetry-instrumentation-redis>=0.50b0
+# threading/asyncio propagam o contexto para threads e corrotinas: sem eles o
+# que roda den'tro de asyncio.to_thread (pipeline de OCR) e de threading.Thread
+# (warmup de cache) perde o trace_id e vira span órfão.
+opentelemetry-instrumentation-threading>=0.50b0
+opentelemetry-instrumentation-asyncio>=0.50b0
 
 # AWS SDK (para migração do OCR para Textract)
 boto3>=1.34.0  # AWS Textract para processamento de documentos
