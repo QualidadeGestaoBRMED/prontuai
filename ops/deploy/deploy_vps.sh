@@ -159,6 +159,19 @@ info "ref     : $REF"
 info "commit  : $SHORT  $(git log -1 --format=%s "$SHA" | cut -c1-58)"
 info "imagem  : $IMAGE_REPO:$TAG"
 
+# Confere que o compose do ambiente existe NO COMMIT e declara o servico que
+# vamos subir. Sem isto, uma troca de ambiente errada so aparece la na frente,
+# no `docker compose up`, depois de o compose errado ja ter sobrescrito o do
+# servidor — foi exatamente o que aconteceu ao enviar o compose de staging para
+# producao.
+git cat-file -e "$SHA:$COMPOSE_SRC" 2>/dev/null \
+  || die "$COMPOSE_SRC nao existe no commit $SHORT."
+if ! git show "$SHA:$COMPOSE_SRC" | grep -qE "^[[:space:]]+$SERVICE:"; then
+  die "Incoerencia de ambiente: $COMPOSE_SRC nao declara o servico '$SERVICE'.
+  DEPLOY_ENV=$DEPLOY_ENV espera esse servico; confira se o ambiente esta certo."
+fi
+info "compose : $COMPOSE_SRC declara '$SERVICE'"
+
 # A arvore de trabalho nao vai para o servidor; so o commit. Duas situacoes bem
 # diferentes se escondem em "git status", e tratar as duas igual gera ruido:
 #
@@ -352,14 +365,14 @@ info "extraidos na VPS: $ENVIADOS arquivos"
 [ "$ENVIADOS" -gt 0 ] || die "A pasta src/ ficou vazia na VPS; transferencia nao funcionou."
 
 # O compose tambem sai do commit, nao da arvore local.
-git show "$SHA:back-end/docker-compose.stg.yml" \
+git show "$SHA:$COMPOSE_SRC" \
   | remote "cat > '$DEPLOY_PATH/docker-compose.yml'" \
-  || die "Falha ao enviar o docker-compose.stg.yml."
+  || die "Falha ao enviar o $COMPOSE_SRC."
 info "docker-compose.yml atualizado a partir do commit"
 step_ok
 
 # ----------------------------------------------------------- 4. build e subida
-step "Build na VPS (arm64 nativo) e subida"
+step "Build na VPS (arquitetura nativa) e subida"
 info "o build imprime abaixo; a primeira vez costuma levar alguns minutos"
 remote "DEPLOY_PATH='$DEPLOY_PATH' TAG='$TAG' PREV_IMAGE='$PREV_IMAGE' \
         SERVICE='$SERVICE' IMAGE_REPO='$IMAGE_REPO' bash -s" <<'REMOTE'
