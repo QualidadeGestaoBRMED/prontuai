@@ -64,6 +64,28 @@ processors:
       - key: service.instance.id
         action: delete
 
+  # Rede de seguranca de PII, NAO a defesa principal. A aplicacao mascara antes
+  # de logar (app/core/pii.py); isto existe para o que passar batido, porque um
+  # `logger.info` novo com CPF e mais facil de escrever do que de revisar — e
+  # aqui os logs saem do perimetro de producao para uma VPS compartilhada entre
+  # projetos, o que muda a consequencia de um vazamento.
+  #
+  # Cobre corpo da linha e o atributo de mensagem. Padroes ancorados em formato
+  # de CPF/CNPJ (com ou sem pontuacao) em vez de \d{11} solto, que apanharia
+  # timestamp em milissegundos e id numerico.
+  transform/redacao_pii:
+    error_mode: ignore
+    log_statements:
+      - context: log
+        statements:
+          # CNPJ primeiro: 14 digitos. Se o de CPF rodasse antes, comeria os 11
+          # primeiros digitos de um CNPJ e deixaria o resto solto.
+          - replace_pattern(body, "\\b\\d{2}\\.?\\d{3}\\.?\\d{3}/?\\d{4}-?\\d{2}\\b", "[CNPJ_REDIGIDO]")
+          - replace_pattern(body, "\\b\\d{3}\\.?\\d{3}\\.?\\d{3}-?\\d{2}\\b", "[CPF_REDIGIDO]")
+          - replace_pattern(attributes["message"], "\\b\\d{2}\\.?\\d{3}\\.?\\d{3}/?\\d{4}-?\\d{2}\\b", "[CNPJ_REDIGIDO]") where attributes["message"] != nil
+          - replace_pattern(attributes["message"], "\\b\\d{3}\\.?\\d{3}\\.?\\d{3}-?\\d{2}\\b", "[CPF_REDIGIDO]") where attributes["message"] != nil
+          - replace_pattern(attributes["cpf"], "\\b\\d{3}\\.?\\d{3}\\.?\\d{3}-?\\d{2}\\b", "[CPF_REDIGIDO]") where attributes["cpf"] != nil
+
 exporters:
   otlp/tempo:
     endpoint: tempo:4317
@@ -107,7 +129,7 @@ service:
       exporters: [prometheus]
     logs:
       receivers: [otlp]
-      processors: [memory_limiter, resource/logs, batch]
+      processors: [memory_limiter, resource/logs, transform/redacao_pii, batch]
       exporters: [loki]
   telemetry:
     metrics:

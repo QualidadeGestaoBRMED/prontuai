@@ -139,6 +139,30 @@ servem a propósitos diferentes:
 O arquivo agora **rotaciona** (`LOG_FILE_MAX_BYTES`, `LOG_FILE_BACKUP_COUNT`) —
 antes era um `FileHandler` puro, que crescia sem limite.
 
+### PII nos logs
+
+Duas camadas, em ordem de importancia:
+
+1. **A aplicacao mascara antes de logar** (`app/core/pii.py`: `mask_identifier`,
+   `mask_cpf`, `mask_name`). É a defesa principal — o dado nem chega ao arquivo.
+2. **O coletor redige o que passar batido** (`transform/redacao_pii` no pipeline
+   de logs). Um `logger.info` novo com CPF e mais facil de escrever do que de
+   revisar, e aqui os logs saem do perimetro de producao para uma VPS
+   compartilhada entre projetos — o que muda a consequencia de um vazamento.
+
+A redacao cobre CPF e CNPJ com ou sem pontuacao, no corpo da linha e nos
+atributos `message`/`cpf`. Os padroes sao ancorados em formato, nao `\d{11}`
+solto, que apanharia timestamp em milissegundos. Verificado: `CPF 12345678901`,
+`123.456.789-01` e `12.345.678/0001-95` saem redigidos, e
+`job_id=1755712345678` passa intacto.
+
+Limitacao conhecida: um identificador numerico de exatamente 11 digitos seria
+redigido junto. É o preco de ser rede de seguranca, e nao substitui mascarar na
+origem.
+
+`user_email` **nao** e redigido: e e-mail de funcionario, indexado de proposito
+(o dashboard de exploracao filtra por ele). Nao confunda com dado de paciente.
+
 Para cortar volume de rede sem perder detalhe no disco, suba `OTEL_LOG_LEVEL`
 (ex.: `WARNING`). Cuidado: o dashboard de exploração filtra linhas INFO
 (`request.completed`, `workflow_completed`), que desapareceriam.
