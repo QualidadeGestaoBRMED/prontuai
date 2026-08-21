@@ -3,6 +3,7 @@ from pydantic import BaseModel
 from app.services import validacao_service
 from app.core.auth import require_checker, get_current_user
 from app.models.user import User
+from app.core.pii import mask_identifier
 import logging
 
 router = APIRouter()
@@ -22,7 +23,7 @@ async def validar_exames(
         logger.warning("Parâmetros obrigatórios ausentes na validação.")
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="CPF, exames obrigatórios e exames enviados são obrigatórios.")
     try:
-        logger.info(f"Usuário {current_user.email} ({current_user.role.value}) validando exames para CPF {request.cpf}")
+        logger.info(f"Usuário {current_user.email} ({current_user.role.value}) validando exames para CPF {mask_identifier(request.cpf)}")
         resultado = validacao_service.validar_exames(request.cpf, request.exames_obrigatorios, request.exames_enviados)
         return resultado
     except Exception as e:
