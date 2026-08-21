@@ -20,20 +20,39 @@ Os scripts assumem o backend em Docker e geram artefatos em `/tmp`.
 ./ops/deploy/50_rollback.sh
 ```
 
-## Staging na VPS sem GitHub Actions
+## Deploy na VPS sem GitHub Actions
 
-Quando a cota do Actions estoura (ou o workflow esta indisponivel),
-`deploy_staging_vps.sh` faz o que o `backend-ghcr-staging-deploy.yml` faz:
+Quando a cota do Actions estoura (ou o workflow esta indisponivel):
 
 ```bash
-STAGING_HOST=1.2.3.4 ./ops/deploy/deploy_staging_vps.sh
-STAGING_HOST=1.2.3.4 ./ops/deploy/deploy_staging_vps.sh --ref staging --skip-tests
+DEPLOY_HOST=1.2.3.4 ./ops/deploy/deploy_staging_vps.sh
+DEPLOY_HOST=1.2.3.4 ./ops/deploy/deploy_staging_vps.sh --ref staging --skip-tests
+
+DEPLOY_HOST=5.6.7.8 PUBLIC_HEALTH_URL=https://api.exemplo.com/health \
+  ./ops/deploy/deploy_prod_vps.sh
 ```
 
-Duas diferencas em relacao ao workflow, ambas deliberadas:
+Os dois sao atalhos para `deploy_vps.sh`, que atende os dois ambientes pelo
+mesmo caminho de codigo — duplicar o script garantiria que uma correcao
+chegasse so em metade dele. Ele resolve por ambiente o compose
+(`docker-compose.stg.yml` / `docker-compose.aws.yml`), o servico
+(`prontuai-backend-stg` / `prontuai-backend`), o caminho e o usuario, espelhando
+o que cada workflow envia.
 
-- **Builda na VPS**, arm64 nativo, em vez de emular aarch64 com QEMU num runner
-  amd64. Sem registry no caminho, entao nao precisa de PAT do GHCR.
+### O que producao tem a mais
+
+| Trava | Por que |
+|---|---|
+| **dump antes de subir** | `auto_migrate()` roda no startup, e voltar a imagem nao desfaz mudanca de schema. Reusa o `backup_postgres.sh` da VPS quando existe (vai para o bucket); senao faz `pg_dump` local e **recusa** dump menor que 100 KB, que quase sempre e erro de credencial |
+| **confirmacao digitada** | exige a palavra `producao`; um `s` de memoria muscular nao passa |
+| **health check publico** | `PUBLIC_HEALTH_URL` cobre nginx, certificado e DNS — o caminho que o usuario usa. Falha aqui **nao** reverte (a aplicacao subiu, o problema esta na borda), mas para o script com o comando de rollback na tela |
+
+`--skip-dump` existe e avisa alto que voce fica sem rede.
+
+Duas diferencas em relacao aos workflows, ambas deliberadas:
+
+- **Builda na VPS**, na arquitetura nativa (staging e arm64/Graviton, producao e
+  amd64). Sem registry no caminho, entao nao precisa de PAT do GHCR nem de QEMU.
 - **Envia o conteudo de um commit** (`git archive`), nao a arvore de trabalho.
   Nada de `.env`, `__pycache__`, log ou compose local vaza para o servidor — por
   construcao. O script avisa e pede confirmacao se houver alteracao em
