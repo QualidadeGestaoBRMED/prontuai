@@ -1156,6 +1156,10 @@ def _line_mentions_any(line: str, labels: tuple[str, ...]) -> bool:
     return any(label in upper for label in labels)
 
 
+# Termo do rótulo de passaporte nas duas línguas usadas nos documentos da BR MED.
+_PASSPORT_WORD = r"PASSPORT|PASSAPORTE"
+
+
 def extrair_cpf_regex(markdown: str) -> str:
     if not markdown:
         return None
@@ -1169,7 +1173,21 @@ def extrair_cpf_regex(markdown: str) -> str:
         if _is_valid_cpf(digits):
             return digits
 
-    # 2) Linhas contendo "CPF" com tolerância a separadores variados
+    # 2) Rótulo bilíngue "CPF / Passport" (voucher e ASO da BR MED). O campo é
+    # único e o valor impresso é o CPF do paciente; sem este passo o rótulo não
+    # cabe na tolerância de 10 caracteres do passo 3 e a captura só sobrevive
+    # por acidente (linha isolada), quebrando quando o OCR junta colunas.
+    cpf_passport_label_match = re.search(
+        rf"CPF[ \t]*/[ \t]*(?:{_PASSPORT_WORD})[^0-9]{{0,6}}([0-9.\- ]{{11,20}})",
+        markdown,
+        flags=re.IGNORECASE,
+    )
+    if cpf_passport_label_match:
+        digits = _digits_only(cpf_passport_label_match.group(1))
+        if _is_valid_cpf(digits):
+            return digits
+
+    # 3) Linhas contendo "CPF" com tolerância a separadores variados
     # (captura restrita à mesma linha: \s cruzaria quebras de linha do
     # markdown e vazaria para o conteúdo seguinte, corrompendo o valor)
     cpf_label_match = re.search(r"CPF[^0-9]{0,10}([0-9.\- ]{11,20})", markdown, flags=re.IGNORECASE)
@@ -1178,7 +1196,7 @@ def extrair_cpf_regex(markdown: str) -> str:
         if _is_valid_cpf(digits):
             return digits
 
-    # 3) Fallback por linha: pega 11 dígitos em linhas que citam CPF
+    # 4) Fallback por linha: pega 11 dígitos em linhas que citam CPF
     for line in markdown.splitlines():
         if "CPF" not in line.upper():
             continue
@@ -1186,7 +1204,7 @@ def extrair_cpf_regex(markdown: str) -> str:
         if _is_valid_cpf(digits):
             return digits
 
-    # 4) Padrão genérico, mas nunca em linhas de passaporte/CNPJ.
+    # 5) Padrão genérico, mas nunca em linhas de passaporte/CNPJ.
     for line in markdown.splitlines():
         if _line_mentions_any(line, ("PASSAPORTE", "PASSPORT", "CNPJ")):
             continue
@@ -1199,9 +1217,58 @@ def extrair_cpf_regex(markdown: str) -> str:
     return None
 
 
+# Cabeçalho da página de voucher da BR MED. O Textract transforma texto curto em
+# maiúsculas em header markdown ("## VOUCHER"), daí a tolerância a "#" e ênfase.
+_VOUCHER_ANCHOR_RE = re.compile(r"^[#>*\s]*VOUCHER\b", flags=re.IGNORECASE)
+# O CNPJ do voucher fica entre o cabeçalho e a seção "1. Identificação".
+_VOUCHER_CNPJ_MAX_LINES = 25
+_VOUCHER_CNPJ_STOP_RE = re.compile(r"IDENTIFICA[ÇC][ÃA]O|IDENTIFICATION", flags=re.IGNORECASE)
+_CNPJ_LABEL_RE = re.compile(r"CNPJ[^0-9]{0,10}([0-9.\-/ ]{14,24})", flags=re.IGNORECASE)
+
+
+def _extrair_cnpj_do_voucher(markdown: str) -> Optional[str]:
+    """CNPJ impresso na página de voucher da BR MED.
+
+    O voucher é o documento que origina o agendamento no BR NET, então o CNPJ
+    dele é o cadastro que a API externa reconhece. Laudos de terceiros anexados
+    ao mesmo PDF (laboratório, clínica parceira) imprimem outro CNPJ — o do
+    contratante ou o da própria clínica — e costumam vir antes no markdown, de
+    modo que o CNPJ errado ganhava por ordem de aparição e a consulta falhava
+    com "Paciente não encontrado".
+    """
+    linhas = markdown.splitlines()
+    for idx, linha in enumerate(linhas):
+        if not _VOUCHER_ANCHOR_RE.match(linha):
+            continue
+        for linha_janela in linhas[idx:idx + _VOUCHER_CNPJ_MAX_LINES]:
+            if _VOUCHER_CNPJ_STOP_RE.search(linha_janela):
+                break
+            match = _CNPJ_LABEL_RE.search(linha_janela)
+            if match:
+                digits = _digits_only(match.group(1))
+                if _is_valid_cnpj(digits):
+                    return digits
+    return None
+
+
+def _log_cnpj_extraido(cnpj: str, fonte: str) -> str:
+    """Registra de onde saiu o CNPJ, para validar a prioridade do voucher.
+
+    fonte=voucher: cabeçalho da página de voucher da BR MED (o cadastro que a
+    API externa reconhece). fonte=documento_*: fallback por ordem de aparição,
+    que pode trazer o CNPJ de um laudo de terceiro anexado ao mesmo PDF.
+    """
+    logger.info("[OCR] CNPJ extraído via regex: %s fonte=%s", mask_identifier(cnpj), fonte)
+    return cnpj
+
+
 def extrair_cnpj_regex(markdown: str) -> str:
     if not markdown:
         return None
+
+    cnpj_voucher = _extrair_cnpj_do_voucher(markdown)
+    if cnpj_voucher:
+        return _log_cnpj_extraido(cnpj_voucher, "voucher")
 
     # Captura restrita à mesma linha: \s cruzaria quebras de linha do markdown
     # e vazaria para o conteúdo seguinte, corrompendo o valor (dígito
@@ -1212,7 +1279,7 @@ def extrair_cnpj_regex(markdown: str) -> str:
     if cnpj_label_match:
         digits = _digits_only(cnpj_label_match.group(1))
         if _is_valid_cnpj(digits):
-            return digits
+            return _log_cnpj_extraido(digits, "documento_rotulo")
 
     for line in markdown.splitlines():
         if _line_mentions_any(line, ("PASSAPORTE", "PASSPORT", "CPF")):
@@ -1221,7 +1288,7 @@ def extrair_cnpj_regex(markdown: str) -> str:
         if generic_cnpj_match:
             digits = _digits_only(generic_cnpj_match.group(0))
             if _is_valid_cnpj(digits):
-                return digits
+                return _log_cnpj_extraido(digits, "documento_generico")
 
     return None
 
@@ -1230,13 +1297,21 @@ def extrair_passaporte_regex(markdown: str) -> str:
     if not markdown:
         return None
 
-    passport_label_match = re.search(
-        r"(?:PASSAPORTE\s*/\s*PASSPORT|PASSPORT\s*/\s*PASSAPORTE|PASSAPORTE|PASSPORT)\s*[:\-]?\s*([A-Z0-9]{5,20})",
+    for match in re.finditer(
+        rf"(?P<rotulo_cpf>CPF[ \t]*/[ \t]*)?"
+        rf"(?:PASSAPORTE\s*/\s*PASSPORT|PASSPORT\s*/\s*PASSAPORTE|PASSAPORTE|PASSPORT)"
+        rf"\s*[:\-]?\s*(?P<valor>[A-Z0-9]{{5,20}})",
         markdown,
         flags=re.IGNORECASE,
-    )
-    if passport_label_match:
-        return passport_label_match.group(1).upper()
+    ):
+        valor = match.group("valor").upper()
+        # O voucher/ASO da BR MED imprime um campo único "CPF / Passport", então
+        # o valor pode ser CPF ou passaporte. Quando é um CPF válido, tratá-lo
+        # como passaporte faz a consulta externa sair por ?passport= e o paciente
+        # nunca é encontrado (o desempate abaixo descartava o CPF correto).
+        if match.group("rotulo_cpf") and _is_valid_cpf(valor):
+            continue
+        return valor
 
     return None
 
@@ -1335,12 +1410,12 @@ async def _ocr_pipeline_impl(file, salvar_markdown=True, progress_hook: Optional
                     progress_hook
                 )
             except TimeoutError as e:
-                metrics.TEXTRACT_TIMEOUT.inc()
+                metrics.TEXTRACT_TIMEOUT.add(1)
                 if settings.TEXTRACT_FALLBACK_TO_LOCAL:
                     logger.warning(f"[OCR] {e}. Fallback para OCR local (Docling).")
                     if progress_hook:
                         progress_hook("Fila Textract, usando OCR local.")
-                    metrics.OCR_FALLBACK_DOCLING.inc()
+                    metrics.OCR_FALLBACK_DOCLING.add(1)
                     motor_metrica = "docling_fallback"
                     markdown = await asyncio.to_thread(
                         processar_arquivo_docling,
@@ -1353,7 +1428,7 @@ async def _ocr_pipeline_impl(file, salvar_markdown=True, progress_hook: Optional
                     logger.warning(f"[OCR] Falha de conexão Textract: {e}. Fallback para OCR local (Docling).")
                     if progress_hook:
                         progress_hook("Falha temporária no Textract, usando OCR local.")
-                    metrics.OCR_FALLBACK_DOCLING.inc()
+                    metrics.OCR_FALLBACK_DOCLING.add(1)
                     motor_metrica = "docling_fallback"
                     markdown = await asyncio.to_thread(
                         processar_arquivo_docling,
@@ -1372,7 +1447,7 @@ async def _ocr_pipeline_impl(file, salvar_markdown=True, progress_hook: Optional
         # Remover arquivo temporário original
         if os.path.exists(temp_path):
             os.remove(temp_path)
-        metrics.OCR_DURACAO.labels(motor=motor_metrica).observe(time.perf_counter() - start_total)
+        metrics.OCR_DURACAO.record(time.perf_counter() - start_total, {"motor": motor_metrica})
         logger.info(f"[OCR] Pipeline OCR finalizado em {time.perf_counter() - start_total:.2f}s")
 
     # Salvar markdown
@@ -1401,8 +1476,14 @@ async def _ocr_pipeline_impl(file, salvar_markdown=True, progress_hook: Optional
     # Extrair passaporte e CNPJ via regex
     passaporte_extraido = extrair_passaporte_regex(markdown)
     if _same_identifier_value(cpf_extraido, passaporte_extraido):
-        logger.info("[OCR] Valor extraído como CPF também aparece como passaporte; usando como passaporte.")
-        cpf_extraido = None
+        # Rede de segurança para rótulos combinados que escapem do extrator:
+        # um valor que passa no dígito verificador é CPF, não passaporte.
+        if _is_valid_cpf(cpf_extraido):
+            logger.info("[OCR] Valor extraído como passaporte é um CPF válido; mantendo como CPF.")
+            passaporte_extraido = None
+        else:
+            logger.info("[OCR] Valor extraído como CPF também aparece como passaporte; usando como passaporte.")
+            cpf_extraido = None
     cnpj_extraido = extrair_cnpj_regex(markdown)
     logger.info(f"[OCR] Passaporte extraído: {mask_identifier(passaporte_extraido) if passaporte_extraido else 'Nenhum passaporte encontrado'}")
     logger.info(f"[OCR] CNPJ extraído: {mask_identifier(cnpj_extraido) if cnpj_extraido else 'Nenhum CNPJ encontrado'}")

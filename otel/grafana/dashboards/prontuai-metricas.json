@@ -61,8 +61,8 @@
       },
       "targets": [
         {
-          "expr": "sum by (handler) (rate(http_requests_total{job=\"prontuai-backend\"}[5m]))",
-          "legendFormat": "{{handler}}",
+          "expr": "sum by (http_route) (rate(http_server_request_duration_seconds_count{job=\"prontuai-backend\"}[5m]))",
+          "legendFormat": "{{http_route}}",
           "refId": "A"
         }
       ],
@@ -88,8 +88,8 @@
       },
       "targets": [
         {
-          "expr": "histogram_quantile(0.95, sum by (handler, le) (rate(http_request_duration_seconds_bucket{job=\"prontuai-backend\"}[5m])))",
-          "legendFormat": "{{handler}}",
+          "expr": "histogram_quantile(0.95, sum by (http_route, le) (rate(http_server_request_duration_seconds_bucket{job=\"prontuai-backend\"}[5m])))",
+          "legendFormat": "{{http_route}}",
           "refId": "A"
         }
       ],
@@ -115,7 +115,7 @@
       },
       "targets": [
         {
-          "expr": "100 * sum(rate(http_requests_total{job=\"prontuai-backend\", status=~\"5..\"}[5m])) / sum(rate(http_requests_total{job=\"prontuai-backend\"}[5m]))",
+          "expr": "100 * sum(rate(http_server_request_duration_seconds_count{job=\"prontuai-backend\", http_response_status_code=~\"5..\"}[5m])) / sum(rate(http_server_request_duration_seconds_count{job=\"prontuai-backend\"}[5m]))",
           "legendFormat": "% 5xx",
           "refId": "A"
         }
@@ -208,12 +208,12 @@
       },
       "targets": [
         {
-          "expr": "increase(prontuai_textract_timeout_total[1h])",
+          "expr": "sum(increase(prontuai_textract_timeout_total[1h]))",
           "legendFormat": "timeouts/h",
           "refId": "A"
         },
         {
-          "expr": "increase(prontuai_ocr_fallback_docling_total[1h])",
+          "expr": "sum(increase(prontuai_ocr_fallback_docling_total[1h]))",
           "legendFormat": "fallbacks/h",
           "refId": "B"
         }
@@ -644,6 +644,40 @@
         },
         "overrides": []
       }
+    },
+    {
+      "type": "timeseries",
+      "title": "Latência das chamadas HTTP de saída p95 (por destino)",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 18
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.95, sum by (server_address, le) (rate(http_client_request_duration_seconds_bucket{job=\"prontuai-backend\"}[5m])))",
+          "legendFormat": "{{server_address}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "description": "p95 das chamadas HTTP que o backend faz para fora (API ProntuAI via httpx). Vem da instrumentação OpenTelemetry do httpx, não de código de métrica no app. server_address é o host de destino — cardinalidade baixa, o caminho da URL não entra como rótulo."
     },
     {
       "type": "row",

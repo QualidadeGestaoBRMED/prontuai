@@ -17,9 +17,21 @@ node_modules
 # Volumes de dados do Postgres montados como bind (docker-compose.db/stg).
 **/pgdata/
 **/pgdata-*/
+# Dumps do banco: sao prontuario medico inteiro em um arquivo. Nao entram no
+# repo em nenhuma hipotese. Nao use *.sql aqui — back-end/migrations/*.sql sao
+# versionados de proposito.
+*.dump
+**/*.dump
+*.sql.gz
+**/*.sql.gz
 /.pytest_cache/
 **/__pycache__/
 /venv/
+# /venv/ acima e ancorado na raiz e nao cobre nome com ponto nem subpasta.
+# Um venv em back-end/.venv (ou, por engano de diretorio, back-end/back-end/.venv)
+# sao ~520 arquivos que um `git add -A` levaria junto.
+**/.venv/
+**/venv/
 /logs/
 **/logs/
 /api/

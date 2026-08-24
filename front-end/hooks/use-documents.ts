@@ -10,6 +10,7 @@ import { useSession } from "next-auth/react"
 import { API_ENDPOINTS } from "@/lib/config"
 import { DocumentApi } from "@/types/document"
 import { authFetch } from "@/lib/auth-fetch"
+import { useVisibleInterval } from "@/hooks/use-visible-interval"
 
 type FetchOptions = {
   silent?: boolean
@@ -25,7 +26,7 @@ export function useDocuments() {
   const [error, setError] = useState<string | null>(null)
   const [hasLoaded, setHasLoaded] = useState(false)
   const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null)
-  const refreshIntervalMs = 3000
+  const refreshIntervalMs = 30000
   const refreshIndicatorDelayMs = 700
   const refreshIndicatorCooldownMs = 12000
   const inFlightRef = useRef(false)
@@ -105,26 +106,19 @@ export function useDocuments() {
     fetchDocuments()
   }, [fetchDocuments])
 
+  // O useVisibleInterval já refaz o fetch quando a aba volta a ficar visível;
+  // o listener de focus cobre a troca de janela sem troca de aba.
   useEffect(() => {
     const onFocus = () => fetchDocuments({ silent: true, showIndicator: false })
-    const onVisibility = () => {
-      if (document.visibilityState === "visible") {
-        fetchDocuments({ silent: true, showIndicator: false })
-      }
-    }
-
     window.addEventListener("focus", onFocus)
-    document.addEventListener("visibilitychange", onVisibility)
-    const interval = window.setInterval(() => {
-      fetchDocuments({ silent: true, showIndicator: false })
-    }, refreshIntervalMs)
+    return () => window.removeEventListener("focus", onFocus)
+  }, [fetchDocuments])
 
-    return () => {
-      window.removeEventListener("focus", onFocus)
-      document.removeEventListener("visibilitychange", onVisibility)
-      window.clearInterval(interval)
-    }
-  }, [fetchDocuments, refreshIntervalMs])
+  const refreshSilently = useCallback(() => {
+    fetchDocuments({ silent: true, showIndicator: false })
+  }, [fetchDocuments])
+
+  useVisibleInterval(refreshSilently, refreshIntervalMs)
 
   useEffect(() => {
     const onManualRefresh = (event: Event) => {

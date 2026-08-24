@@ -240,5 +240,5 @@ async def consultar_exames_prontuai(
     cnpj: Optional[str] = None,
 ) -> Dict[str, Any]:
     resultado = await consultar_exames_prontuai_api(cpf=cpf, passaporte=passaporte, cnpj=cnpj)
-    metrics.PRONTUAI_API_CONSULTAS.labels(resultado="falha" if "erro" in resultado else "sucesso").inc()
+    metrics.PRONTUAI_API_CONSULTAS.add(1, {"resultado": "falha" if "erro" in resultado else "sucesso"})
     return resultado

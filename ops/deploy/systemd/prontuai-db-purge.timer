@@ -1,0 +1,12 @@
+[Unit]
+Description=Dispara a purga semanal de registros transitorios (ver prontuai-db-purge.service)
+
+[Timer]
+# Domingo 02:00, uma hora antes do backup das 03:15 — assim o dump do dia ja
+# sai enxuto, e a folga absorve uma purga mais demorada sem colidir com ele.
+OnCalendar=Sun *-*-* 02:00:00
+Persistent=true
+RandomizedDelaySec=300
+
+[Install]
+WantedBy=timers.target

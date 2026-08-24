@@ -81,11 +81,14 @@ async def create_user(
             clinic_id=clinic_id
         )
         logger.info(f"Admin {admin.email} criou usuário {user.email} com role {user.role.value} (clinic_id: {clinic_id})")
-        metrics.USUARIOS_CRIADOS.labels(
-            role=user.role.value,
-            clinica_id=clinic_id or "sem_clinica",
-            clinica_nome=clinic_name or "sem_clinica",
-        ).inc()
+        metrics.USUARIOS_CRIADOS.add(
+            1,
+            {
+                "role": user.role.value,
+                "clinica_id": clinic_id or "sem_clinica",
+                "clinica_nome": clinic_name or "sem_clinica",
+            },
+        )
         return user
 
     except ValueError as e:

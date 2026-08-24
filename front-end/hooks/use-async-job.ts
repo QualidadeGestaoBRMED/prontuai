@@ -117,9 +117,10 @@ export function useAsyncJob(): UseAsyncJobReturn {
    */
   const clearPolling = useCallback((jobId?: string) => {
     if (jobId) {
-      const interval = pollingIntervalsRef.current.get(jobId)
-      if (interval) {
-        clearInterval(interval)
+      // Handles de poll vêm de setTimeout (cadeia com backoff), não setInterval.
+      const pollHandle = pollingIntervalsRef.current.get(jobId)
+      if (pollHandle) {
+        clearTimeout(pollHandle)
         pollingIntervalsRef.current.delete(jobId)
       }
       const timeout = pollingTimeoutsRef.current.get(jobId)
@@ -128,7 +129,7 @@ export function useAsyncJob(): UseAsyncJobReturn {
         pollingTimeoutsRef.current.delete(jobId)
       }
     } else {
-      pollingIntervalsRef.current.forEach((interval) => clearInterval(interval))
+      pollingIntervalsRef.current.forEach((handle) => clearTimeout(handle))
       pollingIntervalsRef.current.clear()
       pollingTimeoutsRef.current.forEach((timeout) => clearTimeout(timeout))
       pollingTimeoutsRef.current.clear()
@@ -259,6 +260,16 @@ export function useAsyncJob(): UseAsyncJobReturn {
         onError,
       } = options
 
+      // Backoff: documentos rápidos mantêm a resposta imediata (2s); a partir
+      // de 30s o intervalo sobe para 5s. O cap é baixo de propósito — é ele que
+      // limita o atraso na detecção do "concluído". A barra de progresso
+      // interpola entre polls, então o espaçamento não aparece na animação.
+      const maxInterval = Math.max(interval, 5000)
+      const rampAfterMs = 30000
+      const startedAt = Date.now()
+      const nextDelay = () =>
+        Date.now() - startedAt < rampAfterMs ? interval : maxInterval
+
       return new Promise((resolve, reject) => {
         setIsPolling(true)
         setError(null)
@@ -362,12 +373,21 @@ export function useAsyncJob(): UseAsyncJobReturn {
           }
         }
 
-        // Primeira poll imediata
-        poll()
+        // Cadeia de setTimeout em vez de setInterval: o intervalo cresce com
+        // o tempo decorrido e um poll nunca se sobrepõe ao anterior.
+        const scheduleNext = () => {
+          if (finished) return
+          const handle = setTimeout(runPoll, nextDelay())
+          pollingIntervalsRef.current.set(jobId, handle)
+        }
 
-        // Continua polling em intervalo
-        const intervalHandle = setInterval(poll, interval)
-        pollingIntervalsRef.current.set(jobId, intervalHandle)
+        const runPoll = async () => {
+          await poll()
+          scheduleNext()
+        }
+
+        // Primeira poll imediata
+        void runPoll()
       })
     },
     [getJobStatus, clearPolling]

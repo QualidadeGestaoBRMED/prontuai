@@ -20,6 +20,16 @@ services:
       - RATE_LIMIT_UPLOAD_TOKEN_PER_MINUTE=${RATE_LIMIT_UPLOAD_TOKEN_PER_MINUTE:-240}
       # Headers de proxy só são aceitos vindos destas origens
       - TRUSTED_PROXY_IPS=${TRUSTED_PROXY_IPS:-127.0.0.1,::1,172.16.0.0/12}
+      # Observabilidade: métricas saem por OTLP para o otel-collector da stack
+      # em ops/observability (o backend não expõe mais /metrics). Desligado por
+      # padrão via kill switch — ponha OTEL_SDK_DISABLED=false no .env do
+      # servidor para ligar. O service.name distingue staging de produção: as
+      # duas empurram para o mesmo collector e, com o mesmo nome, as séries
+      # colidiriam. Demais variáveis OTEL_* vêm do .env (ver .env.example).
+      - OTEL_SDK_DISABLED=${OTEL_SDK_DISABLED:-true}
+      - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4318}
+      - OTEL_SERVICE_NAME=${OTEL_SERVICE_NAME:-prontuai-backend-stg}
+      - OTEL_RESOURCE_ATTRIBUTES=${OTEL_RESOURCE_ATTRIBUTES:-deployment.environment.name=staging}
     depends_on:
       - prontuai-redis-stg
       - prontuai-db-stg

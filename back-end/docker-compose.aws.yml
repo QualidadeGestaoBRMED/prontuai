@@ -9,6 +9,10 @@ services:
       - "${BACKEND_BIND_ADDRESS:-127.0.0.1}:${BACKEND_HTTP_PORT:-8080}:80"
     environment:
       # JobManager está em memória; múltiplos workers causam 404 em /v1/jobs.
+      # Observabilidade: desligada por padrao, igual dev e staging. Ligar em
+      # producao e ato deliberado (OTEL_SDK_DISABLED=false no .env), porque os
+      # logs passam a sair do perimetro para a VPS compartilhada.
+      - OTEL_SDK_DISABLED=${OTEL_SDK_DISABLED:-true}
       - WORKERS=${WORKERS:-1}
       # Rate limit compartilhado entre instâncias
       - REDIS_URL=${REDIS_URL:-redis://prontuai-redis:6379/0}

@@ -38,3 +38,31 @@ require_file() {
   local file="$1"
   [ -f "$file" ] || die "File not found: $file"
 }
+
+# Serializa os jobs de manutencao do banco (backup e purga) num lock comum.
+#
+# Por que nao Conflicts= no unit do systemd: Conflicts e bidirecional e da
+# terminacao mutua, nao exclusao mutua — iniciar um PARA o outro. Com
+# Persistent=true nos dois timers, um reboot que atrase ambos dispara os dois
+# recuperando o horario perdido, e um mata o outro: pg_dump morto no meio = o
+# backup do dia perdido. flock faz o segundo ESPERAR em vez de matar o primeiro.
+#
+# Uso: db_maintenance_lock <segundos_de_espera> <acao_no_timeout: fail|skip>
+# O lock e liberado quando o script termina (o fd fecha), inclusive se morrer.
+db_maintenance_lock() {
+  local espera="${1:-3600}" no_timeout="${2:-fail}"
+  local arquivo="${DB_LOCK_FILE:-/tmp/prontuai-db-maintenance.lock}"
+
+  require_cmd flock
+  exec 9>"$arquivo" || die "Nao consegui abrir o lock $arquivo"
+
+  if flock -w "$espera" 9; then
+    return 0
+  fi
+
+  if [ "$no_timeout" = "skip" ]; then
+    log "Outro job de manutencao do banco segue rodando apos ${espera}s de espera; pulando esta execucao."
+    exit 0
+  fi
+  die "Outro job de manutencao do banco segue rodando apos ${espera}s de espera (lock: $arquivo)."
+}

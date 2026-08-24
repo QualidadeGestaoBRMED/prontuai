@@ -683,11 +683,14 @@ async def update_document(
             if not clinica_nome and getattr(document, "clinic_id", None):
                 clinica = user_db.get_clinic_by_id(document.clinic_id)
                 clinica_nome = clinica.name if clinica else None
-            metrics.REVISAO_HUMANA.labels(
-                decisao="aprovado" if payload.validation_status == "validated" else "rejeitado",
-                clinica_id=document.clinic_id or "desconhecida",
-                clinica_nome=clinica_nome or "desconhecida",
-            ).inc()
+            metrics.REVISAO_HUMANA.add(
+                1,
+                {
+                    "decisao": "aprovado" if payload.validation_status == "validated" else "rejeitado",
+                    "clinica_id": document.clinic_id or "desconhecida",
+                    "clinica_nome": clinica_nome or "desconhecida",
+                },
+            )
         payload_reviewed_by = None
         if isinstance(payload_result, dict):
             payload_reviewed_by = payload_result.get("reviewed_by") or payload_result.get("reviewedBy")

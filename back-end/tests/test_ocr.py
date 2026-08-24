@@ -1,4 +1,5 @@
 import io
+import logging
 from unittest.mock import patch
 
 from fastapi import status
@@ -66,18 +67,110 @@ def test_pagina_tem_imagem_com_resources_indireto():
 
 
 def test_extrair_cpf_regex():
-    markdown = "Paciente: Fulano\nCPF: 111.222.333-44\n"
-    assert ocr_service.extrair_cpf_regex(markdown) == "11122233344"
+    # CPF com dígito verificador válido: extrair_cpf_regex valida o checksum.
+    markdown = "Paciente: Fulano\nCPF: 104.134.126-10\n"
+    assert ocr_service.extrair_cpf_regex(markdown) == "10413412610"
 
 
 def test_extrair_cnpj_regex():
-    markdown = "Empresa XYZ\nCNPJ: 12.345.678/0001-90\n"
-    assert ocr_service.extrair_cnpj_regex(markdown) == "12345678000190"
+    # CNPJ com dígito verificador válido: extrair_cnpj_regex valida o checksum.
+    markdown = "Empresa XYZ\nCNPJ: 12.345.678/0001-95\n"
+    assert ocr_service.extrair_cnpj_regex(markdown) == "12345678000195"
+
+
+def test_extrair_cnpj_regex_prioriza_voucher():
+    """O CNPJ do voucher da BR MED vence o de laudos anexados ao mesmo PDF.
+
+    O voucher origina o agendamento no BR NET, então o CNPJ dele é o cadastro
+    que a API externa reconhece. Laudos de terceiros imprimem o CNPJ do
+    contratante ou da própria clínica e vêm antes no markdown, então venciam por
+    ordem de aparição e a consulta falhava com "Paciente não encontrado".
+    """
+    markdown = (
+        "RESULTADO DE EXAMES\n"
+        "Unidade: TERMINAL LOGISTICO DO VALE DO PARAIBA\n"
+        "CNPJ: 11.243.246/0001-00\n"
+        "CNPJ: 36.182.482/0001-95 / E-mail: atendimento@n1med.com.br\n"
+        "\n## VOUCHER\n\n"
+        "TERMINAL LOGISTICO DO VALE DO PARAIBA - PORTO VALE - TIPI\n"
+        "CNPJ: 03.214.786/0004-80\n"
+        "1. Identificacao / Identification:\n"
+    )
+    assert ocr_service.extrair_cnpj_regex(markdown) == "03214786000480"
+
+
+def test_extrair_cnpj_regex_sem_voucher_mantem_ordem_de_aparicao():
+    markdown = "Unidade: EMPRESA X\nCNPJ: 12.345.678/0001-95\n"
+    assert ocr_service.extrair_cnpj_regex(markdown) == "12345678000195"
+
+
+def test_extrair_cnpj_do_voucher_ignora_cnpj_fora_do_cabecalho():
+    """Só o CNPJ entre o cabeçalho "VOUCHER" e a seção 1 é o da empresa."""
+    markdown = (
+        "## VOUCHER\n"
+        "EMPRESA X\n"
+        "1. Identificacao / Identification:\n"
+        "CNPJ: 03.214.786/0004-80\n"
+    )
+    assert ocr_service._extrair_cnpj_do_voucher(markdown) is None
+
+
+def test_extrair_cnpj_regex_loga_a_fonte(caplog):
+    """O campo fonte= permite validar no log se o CNPJ veio do voucher."""
+    voucher = (
+        "CNPJ: 11.243.246/0001-00\n"
+        "\n## VOUCHER\n\n"
+        "EMPRESA X\n"
+        "CNPJ: 03.214.786/0004-80\n"
+        "1. Identificacao / Identification:\n"
+    )
+    with caplog.at_level(logging.INFO, logger="app.services.ocr_service"):
+        assert ocr_service.extrair_cnpj_regex(voucher) == "03214786000480"
+    assert "fonte=voucher" in caplog.text
+    # O CNPJ nunca vai em claro para o log.
+    assert "03214786000480" not in caplog.text
+
+    caplog.clear()
+    with caplog.at_level(logging.INFO, logger="app.services.ocr_service"):
+        assert ocr_service.extrair_cnpj_regex("EMPRESA X\nCNPJ: 12.345.678/0001-95\n") == "12345678000195"
+    assert "fonte=documento_rotulo" in caplog.text
 
 
 def test_extrair_passaporte_regex():
     markdown = "Dados do paciente\nPassaporte: ab123456\n"
     assert ocr_service.extrair_passaporte_regex(markdown) == "AB123456"
+
+
+def test_extrair_cpf_regex_rotulo_combinado_cpf_passport():
+    """Voucher/ASO da BR MED imprimem um campo único "CPF / Passport".
+
+    O rótulo tem 13 caracteres entre "CPF" e o número, acima da tolerância de
+    10 do passo por rótulo, então sem tratamento próprio o CPF só era achado
+    pelo fallback por linha - que falha quando o OCR funde as colunas.
+    """
+    markdown = "Nome / Name: PATRICIA\nCPF / Passport: 10413412610\n"
+    assert ocr_service.extrair_cpf_regex(markdown) == "10413412610"
+
+    fundido = "CPF / Passport: 10413412610 Identidade / ID Number: 16041755\n"
+    assert ocr_service.extrair_cpf_regex(fundido) == "10413412610"
+
+
+def test_extrair_passaporte_regex_ignora_cpf_em_rotulo_combinado():
+    """CPF válido no campo "CPF / Passport" não é passaporte.
+
+    Tratá-lo como passaporte fazia a consulta externa sair por ?passport= e o
+    paciente nunca era encontrado ("Paciente não encontrado para o CNPJ, CPF ou
+    Passaporte informados"), porque o desempate descartava o CPF correto.
+    """
+    markdown = "Nome / Name: PATRICIA\nCPF / Passport: 10413412610\n"
+    assert ocr_service.extrair_passaporte_regex(markdown) is None
+
+
+def test_extrair_passaporte_regex_aceita_passaporte_em_rotulo_combinado():
+    """Estrangeiro: o mesmo campo traz um passaporte de verdade."""
+    markdown = "Nome / Name: JOHN SMITH\nCPF / Passport: ab123456\n"
+    assert ocr_service.extrair_passaporte_regex(markdown) == "AB123456"
+    assert ocr_service.extrair_cpf_regex(markdown) is None
 
 
 @patch(

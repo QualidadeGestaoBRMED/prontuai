@@ -1,0 +1,20 @@
+[Unit]
+Description=Purga semanal de registros transitorios do Postgres do ProntuAI
+Wants=network-online.target
+After=network-online.target docker.service
+# A serializacao com o backup e feita por flock dentro dos scripts
+# (db_maintenance_lock em lib.sh), NAO com Conflicts= aqui. Conflicts e
+# bidirecional e da terminacao mutua: iniciar a purga PARARIA o backup e
+# vice-versa. Com Persistent=true nos dois timers, um reboot que atrase ambos
+# dispara os dois recuperando o horario, e um mataria o outro — pg_dump morto no
+# meio significa o backup do dia perdido. O flock faz o segundo esperar.
+# Bonus: o lock tambem vale para execucao manual dos scripts, que o unit nao
+# cobriria.
+
+[Service]
+Type=oneshot
+# Ajuste os caminhos abaixo se as pastas do banco/scripts nao estiverem aqui.
+EnvironmentFile=/home/ec2-user/prontuai-db/.env
+ExecStart=/home/ec2-user/prontuai-db/script/purge_old_records.sh
+# O usuario precisa estar no grupo `docker` para falar com o daemon sem sudo.
+User=ec2-user
