@@ -9,6 +9,7 @@ from app.core.database import user_db
 from app.core import metrics
 from app.models.user import User, UserRole
 from app.models.clinic import Clinic, ClinicCreate, ClinicUpdate
+from app.core.pii import mask_identifier
 import logging
 
 logger = logging.getLogger(__name__)
@@ -144,7 +145,7 @@ async def create_clinic(
     A clínica é identificada por ID (UUID). Usuários SENDER são associados a ela posteriormente.
     """
     try:
-        logger.info(f"[CLINICS] Tentativa de criação: name={clinic_data.name}, cnpj={clinic_data.cnpj}")
+        logger.info(f"[CLINICS] Tentativa de criação: name={clinic_data.name}, cnpj={mask_identifier(clinic_data.cnpj)}")
         logger.info(f"[CLINICS] Admin autenticado: {current_user.email}")
 
         # Verificar se user_db tem os métodos necessários
@@ -165,7 +166,7 @@ async def create_clinic(
         )
 
         logger.info(f"[CLINICS] Admin {current_user.email} criou clínica {clinic.id} ({clinic.name})")
-        metrics.CLINICAS_CRIADAS.inc()
+        metrics.CLINICAS_CRIADAS.add(1)
         return clinic
 
     except HTTPException:

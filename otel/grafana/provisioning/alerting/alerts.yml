@@ -52,7 +52,7 @@ groups:
           severity: warning
 
       - uid: prontuai-backend-down
-        title: Backend sem scrape (fora do ar?)
+        title: Backend sem métricas (fora do ar?)
         condition: C
         data:
           - refId: A
@@ -64,7 +64,7 @@ groups:
               datasource:
                 type: prometheus
                 uid: prometheus
-              expr: "up{job=\"prontuai-backend\"}"
+              expr: "max(prontuai_backend_up{job=\"prontuai-backend\"})"
               refId: A
               queryType: range
           - refId: C
@@ -87,8 +87,93 @@ groups:
         noDataState: Alerting
         execErrState: Error
         annotations:
-          summary: "Prometheus não consegue coletar /metrics do backend"
-          description: "Backend fora do ar, sem METRICS_ENABLED=true ou porta inacessível."
+          summary: "Nenhum processo do backend está exportando métricas"
+          description: "prontuai_backend_up é um heartbeat que todo worker do backend empurra por OTLP. A série some do Prometheus ~90s (metric_expiration do collector) depois que o último worker para de exportar. Causas: backend fora do ar, OTEL_SDK_DISABLED=true, OTEL_EXPORTER_OTLP_ENDPOINT errado ou ausente, ou o otel-collector inacessível — confira o alerta do collector antes de culpar o backend."
+        labels:
+          severity: critical
+
+      # Com o modelo de push o collector virou o único caminho das métricas do
+      # backend: se ele cai, o alerta acima dispara junto e este aqui é o que
+      # diz qual dos dois é a causa real.
+      - uid: prontuai-otel-collector-down
+        title: OTel Collector sem scrape (métricas do backend cegas)
+        condition: C
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            relativeTimeRange:
+              from: 300
+              to: 0
+            model:
+              datasource:
+                type: prometheus
+                uid: prometheus
+              expr: "up{job=\"otel-collector\"}"
+              refId: A
+              queryType: range
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              type: classic_conditions
+              conditions:
+                - evaluator:
+                    type: lt
+                    params:
+                      - 1
+                  operator:
+                    type: and
+                  reducer:
+                    type: last
+                  query:
+                    params:
+                      - A
+        for: 2m
+        noDataState: Alerting
+        execErrState: Error
+        annotations:
+          summary: "otel-collector fora do ar"
+          description: "Sem o collector, nenhuma métrica do backend chega ao Prometheus. Verifique 'docker compose ps otel-collector' e os logs na stack de observabilidade."
+        labels:
+          severity: critical
+
+      - uid: prontuai-db-down
+        title: Postgres sem scrape (exporter ou banco fora do ar?)
+        condition: C
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            relativeTimeRange:
+              from: 300
+              to: 0
+            model:
+              datasource:
+                type: prometheus
+                uid: prometheus
+              expr: "up{job=\"postgres\"}"
+              refId: A
+              queryType: range
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              type: classic_conditions
+              conditions:
+                - evaluator:
+                    type: lt
+                    params:
+                      - 1
+                  operator:
+                    type: and
+                  reducer:
+                    type: last
+                  query:
+                    params:
+                      - A
+        for: 2m
+        noDataState: Alerting
+        execErrState: Error
+        annotations:
+          summary: "Prometheus não consegue coletar métricas do Postgres"
+          description: "prontuai-db-exporter ou o container prontuai-db podem estar fora do ar. Verifique docker-compose.db.yml na VPS."
         labels:
           severity: critical
 
@@ -105,7 +190,7 @@ groups:
               datasource:
                 type: prometheus
                 uid: prometheus
-              expr: "100 * sum(rate(http_requests_total{job=\"prontuai-backend\", status=~\"5..\"}[5m])) / sum(rate(http_requests_total{job=\"prontuai-backend\"}[5m]))"
+              expr: "100 * sum(rate(http_server_request_duration_seconds_count{job=\"prontuai-backend\", http_response_status_code=~\"5..\"}[5m])) / sum(rate(http_server_request_duration_seconds_count{job=\"prontuai-backend\"}[5m]))"
               refId: A
               queryType: range
           - refId: C
@@ -187,7 +272,7 @@ groups:
               datasource:
                 type: prometheus
                 uid: prometheus
-              expr: "increase(prontuai_ocr_fallback_docling_total[1h])"
+              expr: "sum(increase(prontuai_ocr_fallback_docling_total[1h]))"
               refId: A
               queryType: range
           - refId: C

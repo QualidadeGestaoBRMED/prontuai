@@ -6,6 +6,8 @@
 /.pytest_cache/
 /__pycache__/
 /venv/
+.venv/
+**/.venv/
 /logs/
 /data/uploads/
 /pgdata/

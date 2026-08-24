@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react"
 import { usePathname } from "next/navigation"
 
 import { API_ENDPOINTS } from "@/lib/config"
+import { useVisibleInterval } from "@/hooks/use-visible-interval"
 import type { MaintenanceStatusResponse } from "@/types/maintenance"
 import { MaintenanceBanner } from "@/components/maintenance/maintenance-banner"
 import { MaintenancePage } from "@/components/maintenance/maintenance-page"
@@ -43,8 +44,6 @@ export function MaintenanceWrapper({ children }: { children: React.ReactNode }) 
 
   useEffect(() => {
     fetchStatus()
-    const interval = window.setInterval(fetchStatus, POLL_INTERVAL_MS)
-    return () => window.clearInterval(interval)
   }, [fetchStatus])
 
   const maintenanceVersion = maintenance.version || maintenance.id || null
@@ -52,6 +51,12 @@ export function MaintenanceWrapper({ children }: { children: React.ReactNode }) 
     () => ACTIVE_BYPASS_PATHS.some((path) => pathname === path || pathname?.startsWith(`${path}/`)),
     [pathname],
   )
+  // Nas rotas de bypass o status não pode produzir a MaintenancePage, só o
+  // banner de manutenção agendada — que o fetch inicial acima já cobre. Manter
+  // o poll ali fazia abas paradas no /login gerarem tráfego indefinidamente:
+  // era ~92% das chamadas a /v1/maintenance/status.
+  useVisibleInterval(fetchStatus, POLL_INTERVAL_MS, !canBypassActive)
+
   const showScheduledBanner =
     maintenance.status === "scheduled" &&
     Boolean(maintenanceVersion) &&

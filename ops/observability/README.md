@@ -1,165 +1,234 @@
-# Observabilidade ProntuAI (Loki + Grafana + Prometheus)
+# Observabilidade do ProntuAI
 
-Stack completa de observabilidade para rodar junto ao backend (EC2 ou local):
-
-- **Loki + Promtail** — logs estruturados do backend, com filtros por `user_email` e `request_id`
-- **Prometheus** — métricas da API (`/metrics`), de negócio (OCR, workflow, API externa) e da máquina
-- **node_exporter** — CPU/RAM/disco da EC2
-- **cAdvisor** — CPU/memória por container
-- **Grafana** — dashboards provisionados + alertas
-
-## 1. Configuração do backend (obrigatório)
-
-No `.env` do backend (`back-end/.env` local, ou o `.env` do deploy na EC2):
+A telemetria não é mais processada nesta máquina. Todos os sinais saem por um
+único canal **OTLP autenticado** para o `otel-collector` da **VPS Oracle**, onde
+ficam o Tempo, o Loki, o Prometheus e o Grafana — compartilhados entre os
+projetos do time.
 
 ```
-# Logs estruturados (Loki/Grafana filtram por campos)
-LOG_FORMAT=json
-LOG_FILE=logs/app.log
-LOG_LEVEL=INFO
-
-# Métricas Prometheus em /metrics
-METRICS_ENABLED=true
-
-# Erros/exceções no Sentry (crie o projeto em sentry.io — free tier atende)
-SENTRY_DSN=https://...@sentry.io/...
-SENTRY_ENVIRONMENT=production
-SENTRY_TRACES_SAMPLE_RATE=0.1
+EC2 (backend)                          VPS Oracle (dashboard)
+┌────────────────────────────┐         ┌──────────────────────────────────┐
+│ backend                    │         │ otel-collector :4317/:4318       │
+│  ├─ métricas ──┐           │  OTLP   │   bearertokenauth                │
+│  ├─ traces ────┼─ OTLP ────┼────────►│     ├─ traces  → Tempo           │
+│  ├─ logs ──────┘           │  + token│     ├─ logs    → Loki            │
+│  └─ app.log (local, roda-  │         │     └─ métricas→ :8889 (scrape)  │
+│     do; ninguém lê)        │         │                                  │
+│                            │         │ Prometheus · Tempo · Loki        │
+│ otel-agent ────────────────┼────────►│ Grafana :3001                    │
+│  └─ scrape local de        │         └──────────────────────────────────┘
+│     node_exporter,         │
+│     cAdvisor, pg-exporter  │
+└────────────────────────────┘
 ```
 
-Reinicie o backend após aplicar. A dependência `prometheus-fastapi-instrumentator`
-entra no próximo build da imagem (já está no `requirements.txt`).
+Esta pasta contém **só o lado da EC2**. Os arquivos do lado Oracle estão em
+`otel/` na raiz do repo (config do coletor, Prometheus, Tempo, provisionamento do
+Grafana, dashboards e alertas).
 
-> **Segurança**: `/metrics` fica exposto na API. O Prometheus coleta pela porta
-> interna (`127.0.0.1:8080` no host). Se o nginx público faz proxy para o backend,
-> bloqueie a rota: `location /metrics { deny all; }`.
+> **O compose da VPS Oracle não está neste repo** — ele é compartilhado entre os
+> projetos e vive no repo de infraestrutura. Este repo contribui os arquivos de
+> `otel/`, e **nenhum workflow os implanta**: hoje alguém precisa copiá-los para a
+> VPS junto do compose. Enquanto isso não existir, o backend manda telemetria e
+> ela chega, mas sem painel para mostrá-la.
 
-## 2. Configuração da stack
+## Por que ainda existe um agente aqui
 
-Crie `ops/observability/.env`:
+Três fontes de métrica não vêm do app e não teriam como sair por OTLP sozinhas:
+
+| Fonte | O que dá |
+|---|---|
+| `node_exporter` | CPU, RAM e disco da máquina (alertas de disco >85% e RAM >90%) |
+| `cAdvisor` | memória e CPU por container |
+| `prontuai-db-exporter` | Postgres — roda junto do banco em `back-end/docker-compose.db.yml` |
+
+O agente faz scrape local desses três e encaminha por OTLP. Usa o receiver
+`prometheus`, e não os receivers nativos do OTel (`hostmetrics`, `docker_stats`,
+`postgresql`), de propósito: os nativos emitiriam nomes de semconv
+(`system.filesystem.*`, `postgresql.*`) e obrigariam a reescrever as 16 queries
+dos painéis de infra e de Postgres, cortando o histórico. Com o receiver
+`prometheus` os nomes chegam idênticos do outro lado (`node_*`, `container_*`,
+`pg_*`) — inclusive o `up`, de que depende o alerta "Postgres sem scrape".
+
+O agente tem **fila em disco** (`file_storage`): se o link com a Oracle cair, ele
+segura os pontos em vez de descartar.
+
+## TLS é obrigatório neste caminho
+
+O canal atravessa a internet pública e carrega **dado de saúde**: cada linha de
+log leva `user_email`/`user_id`, e há CPF sem máscara em log de nível INFO. Sem
+TLS o próprio bearer token viaja em claro — fica capturável e reutilizável, e
+autenticar o coletor não protege de quem está no caminho.
+
+Na VPS Oracle, o coletor exige o certificado montado em caminho fixo:
 
 ```
-# Caminho dos logs do backend NO HOST (na EC2, o diretório montado pelo compose do backend)
-BACKEND_LOGS_PATH=/caminho/para/back-end/logs
+/etc/otel/certs/fullchain.pem
+/etc/otel/certs/privkey.pem
+```
 
-# Troque a senha do Grafana!
-GRAFANA_ADMIN_PASSWORD=uma-senha-forte
+Os caminhos são fixos de propósito. A variante com `${env:...}` foi testada e
+**falha aberta**: com a variável indefinida o coletor sobe com certificado vazio
+e serve a porta em texto claro (medido: `POST` em `http://` responde 400). Com
+caminho fixo e arquivo ausente ele se recusa a iniciar. Renovação do Let's
+Encrypt é relida a cada 24 h, sem restart.
 
-# Mantenha 127.0.0.1 — nunca exponha Grafana/Loki/Prometheus publicamente
+Nos clientes:
+
+- **backend** — `OTEL_EXPORTER_OTLP_ENDPOINT` com esquema `https://`. É o esquema
+  que faz o SDK abrir canal com TLS; com `http://` ele usa canal em claro.
+- **agente** — `tls: insecure: false` explícito no exporter. Deixar implícito foi
+  o que produziu o descasamento anterior: receiver em texto claro contra exporter
+  em TLS dá `first record does not look like a TLS handshake`, e nenhuma série
+  `node_*`/`container_*`/`pg_*` chega.
+
+Com certificado de CA pública a validação usa as raízes do sistema. Para CA
+interna, aponte `OTEL_EXPORTER_OTLP_CERTIFICATE` (backend) e `ca_file` (agente).
+Há uma trava no código, não só na documentação: se o endpoint for `http://`
+para host **remoto**, `setup_telemetry()` **recusa exportar** e loga em ERROR.
+É a mesma política do outro lado do canal — o coletor se recusa a subir sem
+certificado em vez de servir a porta em claro. O custo de recusar é perder
+telemetria, não disponibilidade: a aplicação segue normalmente.
+
+`http://localhost` continua valendo (coletor no mesmo host, dev). Em rede
+privada, onde texto claro é aceitável, reconheça explicitamente com
+`OTEL_ALLOW_INSECURE_ENDPOINT=true` — aí passa, com aviso.
+
+## Configuração
+
+### 1. `.env` desta pasta, na EC2
+
+```
+OTEL_GATEWAY_ENDPOINT=obs.exemplo.com:4317
+OTEL_AUTH_TOKEN=<mesmo token do coletor da Oracle>
 OBS_BIND_ADDRESS=127.0.0.1
-
-# Rede docker do compose do backend (o Prometheus coleta /metrics direto do
-# container). Descubra com:
-#   docker inspect prontuai-backend --format '{{range $k, $v := .NetworkSettings.Networks}}{{$k}}{{end}}'
-BACKEND_DOCKER_NETWORK=back-end_default
+DB_DOCKER_NETWORK=prontuai-db-net
 ```
 
-> O compose do backend precisa estar rodando antes de subir esta stack
-> (a rede externa `BACKEND_DOCKER_NETWORK` precisa existir).
+### 2. `.env` do backend
 
-## 3. Subir a stack
+Bloco `OTEL_*` completo em `backend-env.example`. O mínimo:
 
-```bash
-cd ops/observability
-docker compose up -d
+```
+OTEL_EXPORTER_OTLP_ENDPOINT=https://obs.exemplo.com:4317
+OTEL_EXPORTER_OTLP_PROTOCOL=grpc
+OTEL_EXPORTER_OTLP_HEADERS=Authorization=Bearer%20<token>
+OTEL_METRICS_EXPORTER=otlp
+OTEL_TRACES_EXPORTER=otlp
+OTEL_LOGS_EXPORTER=otlp
 ```
 
-Serviços (todos em 127.0.0.1):
-- Grafana: http://localhost:3001 (admin / $GRAFANA_ADMIN_PASSWORD)
-- Prometheus: http://localhost:9090
-- Loki: http://localhost:3100
+O `%20` é obrigatório — é o espaço depois de `Bearer`. Sem o URL-encoding o
+coletor responde 401.
 
-### Acesso na EC2
+Sai do `.env`: `METRICS_ENABLED` e `OTEL_ENABLED` (o backend loga um aviso e
+ignora esta última; o kill switch agora é `OTEL_SDK_DISABLED`).
 
-Como as portas ficam em 127.0.0.1, acesse via túnel SSH:
+## Logs: os dois caminhos, de propósito
 
-```bash
-ssh -L 3001:127.0.0.1:3001 usuario@ec2-host
-# depois abra http://localhost:3001
+O backend **escreve o arquivo local e empurra por OTLP**, e as duas coisas
+servem a propósitos diferentes:
+
+- `logs/app.log` é a fonte operacional da máquina e onde caem os logs de crash,
+  que não sobrevivem ao flush do exportador. **Nada o lê** — não há mais
+  promtail. Era justamente um promtail seguindo um arquivo de dezenas de MB que
+  pesava na máquina.
+- O caminho OTLP é o correlacionado: chega ao Loki com `trace_id`, e o Grafana
+  transforma isso em link para o trace no Tempo.
+
+O arquivo agora **rotaciona** (`LOG_FILE_MAX_BYTES`, `LOG_FILE_BACKUP_COUNT`) —
+antes era um `FileHandler` puro, que crescia sem limite.
+
+### PII nos logs
+
+Duas camadas, em ordem de importancia:
+
+1. **A aplicacao mascara antes de logar** (`app/core/pii.py`: `mask_identifier`,
+   `mask_cpf`, `mask_name`). É a defesa principal — o dado nem chega ao arquivo.
+2. **O coletor redige o que passar batido** (`transform/redacao_pii` no pipeline
+   de logs). Um `logger.info` novo com CPF e mais facil de escrever do que de
+   revisar, e aqui os logs saem do perimetro de producao para uma VPS
+   compartilhada entre projetos — o que muda a consequencia de um vazamento.
+
+A redacao cobre CPF e CNPJ com ou sem pontuacao, no corpo da linha e nos
+atributos `message`/`cpf`. Os padroes sao ancorados em formato, nao `\d{11}`
+solto, que apanharia timestamp em milissegundos. Verificado: `CPF 12345678901`,
+`123.456.789-01` e `12.345.678/0001-95` saem redigidos, e
+`job_id=1755712345678` passa intacto.
+
+Limitacao conhecida: um identificador numerico de exatamente 11 digitos seria
+redigido junto. É o preco de ser rede de seguranca, e nao substitui mascarar na
+origem.
+
+`user_email` **nao** e redigido: e e-mail de funcionario, indexado de proposito
+(o dashboard de exploracao filtra por ele). Nao confunda com dado de paciente.
+
+Para cortar volume de rede sem perder detalhe no disco, suba `OTEL_LOG_LEVEL`
+(ex.: `WARNING`). Cuidado: o dashboard de exploração filtra linhas INFO
+(`request.completed`, `workflow_completed`), que desapareceriam.
+
+### Consultar no Loki
+
+A linha chega como envelope OTLP, então o texto está em `body` e os campos
+estruturados em `attributes`, que o `| json` achata com `_`:
+
+```logql
+{job="prontuai-backend"} | json | attributes_user_email="medico@brmed.com.br"
+{job="prontuai-backend", level="ERROR"}
 ```
 
-Alternativa: publicar o Grafana atrás do nginx existente com HTTPS + autenticação.
+`job` e `level` são labels indexados (vêm de `service.name` e da severidade).
+`user_email`, `cpf`, `request_id` e `trace_id` ficam em *structured metadata* —
+filtráveis, mas **nunca** labels: viraria um stream por requisição.
 
-## 4. Dashboards provisionados
+## Deploy
 
-- **ProntuAI - Logs & Auditoria** — busca de logs com filtros `user_email`/`request_id`;
-  row **Atividade** com usuários ativos (24h, distintos por `user_email` no Loki);
-  row **Por Usuário** com ranking de documentos processados e falhas nas últimas 24h
-  (via Loki, `topk` sobre `count_over_time`)
-- **ProntuAI - Aplicação (API / Negócio / Qualidade)** — RPS, latência p95, 5xx,
-  documentos enviados e processados por hora, duração do OCR por motor,
-  timeouts/fallbacks do Textract, consultas à API externa e qualidade de entrega
-  (score de confiança, exames faltantes, aprovação/rejeição na revisão humana);
-  row **Por Clínica** com volume, taxa de erro, score de confiança médio, taxa
-  de rejeição na revisão e usuários criados, cada um quebrado por `clinica_nome`
-  (Prometheus); row **Cadastros** com totais de clínicas/usuários criados (30d,
-  por papel). Use o filtro **Clínica** no topo do dashboard para restringir
-  todos os painéis de "Por Clínica" a uma ou mais clínicas específicas
-  (ex.: selecionar só "BRMED" mostra apenas os números dela)
-- **ProntuAI - Infra (EC2)** — CPU/RAM/disco da máquina, memória por container e
-  row **Picos & Armazenamento** (pico de RAM/disco no período selecionado,
-  armazenamento usado em GB)
+Automático: o workflow `observability-deploy.yml` roda a cada push na `v1` que
+toque `ops/observability/**`, sincroniza para `/home/ec2-user/prontuai-observability`
+e recarrega. Só criar o `.env` no servidor é manual (uma vez).
 
-### Por que clínica é label Prometheus e usuário não
+O `--remove-orphans` do workflow derruba os containers da stack antiga
+(`grafana`, `loki`, `prometheus`, `promtail`) na primeira execução após esta
+migração.
 
-Clínica é um conjunto pequeno e estável (dezenas) — vira label direto nas
-métricas (`clinica_id`/`clinica_nome`) sem risco de cardinalidade. Usuário
-pode crescer bastante e cresce por padrão (novo cadastro = nova série se
-virasse label), então a visão por usuário usa consulta sobre o corpo JSON dos
-logs no Loki (`| json`), nunca como label — mesmo motivo que fez a ingestão de
-logs travar antes com `request_id`/`user_email` como label (ver seção 5 do
-histórico de commits / `promtail-config.yml`).
+Depois de subir, confirme na Oracle:
 
-## 5. Alertas provisionados
+- `prontuai_backend_up` existe no Prometheus com `job="prontuai-backend"`
+- `up{job="postgres"}` e `up{job="node"}` existem (vieram pelo agente)
+- há streams em `{job="prontuai-backend"}` no Loki
+- o backend aparece no Tempo
 
-| Alerta | Condição | Severidade |
-|---|---|---|
-| Backend sem scrape | `up == 0` por 2 min | critical |
-| Erros nos logs | rate de `level=ERROR` > 0 por 2 min | warning |
-| Taxa de 5xx | > 5% por 5 min | critical |
-| OCR degradado | p95 > 5 min por 10 min | warning |
-| Fallback Docling | qualquer ocorrência na última hora | warning |
-| Qualidade degradada | mediana do score de confiança < 60 por 30 min | warning |
-| Disco | > 85% por 5 min | warning |
-| Memória | > 90% por 5 min | critical |
+Se não, os logs do backend dizem o motivo: `setup_telemetry` loga por que
+desistiu. E `docker compose logs otel-agent` mostra falha de auth ou de rede.
 
-**Destino das notificações** (e-mail/Slack) deve ser configurado uma vez na UI:
-Alerting → Contact points → default.
+## Rollback
 
-## 6. Checklist de implantação na EC2
+A stack antiga (Grafana + Loki + Prometheus + promtail nesta máquina) é
+recuperável, mas não por `git revert` sozinho:
 
-O deploy desta pasta é automático: o workflow `observability-deploy.yml` roda a
-cada push na `v1` que toque `ops/observability/**`, sincroniza os arquivos para
-`/home/ec2-user/prontuai-observability` e recarrega o stack (dashboards e
-alertas incluídos). Só o passo 4 (criar o `.env` no servidor) é manual e feito
-uma única vez — sem ele o workflow falha com mensagem explicando o que criar.
+1. `git revert` do commit restaura **todos** os arquivos de config apagados
+   (`loki-config.yml`, `prometheus.yml`, `promtail-config.yml`, o
+   provisionamento e os dashboards) — eles estão no histórico.
+2. O `.env` desta pasta **não volta**, porque nunca esteve em git: recrie
+   `BACKEND_LOGS_PATH`, `BACKEND_DOCKER_NETWORK` e `GRAFANA_ADMIN_PASSWORD`.
+3. Rode o workflow. O `--remove-orphans` derruba o `otel-agent` e sobe a stack
+   antiga.
+4. No backend, `OTEL_SDK_DISABLED=true` interrompe a exportação sem redeploy —
+   é o corte mais rápido se o problema for a telemetria em si, e não exige
+   reverter nada.
 
-1. [ ] `LOG_FORMAT=json` + `METRICS_ENABLED=true` no `.env` do backend; reiniciar
-2. [ ] Criar projeto no sentry.io e setar `SENTRY_DSN`
-3. [ ] Rebuild/pull da imagem do backend (nova dependência de métricas)
-4. [ ] Criar `.env` em `/home/ec2-user/prontuai-observability` na EC2 com
-       `BACKEND_LOGS_PATH=/home/ec2-user/prontuai/logs`,
-       `BACKEND_DOCKER_NETWORK=prontuai_default` (confirme com
-       `docker inspect prontuai-backend`) e `GRAFANA_ADMIN_PASSWORD`
-5. [ ] Rodar o workflow **Observability Deploy** (push ou `workflow_dispatch`)
-6. [ ] Conferir targets em http://localhost:9090/targets (todos UP)
-7. [ ] Bloquear `/metrics` no nginx público, se houver proxy para o backend
-8. [ ] Configurar contact point (e-mail/Slack) no Grafana Alerting
-9. [ ] (Recomendado) Alarme CloudWatch `StatusCheckFailed` + auto-recover na EC2 —
-       cobre o caso em que a instância inteira cai junto com o Grafana
-10. [ ] Verificar folga de RAM: a stack consome ~1–1,5 GB
+Os dados já enviados à Oracle permanecem lá; os dois lados coexistem sem
+conflito durante a transição.
 
-## Notas
+## Workers do gunicorn
 
-- Painéis de **Negócio** (documentos processados, OCR, API externa) só populam
-  após o primeiro documento processado — antes disso mostram "No Data".
-- Painel **Memória por container**: exige que o Docker do host use o storage
-  driver clássico (overlay2, padrão na EC2). Se `docker info` mostrar
-  `io.containerd.snapshotter.v1` (comum em desktop de dev), o cAdvisor não
-  suporta e o painel fica sem dados — limitação conhecida do cAdvisor.
+O SDK é inicializado no import de `main.py`, o que só é seguro porque o gunicorn
+carrega a aplicação **dentro de cada worker, depois do `fork()`** — o padrão
+quando `--preload` não é usado (ver `entrypoint.sh`). A thread de exportação do
+OTel não sobrevive a um fork: se `--preload` for ligado, os workers ficam sem
+telemetria, e o setup precisa migrar para um hook `post_fork`.
 
-- Retenção do Loki: 7 dias (`retention_period: 168h` em `loki-config.yml`);
-  Prometheus: 30 dias (`--storage.tsdb.retention.time`)
-- Para resetar o Grafana: `docker volume rm observability_grafana-data`
-- Se mover o arquivo de log, atualize `BACKEND_LOGS_PATH` (compose) — o caminho
-  interno `/var/log/prontuai/app.log` do promtail-config.yml não muda
+Com `WORKERS>1` cada processo exporta suas próprias séries, distinguidas por
+`instance=<host>-<pid>`; por isso painéis e alertas agregam com `sum()`. Nos
+logs esse atributo é **removido** pelo coletor da Oracle, senão cada deploy
+criaria um stream novo no Loki.

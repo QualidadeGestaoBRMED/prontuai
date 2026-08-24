@@ -1,3 +1,5 @@
+name: back-end
+
 # Docker Compose para desenvolvimento local
 #
 # Uso:
@@ -12,7 +14,7 @@
 
 services:
   db:
-    image: postgres:16-alpine
+    image: postgres:17-alpine
     container_name: prontuai-db-dev
     restart: unless-stopped
     environment:
@@ -52,6 +54,14 @@ services:
       - USE_TEXTRACT=${USE_TEXTRACT:-false}
       - GOOGLE_DRIVE_ENABLED=${GOOGLE_DRIVE_ENABLED:-false}
       - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:3000,http://localhost}
+      # Métricas por OTLP. Desligado por padrão: só faz sentido com a stack de
+      # ops/observability no ar (é ela que sobe o otel-collector, e este compose
+      # usa a mesma rede docker "back-end_default"). Ligue com
+      # OTEL_SDK_DISABLED=false.
+      - OTEL_SDK_DISABLED=${OTEL_SDK_DISABLED:-true}
+      - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4318}
+      - OTEL_SERVICE_NAME=${OTEL_SERVICE_NAME:-prontuai-backend-dev}
+      - OTEL_RESOURCE_ATTRIBUTES=${OTEL_RESOURCE_ATTRIBUTES:-deployment.environment.name=development}
     volumes:
       # Hot-reload: código-fonte montado por cima da imagem
       - .:/app

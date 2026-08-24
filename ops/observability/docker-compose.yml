@@ -1,51 +1,48 @@
-# Stack de observabilidade ProntuAI (logs + métricas)
+# Agente de observabilidade da EC2 (a maquina do backend).
 #
-# Variáveis de ambiente (crie um .env nesta pasta ou exporte):
-#   BACKEND_LOGS_PATH    caminho dos logs do backend (padrão: ../../back-end/logs)
-#   GRAFANA_ADMIN_PASSWORD  senha do admin do Grafana (padrão: admin — TROQUE em produção)
-#   OBS_BIND_ADDRESS     endereço de bind das portas (padrão: 127.0.0.1; nunca exponha publicamente)
+# A stack completa (Grafana + Loki + Prometheus + promtail) NAO roda mais aqui:
+# ela vive na VPS Oracle, junto do dashboard e do otel-collector. O que sobra
+# nesta maquina sao as fontes de metrica que o app nao produz e um agente que
+# as empurra por OTLP para lá.
 #
-# Acesso na EC2: túnel SSH (ssh -L 3001:127.0.0.1:3001 ...) ou proxy nginx com HTTPS.
+# Variaveis (crie um .env nesta pasta):
+#   OTEL_GATEWAY_ENDPOINT   host:porta do otel-collector da Oracle (ex.: obs.exemplo.com:4317)
+#   OTEL_AUTH_TOKEN         mesmo token configurado no coletor da Oracle
+#   OBS_BIND_ADDRESS        bind das portas de debug (padrao 127.0.0.1; nunca exponha)
+#   DB_DOCKER_NETWORK       rede do docker-compose.db.yml (padrao prontuai-db-net)
+#
+# Requer back-end/docker-compose.db.yml no ar (a rede externa "prontuai-db-net"
+# precisa existir), porque é por ela que o agente alcanca o exporter do Postgres.
 
 services:
-  loki:
-    image: grafana/loki:2.9.8
-    command: -config.file=/etc/loki/loki.yml
-    ports:
-      - "${OBS_BIND_ADDRESS:-127.0.0.1}:3100:3100"
+  otel-agent:
+    image: otel/opentelemetry-collector-contrib:0.112.0
+    command: ["--config=/etc/otelcol-contrib/config.yaml"]
+    # A imagem roda como uid 10001, e um volume nomeado nasce root:root — o
+    # agente morria no boot com "permission denied" ao criar a fila em disco
+    # (medido: container em estado exited, nenhuma metrica saindo). Docker nao
+    # tem como fazer chown de volume declarativamente, entao o agente roda como
+    # root para poder escrever a fila. Nao é o ideal, mas nesta pasta ja existe
+    # um cAdvisor privileged: o agente nao é o elo mais fraco.
+    user: "0:0"
+    environment:
+      OTEL_GATEWAY_ENDPOINT: "${OTEL_GATEWAY_ENDPOINT:?OTEL_GATEWAY_ENDPOINT is required}"
+      OTEL_AUTH_TOKEN: "${OTEL_AUTH_TOKEN:?OTEL_AUTH_TOKEN is required}"
     volumes:
-      - ./loki-config.yml:/etc/loki/loki.yml:ro
-      - loki-data:/loki
-    restart: unless-stopped
-
-  promtail:
-    image: grafana/promtail:2.9.8
-    command: -config.file=/etc/promtail/config.yml
-    volumes:
-      - ./promtail-config.yml:/etc/promtail/config.yml:ro
-      - ${BACKEND_LOGS_PATH:-../../back-end/logs}:/var/log/prontuai:ro
-      - ./promtail-positions:/tmp/positions
-    restart: unless-stopped
-    depends_on:
-      - loki
-
-  prometheus:
-    image: prom/prometheus:v2.53.0
-    command:
-      - --config.file=/etc/prometheus/prometheus.yml
-      - --storage.tsdb.retention.time=30d
-    ports:
-      - "${OBS_BIND_ADDRESS:-127.0.0.1}:9090:9090"
-    volumes:
-      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - prometheus-data:/prometheus
+      - ./otel-agent.yaml:/etc/otelcol-contrib/config.yaml:ro
+      # Fila em disco: sobrevive a queda do link com a Oracle e a restart.
+      - otel-agent-queue:/var/lib/otelcol
+    mem_limit: 256m
     restart: unless-stopped
     extra_hosts:
+      # Para alcancar o node_exporter, que roda em network_mode: host.
       - "host.docker.internal:host-gateway"
     networks:
       - default
-      - backend
+      - db
 
+  # Metricas da maquina (CPU, RAM, disco). Continua aqui porque é a fonte —
+  # quem a exporta para fora é o agente acima.
   node_exporter:
     image: prom/node-exporter:v1.8.1
     command:
@@ -56,14 +53,15 @@ services:
       - /:/host:ro,rslave
     restart: unless-stopped
 
+  # Metricas por container (memoria/CPU do backend, OCR etc).
   cadvisor:
     image: gcr.io/cadvisor/cadvisor:v0.52.1
-    # Necessário no cgroup v2 para enxergar os cgroups dos demais containers
+    # Necessario no cgroup v2 para enxergar os cgroups dos demais containers
     cgroup: host
-    # LIMITAÇÃO: se o Docker do host usar containerd-snapshotter
-    # (docker info -> "io.containerd.snapshotter.v1"), o cAdvisor não consegue
-    # criar os handlers dos containers e o painel "Memória por container" fica
-    # sem dados. O Docker padrão da EC2 (overlay2) funciona normalmente.
+    # LIMITACAO: se o Docker do host usar containerd-snapshotter
+    # (docker info -> "io.containerd.snapshotter.v1"), o cAdvisor nao consegue
+    # criar os handlers dos containers e o painel "Memoria por container" fica
+    # sem dados. O Docker padrao da EC2 (overlay2) funciona normalmente.
     command:
       - --docker_only=true
     ports:
@@ -79,40 +77,13 @@ services:
     privileged: true
     restart: unless-stopped
 
-  grafana:
-    image: grafana/grafana:10.4.3
-    ports:
-      - "${OBS_BIND_ADDRESS:-127.0.0.1}:3001:3000"
-    environment:
-      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
-      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
-      # Para servir atrás de proxy em subpath (ex.: https://dominio/grafana/),
-      # defina no .env: GRAFANA_ROOT_URL=https://dominio/grafana/
-      # e GRAFANA_SERVE_FROM_SUB_PATH=true
-      GF_SERVER_ROOT_URL: ${GRAFANA_ROOT_URL:-%(protocol)s://%(domain)s:%(http_port)s/}
-      GF_SERVER_SERVE_FROM_SUB_PATH: ${GRAFANA_SERVE_FROM_SUB_PATH:-false}
-      GF_AUTH_ANONYMOUS_ENABLED: "false"
-      GF_USERS_ALLOW_SIGN_UP: "false"
-    volumes:
-      - grafana-data:/var/lib/grafana
-      - ./grafana/provisioning:/etc/grafana/provisioning:ro
-      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
-    restart: unless-stopped
-    depends_on:
-      - loki
-      - prometheus
-
 volumes:
-  grafana-data:
-  loki-data:
-  prometheus-data:
+  otel-agent-queue:
 
 networks:
   default: {}
-  # Rede do compose do backend, para o Prometheus coletar /metrics direto do
-  # container (a porta do backend fica publicada só em 127.0.0.1 no host).
-  # Ajuste BACKEND_DOCKER_NETWORK se o compose do backend rodar em outra pasta:
-  #   docker inspect prontuai-backend --format '{{range $k, $v := .NetworkSettings.Networks}}{{$k}}{{end}}'
-  backend:
+  # Rede do docker-compose.db.yml (Postgres), para o agente alcancar o
+  # /metrics do prontuai-db-exporter. Nome fixo, raramente precisa de override.
+  db:
     external: true
-    name: ${BACKEND_DOCKER_NETWORK:-back-end_default}
+    name: ${DB_DOCKER_NETWORK:-prontuai-db-net}

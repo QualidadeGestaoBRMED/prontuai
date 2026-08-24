@@ -707,8 +707,15 @@ async def _processar_documento_completo_impl(
         cpf_digits = re.sub(r"\D", "", str(cpf_inicial))
         passaporte_key = re.sub(r"[^A-Z0-9]", "", str(passaporte_inicial).upper())
         if cpf_digits and cpf_digits == passaporte_key:
-            logger.info("[WORKFLOW] Mesmo valor extraído como CPF e passaporte; usando passaporte na consulta externa.")
-            cpf_inicial = None
+            # Documentos da BR MED trazem o campo combinado "CPF / Passport", então
+            # o mesmo valor chega nos dois campos. Se passa no dígito verificador é
+            # CPF: consultar por ?passport= nunca encontra o paciente.
+            if ocr_service._is_valid_cpf(cpf_digits):
+                logger.info("[WORKFLOW] Mesmo valor extraído como CPF e passaporte, mas é CPF válido; priorizando CPF.")
+                passaporte_inicial = None
+            else:
+                logger.info("[WORKFLOW] Mesmo valor extraído como CPF e passaporte; usando passaporte na consulta externa.")
+                cpf_inicial = None
     cpf_consulta = cpf_inicial
     passaporte_consulta = passaporte_inicial
     if cpf_consulta and passaporte_consulta:
@@ -914,8 +921,8 @@ async def _processar_documento_completo_impl(
             if business_error
             else "Não foi possível consultar exames obrigatórios."
         )
-        metrics.DOCUMENTOS_PROCESSADOS.labels(status="error", **clinica_labels).inc()
-        metrics.WORKFLOW_DURACAO.observe(time.perf_counter() - start_total)
+        metrics.DOCUMENTOS_PROCESSADOS.add(1, {"status": "error", **clinica_labels})
+        metrics.WORKFLOW_DURACAO.record(time.perf_counter() - start_total)
         return {
             "status": "error",
             "cpf": cpf_fallback,
@@ -1109,17 +1116,20 @@ async def _processar_documento_completo_impl(
         status=resposta_final.get("status"),
         elapsed_seconds=round(time.perf_counter() - start_total, 3),
     )
-    metrics.DOCUMENTOS_PROCESSADOS.labels(
-        status=resposta_final.get("status") or "desconhecido", **clinica_labels
-    ).inc()
-    metrics.WORKFLOW_DURACAO.observe(time.perf_counter() - start_total)
+    metrics.DOCUMENTOS_PROCESSADOS.add(
+        1, {"status": resposta_final.get("status") or "desconhecido", **clinica_labels}
+    )
+    metrics.WORKFLOW_DURACAO.record(time.perf_counter() - start_total)
     if resposta_final.get("status") == "success":
-        metrics.CONFIANCA_SCORE.labels(**clinica_labels).observe(confiabilidade_score)
+        metrics.CONFIANCA_SCORE.record(confiabilidade_score, clinica_labels)
         exames_faltantes = resposta_final["validation_result"]["exames_faltantes"]
-        metrics.VALIDACAO_DOCUMENTOS.labels(
-            resultado="rejeitado" if exames_faltantes else "aprovado",
-            **clinica_labels,
-        ).inc()
+        metrics.VALIDACAO_DOCUMENTOS.add(
+            1,
+            {
+                "resultado": "rejeitado" if exames_faltantes else "aprovado",
+                **clinica_labels,
+            },
+        )
 
     return resposta_final
 
@@ -1154,9 +1164,12 @@ async def processar_documento_completo(
             )
     except Exception:
         # Falhas não tratadas também contam como documento processado (com erro)
-        metrics.DOCUMENTOS_PROCESSADOS.labels(
-            status="exception",
-            clinica_id=clinic_id or "desconhecida",
-            clinica_nome=clinic_name or "desconhecida",
-        ).inc()
+        metrics.DOCUMENTOS_PROCESSADOS.add(
+            1,
+            {
+                "status": "exception",
+                "clinica_id": clinic_id or "desconhecida",
+                "clinica_nome": clinic_name or "desconhecida",
+            },
+        )
         raise

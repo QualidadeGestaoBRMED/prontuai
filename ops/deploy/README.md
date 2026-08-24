@@ -20,6 +20,67 @@ Os scripts assumem o backend em Docker e geram artefatos em `/tmp`.
 ./ops/deploy/50_rollback.sh
 ```
 
+## Deploy na VPS sem GitHub Actions
+
+Quando a cota do Actions estoura (ou o workflow esta indisponivel):
+
+```bash
+DEPLOY_HOST=1.2.3.4 ./ops/deploy/deploy_staging_vps.sh
+DEPLOY_HOST=1.2.3.4 ./ops/deploy/deploy_staging_vps.sh --ref staging --skip-tests
+
+DEPLOY_HOST=5.6.7.8 PUBLIC_HEALTH_URL=https://api.exemplo.com/health \
+  ./ops/deploy/deploy_prod_vps.sh
+```
+
+Os dois sao atalhos para `deploy_vps.sh`, que atende os dois ambientes pelo
+mesmo caminho de codigo — duplicar o script garantiria que uma correcao
+chegasse so em metade dele. Ele resolve por ambiente o compose
+(`docker-compose.stg.yml` / `docker-compose.aws.yml`), o servico
+(`prontuai-backend-stg` / `prontuai-backend`), o caminho e o usuario, espelhando
+o que cada workflow envia.
+
+### O que producao tem a mais
+
+| Trava | Por que |
+|---|---|
+| **dump antes de subir** | `auto_migrate()` roda no startup, e voltar a imagem nao desfaz mudanca de schema. Reusa o `backup_postgres.sh` da VPS quando existe (vai para o bucket); senao faz `pg_dump` local e **recusa** dump menor que 100 KB, que quase sempre e erro de credencial |
+| **confirmacao digitada** | exige a palavra `producao`; um `s` de memoria muscular nao passa |
+| **health check publico** | `PUBLIC_HEALTH_URL` cobre nginx, certificado e DNS — o caminho que o usuario usa. Falha aqui **nao** reverte (a aplicacao subiu, o problema esta na borda), mas para o script com o comando de rollback na tela |
+
+`--skip-dump` existe e avisa alto que voce fica sem rede.
+
+Duas diferencas em relacao aos workflows, ambas deliberadas:
+
+- **Builda na VPS**, na arquitetura nativa (staging e arm64/Graviton, producao e
+  amd64). Sem registry no caminho, entao nao precisa de PAT do GHCR nem de QEMU.
+- **Envia o conteudo de um commit** (`git archive`), nao a arvore de trabalho.
+  Nada de `.env`, `__pycache__`, log ou compose local vaza para o servidor — por
+  construcao. O script avisa e pede confirmacao se houver alteracao em
+  `back-end/` que nao entrara no deploy.
+
+Roda os mesmos testes do CI antes de subir. `pytest` costuma nao estar no PATH:
+o script procura em `$PYTEST`, no PATH, em `back-end/.venv/bin/pytest`, em
+`.venv/bin/pytest` e em `python3 -m pytest`, nessa ordem. Se nao achar, ele diz
+como resolver — o caminho mais direto e criar o venv uma vez:
+
+```bash
+python3 -m venv back-end/.venv
+back-end/.venv/bin/pip install -r back-end/requirements.txt
+```
+
+`--skip-tests` pula, e avisa que sem CI ninguem mais vai roda-los. Grava
+`.current_backend_image` na VPS e, se o health check falhar, **reverte sozinho**
+para a imagem anterior. O `.current_backend_image` nao e sobrescrito por um
+deploy que falhou, entao o ponto de rollback continua valido.
+
+Nao faz dump do banco: staging tem Postgres proprio e descartavel. Producao
+continua pelo runbook numerado acima, que trata disso.
+
+> O `/health` do backend e estatico — responde 200 sem tocar em banco. Health
+> check verde nao substitui olhar o log do container (o script imprime o comando)
+> e exercitar um endpoint `/v1/` autenticado. Lembre que `auto_migrate()` roda no
+> startup, e voltar a imagem nao desfaz mudanca de schema.
+
 ## Banco de dados (Postgres self-hosted na VPS)
 
 O Postgres roda numa **pasta propria na VPS**, `/home/ec2-user/prontuai-db`
@@ -50,6 +111,59 @@ Backup diario continuo e restore/drill (rodados de dentro de
 ```bash
 ./backup_postgres.sh                                   # roda manual/via systemd, ver systemd/README.md
 ./restore_postgres.sh s3://bucket/prefixo/arquivo.dump # drill seguro (banco descartavel)
+./purge_old_records.sh                                 # purga semanal; PURGE_DRY_RUN=true para simular
+```
+
+### Cadencia dos dumps e retencao no bucket
+
+O `backup_postgres.sh` escolhe a cadencia pela data e grava em subprefixos
+distintos, para que cada faixa tenha sua propria regra de expiracao:
+
+| Prefixo    | Quando        | Escopo           | Retencao sugerida |
+|------------|---------------|------------------|-------------------|
+| `monthly/` | dia 1 do mes  | completo         | nunca expira      |
+| `weekly/`  | domingo       | completo         | 90 dias           |
+| `daily/`   | demais dias   | sem `audit_logs` | 30 dias           |
+
+`audit_logs` cresce ~1.150 linhas por dia util (~23 MB/mes) e nao muda depois
+de escrita. Mante-la no dump diario custaria reenviar o mesmo dado 365 vezes
+por ano. Ficando so no semanal e no mensal, a auditoria continua integralmente
+preservada (expostos no maximo 7 dias), enquanto o dado operacional mantem RPO
+de 24 h.
+
+As regras de expiracao **nao sao criadas pelo script** — configure no bucket.
+No R2, em Settings > Object lifecycle rules, uma regra por prefixo. Via CLI:
+
+```bash
+aws s3api put-bucket-lifecycle-configuration --bucket <bucket> \
+  --endpoint-url https://<account_id>.r2.cloudflarestorage.com \
+  --lifecycle-configuration '{
+    "Rules": [
+      {"ID":"daily-30d","Status":"Enabled",
+       "Filter":{"Prefix":"postgres-backups/prontuai/daily/"},
+       "Expiration":{"Days":30}},
+      {"ID":"weekly-90d","Status":"Enabled",
+       "Filter":{"Prefix":"postgres-backups/prontuai/weekly/"},
+       "Expiration":{"Days":90}}
+    ]}'
+```
+
+`monthly/` fica de fora de proposito: sem regra, nada expira.
+
+> Os anexos do PGR ficam em **bucket separado**, entao estas regras nao
+> alcancam dado de outra aplicacao. A **cota do R2 e da conta**, nao do
+> bucket: o free tier de 10 GB e somado entre os dois, e foi por isso que a
+> pressao apareceu. Ao dimensionar retencao, considere o uso do PGR tambem:
+>
+> ```bash
+> aws s3 ls --summarize --human-readable --recursive s3://<bucket> \
+>   --endpoint-url https://<account_id>.r2.cloudflarestorage.com | tail -2
+> ```
+
+Para gerar um completo sob demanda (antes de uma migracao, por exemplo):
+
+```bash
+BACKUP_CADENCE_OVERRIDE=monthly ./backup_postgres.sh
 ```
 
 ## Variaveis uteis

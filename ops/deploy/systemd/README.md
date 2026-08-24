@@ -25,14 +25,54 @@ de crontab do usuario (sobrevive a reboot, tem logs no journal, e retry via
 # copie os scripts + lib.sh para a pasta dedicada na VPS (uma vez, e de novo
 # sempre que editar os scripts — nao ha CI para isso ainda):
 mkdir -p /home/ec2-user/prontuai-db/script
-cp ops/deploy/backup_postgres.sh ops/deploy/restore_postgres.sh ops/deploy/lib.sh \
+cp ops/deploy/backup_postgres.sh ops/deploy/restore_postgres.sh \
+   ops/deploy/purge_old_records.sh ops/deploy/lib.sh \
   /home/ec2-user/prontuai-db/script/
 
 sudo cp ops/deploy/systemd/prontuai-db-backup.service /etc/systemd/system/
 sudo cp ops/deploy/systemd/prontuai-db-backup.timer /etc/systemd/system/
+sudo cp ops/deploy/systemd/prontuai-db-purge.service /etc/systemd/system/
+sudo cp ops/deploy/systemd/prontuai-db-purge.timer /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable --now prontuai-db-backup.timer
+sudo systemctl enable --now prontuai-db-purge.timer
 ```
+
+## Purga semanal (`prontuai-db-purge.timer`)
+
+Roda domingo 02:00, uma hora antes do backup, removendo dado transitorio que
+inflava todo dump diario: `jobs` finalizados (o `result_json` duplica o que ja
+esta em `documents.result_payload`), notificacoes **ja lidas** antigas e
+refresh tokens expirados. Nao toca em `audit_logs` nem em `documents`.
+
+Simule antes de habilitar — nada e apagado com `PURGE_DRY_RUN`:
+
+```bash
+PURGE_DRY_RUN=true /home/ec2-user/prontuai-db/script/purge_old_records.sh
+```
+
+Janelas configuraveis por `PURGE_JOBS_DAYS` (default 7) e
+`PURGE_NOTIFICATIONS_DAYS` (default 90).
+
+### Por que os dois jobs nao concorrem
+
+Backup e purga compartilham um **lock com `flock`** (`db_maintenance_lock`, em
+`ops/deploy/lib.sh`): quem chega depois **espera**, e o lock e liberado quando o
+script termina, inclusive se ele morrer.
+
+- backup: espera ate 1h e, se nao conseguir, **falha** — um backup diario que
+  nao acontece precisa aparecer como unit falho no journal.
+- purga: espera ate 30min e, se nao conseguir, **pula** com aviso — ela e
+  semanal, e perder uma execucao nao tem consequencia.
+
+Ajustaveis por `DB_LOCK_WAIT`; o arquivo de lock, por `DB_LOCK_FILE`.
+
+Isso **substituiu** um `Conflicts=prontuai-db-backup.service` que existia no
+unit da purga. `Conflicts` e bidirecional e da terminacao mutua, nao exclusao
+mutua: iniciar um **para** o outro. Com `Persistent=true` nos dois timers, um
+reboot que atrase ambos dispara as duas recuperacoes de horario, e uma mataria a
+outra — `pg_dump` morto no meio significa o backup do dia perdido. O `flock`
+tambem cobre execucao manual dos scripts, que o unit nao alcancaria.
 
 ## Verificar
 

@@ -22,6 +22,7 @@ import {
 import { API_ENDPOINTS } from '@/lib/config'
 import { authFetch } from '@/lib/auth-fetch'
 import { useAsyncJob } from '@/hooks/use-async-job'
+import { useVisibleInterval } from '@/hooks/use-visible-interval'
 import { Job } from '@/types/job'
 
 type StartBackgroundProcessingOptions = {
@@ -85,6 +86,7 @@ const STORAGE_KEYS = {
 // Constantes
 const MAX_NOTIFICATIONS = 100
 const MAX_NOTIFICATION_AGE_DAYS = 30
+const NOTIFICATIONS_POLL_INTERVAL_MS = 30_000
 
 const isPresentString = (value: unknown): value is string =>
   typeof value === 'string' && value.trim() !== '' && value !== 'Não encontrado'
@@ -1133,43 +1135,41 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     }
   }, [notificationCenterOpen, updatePreferences])
 
-  useEffect(() => {
+  const fetchNotifications = useCallback(async () => {
     if (!session?.user?.email) return
-    let cancelled = false
-
-    const fetchNotifications = async () => {
-      try {
-        const response = await authFetch(API_ENDPOINTS.NOTIFICATIONS)
-        if (!response.ok) return
-        const data = await response.json()
-        const incoming = (data || []).map(mapApiNotification)
-        const filteredIncoming = applyClearFilter(incoming, lastClearedAtRef.current)
-        setNotifications(prev => {
-          const byId = new Map<string, Notification>()
-          prev.forEach(n => byId.set(n.id, n))
-          filteredIncoming.forEach(n => {
-            const existing = byId.get(n.id)
-            byId.set(n.id, {
-              ...existing,
-              ...n,
-              read: existing?.read || n.read,
-            })
+    try {
+      const response = await authFetch(API_ENDPOINTS.NOTIFICATIONS)
+      if (!response.ok) return
+      const data = await response.json()
+      const incoming = (data || []).map(mapApiNotification)
+      const filteredIncoming = applyClearFilter(incoming, lastClearedAtRef.current)
+      setNotifications(prev => {
+        const byId = new Map<string, Notification>()
+        prev.forEach(n => byId.set(n.id, n))
+        filteredIncoming.forEach(n => {
+          const existing = byId.get(n.id)
+          byId.set(n.id, {
+            ...existing,
+            ...n,
+            read: existing?.read || n.read,
           })
-          const merged = Array.from(byId.values())
-          return cleanupOldNotifications(merged)
         })
-      } catch {
-        if (cancelled) return
-      }
-    }
-
-    fetchNotifications()
-    const interval = setInterval(fetchNotifications, 10000)
-    return () => {
-      cancelled = true
-      clearInterval(interval)
+        const merged = Array.from(byId.values())
+        return cleanupOldNotifications(merged)
+      })
+    } catch {
+      // Silencioso: o próximo poll tenta de novo.
     }
   }, [session?.user?.email])
+
+  useEffect(() => {
+    fetchNotifications()
+  }, [fetchNotifications])
+
+  // 30s em vez de 10s, e somente com a aba visível. O badge pode demorar até
+  // 30s para aparecer, mas a conclusão de processamento não depende daqui —
+  // quem alimenta a barra de progresso é o polling de job (useAsyncJob).
+  useVisibleInterval(fetchNotifications, NOTIFICATIONS_POLL_INTERVAL_MS, Boolean(session?.user?.email))
 
   useEffect(() => {
     if (processingDocuments.length === 0) return
