@@ -17,6 +17,7 @@ from app.core.logging import set_audit_context
 from app.core.config import settings
 from app.core import metrics
 from app.services import drive_service
+from app.services.review_timing import sanitizar_review_timing
 import logging
 import time
 import json
@@ -645,6 +646,28 @@ async def update_document(
             except Exception:
                 reviewed_at_dt = None
 
+        # Uma decisão de verdade é a decisão humana sobre um documento que ainda
+        # não tinha revisor, ou uma mudança de status.
+        #
+        # Não basta comparar o status: a fila da checagem inclui documentos que a
+        # IA já marcou "validated" aguardando confirmação humana (ver o filtro de
+        # DocumentQueue.CHECAGEM acima). Nesses, aprovar manda o MESMO status que
+        # já está no banco — e a comparação sozinha descartaria em silêncio o
+        # caminho mais comum de todos. O `not document.reviewed_by` cobre isso e
+        # continua bloqueando retry: depois da primeira decisão o revisor está
+        # gravado, então o segundo PATCH idêntico não conta de novo.
+        e_decisao = (
+            payload.validation_status in ("validated", "rejected")
+            and is_human_reviewer
+            and (
+                payload.validation_status != document.validation_status
+                or not document.reviewed_by
+            )
+        )
+        review_timing = (
+            sanitizar_review_timing(payload.review_timing, document_id) if e_decisao else None
+        )
+
         try:
             updated = user_db.update_document(
                 document_id=document_id,
@@ -659,6 +682,7 @@ async def update_document(
                 reviewed_at=reviewed_at_dt,
                 approval_reason=approval_reason,
                 rejection_reason=rejection_reason,
+                review_timing=review_timing,
             )
         except TypeError:
             # Compatibilidade com implementações antigas do backend de persistência.
@@ -674,23 +698,25 @@ async def update_document(
                 approval_reason=approval_reason,
                 rejection_reason=rejection_reason,
             )
-        # Métrica de qualidade: decisão humana só conta quando o status muda
-        if (
-            payload.validation_status in ("validated", "rejected")
-            and payload.validation_status != document.validation_status
-        ):
+        # Métrica de qualidade: uma decisão humana por documento revisado —
+        # inclusive quando o revisor concorda com a IA e o status não muda.
+        if e_decisao:
             clinica_nome = getattr(document, "clinic_name", None)
             if not clinica_nome and getattr(document, "clinic_id", None):
                 clinica = user_db.get_clinic_by_id(document.clinic_id)
                 clinica_nome = clinica.name if clinica else None
-            metrics.REVISAO_HUMANA.add(
-                1,
-                {
-                    "decisao": "aprovado" if payload.validation_status == "validated" else "rejeitado",
-                    "clinica_id": document.clinic_id or "desconhecida",
-                    "clinica_nome": clinica_nome or "desconhecida",
-                },
-            )
+            atributos_revisao = {
+                "decisao": "aprovado" if payload.validation_status == "validated" else "rejeitado",
+                "clinica_id": document.clinic_id or "desconhecida",
+                "clinica_nome": clinica_nome or "desconhecida",
+            }
+            metrics.REVISAO_HUMANA.add(1, atributos_revisao)
+            if review_timing is not None:
+                # Mesmos atributos do contador de propósito: a razão entre os
+                # dois é a cobertura da cronometragem no painel.
+                metrics.REVISAO_DURACAO.record(
+                    review_timing["active_ms"] / 1000.0, atributos_revisao
+                )
         payload_reviewed_by = None
         if isinstance(payload_result, dict):
             payload_reviewed_by = payload_result.get("reviewed_by") or payload_result.get("reviewedBy")

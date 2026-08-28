@@ -88,6 +88,23 @@ class DocumentCreate(BaseModel):
         }
 
 
+class ReviewTiming(BaseModel):
+    """Cronometragem da tela de revisão, medida no cliente.
+
+    As durações vêm de `performance.now()` (monotônico): imunes a skew e a
+    ajuste de hora do relógio do cliente. `started_at` é relógio de parede e
+    serve só para derivar o tempo de fila.
+
+    Sem constraint nenhuma de propósito — todo limite fica em
+    `app/services/review_timing.py`, que descarta em vez de levantar 422. Um
+    número torto não pode impedir o revisor de decidir o documento.
+    """
+    started_at: Optional[datetime] = None
+    active_ms: Optional[int] = None
+    wall_ms: Optional[int] = None
+    open_count: Optional[int] = None
+
+
 class DocumentUpdate(BaseModel):
     """Schema para atualização de documento"""
     validation_status: Optional[str] = None
@@ -105,6 +122,9 @@ class DocumentUpdate(BaseModel):
     quality_score: Optional[float] = None
     mandatory_coverage: Optional[float] = None
     content_hash: Optional[str] = None
+    # Cronometragem da tela de revisão; só é gravada quando o PATCH é uma
+    # decisão de verdade (ver update_document em app/api/v1/documents.py).
+    review_timing: Optional[ReviewTiming] = None
 
     class Config:
         json_schema_extra = {
