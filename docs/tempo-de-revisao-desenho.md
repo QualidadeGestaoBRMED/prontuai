@@ -147,17 +147,30 @@ testada com `--noconftest`:
 Descartar em vez de levantar erro é deliberado: uma cronometragem suspeita não pode
 impedir o revisor de aprovar o documento.
 
-**Guarda de transição.** A cronometragem só é gravada quando o PATCH é uma decisão de
-verdade — a mesma condição que já governa o contador `REVISAO_HUMANA`
-(`documents.py:677`):
+**Guarda de decisão.** A cronometragem só é gravada quando o PATCH é uma decisão
+humana de verdade:
 
 ```python
 payload.validation_status in ("validated", "rejected")
-and payload.validation_status != document.validation_status
+and is_human_reviewer
+and (
+    payload.validation_status != document.validation_status
+    or not document.reviewed_by
+)
 ```
 
-Sem essa guarda, um PATCH repetido (retry de rede, duplo clique) somaria a mesma revisão
-duas vezes.
+Comparar só o status **não basta**, e isso apareceu no primeiro teste em staging: a fila
+da checagem inclui documentos que a IA já marcou `validated` aguardando confirmação
+humana (filtro de `DocumentQueue.CHECAGEM`, `documents.py:199`). Nesses, aprovar manda o
+mesmo status que já está no banco — a comparação sozinha descartaria em silêncio o
+caminho mais comum de todos. O `not document.reviewed_by` cobre esse caso e continua
+bloqueando retry: depois da primeira decisão o revisor está gravado, então um segundo
+PATCH idêntico não conta de novo.
+
+Efeito colateral deliberado: o contador `REVISAO_HUMANA`, que usava a condição antiga,
+passa a contar também as confirmações em que o humano concorda com a IA. Ele vinha
+subcontando desde sempre — o número vai subir no Grafana, e comparação através dessa
+data não vale.
 
 Persistência: 1 kwarg novo (`review_timing`, já com os incrementos sanitizados) em
 `user_db.update_document` (`database_postgres.py:1431`), só na chamada primária — o `except TypeError` de `documents.py:663` é o caminho de
@@ -376,8 +389,8 @@ Testes:
 
 | Verificação | Resultado |
 |---|---|
-| `tests/test_review_timing.py` — 19 casos da sanitização + 4 da guarda de decisão no handler | 23 passaram |
-| Suíte back-end completa contra Postgres real | 3 falhas, 85 passaram |
+| `tests/test_review_timing.py` — 19 casos da sanitização + 7 da guarda de decisão no handler | 26 passaram |
+| Suíte back-end completa contra Postgres real | 3 falhas, 88 passaram |
 | Mesma suíte no HEAD limpo, sem esta mudança (baseline) | as **mesmas** 3 falhas, 62 passaram |
 | Migração 004 contra Postgres: detecção, aplicação, tipos, idempotência, reaplicação | 16 checagens passaram |
 | Acumulação em `update_document`: soma, `review_opened_at` imutável, PATCH sem timing não escreve | passou |
@@ -397,3 +410,14 @@ abertura; e `destruir` seguido de nova abertura (duplo mount do StrictMode).
 Não coberto por automação: o comportamento real do viewer de PDF do Chrome —
 a simulação assume que o foco no iframe é observável pelo documento pai, que é
 o pressuposto da regra de ocioso. Vale um teste manual na tela antes do deploy.
+
+### Correção pós-primeiro teste em staging
+
+O primeiro deploy em staging não gravou nada, por dois motivos independentes:
+
+1. Só o back-end subiu — `deploy_staging_vps.sh` envia `git archive "$SHA:back-end"`, e
+   o cronômetro inteiro vive no front. O PATCH chegou (200, registrado em `audit_logs`)
+   sem o bloco `review_timing`.
+2. Investigando o item 1, apareceu a falha real da guarda de decisão descrita na seção 4:
+   documento que a IA marcou `validated` e o humano confirma não muda de status, e a
+   condição antiga o descartava em silêncio. Corrigido antes do segundo teste.

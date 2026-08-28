@@ -141,10 +141,11 @@ from app.models.user import User, UserRole
 class FakeDocumentDB:
     """Só o suficiente para o handler rodar sem banco."""
 
-    def __init__(self, validation_status="pending"):
+    def __init__(self, validation_status="pending", reviewed_by=None):
         self.documento = types.SimpleNamespace(
             id="doc-1",
             validation_status=validation_status,
+            reviewed_by=reviewed_by,
             result_payload={},
             clinic_id="clinic-1",
             clinic_name="Clínica Teste",
@@ -212,15 +213,52 @@ def test_decisao_grava_a_cronometragem(monkeypatch):
     assert kwargs["review_timing"]["wall_ms"] == 300_000
 
 
-def test_patch_repetido_no_mesmo_status_nao_grava(monkeypatch):
-    # Retry de rede / duplo clique: o status já é o que está sendo pedido.
-    fake_db = FakeDocumentDB(validation_status="validated")
+def test_ia_aprovou_e_humano_confirma_grava(monkeypatch):
+    # A fila da checagem inclui documentos que a IA já marcou "validated"
+    # aguardando confirmação humana: o status não muda, mas é revisão de gente.
+    fake_db = FakeDocumentDB(validation_status="validated", reviewed_by=None)
+    kwargs = patch_documento(
+        monkeypatch,
+        fake_db,
+        DocumentUpdate(validation_status="validated", review_timing=TIMING_VALIDO),
+    )
+    assert kwargs["review_timing"]["active_ms"] == 120_000
+
+
+def test_ia_rejeitou_e_humano_confirma_a_rejeicao_grava(monkeypatch):
+    fake_db = FakeDocumentDB(validation_status="rejected", reviewed_by=None)
+    kwargs = patch_documento(
+        monkeypatch,
+        fake_db,
+        DocumentUpdate(validation_status="rejected", review_timing=TIMING_VALIDO),
+    )
+    assert kwargs["review_timing"]["active_ms"] == 120_000
+
+
+def test_patch_repetido_apos_a_decisao_nao_grava(monkeypatch):
+    # Retry de rede / duplo clique: mesmo status E revisor já gravado.
+    fake_db = FakeDocumentDB(
+        validation_status="validated", reviewed_by="checker@grupobrmed.com.br"
+    )
     kwargs = patch_documento(
         monkeypatch,
         fake_db,
         DocumentUpdate(validation_status="validated", review_timing=TIMING_VALIDO),
     )
     assert kwargs["review_timing"] is None
+
+
+def test_segunda_revisao_que_muda_a_decisao_grava(monkeypatch):
+    # Revisor volta atrás depois: é trabalho novo, soma.
+    fake_db = FakeDocumentDB(
+        validation_status="validated", reviewed_by="checker@grupobrmed.com.br"
+    )
+    kwargs = patch_documento(
+        monkeypatch,
+        fake_db,
+        DocumentUpdate(validation_status="rejected", review_timing=TIMING_VALIDO),
+    )
+    assert kwargs["review_timing"]["active_ms"] == 120_000
 
 
 def test_patch_sem_decisao_nao_grava(monkeypatch):

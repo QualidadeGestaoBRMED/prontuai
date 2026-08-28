@@ -646,12 +646,23 @@ async def update_document(
             except Exception:
                 reviewed_at_dt = None
 
-        # Uma decisão de verdade é a transição de status feita por gente. É a
-        # mesma condição que governa a métrica de revisão humana logo abaixo, e
-        # é o que impede um retry do PATCH de contar a revisão duas vezes.
+        # Uma decisão de verdade é a decisão humana sobre um documento que ainda
+        # não tinha revisor, ou uma mudança de status.
+        #
+        # Não basta comparar o status: a fila da checagem inclui documentos que a
+        # IA já marcou "validated" aguardando confirmação humana (ver o filtro de
+        # DocumentQueue.CHECAGEM acima). Nesses, aprovar manda o MESMO status que
+        # já está no banco — e a comparação sozinha descartaria em silêncio o
+        # caminho mais comum de todos. O `not document.reviewed_by` cobre isso e
+        # continua bloqueando retry: depois da primeira decisão o revisor está
+        # gravado, então o segundo PATCH idêntico não conta de novo.
         e_decisao = (
             payload.validation_status in ("validated", "rejected")
-            and payload.validation_status != document.validation_status
+            and is_human_reviewer
+            and (
+                payload.validation_status != document.validation_status
+                or not document.reviewed_by
+            )
         )
         review_timing = (
             sanitizar_review_timing(payload.review_timing, document_id) if e_decisao else None
@@ -687,7 +698,8 @@ async def update_document(
                 approval_reason=approval_reason,
                 rejection_reason=rejection_reason,
             )
-        # Métrica de qualidade: decisão humana só conta quando o status muda
+        # Métrica de qualidade: uma decisão humana por documento revisado —
+        # inclusive quando o revisor concorda com a IA e o status não muda.
         if e_decisao:
             clinica_nome = getattr(document, "clinic_name", None)
             if not clinica_nome and getattr(document, "clinic_id", None):
