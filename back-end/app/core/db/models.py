@@ -17,6 +17,7 @@ from sqlalchemy import (
     Float,
     ForeignKey,
     Integer,
+    SmallInteger,
     String,
     Text,
 )
@@ -87,6 +88,12 @@ class DocumentModel(Base):
     confidence_score = Column(Float, nullable=True)
     quality_score = Column(Float, nullable=True)
     mandatory_coverage = Column(Float, nullable=True)
+    # Cronometragem da tela de revisão (migration 004). NULL = revisão sem
+    # instrumentação, nunca zero — consulta de BI precisa filtrar.
+    review_opened_at = Column(DateTime, nullable=True)
+    review_active_ms = Column(Integer, nullable=True)
+    review_wall_ms = Column(Integer, nullable=True)
+    review_open_count = Column(SmallInteger, nullable=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 

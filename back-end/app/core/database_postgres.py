@@ -1447,9 +1447,14 @@ class PostgresUserDatabase:
         mandatory_coverage: Optional[float] = None,
         file_path: Optional[str] = None,
         content_hash: Optional[str] = None,
-        uploaded_by_user_email: Optional[str] = None
+        uploaded_by_user_email: Optional[str] = None,
+        review_timing: Optional[dict] = None
     ) -> Document:
-        """Atualiza documento."""
+        """Atualiza documento.
+
+        `review_timing` são os incrementos já sanitizados de
+        `app/services/review_timing.py` — nunca o payload cru do cliente.
+        """
         session = self._get_session()
         try:
             doc_model = session.query(DocumentModel).filter(DocumentModel.id == document_id).first()
@@ -1508,6 +1513,24 @@ class PostgresUserDatabase:
                 doc_model.quality_score = quality_score
             if mandatory_coverage is not None:
                 doc_model.mandatory_coverage = mandatory_coverage
+
+            if review_timing is not None:
+                # Acumula em vez de sobrescrever: reabrir o documento (ou revisar
+                # de novo depois) é trabalho adicional e precisa somar. Só o
+                # review_opened_at é imutável — guarda a PRIMEIRA abertura, que é
+                # o que fecha o tempo de fila contra o uploaded_at.
+                # Os min() existem só para não estourar INTEGER/SMALLINT.
+                if review_timing.get("started_at") is not None and doc_model.review_opened_at is None:
+                    doc_model.review_opened_at = review_timing["started_at"]
+                doc_model.review_active_ms = min(
+                    2147483647, (doc_model.review_active_ms or 0) + review_timing["active_ms"]
+                )
+                doc_model.review_wall_ms = min(
+                    2147483647, (doc_model.review_wall_ms or 0) + review_timing["wall_ms"]
+                )
+                doc_model.review_open_count = min(
+                    32767, (doc_model.review_open_count or 0) + review_timing["open_count"]
+                )
 
             doc_model.updated_at = datetime.utcnow()
 

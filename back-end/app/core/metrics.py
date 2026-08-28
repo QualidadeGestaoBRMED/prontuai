@@ -37,6 +37,12 @@ VIEWS: tuple[dict, ...] = (
     {"instrument_name": "prontuai_confianca_score",
      "buckets": (10, 20, 30, 40, 50, 60, 70, 80, 90, 100)},
 
+    # Tempo de revisão humana. Buckets pensados para a faixa real da checagem
+    # (dezenas de segundos a poucos minutos), com cauda até 30min para os
+    # outliers de aba esquecida aberta.
+    {"instrument_name": "prontuai_revisao_duracao_segundos",
+     "buckets": (5, 15, 30, 60, 120, 300, 600, 1800)},
+
     # Latência HTTP da instrumentação do FastAPI. Os buckets vêm do "advice" do
     # semconv, mas SDKs mais antigos ignoram o advice e caem nos buckets default
     # (0..10000) — que, para um histograma em segundos, jogam todo o tráfego no
@@ -126,6 +132,13 @@ try:
         description="Decisões do revisor humano sobre documentos (aprovado | rejeitado)",
     )
 
+    # Só as decisões com cronometragem entram aqui, e o denominador natural é o
+    # REVISAO_HUMANA acima: a razão entre os dois é a cobertura da instrumentação.
+    REVISAO_DURACAO = _meter.create_histogram(
+        "prontuai_revisao_duracao_segundos",
+        description="Tempo ativo de revisão humana, da abertura da tela à decisão",
+    )
+
     DOCUMENTOS_ENVIADOS = _meter.create_counter(
         "prontuai_documentos_enviados",
         description="Documentos recebidos no upload, antes do processamento (workflow pode falhar depois)",
@@ -163,6 +176,7 @@ except ImportError:  # pragma: no cover - ambiente sem opentelemetry-api
     CONFIANCA_SCORE = _NoopInstrument()
     VALIDACAO_DOCUMENTOS = _NoopInstrument()
     REVISAO_HUMANA = _NoopInstrument()
+    REVISAO_DURACAO = _NoopInstrument()
     DOCUMENTOS_ENVIADOS = _NoopInstrument()
     CLINICAS_CRIADAS = _NoopInstrument()
     USUARIOS_CRIADOS = _NoopInstrument()

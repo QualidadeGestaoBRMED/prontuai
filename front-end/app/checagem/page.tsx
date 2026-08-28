@@ -15,6 +15,7 @@ import { ProcessResult } from "@/types/process"
 import { DocumentDetailsModalChecagem } from "@/components/document-details-modal-checagem"
 import { RequireRole } from "@/components/require-role"
 import { useDocumentsPaged } from "@/hooks/use-documents-paged"
+import { useReviewTimer } from "@/hooks/use-review-timer"
 import { useClinicOptions } from "@/hooks/use-clinic-options"
 import { documentToProcessResult } from "@/lib/document-mapper"
 import { API_ENDPOINTS } from "@/lib/config"
@@ -50,6 +51,9 @@ export default function Page() {
   })
   const sessionData = useSession()
   const session = sessionData?.data || null
+  // Cronometragem da revisão: sobe junto do PATCH da decisão, sem UI e sem
+  // requisição extra. Ver docs/tempo-de-revisao-desenho.md.
+  const reviewTimer = useReviewTimer()
   const {
     options: clinicOptions,
     loading: clinicOptionsLoading,
@@ -128,6 +132,7 @@ export default function Page() {
   }
 
   const handleAprovar = async (id: string, approvalReason: string) => {
+    const reviewTiming = reviewTimer.encerrar(id)
     const result = dbResults.find((r) => r.id === id)
     const approvalReasonValue = approvalReason?.trim() || ""
     const approvalReasonNormalized = approvalReasonValue.length ? approvalReasonValue : undefined
@@ -143,6 +148,7 @@ export default function Page() {
         body: JSON.stringify({
           validation_status: "validated",
           approval_reason: approvalReasonNormalized,
+          ...(reviewTiming ? { review_timing: reviewTiming } : {}),
           result_payload: {
             ...(result?.result || {}),
             reviewed_by: session?.user?.email || "revisor@grupobrmed.com.br",
@@ -180,6 +186,7 @@ export default function Page() {
   }
 
   const handleRejeitar = async (id: string, motivo: string) => {
+    const reviewTiming = reviewTimer.encerrar(id)
     const result = dbResults.find((r) => r.id === id)
     updateProcessResultStatus(id, "rejected", session?.user?.email || "revisor@grupobrmed.com.br", motivo)
 
@@ -191,6 +198,7 @@ export default function Page() {
         headers,
         body: JSON.stringify({
           validation_status: "rejected",
+          ...(reviewTiming ? { review_timing: reviewTiming } : {}),
           result_payload: {
             ...(result?.result || {}),
             reviewed_by: session?.user?.email || "revisor@grupobrmed.com.br",
@@ -232,6 +240,7 @@ export default function Page() {
         return null
       })
       setSelectedResult(result)
+      reviewTimer.abrir(id)
     }
   }
 
@@ -351,6 +360,9 @@ export default function Page() {
           open={!!selectedResult}
           onOpenChange={(open) => {
             if (!open) {
+              // Depois de uma decisão o encerrar() já levou o acumulador; aqui
+              // só importa o caso de fechar a tela sem decidir.
+              if (selectedResult) reviewTimer.fechar(selectedResult.id)
               setSelectedResult(null)
               setDocumentPreviewUrl((prev) => {
                 if (prev) URL.revokeObjectURL(prev)
@@ -362,6 +374,9 @@ export default function Page() {
           onAprovar={handleAprovar}
           onRejeitar={handleRejeitar}
           onViewDocument={selectedResult ? () => handleViewDocument(selectedResult) : undefined}
+          onAbrirPdfExterno={
+            selectedResult ? () => reviewTimer.registrarPdfExterno(selectedResult.id) : undefined
+          }
           documentUrl={documentPreviewUrl}
           documentLoading={documentPreviewLoading}
         />

@@ -39,6 +39,8 @@ interface DocumentDetailsModalChecagemProps {
   onRejeitar: (id: string, motivo: string) => void
   onViewDocument?: () => void
   documentUrl?: string | null
+  /** Avisa o cronômetro de revisão que o PDF foi aberto fora da aba. */
+  onAbrirPdfExterno?: () => void
   documentLoading?: boolean
 }
 
@@ -50,6 +52,7 @@ export function DocumentDetailsModalChecagem({
   onRejeitar,
   onViewDocument,
   documentUrl,
+  onAbrirPdfExterno,
   documentLoading,
 }: DocumentDetailsModalChecagemProps) {
   const [motivo, setMotivo] = useState("")
@@ -346,7 +349,10 @@ export function DocumentDetailsModalChecagem({
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => window.open(documentUrl, "_blank", "noopener,noreferrer")}
+                      onClick={() => {
+                        onAbrirPdfExterno?.()
+                        window.open(documentUrl, "_blank", "noopener,noreferrer")
+                      }}
                     >
                       Abrir em nova aba
                     </Button>

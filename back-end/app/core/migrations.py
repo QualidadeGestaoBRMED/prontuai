@@ -50,6 +50,16 @@ def check_if_migration_needed() -> tuple[bool, list[str]]:
             logger.warning("⚠️  Migration 002 necessária: coluna cnpj não existe")
             migrations_needed.append("002_update_clinic_fields.sql")
 
+        # Verificar migration 004: review_active_ms em documents
+        cursor.execute("""
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_name='documents' AND column_name='review_active_ms'
+        """)
+        if not cursor.fetchone():
+            logger.warning("⚠️  Migration 004 necessária: coluna review_active_ms não existe")
+            migrations_needed.append("004_add_review_timing.sql")
+
         cursor.close()
         conn.close()
 
