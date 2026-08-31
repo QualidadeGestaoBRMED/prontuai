@@ -60,6 +60,26 @@ def check_if_migration_needed() -> tuple[bool, list[str]]:
             logger.warning("⚠️  Migration 004 necessária: coluna review_active_ms não existe")
             migrations_needed.append("004_add_review_timing.sql")
 
+        # Verificar migration 005: tabelas do catálogo de exames
+        cursor.execute("""
+            SELECT table_name
+            FROM information_schema.tables
+            WHERE table_name='exam_parents'
+        """)
+        if not cursor.fetchone():
+            logger.warning("⚠️  Migration 005 necessária: tabela exam_parents não existe")
+            migrations_needed.append("005_add_exam_catalog.sql")
+
+        # Verificar migration 006: vector_id no catálogo de exames
+        cursor.execute("""
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_name='exam_parents' AND column_name='vector_id'
+        """)
+        if not cursor.fetchone():
+            logger.warning("⚠️  Migration 006 necessária: coluna vector_id não existe")
+            migrations_needed.append("006_add_exam_vector_id.sql")
+
         cursor.close()
         conn.close()
 

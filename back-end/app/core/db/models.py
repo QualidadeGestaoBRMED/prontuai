@@ -10,16 +10,21 @@ from datetime import datetime
 
 from sqlalchemy import (
     ARRAY,
+    BigInteger,
     Boolean,
+    CheckConstraint,
     Column,
     DateTime,
     Enum as SQLEnum,
     Float,
     ForeignKey,
+    Index,
     Integer,
+    LargeBinary,
     SmallInteger,
     String,
     Text,
+    UniqueConstraint,
 )
 from sqlalchemy.ext.declarative import declarative_base
 
@@ -194,3 +199,114 @@ class MaintenanceWindowModel(Base):
     activated_at = Column(DateTime, nullable=True)
     cancelled_at = Column(DateTime, nullable=True)
     completed_at = Column(DateTime, nullable=True)
+
+
+class ExamParentModel(Base):
+    """
+    Exame pai (canônico) do catálogo de similaridade.
+
+    O pai é o nome pelo qual o BRNET pede o exame: a comparação do motor é
+    sempre BRNET → OCR, então um pai que não seja nome do BRNET nunca aparece
+    do lado esquerdo de um match. Daí a coluna `status`:
+
+    - `ativo`      — nome confirmado no BRNET, vale como canônico;
+    - `quarentena` — herdado do CSV sem correspondência no BRNET. Não serve de
+      canônico, mas o nome continua valendo como vocabulário (ele alarga o
+      portão de extração do OCR), então não é descartado.
+
+    `is_external` é o antigo sufixo "(externo)" promovido a flag — ver
+    `app.core.exam_normalize.separar_marcador_externo`.
+
+    As colunas de embedding ficam nulas nesta fase: o painel só cataloga. A
+    geração de vetor e a reconstrução do índice FAISS entram na fase seguinte.
+    """
+    __tablename__ = "exam_parents"
+
+    id = Column(String, primary_key=True)
+    name = Column(String, nullable=False)
+    name_normalized = Column(String, nullable=False, unique=True, index=True)
+    # Id int64 no índice FAISS, derivado da UUID. Ver migrations/006.
+    vector_id = Column(BigInteger, nullable=True, unique=True)
+    status = Column(String, nullable=False, default="quarentena")
+    is_external = Column(Boolean, nullable=False, default=False)
+    is_active = Column(Boolean, nullable=False, default=True)
+    source = Column(String, nullable=True)
+    notes = Column(Text, nullable=True)
+    # Reservado para a fase de lógica: vetor de 3072 dims (text-embedding-3-large).
+    embedding = Column(LargeBinary, nullable=True)
+    embedding_model = Column(String, nullable=True)
+    embedding_generated_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    created_by = Column(String, nullable=True)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_by = Column(String, nullable=True)
+
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('ativo', 'quarentena')",
+            name="ck_exam_parents_status",
+        ),
+    )
+
+
+class ExamVariationModel(Base):
+    """
+    Variação (sinônimo) de um exame pai.
+
+    Árvore estrita: `name_normalized` é único no catálogo inteiro, ou seja uma
+    variação pertence a exatamente um pai. Quando o CSV de origem manda o mesmo
+    termo para dois pais, a linha não entra — vai para
+    `exam_variation_conflicts` e espera decisão humana no painel.
+
+    `occurrences` guarda quantas vezes o termo foi visto nos documentos, para
+    ordenar a curadoria. Nulo = nunca medido (não é zero).
+    """
+    __tablename__ = "exam_variations"
+
+    id = Column(String, primary_key=True)
+    parent_id = Column(String, ForeignKey("exam_parents.id", ondelete="CASCADE"), nullable=False, index=True)
+    name = Column(String, nullable=False)
+    name_normalized = Column(String, nullable=False, unique=True, index=True)
+    # Id int64 no índice FAISS, derivado da UUID. Ver migrations/006.
+    vector_id = Column(BigInteger, nullable=True, unique=True)
+    is_active = Column(Boolean, nullable=False, default=True)
+    source = Column(String, nullable=True)
+    occurrences = Column(Integer, nullable=True)
+    embedding = Column(LargeBinary, nullable=True)
+    embedding_model = Column(String, nullable=True)
+    embedding_generated_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    created_by = Column(String, nullable=True)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_by = Column(String, nullable=True)
+
+
+class ExamVariationConflictModel(Base):
+    """
+    Variação que a importação não soube atribuir: o mesmo termo apareceu sob
+    mais de um pai.
+
+    Existe porque a alternativa era o importador escolher sozinho. São poucas
+    e todas são pergunta de negócio ("chumbo sérico e chumbo sanguíneo são o
+    mesmo exame?"), não defeito de dado — então param aqui e o painel pergunta.
+    """
+    __tablename__ = "exam_variation_conflicts"
+
+    id = Column(String, primary_key=True)
+    name = Column(String, nullable=False)
+    name_normalized = Column(String, nullable=False, index=True)
+    candidate_parents = Column(ARRAY(String), nullable=False)
+    source = Column(String, nullable=True)
+    resolution = Column(String, nullable=True)
+    resolved_parent_id = Column(String, ForeignKey("exam_parents.id", ondelete="SET NULL"), nullable=True)
+    resolved_at = Column(DateTime, nullable=True)
+    resolved_by = Column(String, nullable=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+
+    __table_args__ = (
+        UniqueConstraint("name_normalized", name="uq_exam_variation_conflicts_name"),
+        CheckConstraint(
+            "resolution IS NULL OR resolution IN ('atribuida', 'descartada')",
+            name="ck_exam_variation_conflicts_resolution",
+        ),
+    )
