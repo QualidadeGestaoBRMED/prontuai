@@ -6,6 +6,7 @@ import logging
 import hashlib
 import hmac
 from app.core.config import settings
+from app.services import exam_catalog_source
 from tenacity import retry, wait_exponential, stop_after_attempt
 import numpy as np
 import faiss
@@ -207,13 +208,22 @@ def _build_synonym_map() -> Dict[str, set[str]]:
             synonym_map[termo].update(termos_norm)
     return synonym_map
 
-EXAM_SYNONYM_MAP = _build_synonym_map()
+EXAM_SYNONYM_MAP_DISCO = _build_synonym_map()
+
+
+# Vocabulário efetivo = disco UNIDO ao catálogo curado no banco; a união nunca
+# reduz. Ver app/services/exam_catalog_source.py.
+def obter_sinonimos(termo_normalizado: str) -> set[str]:
+    """Grupo de sinônimos do termo, somando disco e catálogo."""
+    return EXAM_SYNONYM_MAP_DISCO.get(termo_normalizado, set()) | exam_catalog_source.sinonimos_de(
+        termo_normalizado
+    )
 
 def _match_exame_local(exame_brnet: str, exames_ocr: List[str]) -> Optional[str]:
     norm_brnet = _normalizar_exame(exame_brnet)
     if not norm_brnet:
         return None
-    synonyms = EXAM_SYNONYM_MAP.get(norm_brnet, set())
+    synonyms = obter_sinonimos(norm_brnet)
 
     for exame in exames_ocr:
         norm_ocr = _normalizar_exame(exame)

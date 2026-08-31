@@ -5,6 +5,7 @@ import unicodedata
 from typing import Dict, Any, Optional, List
 from fastapi import UploadFile
 from app.services import ocr_service, brmed_service, validacao_service
+from app.services import exam_catalog_source
 from app.core.config import settings
 from app.core import metrics
 from app.core.pii import mask_cpf, mask_identifier, mask_name
@@ -176,7 +177,7 @@ def _build_master_exam_terms() -> set[str]:
             termos.add(_normalizar_busca(similar))
     return termos
 
-MASTER_EXAM_TERMS = _build_master_exam_terms()
+MASTER_EXAM_TERMS_DISCO = _build_master_exam_terms()
 
 def _build_synonym_map() -> Dict[str, set[str]]:
     synonym_map: Dict[str, set[str]] = {}
@@ -198,7 +199,27 @@ def _build_synonym_map() -> Dict[str, set[str]]:
             synonym_map[termo].update(termos_norm)
     return synonym_map
 
-EXAM_SYNONYM_MAP = _build_synonym_map()
+EXAM_SYNONYM_MAP_DISCO = _build_synonym_map()
+
+# ---------------------------------------------------------------------------
+# Vocabulário efetivo = artefatos de disco  UNIDOS  ao catálogo curado no banco.
+#
+# A união nunca reduz: catálogo vazio ou banco fora deixa o motor exatamente
+# como estava antes do painel existir. Ver app/services/exam_catalog_source.py.
+# ---------------------------------------------------------------------------
+
+
+def obter_master_exam_terms() -> set[str]:
+    """Portão de extração: termo de exame do OCR fora deste conjunto é descartado."""
+    return MASTER_EXAM_TERMS_DISCO | exam_catalog_source.termos_do_catalogo()
+
+
+def obter_sinonimos(termo_normalizado: str) -> set[str]:
+    """Grupo de sinônimos do termo, somando disco e catálogo."""
+    return EXAM_SYNONYM_MAP_DISCO.get(termo_normalizado, set()) | exam_catalog_source.sinonimos_de(
+        termo_normalizado
+    )
+
 
 def _log_event(event: str, **payload: Any) -> None:
     try:
@@ -384,7 +405,7 @@ def _match_ocr_exame(
                 "evidence": _buscar_evidencias(exame, linhas)
             }
 
-    synonyms = EXAM_SYNONYM_MAP.get(norm_brnet, set())
+    synonyms = obter_sinonimos(norm_brnet)
     if synonyms:
         for exame in exames_ocr:
             if _normalizar_busca(exame) in synonyms:
@@ -485,11 +506,12 @@ def _filtrar_exames_ocr(
             continue
         brnet_norm_set.add(normalizado)
         brnet_norm_list.append((exame, normalizado))
-    termos_validos = MASTER_EXAM_TERMS | brnet_norm_set
+    termos_validos = obter_master_exam_terms() | brnet_norm_set
     contains_audiometria = any("AUDIOMETRIA" in normalizado for _, normalizado in brnet_norm_list)
 
     filtrados = []
     vistos = set()
+    descartados: list[str] = []
     for exame in exames_ocr or []:
         normalizado = _normalizar_busca(exame)
         if not normalizado:
@@ -504,11 +526,21 @@ def _filtrar_exames_ocr(
                         chave = brnet_norm
                         break
                 else:
+                    descartados.append(normalizado)
                     continue
         if chave in vistos:
             continue
         vistos.add(chave)
         filtrados.append(exame)
+
+    # Candidato descartado é invisível no banco: `exams_ocr` é persistido depois
+    # deste filtro. Sem este log não há como saber qual grafia cadastrar no
+    # catálogo — foi o que travou a análise dos 118 casos de exame perdido.
+    if descartados:
+        logger.info(
+            "[FILTRO_OCR] Candidatos descartados por não estarem no catálogo: %s",
+            descartados[:40],
+        )
 
     if markdown:
         markdown_norm = f" {_normalizar_busca(markdown)} "
