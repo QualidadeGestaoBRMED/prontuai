@@ -559,6 +559,40 @@ def _filtrar_exames_ocr(
                 vistos.add(normalizado)
                 filtrados.append(exame)
 
+        # Varredura determinística pelos sinônimos do catálogo.
+        #
+        # Fecha o buraco deixado pela extração por LLM, que é instável: medido em
+        # 4 execuções sobre o MESMO markdown, o extrator devolveu 14, 13, 9 e 13
+        # exames, com só 9 presentes em todas. Aqui não se espera que o LLM cite o
+        # exame — procura-se no texto os sinônimos catalogados do que o BRNET
+        # pediu e que ainda não foi encontrado. Só acrescenta candidato.
+        if settings.EXAM_CATALOG_MARKDOWN_SCAN:
+            pendentes = []
+            for exame in exames_brnet:
+                normalizado = _normalizar_busca(exame)
+                if normalizado and normalizado not in vistos:
+                    pendentes.append((exame, normalizado))
+            if pendentes:
+                achados = exam_catalog_source.varrer_markdown(
+                    markdown_norm,
+                    [normalizado for _, normalizado in pendentes],
+                    exigir_valor=settings.EXAM_CATALOG_SCAN_REQUIRE_VALUE,
+                )
+                for exame, normalizado in pendentes:
+                    achado = achados.get(normalizado)
+                    if not achado or normalizado in vistos:
+                        continue
+                    termo, tem_valor = achado
+                    vistos.add(normalizado)
+                    filtrados.append(exame)
+                    logger.info(
+                        "[VARREDURA] '%s' recuperado do texto pelo termo '%s' "
+                        "do catálogo (valor por perto: %s)",
+                        normalizado,
+                        termo,
+                        tem_valor,
+                    )
+
         # Fallbacks por marcador no texto: audiometria e GGT
         has_audiometria_marker = _has_audiometria_marker_text(markdown_norm)
         if contains_audiometria and has_audiometria_marker:

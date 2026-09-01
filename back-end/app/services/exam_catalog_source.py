@@ -145,3 +145,87 @@ def estatisticas() -> dict:
         "grupos_de_sinonimo": len(_sinonimos or {}),
         "cache_carregado": _termos is not None,
     }
+
+
+# ---------------------------------------------------------------------------
+# Varredura determinística do markdown
+#
+# Existe porque a extração de exames é uma chamada de LLM e é instável: medido
+# em 4 execuções sobre o MESMO markdown, o extrator devolveu 14, 13, 9 e 13
+# exames, com só 9 termos presentes em todas — "AVALIACAO OFTALMOLOGICA" saiu em
+# 1 de 4. Nenhum catálogo conserta termo que o extrator não emitiu.
+#
+# A varredura fecha esse buraco pelo outro lado: em vez de esperar o LLM citar o
+# exame, procura no texto os sinônimos catalogados do que o BRNET pediu. É
+# determinística, não custa chamada de API e só ACRESCENTA candidato — nunca
+# remove, então não pode piorar o que já funcionava.
+# ---------------------------------------------------------------------------
+
+MIN_TERMO_VARREDURA = 3
+# Janela em caracteres do texto normalizado onde procurar dígito depois do termo.
+# O normalizado não tem quebra de linha, então a janela atravessa linhas de
+# propósito: em OCR de tabela o valor fica longe do nome do exame.
+JANELA_VALOR = 120
+
+_cache_regex: dict[str, "re.Pattern"] = {}
+
+
+def _regex(termo: str):
+    import re
+
+    padrao = _cache_regex.get(termo)
+    if padrao is None:
+        padrao = re.compile(rf"\b{re.escape(termo)}\b")
+        _cache_regex[termo] = padrao
+    return padrao
+
+
+def varrer_markdown(
+    markdown_norm: str,
+    alvos_norm: list[str],
+    exigir_valor: bool = True,
+) -> dict[str, tuple[str, bool]]:
+    """
+    Procura no texto normalizado os termos do catálogo que são sinônimos dos
+    exames pedidos pelo BRNET.
+
+    `alvos_norm` são os nomes de exame do BRNET já normalizados.
+    Retorna {alvo: (termo encontrado, havia dígito por perto)}.
+
+    `exigir_valor` descarta o achado quando não há dígito na janela seguinte.
+    O motivo é concreto: no corpus, "perfil lipídico" aparecia dentro da frase
+    "padronização da determinação laboratorial do perfil lipídico" — citação de
+    protocolo, sem resultado nenhum. Sem essa guarda o motor concluiria que o
+    exame foi feito e liberaria prontuário incompleto, que é o erro caro.
+    """
+    import re
+
+    if not markdown_norm or not alvos_norm:
+        return {}
+
+    achados: dict[str, tuple[str, bool]] = {}
+    for alvo in alvos_norm:
+        if not alvo:
+            continue
+        grupo = sinonimos_de(alvo)
+        if not grupo:
+            continue
+        # Termo mais longo primeiro: o achado reportado é o mais específico.
+        for termo in sorted(grupo, key=len, reverse=True):
+            if len(termo) < MIN_TERMO_VARREDURA:
+                continue
+            casou = _regex(termo).search(markdown_norm)
+            if not casou:
+                continue
+            janela = markdown_norm[casou.end() : casou.end() + JANELA_VALOR]
+            tem_valor = bool(re.search(r"\d", janela))
+            if exigir_valor and not tem_valor:
+                logger.info(
+                    "[VARREDURA] '%s' encontrado para '%s' mas sem valor por perto; ignorado",
+                    termo,
+                    alvo,
+                )
+                continue
+            achados[alvo] = (termo, tem_valor)
+            break
+    return achados
