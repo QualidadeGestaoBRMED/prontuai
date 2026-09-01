@@ -26,6 +26,7 @@ próximo restart.
 from __future__ import annotations
 
 import logging
+import re
 import threading
 
 logger = logging.getLogger(__name__)
@@ -162,10 +163,28 @@ def estatisticas() -> dict:
 # ---------------------------------------------------------------------------
 
 MIN_TERMO_VARREDURA = 3
-# Janela em caracteres do texto normalizado onde procurar dígito depois do termo.
-# O normalizado não tem quebra de linha, então a janela atravessa linhas de
-# propósito: em OCR de tabela o valor fica longe do nome do exame.
+# Janela em caracteres do texto normalizado, para CADA LADO do termo. Os dois
+# lados importam: medido no corpus, em "TRANSAMINASE PIRUVICA TGP 19 U L" e em
+# "DE REFERENCIA HOMENS INFERIOR A 42 0 U L" a unidade vem ANTES do termo, e uma
+# janela só para frente perdia 16 achados legítimos.
 JANELA_VALOR = 120
+
+# Evidência de que o exame foi REALIZADO, não apenas pedido.
+#
+# A primeira versão aceitava qualquer dígito na janela, e isso é fraco: nos
+# laudos, o nome do exame aparece numa lista numerada de exames solicitados
+# ("2. Avaliação de Visão Ocupacional ... 30 07 2026 6 ESPIROMETRIA 3 ECG"), e
+# número de item e data satisfaziam a guarda. Ou seja, um documento que só
+# *pediu* o exame passava como se o tivesse feito — o falso positivo caro.
+#
+# Unidade de medida ou vocabulário de laudo são sinais de resultado real.
+_UNIDADE = re.compile(
+    r"\b(MG DL|MG L|G DL|U L|UI L|UI ML|MMOL L|NG ML|UG L|MG 24H|MIL MM3|MM3|PG ML|MEQ L)\b"
+)
+_VOCABULARIO_LAUDO = re.compile(
+    r"\b(RESULTADO|VALOR DE REFERENCIA|VALORES DE REFERENCIA|REFERENCIA|METODO|"
+    r"MATERIAL|AMOSTRA|LAUDO|NEGATIVO|POSITIVO|NAO REAGENTE|REAGENTE)\b"
+)
 
 _cache_regex: dict[str, "re.Pattern"] = {}
 
@@ -192,11 +211,17 @@ def varrer_markdown(
     `alvos_norm` são os nomes de exame do BRNET já normalizados.
     Retorna {alvo: (termo encontrado, havia dígito por perto)}.
 
-    `exigir_valor` descarta o achado quando não há dígito na janela seguinte.
-    O motivo é concreto: no corpus, "perfil lipídico" aparecia dentro da frase
-    "padronização da determinação laboratorial do perfil lipídico" — citação de
-    protocolo, sem resultado nenhum. Sem essa guarda o motor concluiria que o
-    exame foi feito e liberaria prontuário incompleto, que é o erro caro.
+    `exigir_valor` descarta o achado sem evidência de resultado no contexto —
+    unidade de medida ou vocabulário de laudo em ±120 caracteres. Duas armadilhas
+    reais do corpus justificam isso: "padronização da determinação laboratorial
+    do perfil lipídico" (citação de diretriz, sem resultado) e a lista numerada
+    de exames PEDIDOS no topo do prontuário, onde número de item e data faziam
+    passar um exame que nunca foi realizado.
+
+    Custo conhecido: exame não-laboratorial (avaliação oftalmológica, ECG, RX)
+    não tem unidade nem vocabulário de laudo perto do nome, então deixa de ser
+    recuperado. É o lado seguro para errar — deixar de liberar é reversível pelo
+    revisor, liberar prontuário incompleto não.
     """
     import re
 
@@ -217,15 +242,20 @@ def varrer_markdown(
             casou = _regex(termo).search(markdown_norm)
             if not casou:
                 continue
-            janela = markdown_norm[casou.end() : casou.end() + JANELA_VALOR]
-            tem_valor = bool(re.search(r"\d", janela))
-            if exigir_valor and not tem_valor:
+            contexto = markdown_norm[
+                max(0, casou.start() - JANELA_VALOR) : casou.end() + JANELA_VALOR
+            ]
+            tem_evidencia = bool(
+                _UNIDADE.search(contexto) or _VOCABULARIO_LAUDO.search(contexto)
+            )
+            if exigir_valor and not tem_evidencia:
                 logger.info(
-                    "[VARREDURA] '%s' encontrado para '%s' mas sem valor por perto; ignorado",
+                    "[VARREDURA] '%s' encontrado para '%s' sem evidência de resultado "
+                    "no contexto; ignorado (provável lista de exames pedidos)",
                     termo,
                     alvo,
                 )
                 continue
-            achados[alvo] = (termo, tem_valor)
+            achados[alvo] = (termo, tem_evidencia)
             break
     return achados
