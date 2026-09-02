@@ -33,6 +33,7 @@ export const API_ENDPOINTS = {
   EXAM_STATS: `${API_PROXY_BASE}/v1/exams/stats`,
   EXAM_VARIATIONS: (parentId: string) => `${API_PROXY_BASE}/v1/exams/${parentId}/variations`,
   EXAM_VARIATION_BY_ID: (id: string) => `${API_PROXY_BASE}/v1/exams/variations/${id}`,
+  EXAM_PENDENCIES: `${API_PROXY_BASE}/v1/exams/pendencies`,
   EXAM_CONFLICTS: `${API_PROXY_BASE}/v1/exams/conflicts`,
   EXAM_CONFLICT_RESOLVE: (id: string) => `${API_PROXY_BASE}/v1/exams/conflicts/${id}/resolve`,
 

@@ -77,6 +77,13 @@ interface ExamConflict {
   source: string | null;
 }
 
+interface ExamPendency {
+  name: string;
+  name_normalized: string;
+  documents: number;
+  requests: number;
+}
+
 interface CatalogStats {
   parents_total: number;
   parents_ativo: number;
@@ -84,7 +91,8 @@ interface CatalogStats {
   parents_sem_variacao: number;
   variations_total: number;
   conflicts_pending: number;
-  terms_without_vector: number;
+  terms_without_vector?: number;
+  brnet_without_parent?: number;
 }
 
 /** Extrai a mensagem de erro do backend (409 traz o motivo da colisão). */
@@ -204,7 +212,7 @@ export default function ExamesAdminPage() {
     process.env.NEXT_PUBLIC_DEV_AUTH_BYPASS === "true";
   const podeCarregar = bypassAuth || !!session?.user?.email;
 
-  const [aba, setAba] = useState<"catalogo" | "conflitos">("catalogo");
+  const [aba, setAba] = useState<"pendencias" | "catalogo" | "conflitos">("pendencias");
   const [stats, setStats] = useState<CatalogStats | null>(null);
   const [parents, setParents] = useState<ExamParent[]>([]);
   const [total, setTotal] = useState(0);
@@ -232,6 +240,8 @@ export default function ExamesAdminPage() {
   const [formVariacoes, setFormVariacoes] = useState<string[]>([""]);
   const [emEdicao, setEmEdicao] = useState<ExamParent | null>(null);
 
+  const [pendencias, setPendencias] = useState<ExamPendency[]>([]);
+  const [carregandoPendencias, setCarregandoPendencias] = useState(true);
   const [conflitos, setConflitos] = useState<ExamConflict[]>([]);
   const [todosPais, setTodosPais] = useState<ExamParent[]>([]);
   const [escolhaConflito, setEscolhaConflito] = useState<Record<string, string>>({});
@@ -272,6 +282,24 @@ export default function ExamesAdminPage() {
     }
   }, [podeCarregar, statusSessao, buscaAplicada, filtroStatus, somenteSemVariacao]);
 
+  const carregarPendencias = useCallback(async () => {
+    if (!podeCarregar) {
+      if (statusSessao !== "loading") setCarregandoPendencias(false);
+      return;
+    }
+    setCarregandoPendencias(true);
+    try {
+      const response = await authFetch(`${API_ENDPOINTS.EXAM_PENDENCIES}?limit=300`);
+      if (!response.ok) throw new Error("Erro ao carregar pendências");
+      setPendencias(await response.json());
+    } catch (error) {
+      console.error("Erro:", error);
+      toast.error("Erro ao carregar pendências do catálogo");
+    } finally {
+      setCarregandoPendencias(false);
+    }
+  }, [podeCarregar, statusSessao]);
+
   const carregarConflitos = useCallback(async () => {
     try {
       const [respConflitos, respPais] = await Promise.all([
@@ -296,6 +324,10 @@ export default function ExamesAdminPage() {
   useEffect(() => {
     if (aba === "catalogo") carregarParents();
   }, [aba, carregarParents]);
+
+  useEffect(() => {
+    if (aba === "pendencias") carregarPendencias();
+  }, [aba, carregarPendencias]);
 
   useEffect(() => {
     if (aba === "conflitos") carregarConflitos();
@@ -365,12 +397,22 @@ export default function ExamesAdminPage() {
       limparFormulario();
       carregarParents();
       carregarStats();
+      carregarPendencias();
     } catch (error) {
       console.error("Erro:", error);
       toast.error("Erro ao criar exame");
     } finally {
       setSalvando(false);
     }
+  };
+
+  /** Abre "Novo Exame" com o nome do BRNET já preenchido: o curador só acrescenta variações. */
+  const cadastrarPendencia = (pendencia: ExamPendency) => {
+    limparFormulario();
+    setFormNome(pendencia.name);
+    setFormStatus("ativo");
+    setFormVariacoes([""]);
+    setModalCriar(true);
   };
 
   const abrirEdicao = (parent: ExamParent) => {
@@ -562,8 +604,7 @@ export default function ExamesAdminPage() {
               <div>
                 <h2 className="text-2xl font-bold text-white">Exames e Variações</h2>
                 <p className="text-sm text-white/80 mt-1">
-                  Cada exame pai é o nome que o BRNET usa; as variações são os nomes
-                  alternativos que aparecem nos documentos.
+                  Gerencie o catálogo de exames e suas variações de nome.
                 </p>
               </div>
               <Button
@@ -577,31 +618,16 @@ export default function ExamesAdminPage() {
               </Button>
             </div>
 
-            {/* Resumo do catálogo */}
-            {stats && (
-              <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-7">
-                {[
-                  { rotulo: "Exames pai", valor: stats.parents_total },
-                  { rotulo: "Confirmados no BRNET", valor: stats.parents_ativo },
-                  { rotulo: "Em quarentena", valor: stats.parents_quarentena },
-                  { rotulo: "Sem variação", valor: stats.parents_sem_variacao },
-                  { rotulo: "Variações", valor: stats.variations_total },
-                  { rotulo: "Conflitos abertos", valor: stats.conflicts_pending },
-                  { rotulo: "Sem vetor", valor: stats.terms_without_vector },
-                ].map((cartao) => (
-                  <div
-                    key={cartao.rotulo}
-                    className="rounded-lg bg-white/10 px-4 py-3 text-white"
-                  >
-                    <div className="text-2xl font-bold">{cartao.valor}</div>
-                    <div className="text-xs text-white/70">{cartao.rotulo}</div>
-                  </div>
-                ))}
-              </div>
-            )}
-
             {/* Abas */}
             <div className="mb-4 flex gap-2">
+              <Button
+                variant={aba === "pendencias" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setAba("pendencias")}
+              >
+                Pendências
+                {stats?.brnet_without_parent ? ` (${stats.brnet_without_parent})` : ""}
+              </Button>
               <Button
                 variant={aba === "catalogo" ? "default" : "outline"}
                 size="sm"
@@ -619,7 +645,74 @@ export default function ExamesAdminPage() {
               </Button>
             </div>
 
-            {aba === "catalogo" ? (
+            {aba === "pendencias" ? (
+              /* Pendências: exames que o BRNET pede e o catálogo não tem */
+              <div className="bg-white rounded-lg shadow overflow-hidden">
+                <p className="text-sm text-gray-600 p-6 pb-4">
+                  Exames que o BRNET pede e que <strong>não têm pai no catálogo</strong>.
+                  Sem pai, a comparação nunca encontra o exame — nem por sinônimo, nem
+                  pela varredura do texto. Ordenado por quantidade de documentos em que
+                  o BRNET pediu o exame.
+                </p>
+                <table className="w-full">
+                  <thead className="bg-gray-50 border-b">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                        Exame pedido pelo BRNET
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                        Documentos
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                        Ações
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    {carregandoPendencias ? (
+                      Array.from({ length: 5 }).map((_, i) => (
+                        <tr key={i} className="animate-pulse">
+                          <td className="px-6 py-4">
+                            <div className="h-4 bg-gray-200 rounded w-64" />
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="h-4 bg-gray-200 rounded w-12" />
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="h-8 bg-gray-200 rounded w-24" />
+                          </td>
+                        </tr>
+                      ))
+                    ) : pendencias.length === 0 ? (
+                      <tr>
+                        <td colSpan={3} className="px-6 py-12 text-center text-gray-500">
+                          Nenhuma pendência: todo exame que o BRNET pede tem pai no catálogo.
+                        </td>
+                      </tr>
+                    ) : (
+                      pendencias.map((pendencia) => (
+                        <tr key={pendencia.name_normalized} className="hover:bg-gray-50">
+                          <td className="px-6 py-4 text-sm font-medium">
+                            {pendencia.name}
+                            <div className="text-xs text-gray-400 font-normal mt-0.5">
+                              {pendencia.name_normalized}
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 text-sm text-gray-600">
+                            {pendencia.documents.toLocaleString("pt-BR")}
+                          </td>
+                          <td className="px-6 py-4 text-sm">
+                            <Button size="sm" onClick={() => cadastrarPendencia(pendencia)}>
+                              Cadastrar
+                            </Button>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            ) : aba === "catalogo" ? (
               <>
                 {/* Filtros */}
                 <div className="mb-4 flex flex-wrap items-center gap-2">
