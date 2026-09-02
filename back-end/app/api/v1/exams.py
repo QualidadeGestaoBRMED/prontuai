@@ -19,6 +19,7 @@ from app.core.logging import set_audit_context
 from app.services import exam_catalog_source, exam_vector_service
 from app.models.exam import (
     ExamCatalogStats,
+    ExamPendency,
     ExamConflictResolution,
     ExamParent,
     ExamParentCreate,
@@ -110,6 +111,28 @@ async def get_catalog_stats(current_user: User = Depends(require_management)):
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Erro ao obter estatísticas do catálogo",
+        )
+
+
+@router.get("/pendencies", response_model=List[ExamPendency])
+async def list_pendencies(
+    limit: int = Query(200, ge=1, le=1000),
+    current_user: User = Depends(require_management),
+):
+    """
+    Exames que o BRNET pede e que não têm pai no catálogo.
+
+    É a pendência mais consequente da curadoria: sem pai, a comparação nunca
+    encontra o exame — nem por sinônimo, nem pela varredura do markdown. Ordenado
+    por quantidade de documentos em que o BRNET pediu o exame.
+    """
+    try:
+        return user_db.listar_exames_brnet_sem_pai(limit=limit)
+    except Exception as e:
+        logger.exception(f"[EXAMS] Erro ao listar pendências: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Erro ao listar pendências do catálogo",
         )
 
 

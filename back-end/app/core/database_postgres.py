@@ -21,6 +21,7 @@ from app.models.notification import Notification, NotificationCreate, Notificati
 from app.models.audit_log import AuditLog, AuditLogCreate
 from app.models.exam import (
     ExamCatalogStats,
+    ExamPendency,
     ExamParent,
     ExamParentDetail,
     ExamVariation,
@@ -2147,6 +2148,7 @@ class PostgresUserDatabase:
                 .filter(ExamVariationConflictModel.resolution.is_(None))
                 .scalar()
                 or 0,
+                brnet_without_parent=len(self.listar_exames_brnet_sem_pai(limit=10000)),
                 terms_without_vector=sum(
                     session.query(func.count(modelo.id))
                     .filter(modelo.embedding.is_(None))
@@ -2257,3 +2259,63 @@ class PostgresUserDatabase:
             return total
         finally:
             session.close()
+
+    def listar_exames_brnet_sem_pai(self, limit: int = 200) -> List[ExamPendency]:
+        """
+        Exames que o BRNET pede e que não têm pai no catálogo.
+
+        A normalização roda em **Python**, não em SQL: as reescritas de sigla de
+        `normalizar_termo` (gama-GT → GGT, entre outras) não existem no banco, e
+        reimplementá-las em SQL faria as duas divergirem em silêncio — foi o que
+        aconteceu num rascunho, onde `ggt (gama-gt)` aparecia como órfão tendo pai.
+
+        Ordena por número de documentos em que o BRNET pediu o exame, que é a
+        exposição do problema. O impacto real (quantos faltantes o exame causou)
+        exige parsear `result_payload` de todos os documentos — medido em ~3,8s,
+        caro demais para carregar tela.
+        """
+        session = self._get_session()
+        try:
+            bruto = session.execute(
+                text(
+                    "SELECT btrim(e), count(*), count(DISTINCT d.id) "
+                    "FROM documents d, unnest(d.exams_brnet) e "
+                    "WHERE d.exams_brnet IS NOT NULL AND btrim(e) <> '' "
+                    "GROUP BY 1"
+                )
+            ).all()
+
+            agregado: dict[str, dict] = {}
+            for nome, pedidos, docs in bruto:
+                chave = normalizar_termo(nome)
+                if not chave:
+                    continue
+                # Nomes distintos podem colapsar na mesma chave (acento, sigla).
+                item = agregado.setdefault(
+                    chave, {"name": nome, "requests": 0, "documents": 0}
+                )
+                item["requests"] += int(pedidos or 0)
+                item["documents"] += int(docs or 0)
+
+            pais = {
+                chave
+                for (chave,) in session.query(ExamParentModel.name_normalized).all()
+            }
+
+            pendencias = [
+                ExamPendency(
+                    name=item["name"],
+                    name_normalized=chave,
+                    documents=item["documents"],
+                    requests=item["requests"],
+                )
+                for chave, item in agregado.items()
+                if chave not in pais
+            ]
+            pendencias.sort(key=lambda p: (-p.documents, p.name))
+            return pendencias[:limit]
+        finally:
+            session.close()
+
+    def contar_exames_brnet_sem_pai(self) -> int:
+        return len(self.listar_exames_brnet_sem_pai(limit=10000))
