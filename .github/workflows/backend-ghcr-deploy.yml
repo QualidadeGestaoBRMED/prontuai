@@ -179,6 +179,55 @@ jobs:
             back-end/docker-compose.aws.yml \
             "$AWS_VPS_USER@$AWS_VPS_HOST:$DEPLOY_PATH/docker-compose.yml"
 
+      - name: Dump do banco antes de subir
+        env:
+          AWS_VPS_HOST: ${{ secrets.AWS_VPS_HOST }}
+          AWS_VPS_USER: ${{ secrets.AWS_VPS_USER }}
+          AWS_VPS_PORT: ${{ vars.AWS_VPS_PORT || '22' }}
+          DB_DEPLOY_DIR: ${{ vars.AWS_VPS_DB_DEPLOY_DIR || '/home/ec2-user/prontuai-db' }}
+        run: |
+          ssh -i ~/.ssh/aws_vps_key -p "$AWS_VPS_PORT" -o StrictHostKeyChecking=accept-new \
+            "$AWS_VPS_USER@$AWS_VPS_HOST" \
+            "DEPLOY_PATH='$DEPLOY_PATH' DB_DEPLOY_DIR='$DB_DEPLOY_DIR' bash -s" <<'REMOTE'
+          set -euo pipefail
+
+          # auto_migrate() roda no startup do container e voltar a imagem NAO
+          # desfaz mudanca de schema. Por isso o dump vem antes de subir e a
+          # falha dele aborta o deploy — mesma trava do deploy_vps.sh manual,
+          # que ate agora so existia no caminho de deploy a mao.
+
+          if [ -x "$DB_DEPLOY_DIR/script/backup_postgres.sh" ]; then
+            echo ">> backup via $DB_DEPLOY_DIR/script/backup_postgres.sh (vai para o bucket)"
+            cd "$DB_DEPLOY_DIR"
+            ./script/backup_postgres.sh
+            exit 0
+          fi
+
+          echo ">> backup_postgres.sh ausente; pg_dump local em $DEPLOY_PATH"
+          cd "$DEPLOY_PATH"
+          arquivo="pre-deploy-$(date +%Y%m%d-%H%M%S).sql.gz"
+
+          # Credenciais lidas DENTRO do container: sao as mesmas com que o
+          # Postgres foi inicializado, e nao repetem o source do .env no host.
+          if ! docker exec prontuai-db sh -c 'pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB"' | gzip > "$arquivo"; then
+            rm -f "$arquivo"
+            echo "pg_dump falhou. Nao vou implantar sem dump." >&2
+            exit 1
+          fi
+
+          bytes="$(stat -c %s "$arquivo")"
+          # Poucos KB e quase sempre erro de credencial ou banco vazio.
+          if [ "$bytes" -lt 102400 ]; then
+            echo "Dump com $bytes bytes: pequeno demais para producao. Abortando." >&2
+            rm -f "$arquivo"
+            exit 1
+          fi
+          echo ">> dump OK: $arquivo ($(awk -v b="$bytes" 'BEGIN{printf "%.1f MB", b/1048576}'))"
+
+          # Retencao: guarda os 5 mais recentes para nao encher o disco da VPS.
+          ls -1t pre-deploy-*.sql.gz 2>/dev/null | tail -n +6 | xargs -r rm -f || true
+          REMOTE
+
       - name: Deploy on VPS
         env:
           AWS_VPS_HOST: ${{ secrets.AWS_VPS_HOST }}
@@ -200,12 +249,6 @@ jobs:
             exit 1
           fi
 
-          target_backend_image="$BACKEND_IMAGE"
-          set -a
-          . ./.env
-          set +a
-          BACKEND_IMAGE="$target_backend_image"
-
           if [ -n "${GHCR_DEPLOY_USERNAME:-}" ] && [ -n "${GHCR_DEPLOY_TOKEN:-}" ]; then
             printf '%s\n' "$GHCR_DEPLOY_TOKEN" | docker login ghcr.io -u "$GHCR_DEPLOY_USERNAME" --password-stdin
           fi
@@ -214,7 +257,12 @@ jobs:
           docker compose -f docker-compose.yml pull prontuai-backend
           docker compose -f docker-compose.yml up -d --remove-orphans prontuai-backend
 
-          health_port="${BACKEND_HTTP_PORT:-8080}"
+          # A porta sai do compose, que le o .env com parser proprio. Sourcear o
+          # .env aqui executava o arquivo como shell: valor com espaco, $, crase
+          # ou # quebrava o deploy — ou pior, virava vazio em silencio — e ainda
+          # sobrescrevia o BACKEND_IMAGE que chega por ssh.
+          health_port="$(docker compose -f docker-compose.yml port prontuai-backend 80 2>/dev/null | head -1 | cut -d: -f2 || true)"
+          health_port="${health_port:-8080}"
           for i in $(seq 1 30); do
             if curl -fsS "http://127.0.0.1:${health_port}/health" >/dev/null; then
               printf '%s\n' "$BACKEND_IMAGE" > .current_backend_image

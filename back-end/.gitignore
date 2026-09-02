@@ -51,3 +51,8 @@ miniconda.sh
 script-sheets-qeg-cf49d0e4845c.json
 drive.json
 .secrets
+
+# Índice vetorial do catálogo de exames: artefato derivado da tabela, gerado
+# e assinado em runtime a cada escrita no painel. Nunca versionar.
+data/exam_catalog_index.faiss
+data/exam_catalog_index.faiss.hmac

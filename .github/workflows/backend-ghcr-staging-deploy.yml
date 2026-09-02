@@ -204,12 +204,6 @@ jobs:
             exit 1
           fi
 
-          target_backend_image="$BACKEND_IMAGE"
-          set -a
-          . ./.env
-          set +a
-          BACKEND_IMAGE="$target_backend_image"
-
           if [ -n "${GHCR_DEPLOY_USERNAME:-}" ] && [ -n "${GHCR_DEPLOY_TOKEN:-}" ]; then
             printf '%s\n' "$GHCR_DEPLOY_TOKEN" | docker login ghcr.io -u "$GHCR_DEPLOY_USERNAME" --password-stdin
           fi
@@ -218,7 +212,12 @@ jobs:
           docker compose -f docker-compose.yml pull prontuai-backend-stg
           docker compose -f docker-compose.yml up -d --remove-orphans prontuai-backend-stg
 
-          health_port="${BACKEND_HTTP_PORT:-8080}"
+          # A porta sai do compose, que le o .env com parser proprio. Sourcear o
+          # .env aqui executava o arquivo como shell: valor com espaco, $, crase
+          # ou # quebrava o deploy — ou pior, virava vazio em silencio — e ainda
+          # sobrescrevia o BACKEND_IMAGE que chega por ssh.
+          health_port="$(docker compose -f docker-compose.yml port prontuai-backend-stg 80 2>/dev/null | head -1 | cut -d: -f2 || true)"
+          health_port="${health_port:-8080}"
           for i in $(seq 1 30); do
             if curl -fsS "http://127.0.0.1:${health_port}/health" >/dev/null; then
               printf '%s\n' "$BACKEND_IMAGE" > .current_backend_image
