@@ -762,7 +762,7 @@ export default function ExamesAdminPage() {
                     variant={somenteSemVariacao ? "default" : "outline"}
                     onClick={() => setSomenteSemVariacao((v) => !v)}
                   >
-                    Só sem variação
+                    Sem variações
                   </Button>
                   <span className="ml-auto text-sm text-white/70">
                     {total} exame{total === 1 ? "" : "s"}
