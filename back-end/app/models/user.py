@@ -8,6 +8,7 @@ class UserRole(str, Enum):
     """Roles de usuários no sistema"""
     ADMIN = "ADMIN"      # Acesso total + gerenciar usuários
     MANAGER = "MANAGER"  # Gestor: igual ao ADMIN, exceto exclusões e operações de sistema
+    CURATOR = "CURATOR"  # Curadoria do catálogo de exames, e nada além disso
     CHECKER = "CHECKER"  # Apenas checagem de exames
     SENDER = "SENDER"    # Apenas enviar documentos (pendentes)
 

@@ -82,7 +82,7 @@ const data = {
 };
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
-  const { isAdmin, isManagement, role } = usePermissions();
+  const { isAdmin, isManagement, canCurateExams, role } = usePermissions();
   const documentsRoutes = new Set(["/pendentes", "/historico", "/checagem"]);
   const handleDocumentsRefresh = (url?: string) => {
     if (!url || !documentsRoutes.has(url)) return;
@@ -151,13 +151,14 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         )}
 
         {/* Admin Section - Apenas para administradores */}
-        {isManagement && (
+        {(isManagement || canCurateExams) && (
           <SidebarGroup>
             <SidebarGroupLabel className="uppercase text-sidebar-foreground/50">
               Administração
             </SidebarGroupLabel>
             <SidebarGroupContent className="px-2">
               <SidebarMenu>
+                {isManagement && (
                 <SidebarMenuItem>
                   <SidebarMenuButton
                     asChild
@@ -173,6 +174,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                     </a>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
+                )}
                 {isAdmin && (
                   <SidebarMenuItem>
                     <SidebarMenuButton
@@ -207,6 +209,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                 )}
+                {isManagement && (
                 <SidebarMenuItem>
                   <SidebarMenuButton
                     asChild
@@ -222,6 +225,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                     </a>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
+                )}
+                {canCurateExams && (
                 <SidebarMenuItem>
                   <SidebarMenuButton
                     asChild
@@ -237,6 +242,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                     </a>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
+                )}
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>

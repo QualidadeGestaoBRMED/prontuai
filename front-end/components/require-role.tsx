@@ -63,6 +63,9 @@ export function RequireRole({
 
   // Not authorized
   if (!userRole || !allowedRoles.includes(userRole)) {
+    if (userRole === "CURATOR") {
+      redirect("/admin/exames");
+    }
     if (userRole === "CHECKER") {
       redirect("/checagem");
     }

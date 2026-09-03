@@ -1,8 +1,9 @@
 """
 Endpoints do catálogo de exames similares (exame pai + variações).
 
-Painel de curadoria: só ADMIN e MANAGER leem e escrevem; exclusão é
-exclusiva de ADMIN, como no resto do sistema.
+Painel de curadoria: só ADMIN e CURATOR, incluindo exclusão — quem cura precisa
+poder remover uma entrada errada. MANAGER **não** acessa: a curadoria do catálogo
+foi separada da gestão administrativa.
 
 Esta fase é só catálogo. A geração de vetor por termo e a reconstrução do
 índice FAISS entram depois — as colunas de embedding já existem e ficam nulas.
@@ -12,7 +13,7 @@ from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
-from app.core.auth import require_admin, require_management
+from app.core.auth import require_exam_catalog
 from app.core.config import settings
 from app.core.database import user_db
 from app.core.logging import set_audit_context
@@ -102,7 +103,7 @@ async def _pos_escrita(termos: list[tuple[str, str, bool]]) -> dict:
 
 
 @router.get("/stats", response_model=ExamCatalogStats)
-async def get_catalog_stats(current_user: User = Depends(require_management)):
+async def get_catalog_stats(current_user: User = Depends(require_exam_catalog)):
     """Resumo do catálogo para o cabeçalho do painel."""
     try:
         return user_db.get_exam_catalog_stats()
@@ -117,7 +118,7 @@ async def get_catalog_stats(current_user: User = Depends(require_management)):
 @router.get("/pendencies", response_model=List[ExamPendency])
 async def list_pendencies(
     limit: int = Query(200, ge=1, le=1000),
-    current_user: User = Depends(require_management),
+    current_user: User = Depends(require_exam_catalog),
 ):
     """
     Exames que o BRNET pede e que não têm pai no catálogo.
@@ -139,7 +140,7 @@ async def list_pendencies(
 @router.get("/conflicts", response_model=List[ExamVariationConflict])
 async def list_conflicts(
     pending_only: bool = True,
-    current_user: User = Depends(require_management),
+    current_user: User = Depends(require_exam_catalog),
 ):
     """
     Termos que a importação viu sob mais de um pai e não atribuiu.
@@ -159,7 +160,7 @@ async def list_conflicts(
 async def resolve_conflict(
     conflict_id: str,
     payload: ExamConflictResolution,
-    current_user: User = Depends(require_management),
+    current_user: User = Depends(require_exam_catalog),
 ):
     """Atribui a variação em conflito a um pai, ou descarta o termo."""
     try:
@@ -215,7 +216,7 @@ async def resolve_conflict(
 async def update_variation(
     variation_id: str,
     payload: ExamVariationUpdate,
-    current_user: User = Depends(require_management),
+    current_user: User = Depends(require_exam_catalog),
 ):
     """Renomeia, ativa/desativa, ou move a variação para outro pai."""
     try:
@@ -254,9 +255,9 @@ async def update_variation(
 @router.delete("/variations/{variation_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_variation(
     variation_id: str,
-    current_user: User = Depends(require_admin),
+    current_user: User = Depends(require_exam_catalog),
 ):
-    """Remove uma variação. Apenas ADMIN."""
+    """Remove uma variação."""
     try:
         if not user_db.delete_exam_variation(variation_id):
             raise HTTPException(
@@ -289,7 +290,7 @@ async def list_parents(
     only_without_variations: bool = False,
     limit: int = Query(200, ge=1, le=500),
     offset: int = Query(0, ge=0),
-    current_user: User = Depends(require_management),
+    current_user: User = Depends(require_exam_catalog),
 ):
     """
     Lista exames pai com a contagem de variações.
@@ -323,7 +324,7 @@ async def list_parents(
 @router.post("", response_model=ExamParentDetail, status_code=status.HTTP_201_CREATED)
 async def create_parent(
     payload: ExamParentCreate,
-    current_user: User = Depends(require_management),
+    current_user: User = Depends(require_exam_catalog),
 ):
     """
     Cria um exame pai, com variações opcionais no mesmo passo.
@@ -368,7 +369,7 @@ async def create_parent(
 @router.get("/{parent_id}", response_model=ExamParentDetail)
 async def get_parent(
     parent_id: str,
-    current_user: User = Depends(require_management),
+    current_user: User = Depends(require_exam_catalog),
 ):
     """Exame pai com todas as variações."""
     try:
@@ -393,7 +394,7 @@ async def get_parent(
 async def update_parent(
     parent_id: str,
     payload: ExamParentUpdate,
-    current_user: User = Depends(require_management),
+    current_user: User = Depends(require_exam_catalog),
 ):
     """Atualiza exame pai. Campos ausentes no corpo ficam como estão."""
     try:
@@ -433,9 +434,9 @@ async def update_parent(
 @router.delete("/{parent_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_parent(
     parent_id: str,
-    current_user: User = Depends(require_admin),
+    current_user: User = Depends(require_exam_catalog),
 ):
-    """Remove exame pai e todas as suas variações. Apenas ADMIN."""
+    """Remove exame pai e todas as suas variações."""
     try:
         if not user_db.delete_exam_parent(parent_id):
             raise HTTPException(
@@ -463,7 +464,7 @@ async def delete_parent(
 async def create_variation(
     parent_id: str,
     payload: ExamVariationCreate,
-    current_user: User = Depends(require_management),
+    current_user: User = Depends(require_exam_catalog),
 ):
     """Adiciona uma variação ao exame pai."""
     try:

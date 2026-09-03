@@ -2,7 +2,7 @@
 
 import { useSession } from "next-auth/react";
 
-export type UserRole = "ADMIN" | "MANAGER" | "CHECKER" | "SENDER";
+export type UserRole = "ADMIN" | "MANAGER" | "CURATOR" | "CHECKER" | "SENDER";
 
 export interface PermissionsHook {
   user: any;
@@ -10,6 +10,8 @@ export interface PermissionsHook {
   isAdmin: boolean;
   /** ADMIN ou MANAGER: acesso administrativo (MANAGER sem operações destrutivas) */
   isManagement: boolean;
+  /** ADMIN ou CURATOR: curadoria do catálogo de exames. MANAGER fica de fora. */
+  canCurateExams: boolean;
   isChecker: boolean;
   isSender: boolean;
   canManageUsers: boolean;
@@ -24,12 +26,15 @@ export interface PermissionsHook {
 function buildPermissions(role: UserRole | undefined) {
   const isAdmin = role === "ADMIN";
   const isManagement = role === "ADMIN" || role === "MANAGER";
+  // Curadoria do catálogo é separada da gestão: MANAGER não entra de propósito.
+  const canCurateExams = role === "ADMIN" || role === "CURATOR";
   const isChecker = role === "CHECKER" || isManagement;
   const isSender = role === "SENDER" || isManagement;
 
   return {
     isAdmin,
     isManagement,
+    canCurateExams,
     isChecker,
     isSender,
     canManageUsers: isManagement,

@@ -587,7 +587,7 @@ export default function ExamesAdminPage() {
   );
 
   return (
-    <RequireRole allowedRoles={["ADMIN", "MANAGER"]}>
+    <RequireRole allowedRoles={["ADMIN", "CURATOR"]}>
       <SidebarProvider>
         <AppSidebar />
         <SidebarInset className="bg-sidebar">

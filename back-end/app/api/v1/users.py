@@ -18,8 +18,15 @@ router = APIRouter(prefix="/users", tags=["Usuários"])
 
 
 def _assert_manager_cannot_touch_admin(actor: User, target_role: UserRole | None):
-    """Impede escalada de privilégio: MANAGER só atribui roles CHECKER/SENDER."""
-    if actor.role == UserRole.MANAGER and target_role in (UserRole.ADMIN, UserRole.MANAGER):
+    """
+    Impede escalada de privilégio: MANAGER só atribui roles CHECKER/SENDER.
+
+    CURATOR entra nesta lista porque o MANAGER não acessa o catálogo de exames —
+    se pudesse atribuir o papel, bastaria criar um usuário para contornar isso.
+    """
+    if actor.role == UserRole.MANAGER and target_role in (
+        UserRole.ADMIN, UserRole.MANAGER, UserRole.CURATOR
+    ):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Gestores só podem atribuir as roles CHECKER e SENDER"
@@ -70,8 +77,10 @@ async def create_user(
 
             logger.info(f"Criando usuário SENDER {user_create.email} para clínica {clinic.name} ({clinic_id})")
 
-        # CHECKER, ADMIN e MANAGER não devem ter clinic_id
-        if user_create.role in [UserRole.CHECKER, UserRole.ADMIN, UserRole.MANAGER]:
+        # CHECKER, ADMIN, MANAGER e CURATOR não devem ter clinic_id
+        if user_create.role in [
+            UserRole.CHECKER, UserRole.ADMIN, UserRole.MANAGER, UserRole.CURATOR
+        ]:
             clinic_id = None
 
         user = user_db.create_user(

@@ -353,6 +353,22 @@ async def require_management(current_user: User = Depends(get_current_user)) -> 
     return current_user
 
 
+async def require_exam_catalog(current_user: User = Depends(get_current_user)) -> User:
+    """
+    Requer ADMIN ou CURATOR.
+
+    Deliberadamente **não** inclui MANAGER: o catálogo de exames define o que o
+    motor reconhece em cada prontuário, e essa curadoria foi separada da gestão
+    administrativa. Por isso não usa `require_management`.
+    """
+    if current_user.role not in [UserRole.ADMIN, UserRole.CURATOR]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Apenas administradores ou curadores podem acessar o catálogo de exames"
+        )
+    return current_user
+
+
 async def get_current_upload_user(
     credentials: HTTPAuthorizationCredentials = Depends(security)
 ) -> User:
