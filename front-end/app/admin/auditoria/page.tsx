@@ -247,7 +247,7 @@ export default function AuditoriaPage() {
               </div>
 
               <div className="rounded-lg border bg-white p-4 space-y-4">
-                <div className="grid gap-4 md:grid-cols-4">
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
                   <div className="space-y-1">
                     <Label htmlFor="audit-user-email">Usuário</Label>
                     <Input
@@ -324,18 +324,26 @@ export default function AuditoriaPage() {
               </div>
 
               <div className="rounded-lg border bg-white overflow-x-auto">
-                <Table className="w-full table-fixed">
+                {/*
+                  Com table-fixed a largura de cada coluna vem da PRIMEIRA linha,
+                  ou seja do cabeçalho. Largura declarada só no <td> do corpo é
+                  ignorada — era o que fazia as 9 colunas ficarem iguais e o
+                  conteúdo de "Ação" ser pintado por cima de "Recurso".
+                  min-w mantém a proporção e joga a diferença no scroll lateral.
+                */}
+                <Table className="w-full table-fixed min-w-[1170px]">
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Data</TableHead>
-                      <TableHead>Usuário</TableHead>
-                      <TableHead>Ação</TableHead>
-                      <TableHead>Recurso</TableHead>
-                      <TableHead>Método</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>IP</TableHead>
-                      <TableHead>Request ID</TableHead>
-                      <TableHead>Detalhes</TableHead>
+                      <TableHead className="w-[140px]">Data</TableHead>
+                      <TableHead className="w-[165px]">Usuário</TableHead>
+                      <TableHead className="w-[225px]">Ação</TableHead>
+                      <TableHead className="w-[145px]">Recurso</TableHead>
+                      {/* 115px porque o método mais largo é BACKGROUND, não DELETE. */}
+                      <TableHead className="w-[115px]">Método</TableHead>
+                      <TableHead className="w-[80px]">Status</TableHead>
+                      <TableHead className="w-[100px]">IP</TableHead>
+                      <TableHead className="w-[130px]">Request ID</TableHead>
+                      <TableHead className="w-[70px]">Detalhes</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -357,39 +365,63 @@ export default function AuditoriaPage() {
                     ) : (
                       logs.map((log) => (
                         <Fragment key={log.id ?? `${log.request_id}-${log.created_at}`}>
-                          <TableRow>
-                            <TableCell className="text-sm text-muted-foreground w-[150px]">
+                          <TableRow className="align-top">
+                            <TableCell className="text-sm text-muted-foreground">
                               {formatDateTime(log.created_at)}
                             </TableCell>
-                            <TableCell className="text-sm w-[200px]">
-                              <div className="font-medium">
+                            <TableCell className="text-sm">
+                              <div
+                                className="font-medium truncate"
+                                title={log.user_email ?? "Sistema/Automação"}
+                              >
                                 {log.user_email ?? "Sistema/Automação"}
                               </div>
-                              <div className="text-xs text-muted-foreground">
+                              <div className="text-xs text-muted-foreground truncate">
                                 {log.user_role ?? "-"}
                               </div>
                             </TableCell>
-                            <TableCell className="text-sm w-[220px]">
-                              <div className="font-medium break-words">{log.action}</div>
-                              <div className="text-xs text-muted-foreground break-words">
+                            {/*
+                              truncate (overflow hidden + nowrap) é o que impede
+                              o texto de ser pintado fora da célula. O valor
+                              inteiro fica no title e no modal "Ver".
+                            */}
+                            <TableCell className="text-sm">
+                              <div className="font-medium truncate" title={log.action}>
+                                {log.action}
+                              </div>
+                              <div
+                                className="text-xs text-muted-foreground truncate"
+                                title={log.path ?? undefined}
+                              >
                                 {log.path ?? "-"}
                               </div>
                             </TableCell>
-                            <TableCell className="text-sm w-[160px]">
-                              <div className="font-medium break-words">{log.resource ?? "-"}</div>
-                              <div className="text-xs text-muted-foreground break-words">
+                            <TableCell className="text-sm">
+                              <div
+                                className="font-medium truncate"
+                                title={log.resource ?? undefined}
+                              >
+                                {log.resource ?? "-"}
+                              </div>
+                              <div
+                                className="text-xs text-muted-foreground truncate"
+                                title={log.resource_id ?? undefined}
+                              >
                                 {log.resource_id ?? "-"}
                               </div>
                             </TableCell>
-                            <TableCell className="w-[90px]">{methodBadge(log.method)}</TableCell>
-                            <TableCell className="w-[90px]">{statusBadge(log.status_code)}</TableCell>
-                            <TableCell className="text-sm text-muted-foreground w-[120px]">
+                            <TableCell>{methodBadge(log.method)}</TableCell>
+                            <TableCell>{statusBadge(log.status_code)}</TableCell>
+                            <TableCell className="text-sm text-muted-foreground truncate">
                               {log.ip ?? "-"}
                             </TableCell>
-                            <TableCell className="text-xs text-muted-foreground w-[160px]">
+                            <TableCell
+                              className="text-xs text-muted-foreground truncate"
+                              title={log.request_id ?? undefined}
+                            >
                               {log.request_id ?? "-"}
                             </TableCell>
-                            <TableCell className="w-[90px]">
+                            <TableCell>
                               <Button
                                 variant="ghost"
                                 size="sm"
