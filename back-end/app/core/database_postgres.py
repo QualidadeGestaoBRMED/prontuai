@@ -1896,29 +1896,6 @@ class PostgresUserDatabase:
 
         return self.get_exam_parent(parent_id)
 
-    def delete_exam_parent(self, parent_id: str) -> bool:
-        """Remove exame pai. As variações vão junto (ON DELETE CASCADE)."""
-        session = self._get_session()
-        try:
-            modelo = session.query(ExamParentModel).filter(
-                ExamParentModel.id == parent_id
-            ).first()
-            if not modelo:
-                return False
-            # O cascade está no schema, mas o delete via ORM não o dispara
-            # sozinho sem relationship configurado — apaga explicitamente.
-            session.query(ExamVariationModel).filter(
-                ExamVariationModel.parent_id == parent_id
-            ).delete(synchronize_session=False)
-            session.delete(modelo)
-            session.commit()
-            return True
-        except Exception:
-            session.rollback()
-            raise
-        finally:
-            session.close()
-
     def create_exam_variation(
         self,
         parent_id: str,
@@ -2201,18 +2178,31 @@ class PostgresUserDatabase:
         """
         Pares (vector_id, bytes) de todo termo ativo com vetor gravado.
         É a entrada da reconstrução do índice.
+
+        Desativar um pai também tira as variações dele daqui, mesmo com a linha
+        da variação ainda ativa — é o mesmo recorte que `exam_catalog_source`
+        usa para montar o vocabulário, que só considera variação cujo pai está
+        ativo. Sem o join, desativar um pai limparia o vocabulário mas deixaria
+        os vetores das variações no índice.
         """
         session = self._get_session()
         try:
-            linhas = []
-            for modelo in (ExamParentModel, ExamVariationModel):
-                linhas.extend(
-                    session.query(modelo.vector_id, modelo.embedding)
-                    .filter(modelo.embedding.isnot(None))
-                    .filter(modelo.vector_id.isnot(None))
-                    .filter(modelo.is_active.is_(True))
-                    .all()
-                )
+            linhas = list(
+                session.query(ExamParentModel.vector_id, ExamParentModel.embedding)
+                .filter(ExamParentModel.embedding.isnot(None))
+                .filter(ExamParentModel.vector_id.isnot(None))
+                .filter(ExamParentModel.is_active.is_(True))
+                .all()
+            )
+            linhas.extend(
+                session.query(ExamVariationModel.vector_id, ExamVariationModel.embedding)
+                .join(ExamParentModel, ExamVariationModel.parent_id == ExamParentModel.id)
+                .filter(ExamVariationModel.embedding.isnot(None))
+                .filter(ExamVariationModel.vector_id.isnot(None))
+                .filter(ExamVariationModel.is_active.is_(True))
+                .filter(ExamParentModel.is_active.is_(True))
+                .all()
+            )
             return [(int(vid), bytes(bruto)) for vid, bruto in linhas]
         finally:
             session.close()

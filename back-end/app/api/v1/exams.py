@@ -431,31 +431,6 @@ async def update_parent(
         )
 
 
-@router.delete("/{parent_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_parent(
-    parent_id: str,
-    current_user: User = Depends(require_exam_catalog),
-):
-    """Remove exame pai e todas as suas variações."""
-    try:
-        if not user_db.delete_exam_parent(parent_id):
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Exame não encontrado",
-            )
-        vetor = await _pos_escrita([])
-        set_audit_context({"parent_id": parent_id, "vetores_no_indice": vetor["vetores_no_indice"]})
-        logger.info(f"[EXAMS] {current_user.email} removeu exame pai {parent_id}")
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.exception(f"[EXAMS] Erro ao remover exame {parent_id}: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Erro ao remover exame",
-        )
-
-
 @router.post(
     "/{parent_id}/variations",
     response_model=ExamVariation,

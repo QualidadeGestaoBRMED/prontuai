@@ -222,6 +222,11 @@ export default function ExamesAdminPage() {
   const [buscaAplicada, setBuscaAplicada] = useState("");
   const [filtroStatus, setFiltroStatus] = useState<"todos" | "ativo" | "quarentena">("todos");
   const [somenteSemVariacao, setSomenteSemVariacao] = useState(false);
+  // Desativar some com o exame da listagem padrão; sem este filtro não haveria
+  // como reativá-lo pelo painel.
+  const [incluirInativos, setIncluirInativos] = useState(false);
+  const [paraDesativar, setParaDesativar] = useState<ExamParent | null>(null);
+  const [alterandoSituacao, setAlterandoSituacao] = useState(false);
 
   // Detalhe expandido: pai -> variações carregadas
   const [expandido, setExpandido] = useState<string | null>(null);
@@ -268,6 +273,7 @@ export default function ExamesAdminPage() {
       if (buscaAplicada) params.set("search", buscaAplicada);
       if (filtroStatus !== "todos") params.set("status", filtroStatus);
       if (somenteSemVariacao) params.set("only_without_variations", "true");
+      if (incluirInativos) params.set("include_inactive", "true");
 
       const response = await authFetch(`${API_ENDPOINTS.EXAMS}?${params.toString()}`);
       if (!response.ok) throw new Error("Erro ao carregar exames");
@@ -280,7 +286,14 @@ export default function ExamesAdminPage() {
     } finally {
       setLoading(false);
     }
-  }, [podeCarregar, statusSessao, buscaAplicada, filtroStatus, somenteSemVariacao]);
+  }, [
+    podeCarregar,
+    statusSessao,
+    buscaAplicada,
+    filtroStatus,
+    somenteSemVariacao,
+    incluirInativos,
+  ]);
 
   const carregarPendencias = useCallback(async () => {
     if (!podeCarregar) {
@@ -458,6 +471,56 @@ export default function ExamesAdminPage() {
       toast.error("Erro ao salvar exame");
     } finally {
       setSalvando(false);
+    }
+  };
+
+  /**
+   * Desativa (ou reativa) o exame pai.
+   *
+   * Desativar não apaga: a linha continua no banco, mas o back tira o exame e
+   * as variações dele do vocabulário do motor e do índice de vetores.
+   *
+   * Mesmo fluxo da tela de usuários — desativar pede confirmação, ativar vai
+   * direto, porque só um dos dois lados tira algo do ar.
+   */
+  const alternarAtivo = (parent: ExamParent) => {
+    if (parent.is_active) {
+      setParaDesativar(parent);
+      return;
+    }
+    aplicarSituacao(parent, true);
+  };
+
+  const aplicarSituacao = async (parent: ExamParent, ativando: boolean) => {
+    setAlterandoSituacao(true);
+    try {
+      const response = await authFetch(API_ENDPOINTS.EXAM_BY_ID(parent.id), {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ is_active: ativando }),
+      });
+      if (!response.ok) {
+        toast.error(await mensagemDeErro(response, "Erro ao atualizar status"));
+        return;
+      }
+
+      toast.success(
+        ativando ? "Exame ativado com sucesso!" : "Exame desativado com sucesso!"
+      );
+      setParaDesativar(null);
+      // O desativado sai da listagem padrão; fechar o detalhe evita deixar as
+      // variações de um exame que não está mais na tabela abertas embaixo.
+      if (!ativando && expandido === parent.id) {
+        setExpandido(null);
+        setDetalhe(null);
+      }
+      carregarParents();
+      carregarStats();
+    } catch (error) {
+      console.error("Erro:", error);
+      toast.error("Erro ao atualizar status");
+    } finally {
+      setAlterandoSituacao(false);
     }
   };
 
@@ -764,6 +827,14 @@ export default function ExamesAdminPage() {
                   >
                     Sem variações
                   </Button>
+                  <Button
+                    size="sm"
+                    variant={incluirInativos ? "default" : "outline"}
+                    onClick={() => setIncluirInativos((v) => !v)}
+                    title="Exames desativados ficam fora da listagem padrão"
+                  >
+                    Incluir inativos
+                  </Button>
                   <span className="ml-auto text-sm text-white/70">
                     {total} exame{total === 1 ? "" : "s"}
                   </span>
@@ -781,6 +852,9 @@ export default function ExamesAdminPage() {
                         </th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                           Variações
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                          Situação
                         </th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                           Ações
@@ -801,6 +875,9 @@ export default function ExamesAdminPage() {
                               <div className="h-4 bg-gray-200 rounded w-8" />
                             </td>
                             <td className="px-6 py-4">
+                              <div className="h-6 bg-gray-200 rounded-full w-16" />
+                            </td>
+                            <td className="px-6 py-4">
                               <div className="h-8 bg-gray-200 rounded w-32" />
                             </td>
                           </tr>
@@ -808,7 +885,7 @@ export default function ExamesAdminPage() {
                       ) : parents.length === 0 ? (
                         <tr>
                           <td
-                            colSpan={4}
+                            colSpan={5}
                             className="px-6 py-12 text-center text-gray-500"
                           >
                             Nenhum exame encontrado. Rode{" "}
@@ -827,11 +904,6 @@ export default function ExamesAdminPage() {
                                 {parent.is_external && (
                                   <Badge variant="outline" className="ml-2 text-xs">
                                     externo
-                                  </Badge>
-                                )}
-                                {!parent.is_active && (
-                                  <Badge variant="secondary" className="ml-2 text-xs">
-                                    inativo
                                   </Badge>
                                 )}
                               </td>
@@ -856,6 +928,17 @@ export default function ExamesAdminPage() {
                               <td className="px-6 py-4 text-sm text-gray-600">
                                 {parent.variation_count}
                               </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <span
+                                  className={`px-2 py-1 text-xs rounded-full ${
+                                    parent.is_active
+                                      ? "bg-green-100 text-green-800"
+                                      : "bg-red-100 text-red-800"
+                                  }`}
+                                >
+                                  {parent.is_active ? "Ativo" : "Inativo"}
+                                </span>
+                              </td>
                               <td className="px-6 py-4 text-sm space-x-2">
                                 <Button
                                   variant="outline"
@@ -871,12 +954,19 @@ export default function ExamesAdminPage() {
                                 >
                                   Editar
                                 </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => alternarAtivo(parent)}
+                                >
+                                  {parent.is_active ? "Desativar" : "Ativar"}
+                                </Button>
                               </td>
                             </tr>
 
                             {expandido === parent.id && (
                               <tr className="bg-gray-50">
-                                <td colSpan={4} className="px-6 py-4">
+                                <td colSpan={5} className="px-6 py-4">
                                   {!detalhe ? (
                                     <p className="text-sm text-gray-500">
                                       Carregando variações...
@@ -1206,6 +1296,78 @@ export default function ExamesAdminPage() {
               </Button>
               <Button onClick={salvarEdicao} disabled={salvando || !formNome.trim()}>
                 {salvando ? "Salvando..." : "Salvar"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Confirmação de desativação, no mesmo formato da tela de usuários. */}
+        <Dialog
+          open={paraDesativar !== null}
+          onOpenChange={(aberto) => {
+            if (!aberto && !alterandoSituacao) setParaDesativar(null);
+          }}
+        >
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Desativar Exame</DialogTitle>
+              <DialogDescription>
+                Tem certeza que deseja desativar este exame?
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="py-4">
+              <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4">
+                <div className="flex items-start">
+                  <div className="flex-shrink-0">
+                    <svg
+                      className="h-5 w-5 text-yellow-400"
+                      viewBox="0 0 20 20"
+                      fill="currentColor"
+                    >
+                      <path
+                        fillRule="evenodd"
+                        d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                  </div>
+                  <div className="ml-3">
+                    <h3 className="text-sm font-medium text-yellow-800">Atenção</h3>
+                    <div className="mt-2 text-sm text-yellow-700">
+                      <p>
+                        O exame{" "}
+                        <span className="font-semibold">{paraDesativar?.name}</span>
+                        {paraDesativar && paraDesativar.variation_count > 0 && (
+                          <>
+                            {" "}e as {paraDesativar.variation_count} variaç
+                            {paraDesativar.variation_count === 1 ? "ão" : "ões"} dele
+                          </>
+                        )}{" "}
+                        deixam de ser usados na comparação. Nada é apagado: use{" "}
+                        <span className="font-semibold">Incluir inativos</span> para
+                        encontrá-lo e ativar de novo.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setParaDesativar(null)}
+                disabled={alterandoSituacao}
+              >
+                Cancelar
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={() => paraDesativar && aplicarSituacao(paraDesativar, false)}
+                disabled={alterandoSituacao}
+              >
+                {alterandoSituacao ? "Desativando..." : "Desativar Exame"}
               </Button>
             </DialogFooter>
           </DialogContent>
