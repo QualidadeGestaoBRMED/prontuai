@@ -99,6 +99,14 @@ function methodBadge(method?: string | null) {
 
 export default function AuditoriaPage() {
   const { data: session } = useSession();
+
+  // Com DEV_AUTH_BYPASS não existe sessão do NextAuth, mas o proxy injeta o
+  // Bearer do mesmo jeito. Esperar por session.user.email deixava a tabela
+  // presa em "Carregando logs..." para sempre em dev.
+  const bypassAuth =
+    process.env.NODE_ENV !== "production" &&
+    process.env.NEXT_PUBLIC_DEV_AUTH_BYPASS === "true";
+  const podeCarregar = bypassAuth || !!session?.user?.email;
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
@@ -170,7 +178,10 @@ export default function AuditoriaPage() {
       : null;
 
   const fetchLogs = useCallback(async () => {
-    if (!session?.user?.email) return;
+    if (!podeCarregar) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
       const response = await authFetch(`${API_ENDPOINTS.AUDIT_LOGS}?${queryParams}`);
@@ -200,7 +211,7 @@ export default function AuditoriaPage() {
     } finally {
       setLoading(false);
     }
-  }, [session?.user?.email, queryParams, hideNotifications]);
+  }, [podeCarregar, queryParams, hideNotifications]);
 
   useEffect(() => {
     fetchLogs();
