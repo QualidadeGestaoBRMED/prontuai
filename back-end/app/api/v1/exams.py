@@ -121,14 +121,14 @@ async def list_pendencies(
     current_user: User = Depends(require_exam_catalog),
 ):
     """
-    Exames que o BRNET pede e que não têm pai no catálogo.
+    Exames que o BRNET pede e que a análise nunca encontrou, em nenhum documento.
 
-    É a pendência mais consequente da curadoria: sem pai, a comparação nunca
-    encontra o exame — nem por sinônimo, nem pela varredura do markdown. Ordenado
-    por quantidade de documentos em que o BRNET pediu o exame.
+    A regra é de evidência, não de catálogo: exame já encontrado alguma vez não
+    é pendência, porque cadastrá-lo não muda o resultado. Ordenado por
+    quantidade de documentos em que o BRNET pediu o exame.
     """
     try:
-        return user_db.listar_exames_brnet_sem_pai(limit=limit)
+        return user_db.listar_exames_nunca_encontrados(limit=limit)
     except Exception as e:
         logger.exception(f"[EXAMS] Erro ao listar pendências: {e}")
         raise HTTPException(

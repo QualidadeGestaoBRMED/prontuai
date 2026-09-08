@@ -92,7 +92,7 @@ interface CatalogStats {
   variations_total: number;
   conflicts_pending: number;
   terms_without_vector?: number;
-  brnet_without_parent?: number;
+  brnet_never_found?: number;
 }
 
 /** Extrai a mensagem de erro do backend (409 traz o motivo da colisão). */
@@ -689,7 +689,7 @@ export default function ExamesAdminPage() {
                 onClick={() => setAba("pendencias")}
               >
                 Pendências
-                {stats?.brnet_without_parent ? ` (${stats.brnet_without_parent})` : ""}
+                {stats?.brnet_never_found ? ` (${stats.brnet_never_found})` : ""}
               </Button>
               <Button
                 variant={aba === "catalogo" ? "default" : "outline"}
@@ -709,13 +709,14 @@ export default function ExamesAdminPage() {
             </div>
 
             {aba === "pendencias" ? (
-              /* Pendências: exames que o BRNET pede e o catálogo não tem */
+              /* Pendências: exames que o BRNET pede e a comparação nunca achou */
               <div className="bg-white rounded-lg shadow overflow-hidden">
                 <p className="text-sm text-gray-600 p-6 pb-4">
-                  Exames que o BRNET pede e que <strong>não têm pai no catálogo</strong>.
-                  Sem pai, a comparação nunca encontra o exame — nem por sinônimo, nem
-                  pela varredura do texto. Ordenado por quantidade de documentos em que
-                  o BRNET pediu o exame.
+                  Exames que o BRNET pede e que a comparação{" "}
+                  <strong>nunca encontrou em documento nenhum</strong>. Exame já
+                  encontrado alguma vez não entra aqui — cadastrá-lo não mudaria o
+                  resultado. Ordenado por quantidade de documentos em que o BRNET
+                  pediu o exame.
                 </p>
                 <table className="w-full">
                   <thead className="bg-gray-50 border-b">

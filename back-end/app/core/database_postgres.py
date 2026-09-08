@@ -2141,7 +2141,7 @@ class PostgresUserDatabase:
                 .filter(ExamVariationConflictModel.resolution.is_(None))
                 .scalar()
                 or 0,
-                brnet_without_parent=len(self.listar_exames_brnet_sem_pai(limit=10000)),
+                brnet_never_found=len(self.listar_exames_nunca_encontrados(limit=10000)),
                 terms_without_vector=sum(
                     session.query(func.count(modelo.id))
                     .filter(modelo.embedding.is_(None))
@@ -2266,19 +2266,37 @@ class PostgresUserDatabase:
         finally:
             session.close()
 
-    def listar_exames_brnet_sem_pai(self, limit: int = 200) -> List[ExamPendency]:
+    # Consulta os 'encontrado' de todos os documentos. `result_payload` é text,
+    # então o cast para jsonb roda no banco — medido em ~0,9s para 4861
+    # documentos, contra parsear tudo em Python. O LIKE evita o cast estourar em
+    # payload que não seja objeto JSON.
+    _SQL_EXAMES_JA_ENCONTRADOS = (
+        "SELECT DISTINCT elem->>'exame' "
+        "FROM documents, "
+        "     LATERAL jsonb_array_elements((result_payload::jsonb)->'tabela_comparacao') AS elem "
+        "WHERE result_payload IS NOT NULL "
+        "  AND result_payload LIKE '{%' "
+        "  AND elem->>'status' = 'encontrado'"
+    )
+
+    def listar_exames_nunca_encontrados(self, limit: int = 200) -> List[ExamPendency]:
         """
-        Exames que o BRNET pede e que não têm pai no catálogo.
+        Exames que o BRNET pede e que a análise **nunca** encontrou, em nenhum
+        documento.
+
+        A regra é de evidência, não de catálogo. Um exame já encontrado alguma
+        vez não é pendência: cadastrá-lo não muda o resultado. A regra anterior
+        ("sem pai no catálogo") inflava a lista — media 70 exames, dos quais 69
+        já eram encontrados. O caso que expôs isso foi o TSH: sem pai nenhum, e
+        encontrado em 140 de 140 documentos, porque `_filtrar_exames_ocr` aceita
+        todo nome que o BRNET pediu, com ou sem catálogo.
 
         A normalização roda em **Python**, não em SQL: as reescritas de sigla de
         `normalizar_termo` (gama-GT → GGT, entre outras) não existem no banco, e
-        reimplementá-las em SQL faria as duas divergirem em silêncio — foi o que
-        aconteceu num rascunho, onde `ggt (gama-gt)` aparecia como órfão tendo pai.
+        reimplementá-las em SQL faria as duas divergirem em silêncio.
 
-        Ordena por número de documentos em que o BRNET pediu o exame, que é a
-        exposição do problema. O impacto real (quantos faltantes o exame causou)
-        exige parsear `result_payload` de todos os documentos — medido em ~3,8s,
-        caro demais para carregar tela.
+        Ordena por número de documentos em que o BRNET pediu o exame — que aqui
+        é a fila de trabalho de verdade, já que nenhum deles foi encontrado.
         """
         session = self._get_session()
         try:
@@ -2303,10 +2321,11 @@ class PostgresUserDatabase:
                 item["requests"] += int(pedidos or 0)
                 item["documents"] += int(docs or 0)
 
-            pais = {
-                chave
-                for (chave,) in session.query(ExamParentModel.name_normalized).all()
-            }
+            ja_encontrados = set()
+            for (nome,) in session.execute(text(self._SQL_EXAMES_JA_ENCONTRADOS)):
+                chave = normalizar_termo(nome or "")
+                if chave:
+                    ja_encontrados.add(chave)
 
             pendencias = [
                 ExamPendency(
@@ -2316,12 +2335,12 @@ class PostgresUserDatabase:
                     requests=item["requests"],
                 )
                 for chave, item in agregado.items()
-                if chave not in pais
+                if chave not in ja_encontrados
             ]
             pendencias.sort(key=lambda p: (-p.documents, p.name))
             return pendencias[:limit]
         finally:
             session.close()
 
-    def contar_exames_brnet_sem_pai(self) -> int:
-        return len(self.listar_exames_brnet_sem_pai(limit=10000))
+    def contar_exames_nunca_encontrados(self) -> int:
+        return len(self.listar_exames_nunca_encontrados(limit=10000))

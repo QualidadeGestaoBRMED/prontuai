@@ -159,5 +159,5 @@ class ExamCatalogStats(BaseModel):
     conflicts_pending: int = 0
     # `embedding IS NULL` é o marcador de pendência; não há tabela de fila.
     terms_without_vector: int = 0
-    # Nomes que o BRNET pede e não têm pai no catálogo.
-    brnet_without_parent: int = 0
+    # Nomes que o BRNET pede e que a análise nunca encontrou em documento algum.
+    brnet_never_found: int = 0
