@@ -104,6 +104,14 @@ class Settings:
         os.path.join(BASE_DIR, "data", "uploads"),
     )
 
+    # Texto de contato mostrado quando o usuário tenta abrir um documento já
+    # arquivado (410). Configurável para o time trocar o responsável sem
+    # precisar de deploy de código.
+    DOCUMENT_ARCHIVE_CONTACT = os.getenv(
+        "DOCUMENT_ARCHIVE_CONTACT",
+        "o administrador do ProntuAI",
+    )
+
     # Google Drive (upload após aprovação)
     GOOGLE_DRIVE_ENABLED = os.getenv("GOOGLE_DRIVE_ENABLED", "true").lower() == "true"
     GOOGLE_DRIVE_FOLDER_ID = os.getenv("GOOGLE_DRIVE_FOLDER_ID")

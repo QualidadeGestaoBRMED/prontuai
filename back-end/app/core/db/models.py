@@ -99,6 +99,11 @@ class DocumentModel(Base):
     review_active_ms = Column(Integer, nullable=True)
     review_wall_ms = Column(Integer, nullable=True)
     review_open_count = Column(SmallInteger, nullable=True)
+    # Quando o PDF saiu do disco para o arquivo morto no Drive (migration 007).
+    # NULL = nunca arquivado. Escrito pelo job de arquivamento, não pela app;
+    # é o que permite o endpoint de visualização responder "arquivado, peça a
+    # recuperação" em vez de um 404 indistinguível de arquivo perdido por bug.
+    archived_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 

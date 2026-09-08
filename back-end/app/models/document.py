@@ -35,6 +35,10 @@ class Document(BaseModel):
     confidence_score: Optional[float] = None
     quality_score: Optional[float] = None
     mandatory_coverage: Optional[float] = None
+    # Preenchido quando o PDF foi movido para o arquivo morto e removido do
+    # disco. Serve para a UI avisar que a recuperação é manual, em vez de
+    # mostrar erro genérico.
+    archived_at: Optional[datetime] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 

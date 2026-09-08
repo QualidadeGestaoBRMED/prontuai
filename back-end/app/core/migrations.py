@@ -80,6 +80,16 @@ def check_if_migration_needed() -> tuple[bool, list[str]]:
             logger.warning("⚠️  Migration 006 necessária: coluna vector_id não existe")
             migrations_needed.append("006_add_exam_vector_id.sql")
 
+        # Verificar migration 007: archived_at em documents
+        cursor.execute("""
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_name='documents' AND column_name='archived_at'
+        """)
+        if not cursor.fetchone():
+            logger.warning("⚠️  Migration 007 necessária: coluna archived_at não existe")
+            migrations_needed.append("007_add_archived_at.sql")
+
         cursor.close()
         conn.close()
 

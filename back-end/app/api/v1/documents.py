@@ -521,18 +521,27 @@ async def view_document(document_id: str, current_user: User = Depends(get_curre
         if file_path:
             add_candidate(os.path.join(base_dir, os.path.basename(file_path)))
 
-        # Fallback final para registros antigos sem file_path persistido:
-        # arquivos salvos pelo upload usam "<prefixo>_<nome_sanitizado>".
-        original_safe_name = safe_filename(document.filename)
-        add_candidate(os.path.join(base_dir, original_safe_name))
-        try:
-            for entry in os.scandir(base_dir):
-                if not entry.is_file():
-                    continue
-                if entry.name == original_safe_name or entry.name.endswith(f"_{original_safe_name}"):
-                    add_candidate(entry.path)
-        except FileNotFoundError:
-            pass
+        # Fallback por NOME do arquivo, só para registros antigos sem file_path
+        # persistido. O `if not file_path` não é detalhe: o casamento por sufixo
+        # abaixo aceita qualquer "<prefixo>_<nome_sanitizado>", e nomes originais
+        # repetem muito neste domínio (exame.pdf, resultado.pdf). Com file_path
+        # gravado e o arquivo ausente — o que passou a ser comum depois do
+        # arquivamento no Drive — este fallback encontraria o arquivo de OUTRO
+        # paciente com o mesmo nome original e o serviria como se fosse deste
+        # documento; pior, o update logo abaixo gravaria esse caminho errado no
+        # file_path, tornando a troca permanente. Quando há file_path, arquivo
+        # ausente tem de virar 404/410, nunca o PDF de outra pessoa.
+        if not file_path:
+            original_safe_name = safe_filename(document.filename)
+            add_candidate(os.path.join(base_dir, original_safe_name))
+            try:
+                for entry in os.scandir(base_dir):
+                    if not entry.is_file():
+                        continue
+                    if entry.name == original_safe_name or entry.name.endswith(f"_{original_safe_name}"):
+                        add_candidate(entry.path)
+            except FileNotFoundError:
+                pass
 
         resolved_path: str | None = None
         for candidate in candidate_paths:
@@ -544,6 +553,32 @@ async def view_document(document_id: str, current_user: User = Depends(get_curre
                 break
 
         if not resolved_path:
+            # Arquivado pela política de retenção e sumiço por defeito exigem
+            # respostas diferentes: o primeiro é esperado e tem caminho de
+            # recuperação; o segundo é bug e precisa continuar aparecendo como
+            # 404. `archived_at` é escrito pelo job de arquivamento
+            # (ops/deploy/archive_documents_to_drive.sh) só depois de verificar
+            # a cópia no Drive por checksum.
+            archived_at = getattr(document, "archived_at", None)
+            if archived_at:
+                logger.info(
+                    "[DOCUMENTS] Visualização de documento arquivado doc_id=%s archived_at=%s",
+                    document_id,
+                    archived_at,
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_410_GONE,
+                    detail={
+                        "code": "documento_arquivado",
+                        "message": (
+                            "Este documento foi arquivado e não está mais disponível "
+                            "para visualização direta. Solicite a recuperação ao responsável."
+                        ),
+                        "archived_at": archived_at.isoformat(),
+                        "filename": document.filename,
+                        "contact": settings.DOCUMENT_ARCHIVE_CONTACT,
+                    },
+                )
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Arquivo do documento não encontrado"

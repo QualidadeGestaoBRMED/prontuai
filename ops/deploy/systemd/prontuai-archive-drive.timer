@@ -1,0 +1,15 @@
+[Unit]
+Description=Dispara o arquivamento semanal de documentos (ver prontuai-archive-drive.service)
+
+[Timer]
+# Semanal, e nao mensal, de proposito: o balde semanal so pode fechar se o job
+# rodar toda semana. Com agendamento mensal o documento esperaria ate 30 dias
+# extras no disco, anulando o ganho do balde.
+#
+# Segunda 04:30 — depois do backup das 03:15 e fora do horario de uso.
+OnCalendar=Mon *-*-* 04:30:00
+Persistent=true
+RandomizedDelaySec=600
+
+[Install]
+WantedBy=timers.target

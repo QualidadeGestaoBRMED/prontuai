@@ -192,11 +192,25 @@ class PostgresUserDatabase:
             connection.execute(text("ALTER TABLE documents ADD COLUMN IF NOT EXISTS content_hash VARCHAR"))
             connection.execute(text("ALTER TABLE documents ADD COLUMN IF NOT EXISTS uploaded_by_user_email VARCHAR"))
             connection.execute(text("ALTER TABLE documents ADD COLUMN IF NOT EXISTS patient_name VARCHAR"))
+            # Escrito pelo job de arquivamento, não pela app. Vai aqui além da
+            # migration 007 porque este método roda em TODO startup: uma VPS que
+            # suba com o banco atrás da migration ainda ganha a coluna, e sem
+            # ela o endpoint de visualização não consegue diferenciar documento
+            # arquivado (410, com caminho de recuperação) de arquivo perdido
+            # por defeito (404).
+            connection.execute(text("ALTER TABLE documents ADD COLUMN IF NOT EXISTS archived_at TIMESTAMP"))
             connection.execute(text("CREATE INDEX IF NOT EXISTS idx_documents_patient_name ON documents(patient_name)"))
             connection.execute(text("CREATE INDEX IF NOT EXISTS idx_documents_content_hash ON documents(content_hash)"))
             connection.execute(text("CREATE INDEX IF NOT EXISTS idx_documents_uploader_email ON documents(uploaded_by_user_email)"))
             connection.execute(text("CREATE INDEX IF NOT EXISTS idx_documents_reviewed_by ON documents(reviewed_by)"))
             connection.execute(text("CREATE INDEX IF NOT EXISTS idx_documents_clinic_id ON documents(clinic_id)"))
+            # Índice parcial: só as linhas já arquivadas são consultadas, e são
+            # a minoria. Mantém o índice pequeno e não pesa no INSERT do fluxo
+            # normal, em que archived_at é sempre NULL.
+            connection.execute(text(
+                "CREATE INDEX IF NOT EXISTS idx_documents_archived_at ON documents(archived_at) "
+                "WHERE archived_at IS NOT NULL"
+            ))
 
     def _ensure_notification_columns(self) -> None:
         """Garante que colunas novas existam para notificações."""
@@ -1087,6 +1101,7 @@ class PostgresUserDatabase:
             confidence_score=model.confidence_score,
             quality_score=model.quality_score,
             mandatory_coverage=model.mandatory_coverage,
+            archived_at=_as_utc(getattr(model, "archived_at", None)),
             created_at=_as_utc(model.created_at),
             updated_at=_as_utc(model.updated_at)
         )

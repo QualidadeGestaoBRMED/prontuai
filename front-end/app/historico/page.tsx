@@ -21,6 +21,8 @@ import { DocumentDetailsModal } from "@/components/document-details-modal"
 import { ProcessResult } from "@/types/process"
 import { History, Loader2 } from "lucide-react"
 import { downloadDocumentPdf } from "@/lib/document-download"
+import { DocumentoArquivadoError } from "@/lib/document-archive"
+import { toast } from "sonner"
 
 function HistoricoContent() {
   const searchParams = useSearchParams()
@@ -69,6 +71,14 @@ function HistoricoContent() {
       })
     } catch (error) {
       console.error("Falha ao baixar PDF:", error)
+      // Antes este catch era silencioso: a falha só aparecia no console.
+      // Com o arquivamento, "não abre" passou a ser um caso normal e o
+      // usuário precisa saber o que fazer.
+      if (error instanceof DocumentoArquivadoError) {
+        toast.info(error.message, { duration: 10000 })
+      } else {
+        toast.error("Não foi possível baixar o documento.")
+      }
     }
   }, [])
 

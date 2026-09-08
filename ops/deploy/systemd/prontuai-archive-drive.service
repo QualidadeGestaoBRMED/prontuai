@@ -1,0 +1,23 @@
+[Unit]
+Description=Arquiva no Google Drive os documentos fora da janela de consulta
+Wants=network-online.target
+After=network-online.target docker.service
+# A serializacao com backup e purga e feita por flock dentro dos scripts
+# (db_maintenance_lock em lib.sh), nao com Conflicts= aqui — ver o README.
+
+[Service]
+Type=oneshot
+# Ajuste os caminhos se as pastas nao estiverem aqui.
+EnvironmentFile=/home/ec2-user/prontuai-db/.env
+Environment=ARCHIVE_SOURCE_DIR=/home/ec2-user/prontuai/data/uploads
+# Janela de consulta: o documento fica 20 dias no disco. Passados os 20 dias,
+# so sai se um humano ja tiver checado — quem nao passou pela revisao fica,
+# por mais velho que seja. Ver o cabecalho do script.
+Environment=ARCHIVE_AFTER_DAYS=20
+# ARCHIVE_RCLONE_REMOTE vem do EnvironmentFile (.env do banco), junto das
+# credenciais do Postgres que o portao de aprovacao precisa consultar.
+ExecStart=/home/ec2-user/prontuai-db/script/archive_documents_to_drive.sh
+User=ec2-user
+# Enviar GB leva tempo. O primeiro run (acervo acumulado) NAO deve ir por aqui:
+# rode a mao dentro de um tmux, senao o systemd mata no meio. Ver o runbook.
+TimeoutStartSec=6h

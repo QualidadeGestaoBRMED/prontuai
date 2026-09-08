@@ -26,6 +26,7 @@ import { ResultsTable } from "@/components/results-table"
 import { DocumentDetailsModal } from "@/components/document-details-modal"
 import { ProcessResult } from "@/types/process"
 import { downloadDocumentPdf } from "@/lib/document-download"
+import { DocumentoArquivadoError } from "@/lib/document-archive"
 import { toast } from "sonner"
 import { RequireRole } from "@/components/require-role"
 
@@ -192,7 +193,11 @@ function PageContent() {
       })
     } catch (error) {
       console.error("Falha ao baixar PDF:", error)
-      toast.error("Não foi possível baixar o documento original.")
+      if (error instanceof DocumentoArquivadoError) {
+        toast.info(error.message, { duration: 10000 })
+      } else {
+        toast.error("Não foi possível baixar o documento original.")
+      }
     }
   }
 

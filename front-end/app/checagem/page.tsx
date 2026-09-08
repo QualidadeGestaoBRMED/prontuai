@@ -12,6 +12,7 @@ import { NotificationBell } from "@/components/notification-bell"
 import { NotificationCenter } from "@/components/notification-center"
 import { useSession } from "next-auth/react"
 import { ProcessResult } from "@/types/process"
+import { lerDocumentoArquivado, mensagemDocumentoArquivado } from "@/lib/document-archive"
 import { DocumentDetailsModalChecagem } from "@/components/document-details-modal-checagem"
 import { RequireRole } from "@/components/require-role"
 import { useDocumentsPaged } from "@/hooks/use-documents-paged"
@@ -113,7 +114,12 @@ export default function Page() {
     try {
       const response = await authFetch(API_ENDPOINTS.DOCUMENT_VIEW(result.id))
       if (!response.ok) {
-        toast.error("Não foi possível abrir o documento.")
+        const arquivado = await lerDocumentoArquivado(response)
+        if (arquivado) {
+          toast.info(mensagemDocumentoArquivado(arquivado), { duration: 10000 })
+        } else {
+          toast.error("Não foi possível abrir o documento.")
+        }
         setDocumentPreviewLoading(false)
         return
       }
