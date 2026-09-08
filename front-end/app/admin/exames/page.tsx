@@ -818,7 +818,7 @@ export default function ExamesAdminPage() {
                     <SelectContent>
                       <SelectItem value="todos">Todos os status</SelectItem>
                       <SelectItem value="ativo">Confirmado no BRNET</SelectItem>
-                      <SelectItem value="quarentena">Em quarentena</SelectItem>
+                      <SelectItem value="quarentena">Não encontrado</SelectItem>
                     </SelectContent>
                   </Select>
                   <Button
@@ -923,7 +923,7 @@ export default function ExamesAdminPage() {
                                 >
                                   {parent.status === "ativo"
                                     ? "Confirmado no BRNET"
-                                    : "Em quarentena"}
+                                    : "Não encontrado"}
                                 </span>
                               </td>
                               <td className="px-6 py-4 text-sm text-gray-600">
@@ -1166,7 +1166,7 @@ export default function ExamesAdminPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="ativo">Confirmado no BRNET</SelectItem>
-                    <SelectItem value="quarentena">Em quarentena</SelectItem>
+                    <SelectItem value="quarentena">Não encontrado</SelectItem>
                   </SelectContent>
                 </Select>
                 <p className="text-xs text-gray-500 mt-1">
@@ -1258,7 +1258,7 @@ export default function ExamesAdminPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="ativo">Confirmado no BRNET</SelectItem>
-                    <SelectItem value="quarentena">Em quarentena</SelectItem>
+                    <SelectItem value="quarentena">Não encontrado</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
