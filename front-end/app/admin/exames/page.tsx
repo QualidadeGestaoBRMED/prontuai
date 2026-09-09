@@ -711,13 +711,6 @@ export default function ExamesAdminPage() {
             {aba === "pendencias" ? (
               /* Pendências: exames que o BRNET pede e a comparação nunca achou */
               <div className="bg-white rounded-lg shadow overflow-hidden">
-                <p className="text-sm text-gray-600 p-6 pb-4">
-                  Exames que o BRNET pede e que a comparação{" "}
-                  <strong>nunca encontrou em documento nenhum</strong>. Exame já
-                  encontrado alguma vez não entra aqui — cadastrá-lo não mudaria o
-                  resultado. Ordenado por quantidade de documentos em que o BRNET
-                  pediu o exame.
-                </p>
                 <table className="w-full">
                   <thead className="bg-gray-50 border-b">
                     <tr>
