@@ -360,6 +360,13 @@ async def startup_event():
     except Exception as e:
         logger.warning(f"Job watchdog falhou ao iniciar: {e}")
 
+    # Atualização diária dos indicadores do dashboard (7h em São Paulo)
+    try:
+        from app.services.dashboard_service import atualizacao_diaria_loop
+        asyncio.create_task(atualizacao_diaria_loop())
+    except Exception as e:
+        logger.warning(f"Atualização diária do dashboard falhou ao iniciar: {e}")
+
 
 @app.on_event("shutdown")
 async def shutdown_event():

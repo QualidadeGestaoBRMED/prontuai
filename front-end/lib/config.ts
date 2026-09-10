@@ -66,6 +66,9 @@ export const API_ENDPOINTS = {
   // Audit Logs
   AUDIT_LOGS: `${API_PROXY_BASE}/v1/audit-logs`,
 
+  // Dashboard de indicadores
+  DASHBOARD_INDICADORES: `${API_PROXY_BASE}/v1/dashboard/indicadores`,
+
   // Maintenance
   MAINTENANCE_STATUS: "/api/maintenance-status",
   MAINTENANCE_WINDOWS: `${API_PROXY_BASE}/v1/maintenance/windows`,

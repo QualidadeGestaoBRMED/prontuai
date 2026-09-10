@@ -56,3 +56,9 @@ drive.json
 # e assinado em runtime a cada escrita no painel. Nunca versionar.
 data/exam_catalog_index.faiss
 data/exam_catalog_index.faiss.hmac
+
+# Expedições de clínicas credenciadas por dia, extraídas do BRNET. Alimenta o
+# denominador da cobertura no dashboard. É volume de operação: fica no disco do
+# servidor, nunca no git nem no bundle do front. Sem ele o painel de cobertura
+# some e o resto do dashboard continua funcionando.
+data/expedicoes_credenciadas.json
