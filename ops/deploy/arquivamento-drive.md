@@ -155,23 +155,24 @@ por idade sozinha removeria documentos da fila de revisão.
 
 ## Testando em staging — atenção ao banco
 
-Staging e produção rodam **na mesma VPS**, com os containers `prontuai-db`
-(produção) e `prontuai-db-stg` (staging) lado a lado. O script usa
-`prontuai-db` por padrão. Para testar em staging, **as duas** variáveis abaixo
-são obrigatórias — trocar só a pasta faria o script consultar e marcar o banco
-de **produção**, apagando arquivos de staging com base em aprovações de
-produção:
+Staging roda em **outra máquina** (Ubuntu, usuário `ubuntu`, pasta
+`/home/ubuntu/prontuai-staging` — ver `DEPLOY_ENV=staging` em
+`ops/deploy/deploy_vps.sh`), com o banco no container `prontuai-db-stg`. Os
+padrões do script são de produção, então lá tudo precisa ser explícito:
 
 ```bash
 ARCHIVE_DB_CONTAINER=prontuai-db-stg \
-ARCHIVE_SOURCE_DIR=<pasta uploads-stg do host> \
+ARCHIVE_SOURCE_DIR=/home/ubuntu/prontuai-staging/data/uploads \
+POSTGRES_USER=<usuario de staging> POSTGRES_DB=<banco de staging> \
 ARCHIVE_RCLONE_REMOTE=gdrive:prontuai/arquivo-staging \
 ARCHIVE_DRY_RUN=true ./archive_documents_to_drive.sh
 ```
 
-Confira a linha `Banco:` no início do log antes de rodar sem dry-run. Use também
-um remote separado para staging, para o teste não misturar arquivos no Drive
-de produção.
+`POSTGRES_USER`/`POSTGRES_DB` explícitos porque o script, na falta deles, lê o
+`.env` de `/home/ec2-user/prontuai-db`, que não existe na máquina de staging. O
+rclone também precisa estar configurado lá. Use um remote separado para o
+teste não misturar arquivos no Drive de produção, e confira a linha `Banco:` no
+início do log antes de rodar sem dry-run.
 
 ## 3. Primeiro run (o acervo acumulado)
 

@@ -84,12 +84,11 @@ DRY_RUN="${ARCHIVE_DRY_RUN:-false}"
 DB_DEPLOY_DIR="${DB_DEPLOY_DIR:-/home/ec2-user/prontuai-db}"
 # Container do Postgres consultado pelo portao e onde archived_at e gravado.
 #
-# Configuravel porque staging e producao rodam NA MESMA VPS, com
-# `prontuai-db` (producao) e `prontuai-db-stg` (staging, ver
-# back-end/docker-compose.stg.yml) lado a lado. Com o nome fixo, um teste "em
-# staging" apontando ARCHIVE_SOURCE_DIR para uploads-stg encontraria o banco de
-# PRODUCAO: consultaria aprovacoes de producao, gravaria archived_at em linhas
-# de producao e apagaria arquivos de staging com base nelas — sem erro nenhum.
+# Configuravel porque o banco de staging se chama `prontuai-db-stg` (ver
+# back-end/docker-compose.stg.yml): com o nome fixo, o script se recusaria a
+# rodar em staging. E num host onde os dois containers existam lado a lado, o
+# nome fixo faria um teste "de staging" consultar e marcar o banco de PRODUCAO
+# sem erro nenhum — por isso o banco em uso aparece no inicio do log.
 DB_CONTAINER="${ARCHIVE_DB_CONTAINER:-prontuai-db}"
 
 # --transfers=4: o gargalo aqui e latencia por arquivo, nao banda — sao muitos
