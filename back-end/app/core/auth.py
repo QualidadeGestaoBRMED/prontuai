@@ -434,6 +434,28 @@ async def get_current_upload_user(
     return user
 
 
+# Quem vê o dashboard de indicadores. Lista única: o front espelha esta mesma
+# regra em `usePermissions.canViewDashboard`, e as duas precisam andar juntas.
+DASHBOARD_ROLES = (UserRole.ADMIN, UserRole.VIEWER)
+
+
+async def require_dashboard(current_user: User = Depends(get_current_user)) -> User:
+    """
+    Requer um papel com acesso ao dashboard de indicadores.
+
+    Deliberadamente **não** inclui MANAGER: os indicadores (volume por clínica,
+    acurácia da IA, cobertura das expedições) foram separados da gestão
+    administrativa e ganharam um papel próprio, o VIEWER. Por isso não usa
+    `require_management`.
+    """
+    if current_user.role not in DASHBOARD_ROLES:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Seu perfil não tem acesso ao dashboard de indicadores"
+        )
+    return current_user
+
+
 async def require_checker(current_user: User = Depends(get_current_user)) -> User:
     """Requer role CHECKER, ADMIN ou MANAGER"""
     if current_user.role not in [UserRole.CHECKER, UserRole.ADMIN, UserRole.MANAGER]:

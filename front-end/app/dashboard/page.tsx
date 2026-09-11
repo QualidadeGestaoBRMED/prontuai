@@ -5,6 +5,7 @@ import { RiBarChartBoxLine, RiRefreshLine } from "@remixicon/react";
 
 import { AppSidebar } from "@/components/app-sidebar";
 import { RequireRole } from "@/components/require-role";
+import { DASHBOARD_ROLES } from "@/hooks/usePermissions";
 import UserDropdown from "@/components/user-dropdown";
 import {
   Dialog,
@@ -70,7 +71,7 @@ export default function DashboardPage() {
   );
 
   return (
-    <RequireRole allowedRoles={["ADMIN", "MANAGER"]}>
+    <RequireRole allowedRoles={DASHBOARD_ROLES}>
       <SidebarProvider>
         <AppSidebar />
         <SidebarInset className="bg-sidebar group/sidebar-inset">

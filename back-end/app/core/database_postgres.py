@@ -172,6 +172,7 @@ class PostgresUserDatabase:
             if type_exists:
                 autocommit.execute(text("ALTER TYPE userrole ADD VALUE IF NOT EXISTS 'MANAGER'"))
                 autocommit.execute(text("ALTER TYPE userrole ADD VALUE IF NOT EXISTS 'CURATOR'"))
+                autocommit.execute(text("ALTER TYPE userrole ADD VALUE IF NOT EXISTS 'VIEWER'"))
 
     def _ensure_document_columns(self) -> None:
         """Garante que colunas novas existam para documentos."""

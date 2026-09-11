@@ -2,7 +2,14 @@
 
 import { useSession } from "next-auth/react";
 
-export type UserRole = "ADMIN" | "MANAGER" | "CURATOR" | "CHECKER" | "SENDER";
+export type UserRole = "ADMIN" | "MANAGER" | "CURATOR" | "VIEWER" | "CHECKER" | "SENDER";
+
+/**
+ * Quem vê o dashboard de indicadores. Espelho de `DASHBOARD_ROLES` em
+ * back-end/app/core/auth.py — é o back-end que protege o dado; esta lista só
+ * decide o que aparece na tela. Mude as duas juntas.
+ */
+export const DASHBOARD_ROLES: UserRole[] = ["ADMIN", "VIEWER"];
 
 export interface PermissionsHook {
   user: any;
@@ -12,6 +19,8 @@ export interface PermissionsHook {
   isManagement: boolean;
   /** ADMIN ou CURATOR: curadoria do catálogo de exames. MANAGER fica de fora. */
   canCurateExams: boolean;
+  /** Dashboard de indicadores. MANAGER fica de fora — ver `DASHBOARD_ROLES`. */
+  canViewDashboard: boolean;
   isChecker: boolean;
   isSender: boolean;
   canManageUsers: boolean;
@@ -28,6 +37,7 @@ function buildPermissions(role: UserRole | undefined) {
   const isManagement = role === "ADMIN" || role === "MANAGER";
   // Curadoria do catálogo é separada da gestão: MANAGER não entra de propósito.
   const canCurateExams = role === "ADMIN" || role === "CURATOR";
+  const canViewDashboard = role !== undefined && DASHBOARD_ROLES.includes(role);
   const isChecker = role === "CHECKER" || isManagement;
   const isSender = role === "SENDER" || isManagement;
 
@@ -35,6 +45,7 @@ function buildPermissions(role: UserRole | undefined) {
     isAdmin,
     isManagement,
     canCurateExams,
+    canViewDashboard,
     isChecker,
     isSender,
     canManageUsers: isManagement,

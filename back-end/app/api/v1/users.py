@@ -21,11 +21,12 @@ def _assert_manager_cannot_touch_admin(actor: User, target_role: UserRole | None
     """
     Impede escalada de privilégio: MANAGER só atribui roles CHECKER/SENDER.
 
-    CURATOR entra nesta lista porque o MANAGER não acessa o catálogo de exames —
-    se pudesse atribuir o papel, bastaria criar um usuário para contornar isso.
+    CURATOR e VIEWER entram nesta lista porque o MANAGER não acessa nem o
+    catálogo de exames nem o dashboard — se pudesse atribuir esses papéis,
+    bastaria criar um usuário para contornar isso.
     """
     if actor.role == UserRole.MANAGER and target_role in (
-        UserRole.ADMIN, UserRole.MANAGER, UserRole.CURATOR
+        UserRole.ADMIN, UserRole.MANAGER, UserRole.CURATOR, UserRole.VIEWER
     ):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -77,9 +78,10 @@ async def create_user(
 
             logger.info(f"Criando usuário SENDER {user_create.email} para clínica {clinic.name} ({clinic_id})")
 
-        # CHECKER, ADMIN, MANAGER e CURATOR não devem ter clinic_id
+        # CHECKER, ADMIN, MANAGER, CURATOR e VIEWER não devem ter clinic_id
         if user_create.role in [
-            UserRole.CHECKER, UserRole.ADMIN, UserRole.MANAGER, UserRole.CURATOR
+            UserRole.CHECKER, UserRole.ADMIN, UserRole.MANAGER, UserRole.CURATOR,
+            UserRole.VIEWER,
         ]:
             clinic_id = None
 

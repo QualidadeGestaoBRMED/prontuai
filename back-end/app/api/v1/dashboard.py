@@ -1,10 +1,10 @@
-"""Indicadores do dashboard. Leitura agregada, restrita à gestão."""
+"""Indicadores do dashboard. Leitura agregada, restrita a quem tem o papel de indicadores."""
 import asyncio
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from app.core.auth import require_management
+from app.core.auth import require_dashboard
 from app.services.dashboard_service import (
     DashboardIndisponivel,
     obter_indicadores,
@@ -18,7 +18,7 @@ router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
 @router.get("/indicadores")
 async def indicadores(
     forcar: bool = Query(False, description="Ignora o cache e recalcula agora."),
-    current_user=Depends(require_management),
+    current_user=Depends(require_dashboard),
 ):
     """Séries de utilização, acurácia, clínicas e exames do ambiente atual.
 

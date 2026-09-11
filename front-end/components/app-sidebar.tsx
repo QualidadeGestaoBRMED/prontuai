@@ -83,7 +83,7 @@ const data = {
 };
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
-  const { isAdmin, isManagement, canCurateExams, role } = usePermissions();
+  const { isAdmin, isManagement, canCurateExams, canViewDashboard, role } = usePermissions();
   const documentsRoutes = new Set(["/pendentes", "/historico", "/checagem"]);
   const handleDocumentsRefresh = (url?: string) => {
     if (!url || !documentsRoutes.has(url)) return;
@@ -152,7 +152,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         )}
 
         {/* Admin Section - Apenas para administradores */}
-        {(isManagement || canCurateExams) && (
+        {(isManagement || canCurateExams || canViewDashboard) && (
           <SidebarGroup>
             <SidebarGroupLabel className="uppercase text-sidebar-foreground/50">
               Administração
@@ -176,7 +176,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                   </SidebarMenuButton>
                 </SidebarMenuItem>
                 )}
-                {isManagement && (
+                {canViewDashboard && (
                   <SidebarMenuItem>
                     <SidebarMenuButton
                       asChild
