@@ -277,8 +277,6 @@ export interface VisaoDashboard {
 
   kpiPrimary: Kpi[];
   docsSeries: BarraDocs[];
-  ptsLiberados: string;
-  ptsPendencia: string;
   coberturaSeries: BarraPercentual[];
   expSeries: BarraExpedicao[];
   ranking: LinhaRanking[];
@@ -364,7 +362,6 @@ export function calcularVisao({ dados, filtro, comparar, verTodasClinicas }: Opc
   const bar = (v: number, max: number, h: number) => (v <= 0 ? 0 : Math.max(3, Math.round((v / max) * h)));
   const maxDocs = Math.max(1, ...grafico.map((p) => p.docs));
   const maxExp = Math.max(1, ...grafico.map((p) => p.antecipada + p.em_dia + p.atrasada));
-  const passo = grafico.length ? 600 / grafico.length : 600;
 
   // ---- expedições da empresa (denominador da cobertura) ---------------------
   const porDia = dados.expedicoes_dia || {};
@@ -551,14 +548,6 @@ export function calcularVisao({ dados, filtro, comparar, verTodasClinicas }: Opc
         ? `${rotuloG(p.chave)} — ${fmt(p.docs)} enviados, ${fmt(p.validados)} liberados, ${fmt(p.rejeitados)} com pendência`
         : `${rotuloG(p.chave)} — sem documentos`,
     })),
-
-    // Linhas em bandas fixas: liberados na faixa superior, pendência na inferior.
-    ptsLiberados: grafico
-      .map((p, i) => `${((i + 0.5) * passo).toFixed(1)},${(100 - (pct(p.validados, p.docs) / 100) * 85).toFixed(1)}`)
-      .join(" "),
-    ptsPendencia: grafico
-      .map((p, i) => `${((i + 0.5) * passo).toFixed(1)},${(258 - (pct(p.rejeitados, p.docs) / 100) * 83).toFixed(1)}`)
-      .join(" "),
 
     // Cobertura do ProntuAI sobre as expedições da empresa, ponto a ponto.
     coberturaSeries: (() => {
