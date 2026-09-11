@@ -55,7 +55,7 @@
       },
       "targets": [
         {
-          "expr": "100 * sum(rate(pg_stat_database_blks_hit[5m])) / (sum(rate(pg_stat_database_blks_hit[5m])) + sum(rate(pg_stat_database_blks_read[5m])))",
+          "expr": "100 * sum(rate(pg_stat_database_blks_hit_total[5m])) / (sum(rate(pg_stat_database_blks_hit_total[5m])) + sum(rate(pg_stat_database_blks_read_total[5m])))",
           "legendFormat": "cache hit",
           "refId": "A"
         }
@@ -84,12 +84,12 @@
       },
       "targets": [
         {
-          "expr": "sum(rate(pg_stat_database_xact_commit[5m]))",
+          "expr": "sum(rate(pg_stat_database_xact_commit_total[5m]))",
           "legendFormat": "commit",
           "refId": "A"
         },
         {
-          "expr": "sum(rate(pg_stat_database_xact_rollback[5m]))",
+          "expr": "sum(rate(pg_stat_database_xact_rollback_total[5m]))",
           "legendFormat": "rollback",
           "refId": "B"
         }
@@ -117,27 +117,27 @@
       },
       "targets": [
         {
-          "expr": "sum(rate(pg_stat_database_tup_returned[5m]))",
+          "expr": "sum(rate(pg_stat_database_tup_returned_total[5m]))",
           "legendFormat": "returned",
           "refId": "A"
         },
         {
-          "expr": "sum(rate(pg_stat_database_tup_fetched[5m]))",
+          "expr": "sum(rate(pg_stat_database_tup_fetched_total[5m]))",
           "legendFormat": "fetched",
           "refId": "B"
         },
         {
-          "expr": "sum(rate(pg_stat_database_tup_inserted[5m]))",
+          "expr": "sum(rate(pg_stat_database_tup_inserted_total[5m]))",
           "legendFormat": "inserted",
           "refId": "C"
         },
         {
-          "expr": "sum(rate(pg_stat_database_tup_updated[5m]))",
+          "expr": "sum(rate(pg_stat_database_tup_updated_total[5m]))",
           "legendFormat": "updated",
           "refId": "D"
         },
         {
-          "expr": "sum(rate(pg_stat_database_tup_deleted[5m]))",
+          "expr": "sum(rate(pg_stat_database_tup_deleted_total[5m]))",
           "legendFormat": "deleted",
           "refId": "E"
         }
@@ -165,7 +165,7 @@
       },
       "targets": [
         {
-          "expr": "rate(pg_stat_database_deadlocks[5m])",
+          "expr": "rate(pg_stat_database_deadlocks_total[5m])",
           "legendFormat": "{{datname}}",
           "refId": "A"
         }
