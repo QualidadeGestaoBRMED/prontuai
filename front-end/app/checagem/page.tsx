@@ -12,10 +12,12 @@ import { NotificationBell } from "@/components/notification-bell"
 import { NotificationCenter } from "@/components/notification-center"
 import { useSession } from "next-auth/react"
 import { ProcessResult } from "@/types/process"
+import { lerDocumentoArquivado, mensagemDocumentoArquivado } from "@/lib/document-archive"
 import { DocumentDetailsModalChecagem } from "@/components/document-details-modal-checagem"
 import { RequireRole } from "@/components/require-role"
 import { useDocumentsPaged } from "@/hooks/use-documents-paged"
 import { useReviewTimer } from "@/hooks/use-review-timer"
+import { usePermissions } from "@/hooks/usePermissions"
 import { useClinicOptions } from "@/hooks/use-clinic-options"
 import { documentToProcessResult } from "@/lib/document-mapper"
 import { API_ENDPOINTS } from "@/lib/config"
@@ -54,6 +56,7 @@ export default function Page() {
   // Cronometragem da revisão: sobe junto do PATCH da decisão, sem UI e sem
   // requisição extra. Ver docs/tempo-de-revisao-desenho.md.
   const reviewTimer = useReviewTimer()
+  const { isReadOnly } = usePermissions()
   const {
     options: clinicOptions,
     loading: clinicOptionsLoading,
@@ -113,7 +116,12 @@ export default function Page() {
     try {
       const response = await authFetch(API_ENDPOINTS.DOCUMENT_VIEW(result.id))
       if (!response.ok) {
-        toast.error("Não foi possível abrir o documento.")
+        const arquivado = await lerDocumentoArquivado(response)
+        if (arquivado) {
+          toast.info(mensagemDocumentoArquivado(arquivado), { duration: 10000 })
+        } else {
+          toast.error("Não foi possível abrir o documento.")
+        }
         setDocumentPreviewLoading(false)
         return
       }
@@ -245,7 +253,7 @@ export default function Page() {
   }
 
   return (
-    <RequireRole allowedRoles={["ADMIN", "MANAGER", "CHECKER"]}>
+    <RequireRole allowedRoles={["ADMIN", "MANAGER", "CHECKER", "VIEWER", "CURATOR"]}>
       <SidebarProvider>
         <AppSidebar />
         <SidebarInset className="bg-sidebar group/sidebar-inset">
@@ -377,6 +385,7 @@ export default function Page() {
           onAbrirPdfExterno={
             selectedResult ? () => reviewTimer.registrarPdfExterno(selectedResult.id) : undefined
           }
+          somenteLeitura={isReadOnly}
           documentUrl={documentPreviewUrl}
           documentLoading={documentPreviewLoading}
         />

@@ -4,9 +4,9 @@ Endpoints para gerenciamento de documentos.
 from fastapi import APIRouter, HTTPException, status, Depends, Query, Request, BackgroundTasks
 from fastapi.responses import FileResponse
 from typing import List, Any
-from app.core.auth import get_current_user, require_admin, require_checker
+from app.core.auth import get_current_user, require_admin, require_checker, require_document_reader
 from app.core.database import user_db
-from app.models.user import User, UserRole
+from app.models.user import User, UserRole, GLOBAL_READ_ROLES
 from app.models.document import (
     Document,
     DocumentUpdate,
@@ -76,7 +76,7 @@ def _load_documents(
     compact: bool,
     user_id: str | None = None,
 ) -> List[Document]:
-    if role in [UserRole.CHECKER, UserRole.ADMIN, UserRole.MANAGER]:
+    if role in GLOBAL_READ_ROLES:
         documents = user_db.get_all_documents(use_compact_payload=compact)
         logger.debug(f"[DOCUMENTS] {role.value} listou {len(documents)} documentos (todas clínicas)")
     else:
@@ -262,7 +262,7 @@ def _attach_clinic_names(documents: list[Document]) -> None:
 
 @router.get("/paged", response_model=PaginatedDocumentsResponse)
 async def list_documents_paged(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_document_reader),
     queue: DocumentQueue | None = Query(None, description="Fila para otimizar a consulta"),
     compact: bool = Query(True, description="Remove campos pesados do payload para melhorar performance"),
     page: int = Query(1, ge=1),
@@ -348,7 +348,7 @@ async def list_documents_paged(
 @router.get("", response_model=List[Document])
 async def list_documents(
     request: Request,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_document_reader),
     compact: bool = Query(True, description="Remove campos pesados do payload para melhorar performance"),
     cache_seconds: int = Query(5, ge=0, le=_DOCS_CACHE_MAX_SECONDS, description="Cache em memória para aliviar latência do DB"),
     stale_seconds: int = Query(30, ge=0, le=_DOCS_STALE_MAX_SECONDS, description="Permite retornar cache expirado enquanto atualiza em background")
@@ -431,7 +431,7 @@ async def list_documents(
 
 
 @router.get("/{document_id}", response_model=Document)
-async def get_document(document_id: str, current_user: User = Depends(get_current_user)):
+async def get_document(document_id: str, current_user: User = Depends(require_document_reader)):
     """
     Obtém detalhes de um documento específico.
 
@@ -474,7 +474,7 @@ async def get_document(document_id: str, current_user: User = Depends(get_curren
 
 
 @router.get("/{document_id}/view")
-async def view_document(document_id: str, current_user: User = Depends(get_current_user)):
+async def view_document(document_id: str, current_user: User = Depends(require_document_reader)):
     """
     Retorna o arquivo original do documento para visualização.
 
@@ -521,18 +521,27 @@ async def view_document(document_id: str, current_user: User = Depends(get_curre
         if file_path:
             add_candidate(os.path.join(base_dir, os.path.basename(file_path)))
 
-        # Fallback final para registros antigos sem file_path persistido:
-        # arquivos salvos pelo upload usam "<prefixo>_<nome_sanitizado>".
-        original_safe_name = safe_filename(document.filename)
-        add_candidate(os.path.join(base_dir, original_safe_name))
-        try:
-            for entry in os.scandir(base_dir):
-                if not entry.is_file():
-                    continue
-                if entry.name == original_safe_name or entry.name.endswith(f"_{original_safe_name}"):
-                    add_candidate(entry.path)
-        except FileNotFoundError:
-            pass
+        # Fallback por NOME do arquivo, só para registros antigos sem file_path
+        # persistido. O `if not file_path` não é detalhe: o casamento por sufixo
+        # abaixo aceita qualquer "<prefixo>_<nome_sanitizado>", e nomes originais
+        # repetem muito neste domínio (exame.pdf, resultado.pdf). Com file_path
+        # gravado e o arquivo ausente — o que passou a ser comum depois do
+        # arquivamento no Drive — este fallback encontraria o arquivo de OUTRO
+        # paciente com o mesmo nome original e o serviria como se fosse deste
+        # documento; pior, o update logo abaixo gravaria esse caminho errado no
+        # file_path, tornando a troca permanente. Quando há file_path, arquivo
+        # ausente tem de virar 404/410, nunca o PDF de outra pessoa.
+        if not file_path:
+            original_safe_name = safe_filename(document.filename)
+            add_candidate(os.path.join(base_dir, original_safe_name))
+            try:
+                for entry in os.scandir(base_dir):
+                    if not entry.is_file():
+                        continue
+                    if entry.name == original_safe_name or entry.name.endswith(f"_{original_safe_name}"):
+                        add_candidate(entry.path)
+            except FileNotFoundError:
+                pass
 
         resolved_path: str | None = None
         for candidate in candidate_paths:
@@ -544,6 +553,36 @@ async def view_document(document_id: str, current_user: User = Depends(get_curre
                 break
 
         if not resolved_path:
+            # Arquivado pela política de retenção e sumiço por defeito exigem
+            # respostas diferentes: o primeiro é esperado e tem caminho de
+            # recuperação; o segundo é bug e precisa continuar aparecendo como
+            # 404. `archived_at` é escrito pelo job de arquivamento
+            # (ops/deploy/archive_documents_to_drive.sh) só depois de verificar
+            # a cópia no Drive por checksum.
+            archived_at = getattr(document, "archived_at", None)
+            if archived_at:
+                logger.info(
+                    "[DOCUMENTS] Visualização de documento arquivado doc_id=%s archived_at=%s",
+                    document_id,
+                    archived_at,
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_410_GONE,
+                    detail={
+                        "code": "documento_arquivado",
+                        # Sem a data: archived_at está em UTC e o fuso é de
+                        # quem lê. O front monta a frase com a data local;
+                        # esta serve a quem consome a API diretamente.
+                        "message": (
+                            "Este documento foi arquivado e não está mais disponível "
+                            "para visualização. Para recuperá-lo, entre em contato com "
+                            f"{settings.DOCUMENT_ARCHIVE_CONTACT}."
+                        ),
+                        "archived_at": archived_at.isoformat(),
+                        "filename": document.filename,
+                        "contact": settings.DOCUMENT_ARCHIVE_CONTACT,
+                    },
+                )
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Arquivo do documento não encontrado"

@@ -14,11 +14,21 @@ from typing import List, Optional
 from datetime import datetime, timezone
 from sqlalchemy import create_engine, text, func, or_, and_, case
 from sqlalchemy.orm import sessionmaker, Session, defer
-from app.models.user import User, UserCreate, UserUpdate, UserRole
+from app.models.user import User, UserCreate, UserUpdate, UserRole, GLOBAL_READ_ROLES
 from app.models.clinic import Clinic, ClinicCreate, ClinicUpdate
 from app.models.document import Document, DocumentCreate, DocumentUpdate
 from app.models.notification import Notification, NotificationCreate, NotificationUpdate
 from app.models.audit_log import AuditLog, AuditLogCreate
+from app.models.exam import (
+    ExamCatalogStats,
+    ExamPendency,
+    ExamParent,
+    ExamParentDetail,
+    ExamVariation,
+    ExamVariationConflict,
+)
+from app.core.exam_normalize import limpar_texto, normalizar_termo
+from app.services.exam_vector_service import derivar_vector_id
 from app.core.db.models import (
     Base,
     ClinicModel,
@@ -29,6 +39,9 @@ from app.core.db.models import (
     JobModel,
     MaintenanceWindowModel,
     RefreshTokenModel,
+    ExamParentModel,
+    ExamVariationModel,
+    ExamVariationConflictModel,
 )
 
 logger = logging.getLogger(__name__)
@@ -158,6 +171,8 @@ class PostgresUserDatabase:
             ).scalar()
             if type_exists:
                 autocommit.execute(text("ALTER TYPE userrole ADD VALUE IF NOT EXISTS 'MANAGER'"))
+                autocommit.execute(text("ALTER TYPE userrole ADD VALUE IF NOT EXISTS 'CURATOR'"))
+                autocommit.execute(text("ALTER TYPE userrole ADD VALUE IF NOT EXISTS 'VIEWER'"))
 
     def _ensure_document_columns(self) -> None:
         """Garante que colunas novas existam para documentos."""
@@ -178,11 +193,25 @@ class PostgresUserDatabase:
             connection.execute(text("ALTER TABLE documents ADD COLUMN IF NOT EXISTS content_hash VARCHAR"))
             connection.execute(text("ALTER TABLE documents ADD COLUMN IF NOT EXISTS uploaded_by_user_email VARCHAR"))
             connection.execute(text("ALTER TABLE documents ADD COLUMN IF NOT EXISTS patient_name VARCHAR"))
+            # Escrito pelo job de arquivamento, não pela app. Vai aqui além da
+            # migration 007 porque este método roda em TODO startup: uma VPS que
+            # suba com o banco atrás da migration ainda ganha a coluna, e sem
+            # ela o endpoint de visualização não consegue diferenciar documento
+            # arquivado (410, com caminho de recuperação) de arquivo perdido
+            # por defeito (404).
+            connection.execute(text("ALTER TABLE documents ADD COLUMN IF NOT EXISTS archived_at TIMESTAMP"))
             connection.execute(text("CREATE INDEX IF NOT EXISTS idx_documents_patient_name ON documents(patient_name)"))
             connection.execute(text("CREATE INDEX IF NOT EXISTS idx_documents_content_hash ON documents(content_hash)"))
             connection.execute(text("CREATE INDEX IF NOT EXISTS idx_documents_uploader_email ON documents(uploaded_by_user_email)"))
             connection.execute(text("CREATE INDEX IF NOT EXISTS idx_documents_reviewed_by ON documents(reviewed_by)"))
             connection.execute(text("CREATE INDEX IF NOT EXISTS idx_documents_clinic_id ON documents(clinic_id)"))
+            # Índice parcial: só as linhas já arquivadas são consultadas, e são
+            # a minoria. Mantém o índice pequeno e não pesa no INSERT do fluxo
+            # normal, em que archived_at é sempre NULL.
+            connection.execute(text(
+                "CREATE INDEX IF NOT EXISTS idx_documents_archived_at ON documents(archived_at) "
+                "WHERE archived_at IS NOT NULL"
+            ))
 
     def _ensure_notification_columns(self) -> None:
         """Garante que colunas novas existam para notificações."""
@@ -1073,6 +1102,7 @@ class PostgresUserDatabase:
             confidence_score=model.confidence_score,
             quality_score=model.quality_score,
             mandatory_coverage=model.mandatory_coverage,
+            archived_at=_as_utc(getattr(model, "archived_at", None)),
             created_at=_as_utc(model.created_at),
             updated_at=_as_utc(model.updated_at)
         )
@@ -1186,7 +1216,7 @@ class PostgresUserDatabase:
 
             base_query = session.query(DocumentModel).options(*query_options)
 
-            if role in [UserRole.CHECKER, UserRole.ADMIN, UserRole.MANAGER]:
+            if role in GLOBAL_READ_ROLES:
                 scoped_query = base_query
             else:
                 if not clinic_id:
@@ -1264,7 +1294,7 @@ class PostgresUserDatabase:
                 ).label("pending_review"),
             )
 
-            if role in [UserRole.CHECKER, UserRole.ADMIN, UserRole.MANAGER]:
+            if role in GLOBAL_READ_ROLES:
                 scoped_summary_query = summary_query
             else:
                 if not clinic_id:
@@ -1582,3 +1612,736 @@ class PostgresUserDatabase:
             return self._model_to_document(model, include_ocr_markdown=False, use_compact_payload=True) if model else None
         finally:
             session.close()
+
+    # ------------------------------------------------------------------
+    # Catálogo de exames similares (exame pai + variações)
+    #
+    # `ValueError` aqui significa sempre colisão de nome no catálogo — o
+    # router traduz para 409. Validação de formato fica nos schemas Pydantic.
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _model_to_exam_variation(model: ExamVariationModel) -> ExamVariation:
+        return ExamVariation(
+            id=model.id,
+            parent_id=model.parent_id,
+            name=model.name,
+            name_normalized=model.name_normalized,
+            is_active=model.is_active,
+            source=model.source,
+            occurrences=model.occurrences,
+            has_embedding=model.embedding is not None,
+            created_at=model.created_at,
+            updated_at=model.updated_at,
+        )
+
+    @staticmethod
+    def _model_to_exam_parent(model: ExamParentModel, variation_count: int = 0) -> ExamParent:
+        return ExamParent(
+            id=model.id,
+            name=model.name,
+            name_normalized=model.name_normalized,
+            status=model.status,
+            is_external=model.is_external,
+            is_active=model.is_active,
+            source=model.source,
+            notes=model.notes,
+            has_embedding=model.embedding is not None,
+            variation_count=variation_count,
+            created_at=model.created_at,
+            updated_at=model.updated_at,
+        )
+
+    @staticmethod
+    def _model_to_exam_conflict(model: ExamVariationConflictModel) -> ExamVariationConflict:
+        return ExamVariationConflict(
+            id=model.id,
+            name=model.name,
+            name_normalized=model.name_normalized,
+            candidate_parents=list(model.candidate_parents or []),
+            source=model.source,
+            resolution=model.resolution,
+            resolved_parent_id=model.resolved_parent_id,
+            resolved_at=model.resolved_at,
+            resolved_by=model.resolved_by,
+            created_at=model.created_at,
+        )
+
+    def _assert_termo_livre(
+        self,
+        session: Session,
+        normalizado: str,
+        ignorar_parent_id: Optional[str] = None,
+        ignorar_variation_id: Optional[str] = None,
+    ) -> None:
+        """
+        Árvore estrita: um termo normalizado existe uma única vez no catálogo,
+        seja como pai ou como variação. Levanta ValueError se já estiver em uso.
+        """
+        query = session.query(ExamParentModel).filter(
+            ExamParentModel.name_normalized == normalizado
+        )
+        if ignorar_parent_id:
+            query = query.filter(ExamParentModel.id != ignorar_parent_id)
+        colidente = query.first()
+        if colidente:
+            raise ValueError(f"'{colidente.name}' já existe como exame pai no catálogo")
+
+        query = session.query(ExamVariationModel).filter(
+            ExamVariationModel.name_normalized == normalizado
+        )
+        if ignorar_variation_id:
+            query = query.filter(ExamVariationModel.id != ignorar_variation_id)
+        colidente = query.first()
+        if colidente:
+            pai = session.query(ExamParentModel).filter(
+                ExamParentModel.id == colidente.parent_id
+            ).first()
+            nome_pai = pai.name if pai else "?"
+            raise ValueError(
+                f"'{colidente.name}' já é variação de '{nome_pai}'"
+            )
+
+    def list_exam_parents(
+        self,
+        search: Optional[str] = None,
+        status: Optional[str] = None,
+        include_inactive: bool = False,
+        only_without_variations: bool = False,
+        limit: int = 200,
+        offset: int = 0,
+    ) -> tuple[List[ExamParent], int]:
+        """Lista exames pai com a contagem de variações. Retorna (itens, total)."""
+        session = self._get_session()
+        try:
+            contagem = (
+                session.query(
+                    ExamVariationModel.parent_id.label("parent_id"),
+                    func.count(ExamVariationModel.id).label("total"),
+                )
+                .group_by(ExamVariationModel.parent_id)
+                .subquery()
+            )
+
+            query = session.query(
+                ExamParentModel,
+                func.coalesce(contagem.c.total, 0).label("variation_count"),
+            ).outerjoin(contagem, contagem.c.parent_id == ExamParentModel.id)
+
+            if not include_inactive:
+                query = query.filter(ExamParentModel.is_active.is_(True))
+            if status:
+                query = query.filter(ExamParentModel.status == status)
+            if only_without_variations:
+                query = query.filter(func.coalesce(contagem.c.total, 0) == 0)
+            if search:
+                termo = f"%{normalizar_termo(search)}%"
+                # Busca pelo nome normalizado do pai ou de qualquer variação dele.
+                pais_por_variacao = (
+                    session.query(ExamVariationModel.parent_id)
+                    .filter(ExamVariationModel.name_normalized.like(termo))
+                    .subquery()
+                )
+                query = query.filter(
+                    or_(
+                        ExamParentModel.name_normalized.like(termo),
+                        ExamParentModel.id.in_(session.query(pais_por_variacao.c.parent_id)),
+                    )
+                )
+
+            total = query.count()
+            linhas = (
+                query.order_by(ExamParentModel.name_normalized.asc())
+                .limit(limit)
+                .offset(offset)
+                .all()
+            )
+            itens = [
+                self._model_to_exam_parent(modelo, int(contagem_variacoes or 0))
+                for modelo, contagem_variacoes in linhas
+            ]
+            return itens, total
+        finally:
+            session.close()
+
+    def get_exam_parent(self, parent_id: str) -> Optional[ExamParentDetail]:
+        """Exame pai com as variações carregadas."""
+        session = self._get_session()
+        try:
+            modelo = session.query(ExamParentModel).filter(
+                ExamParentModel.id == parent_id
+            ).first()
+            if not modelo:
+                return None
+
+            variacoes = (
+                session.query(ExamVariationModel)
+                .filter(ExamVariationModel.parent_id == parent_id)
+                .order_by(ExamVariationModel.name_normalized.asc())
+                .all()
+            )
+            base = self._model_to_exam_parent(modelo, len(variacoes))
+            return ExamParentDetail(
+                **base.model_dump(),
+                variations=[self._model_to_exam_variation(v) for v in variacoes],
+            )
+        finally:
+            session.close()
+
+    def create_exam_parent(
+        self,
+        name: str,
+        status: str = "quarentena",
+        is_external: bool = False,
+        notes: Optional[str] = None,
+        variations: Optional[List[str]] = None,
+        source: str = "manual",
+        actor: Optional[str] = None,
+    ) -> ExamParentDetail:
+        """Cria exame pai e, opcionalmente, suas variações no mesmo passo."""
+        import uuid
+
+        nome_limpo = limpar_texto(name)
+        normalizado = normalizar_termo(nome_limpo)
+        if not normalizado:
+            raise ValueError("Nome de exame inválido depois da normalização")
+
+        session = self._get_session()
+        try:
+            self._assert_termo_livre(session, normalizado)
+
+            agora = datetime.utcnow()
+            parent_id = str(uuid.uuid4())
+            session.add(
+                ExamParentModel(
+                    id=parent_id,
+                    name=nome_limpo,
+                    name_normalized=normalizado,
+                    vector_id=derivar_vector_id(parent_id),
+                    status=status,
+                    is_external=is_external,
+                    is_active=True,
+                    source=source,
+                    notes=notes,
+                    created_at=agora,
+                    created_by=actor,
+                    updated_at=agora,
+                    updated_by=actor,
+                )
+            )
+
+            vistos = {normalizado}
+            for variacao in variations or []:
+                nome_var = limpar_texto(variacao)
+                norm_var = normalizar_termo(nome_var)
+                if not norm_var or norm_var in vistos:
+                    continue
+                self._assert_termo_livre(session, norm_var)
+                vistos.add(norm_var)
+                variation_id = str(uuid.uuid4())
+                session.add(
+                    ExamVariationModel(
+                        id=variation_id,
+                        parent_id=parent_id,
+                        name=nome_var,
+                        name_normalized=norm_var,
+                        vector_id=derivar_vector_id(variation_id),
+                        is_active=True,
+                        source=source,
+                        created_at=agora,
+                        created_by=actor,
+                        updated_at=agora,
+                        updated_by=actor,
+                    )
+                )
+
+            session.commit()
+        except Exception:
+            session.rollback()
+            raise
+        finally:
+            session.close()
+
+        return self.get_exam_parent(parent_id)
+
+    def update_exam_parent(
+        self,
+        parent_id: str,
+        name: Optional[str] = None,
+        status: Optional[str] = None,
+        is_external: Optional[bool] = None,
+        is_active: Optional[bool] = None,
+        notes: Optional[str] = None,
+        actor: Optional[str] = None,
+    ) -> Optional[ExamParentDetail]:
+        """Atualiza exame pai. Campos None ficam como estão."""
+        session = self._get_session()
+        try:
+            modelo = session.query(ExamParentModel).filter(
+                ExamParentModel.id == parent_id
+            ).first()
+            if not modelo:
+                return None
+
+            if name is not None:
+                nome_limpo = limpar_texto(name)
+                normalizado = normalizar_termo(nome_limpo)
+                if not normalizado:
+                    raise ValueError("Nome de exame inválido depois da normalização")
+                if normalizado != modelo.name_normalized:
+                    self._assert_termo_livre(session, normalizado, ignorar_parent_id=parent_id)
+                modelo.name = nome_limpo
+                modelo.name_normalized = normalizado
+            if status is not None:
+                modelo.status = status
+            if is_external is not None:
+                modelo.is_external = is_external
+            if is_active is not None:
+                modelo.is_active = is_active
+            if notes is not None:
+                modelo.notes = notes
+
+            modelo.updated_at = datetime.utcnow()
+            modelo.updated_by = actor
+            session.commit()
+        except Exception:
+            session.rollback()
+            raise
+        finally:
+            session.close()
+
+        return self.get_exam_parent(parent_id)
+
+    def create_exam_variation(
+        self,
+        parent_id: str,
+        name: str,
+        source: str = "manual",
+        occurrences: Optional[int] = None,
+        actor: Optional[str] = None,
+    ) -> Optional[ExamVariation]:
+        """Adiciona variação a um pai. None se o pai não existe."""
+        import uuid
+
+        nome_limpo = limpar_texto(name)
+        normalizado = normalizar_termo(nome_limpo)
+        if not normalizado:
+            raise ValueError("Nome de variação inválido depois da normalização")
+
+        session = self._get_session()
+        try:
+            pai = session.query(ExamParentModel).filter(
+                ExamParentModel.id == parent_id
+            ).first()
+            if not pai:
+                return None
+
+            self._assert_termo_livre(session, normalizado)
+
+            agora = datetime.utcnow()
+            variation_id = str(uuid.uuid4())
+            modelo = ExamVariationModel(
+                id=variation_id,
+                parent_id=parent_id,
+                name=nome_limpo,
+                name_normalized=normalizado,
+                vector_id=derivar_vector_id(variation_id),
+                is_active=True,
+                source=source,
+                occurrences=occurrences,
+                created_at=agora,
+                created_by=actor,
+                updated_at=agora,
+                updated_by=actor,
+            )
+            session.add(modelo)
+            session.commit()
+            session.refresh(modelo)
+            return self._model_to_exam_variation(modelo)
+        except Exception:
+            session.rollback()
+            raise
+        finally:
+            session.close()
+
+    def update_exam_variation(
+        self,
+        variation_id: str,
+        name: Optional[str] = None,
+        parent_id: Optional[str] = None,
+        is_active: Optional[bool] = None,
+        actor: Optional[str] = None,
+    ) -> Optional[ExamVariation]:
+        """Atualiza variação. `parent_id` move a variação para outro pai."""
+        session = self._get_session()
+        try:
+            modelo = session.query(ExamVariationModel).filter(
+                ExamVariationModel.id == variation_id
+            ).first()
+            if not modelo:
+                return None
+
+            if name is not None:
+                nome_limpo = limpar_texto(name)
+                normalizado = normalizar_termo(nome_limpo)
+                if not normalizado:
+                    raise ValueError("Nome de variação inválido depois da normalização")
+                if normalizado != modelo.name_normalized:
+                    self._assert_termo_livre(
+                        session, normalizado, ignorar_variation_id=variation_id
+                    )
+                modelo.name = nome_limpo
+                modelo.name_normalized = normalizado
+
+            if parent_id is not None and parent_id != modelo.parent_id:
+                novo_pai = session.query(ExamParentModel).filter(
+                    ExamParentModel.id == parent_id
+                ).first()
+                if not novo_pai:
+                    raise ValueError("Exame pai de destino não encontrado")
+                modelo.parent_id = parent_id
+
+            if is_active is not None:
+                modelo.is_active = is_active
+
+            modelo.updated_at = datetime.utcnow()
+            modelo.updated_by = actor
+            session.commit()
+            session.refresh(modelo)
+            return self._model_to_exam_variation(modelo)
+        except Exception:
+            session.rollback()
+            raise
+        finally:
+            session.close()
+
+    def delete_exam_variation(self, variation_id: str) -> bool:
+        """Remove uma variação."""
+        session = self._get_session()
+        try:
+            modelo = session.query(ExamVariationModel).filter(
+                ExamVariationModel.id == variation_id
+            ).first()
+            if not modelo:
+                return False
+            session.delete(modelo)
+            session.commit()
+            return True
+        except Exception:
+            session.rollback()
+            raise
+        finally:
+            session.close()
+
+    def list_exam_conflicts(
+        self, pending_only: bool = True
+    ) -> List[ExamVariationConflict]:
+        """Conflitos de importação (mesmo termo sob mais de um pai)."""
+        session = self._get_session()
+        try:
+            query = session.query(ExamVariationConflictModel)
+            if pending_only:
+                query = query.filter(ExamVariationConflictModel.resolution.is_(None))
+            modelos = query.order_by(ExamVariationConflictModel.name_normalized.asc()).all()
+            return [self._model_to_exam_conflict(m) for m in modelos]
+        finally:
+            session.close()
+
+    def resolve_exam_conflict(
+        self,
+        conflict_id: str,
+        resolution: str,
+        parent_id: Optional[str] = None,
+        actor: Optional[str] = None,
+    ) -> Optional[ExamVariationConflict]:
+        """
+        Resolve um conflito. 'atribuida' cria a variação sob o pai escolhido;
+        'descartada' apenas marca o conflito como decidido.
+        """
+        import uuid
+
+        session = self._get_session()
+        try:
+            modelo = session.query(ExamVariationConflictModel).filter(
+                ExamVariationConflictModel.id == conflict_id
+            ).first()
+            if not modelo:
+                return None
+            if modelo.resolution is not None:
+                raise ValueError("Conflito já resolvido")
+
+            if resolution == "atribuida":
+                if not parent_id:
+                    raise ValueError("parent_id é obrigatório para atribuir a variação")
+                pai = session.query(ExamParentModel).filter(
+                    ExamParentModel.id == parent_id
+                ).first()
+                if not pai:
+                    raise ValueError("Exame pai de destino não encontrado")
+
+                self._assert_termo_livre(session, modelo.name_normalized)
+
+                agora = datetime.utcnow()
+                variation_id = str(uuid.uuid4())
+                session.add(
+                    ExamVariationModel(
+                        id=variation_id,
+                        parent_id=parent_id,
+                        name=modelo.name,
+                        name_normalized=modelo.name_normalized,
+                        vector_id=derivar_vector_id(variation_id),
+                        is_active=True,
+                        source="conflito_resolvido",
+                        created_at=agora,
+                        created_by=actor,
+                        updated_at=agora,
+                        updated_by=actor,
+                    )
+                )
+                modelo.resolved_parent_id = parent_id
+
+            modelo.resolution = resolution
+            modelo.resolved_at = datetime.utcnow()
+            modelo.resolved_by = actor
+            session.commit()
+            session.refresh(modelo)
+            return self._model_to_exam_conflict(modelo)
+        except Exception:
+            session.rollback()
+            raise
+        finally:
+            session.close()
+
+    def get_exam_catalog_stats(self) -> ExamCatalogStats:
+        """Resumo do catálogo para o cabeçalho do painel."""
+        session = self._get_session()
+        try:
+            pais_com_variacao = (
+                session.query(ExamVariationModel.parent_id).distinct().subquery()
+            )
+            return ExamCatalogStats(
+                parents_total=session.query(func.count(ExamParentModel.id)).scalar() or 0,
+                parents_ativo=session.query(func.count(ExamParentModel.id))
+                .filter(ExamParentModel.status == "ativo")
+                .scalar()
+                or 0,
+                parents_quarentena=session.query(func.count(ExamParentModel.id))
+                .filter(ExamParentModel.status == "quarentena")
+                .scalar()
+                or 0,
+                parents_sem_variacao=session.query(func.count(ExamParentModel.id))
+                .filter(
+                    ~ExamParentModel.id.in_(
+                        session.query(pais_com_variacao.c.parent_id)
+                    )
+                )
+                .scalar()
+                or 0,
+                variations_total=session.query(func.count(ExamVariationModel.id)).scalar() or 0,
+                conflicts_pending=session.query(func.count(ExamVariationConflictModel.id))
+                .filter(ExamVariationConflictModel.resolution.is_(None))
+                .scalar()
+                or 0,
+                brnet_never_found=len(self.listar_exames_nunca_encontrados(limit=10000)),
+                terms_without_vector=sum(
+                    session.query(func.count(modelo.id))
+                    .filter(modelo.embedding.is_(None))
+                    .filter(modelo.is_active.is_(True))
+                    .scalar()
+                    or 0
+                    for modelo in (ExamParentModel, ExamVariationModel)
+                ),
+            )
+        finally:
+            session.close()
+
+    # ------------------------------------------------------------------
+    # Vetores do catálogo
+    #
+    # O vetor mora na própria linha; o arquivo FAISS é artefato derivado,
+    # reconstruído a partir daqui. Assim editar um exame custa uma chamada de
+    # embedding, não o catálogo inteiro.
+    # ------------------------------------------------------------------
+
+    def salvar_embedding_exame(
+        self,
+        row_id: str,
+        embedding: bytes,
+        modelo: str,
+        eh_variacao: bool = False,
+    ) -> bool:
+        """Grava o vetor na linha do pai ou da variação."""
+        Modelo = ExamVariationModel if eh_variacao else ExamParentModel
+        session = self._get_session()
+        try:
+            linha = session.query(Modelo).filter(Modelo.id == row_id).first()
+            if not linha:
+                return False
+            linha.embedding = embedding
+            linha.embedding_model = modelo
+            linha.embedding_generated_at = datetime.utcnow()
+            if linha.vector_id is None:
+                linha.vector_id = derivar_vector_id(row_id)
+            session.commit()
+            return True
+        except Exception:
+            session.rollback()
+            raise
+        finally:
+            session.close()
+
+    def listar_vetores_catalogo(self) -> List[tuple]:
+        """
+        Pares (vector_id, bytes) de todo termo ativo com vetor gravado.
+        É a entrada da reconstrução do índice.
+
+        Desativar um pai também tira as variações dele daqui, mesmo com a linha
+        da variação ainda ativa — é o mesmo recorte que `exam_catalog_source`
+        usa para montar o vocabulário, que só considera variação cujo pai está
+        ativo. Sem o join, desativar um pai limparia o vocabulário mas deixaria
+        os vetores das variações no índice.
+        """
+        session = self._get_session()
+        try:
+            linhas = list(
+                session.query(ExamParentModel.vector_id, ExamParentModel.embedding)
+                .filter(ExamParentModel.embedding.isnot(None))
+                .filter(ExamParentModel.vector_id.isnot(None))
+                .filter(ExamParentModel.is_active.is_(True))
+                .all()
+            )
+            linhas.extend(
+                session.query(ExamVariationModel.vector_id, ExamVariationModel.embedding)
+                .join(ExamParentModel, ExamVariationModel.parent_id == ExamParentModel.id)
+                .filter(ExamVariationModel.embedding.isnot(None))
+                .filter(ExamVariationModel.vector_id.isnot(None))
+                .filter(ExamVariationModel.is_active.is_(True))
+                .filter(ExamParentModel.is_active.is_(True))
+                .all()
+            )
+            return [(int(vid), bytes(bruto)) for vid, bruto in linhas]
+        finally:
+            session.close()
+
+    def listar_termos_sem_vetor(self, limit: int = 1000) -> List[dict]:
+        """
+        Termos ativos ainda sem vetor.
+
+        `embedding IS NULL` é o marcador de pendência — não existe tabela de
+        fila. Serve para o painel mostrar o que falta e para uma reprocessagem
+        pegar o que ficou atrás depois de uma falha da API.
+        """
+        session = self._get_session()
+        try:
+            pendentes: List[dict] = []
+            for modelo, eh_variacao in ((ExamParentModel, False), (ExamVariationModel, True)):
+                for linha in (
+                    session.query(modelo)
+                    .filter(modelo.embedding.is_(None))
+                    .filter(modelo.is_active.is_(True))
+                    .limit(limit)
+                    .all()
+                ):
+                    pendentes.append({
+                        "id": linha.id,
+                        "name": linha.name,
+                        "eh_variacao": eh_variacao,
+                    })
+            return pendentes[:limit]
+        finally:
+            session.close()
+
+    def contar_termos_sem_vetor(self) -> int:
+        session = self._get_session()
+        try:
+            total = 0
+            for modelo in (ExamParentModel, ExamVariationModel):
+                total += (
+                    session.query(func.count(modelo.id))
+                    .filter(modelo.embedding.is_(None))
+                    .filter(modelo.is_active.is_(True))
+                    .scalar()
+                    or 0
+                )
+            return total
+        finally:
+            session.close()
+
+    # Consulta os 'encontrado' de todos os documentos. `result_payload` é text,
+    # então o cast para jsonb roda no banco — medido em ~0,9s para 4861
+    # documentos, contra parsear tudo em Python. O LIKE evita o cast estourar em
+    # payload que não seja objeto JSON.
+    _SQL_EXAMES_JA_ENCONTRADOS = (
+        "SELECT DISTINCT elem->>'exame' "
+        "FROM documents, "
+        "     LATERAL jsonb_array_elements((result_payload::jsonb)->'tabela_comparacao') AS elem "
+        "WHERE result_payload IS NOT NULL "
+        "  AND result_payload LIKE '{%' "
+        "  AND elem->>'status' = 'encontrado'"
+    )
+
+    def listar_exames_nunca_encontrados(self, limit: int = 200) -> List[ExamPendency]:
+        """
+        Exames que o BRNET pede e que a análise **nunca** encontrou, em nenhum
+        documento.
+
+        A regra é de evidência, não de catálogo. Um exame já encontrado alguma
+        vez não é pendência: cadastrá-lo não muda o resultado. A regra anterior
+        ("sem pai no catálogo") inflava a lista — media 70 exames, dos quais 69
+        já eram encontrados. O caso que expôs isso foi o TSH: sem pai nenhum, e
+        encontrado em 140 de 140 documentos, porque `_filtrar_exames_ocr` aceita
+        todo nome que o BRNET pediu, com ou sem catálogo.
+
+        A normalização roda em **Python**, não em SQL: as reescritas de sigla de
+        `normalizar_termo` (gama-GT → GGT, entre outras) não existem no banco, e
+        reimplementá-las em SQL faria as duas divergirem em silêncio.
+
+        Ordena por número de documentos em que o BRNET pediu o exame — que aqui
+        é a fila de trabalho de verdade, já que nenhum deles foi encontrado.
+        """
+        session = self._get_session()
+        try:
+            bruto = session.execute(
+                text(
+                    "SELECT btrim(e), count(*), count(DISTINCT d.id) "
+                    "FROM documents d, unnest(d.exams_brnet) e "
+                    "WHERE d.exams_brnet IS NOT NULL AND btrim(e) <> '' "
+                    "GROUP BY 1"
+                )
+            ).all()
+
+            agregado: dict[str, dict] = {}
+            for nome, pedidos, docs in bruto:
+                chave = normalizar_termo(nome)
+                if not chave:
+                    continue
+                # Nomes distintos podem colapsar na mesma chave (acento, sigla).
+                item = agregado.setdefault(
+                    chave, {"name": nome, "requests": 0, "documents": 0}
+                )
+                item["requests"] += int(pedidos or 0)
+                item["documents"] += int(docs or 0)
+
+            ja_encontrados = set()
+            for (nome,) in session.execute(text(self._SQL_EXAMES_JA_ENCONTRADOS)):
+                chave = normalizar_termo(nome or "")
+                if chave:
+                    ja_encontrados.add(chave)
+
+            pendencias = [
+                ExamPendency(
+                    name=item["name"],
+                    name_normalized=chave,
+                    documents=item["documents"],
+                    requests=item["requests"],
+                )
+                for chave, item in agregado.items()
+                if chave not in ja_encontrados
+            ]
+            pendencias.sort(key=lambda p: (-p.documents, p.name))
+            return pendencias[:limit]
+        finally:
+            session.close()
+
+    def contar_exames_nunca_encontrados(self) -> int:
+        return len(self.listar_exames_nunca_encontrados(limit=10000))

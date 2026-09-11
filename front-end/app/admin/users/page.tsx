@@ -33,7 +33,7 @@ import { API_ENDPOINTS } from "@/lib/config";
 import { authFetch } from "@/lib/auth-fetch";
 import { usePermissions } from "@/hooks/usePermissions";
 
-type UserRole = "ADMIN" | "MANAGER" | "CHECKER" | "SENDER";
+type UserRole = "ADMIN" | "MANAGER" | "CURATOR" | "VIEWER" | "CHECKER" | "SENDER";
 
 interface User {
   id: string;
@@ -56,6 +56,10 @@ interface Clinic {
 const roleLabels: Record<UserRole, string> = {
   ADMIN: "Administrador",
   MANAGER: "Gestor",
+  // Rótulo de exibição. O identificador (CURATOR) vive no enum do Postgres e
+  // não acompanha mudanças de nome — trocar o texto aqui basta.
+  CURATOR: "Saúde",
+  VIEWER: "Visualizador",
   CHECKER: "Checador",
   SENDER: "Enviador",
 };
@@ -63,6 +67,8 @@ const roleLabels: Record<UserRole, string> = {
 const roleDescriptions: Record<UserRole, string> = {
   ADMIN: "Acesso total + gerenciar usuários",
   MANAGER: "Gerencia clínicas e usuários",
+  CURATOR: "Apenas o catálogo de exames",
+  VIEWER: "Apenas o dashboard de indicadores",
   CHECKER: "Apenas checagem de exames",
   SENDER: "Apenas enviar documentos",
 };
@@ -423,6 +429,10 @@ export default function UsersAdminPage() {
                             className={`px-2 py-1 text-xs rounded-full ${
                               user.role === "ADMIN"
                                 ? "bg-purple-100 text-purple-800"
+                                : user.role === "CURATOR"
+                                ? "bg-teal-100 text-teal-800"
+                                : user.role === "VIEWER"
+                                ? "bg-slate-100 text-slate-800"
                                 : user.role === "MANAGER"
                                 ? "bg-amber-100 text-amber-800"
                                 : user.role === "CHECKER"
@@ -445,20 +455,28 @@ export default function UsersAdminPage() {
                           </span>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm space-x-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => openEditModal(user)}
-                          >
-                            Editar
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleToggleActive(user)}
-                          >
-                            {user.is_active ? "Desativar" : "Ativar"}
-                          </Button>
+                          {/* Espelha `_assert_manager_can_edit` do back-end: o
+                              gestor só edita CHECKER/SENDER e nunca ativa ou
+                              desativa. Esconder aqui é só para não oferecer um
+                              botão que o servidor vai recusar. */}
+                          {(canAssignAdmin || user.role === "CHECKER" || user.role === "SENDER") && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => openEditModal(user)}
+                            >
+                              Editar
+                            </Button>
+                          )}
+                          {canAssignAdmin && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleToggleActive(user)}
+                            >
+                              {user.is_active ? "Desativar" : "Ativar"}
+                            </Button>
+                          )}
                         </td>
                       </tr>
                     ))
@@ -528,6 +546,26 @@ export default function UsersAdminPage() {
                           <div className="font-medium">{roleLabels.MANAGER}</div>
                           <div className="text-xs text-gray-500 group-hover:text-white">
                             {roleDescriptions.MANAGER}
+                          </div>
+                        </div>
+                      </SelectItem>
+                    )}
+                    {canAssignAdmin && (
+                      <SelectItem value="CURATOR">
+                        <div>
+                          <div className="font-medium">{roleLabels.CURATOR}</div>
+                          <div className="text-xs text-gray-500 group-hover:text-white">
+                            {roleDescriptions.CURATOR}
+                          </div>
+                        </div>
+                      </SelectItem>
+                    )}
+                    {canAssignAdmin && (
+                      <SelectItem value="VIEWER">
+                        <div>
+                          <div className="font-medium">{roleLabels.VIEWER}</div>
+                          <div className="text-xs text-gray-500 group-hover:text-white">
+                            {roleDescriptions.VIEWER}
                           </div>
                         </div>
                       </SelectItem>
@@ -656,6 +694,12 @@ export default function UsersAdminPage() {
                     )}
                     {canAssignAdmin && (
                       <SelectItem value="MANAGER">{roleLabels.MANAGER}</SelectItem>
+                    )}
+                    {canAssignAdmin && (
+                      <SelectItem value="CURATOR">{roleLabels.CURATOR}</SelectItem>
+                    )}
+                    {canAssignAdmin && (
+                      <SelectItem value="VIEWER">{roleLabels.VIEWER}</SelectItem>
                     )}
                     <SelectItem value="CHECKER">{roleLabels.CHECKER}</SelectItem>
                     <SelectItem value="SENDER">{roleLabels.SENDER}</SelectItem>

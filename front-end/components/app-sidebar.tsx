@@ -25,6 +25,8 @@ import {
   RiHospitalLine,
   RiShieldCheckLine,
   RiFileSearchLine,
+  RiTestTubeLine,
+  RiBarChartBoxLine,
 } from "@remixicon/react";
 import { CentroAjudaDialog } from "@/components/centro-ajuda-dialog";
 import { TourGuiado } from "@/components/tour-guiado";
@@ -55,25 +57,25 @@ const data = {
           url: "/anexar-prontuario",
           icon: RiUploadLine,
           isActive: false,
-          roles: ["ADMIN", "SENDER"],
+          roles: ["ADMIN", "SENDER", "VIEWER", "CURATOR"],
         },
         {
           title: "Pendentes",
           url: "/pendentes",
           icon: RiHistoryLine,
-          roles: ["ADMIN", "SENDER"],
+          roles: ["ADMIN", "SENDER", "VIEWER", "CURATOR"],
         },
         {
           title: "Histórico",
           url: "/historico",
           icon: RiFileSearchLine,
-          roles: ["ADMIN", "SENDER"],
+          roles: ["ADMIN", "SENDER", "VIEWER", "CURATOR"],
         },
         {
           title: "Checagem",
           url: "/checagem",
           icon: RiCheckDoubleLine,
-          roles: ["ADMIN", "CHECKER"],
+          roles: ["ADMIN", "CHECKER", "VIEWER", "CURATOR"],
         },
       ],
     },
@@ -81,7 +83,7 @@ const data = {
 };
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
-  const { isAdmin, isManagement, role } = usePermissions();
+  const { isAdmin, isManagement, canCurateExams, canViewDashboard, role } = usePermissions();
   const documentsRoutes = new Set(["/pendentes", "/historico", "/checagem"]);
   const handleDocumentsRefresh = (url?: string) => {
     if (!url || !documentsRoutes.has(url)) return;
@@ -150,13 +152,14 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         )}
 
         {/* Admin Section - Apenas para administradores */}
-        {isManagement && (
+        {(isManagement || canCurateExams || canViewDashboard) && (
           <SidebarGroup>
             <SidebarGroupLabel className="uppercase text-sidebar-foreground/50">
               Administração
             </SidebarGroupLabel>
             <SidebarGroupContent className="px-2">
               <SidebarMenu>
+                {isManagement && (
                 <SidebarMenuItem>
                   <SidebarMenuButton
                     asChild
@@ -172,6 +175,24 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                     </a>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
+                )}
+                {canViewDashboard && (
+                  <SidebarMenuItem>
+                    <SidebarMenuButton
+                      asChild
+                      className="group/menu-button font-medium gap-3 h-9 rounded-md data-[active=true]:hover:bg-transparent data-[active=true]:bg-gradient-to-b data-[active=true]:from-sidebar-primary data-[active=true]:to-sidebar-primary/70 data-[active=true]:shadow-[0_1px_2px_0_rgb(0_0_0/.05),inset_0_1px_0_0_rgb(255_255_255/.12)] [&>svg]:size-auto"
+                    >
+                      <a href="/dashboard">
+                        <RiBarChartBoxLine
+                          className="text-sidebar-foreground/50 group-data-[active=true]/menu-button:text-sidebar-foreground"
+                          size={22}
+                          aria-hidden="true"
+                        />
+                        <span>Dashboard</span>
+                      </a>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                )}
                 {isAdmin && (
                   <SidebarMenuItem>
                     <SidebarMenuButton
@@ -206,6 +227,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                 )}
+                {isManagement && (
                 <SidebarMenuItem>
                   <SidebarMenuButton
                     asChild
@@ -221,6 +243,24 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                     </a>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
+                )}
+                {canCurateExams && (
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    asChild
+                    className="group/menu-button font-medium gap-3 h-9 rounded-md data-[active=true]:hover:bg-transparent data-[active=true]:bg-gradient-to-b data-[active=true]:from-sidebar-primary data-[active=true]:to-sidebar-primary/70 data-[active=true]:shadow-[0_1px_2px_0_rgb(0_0_0/.05),inset_0_1px_0_0_rgb(255_255_255/.12)] [&>svg]:size-auto"
+                  >
+                    <a href="/admin/exames">
+                      <RiTestTubeLine
+                        className="text-sidebar-foreground/50 group-data-[active=true]/menu-button:text-sidebar-foreground"
+                        size={22}
+                        aria-hidden="true"
+                      />
+                      <span>Catálogo de Exames</span>
+                    </a>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                )}
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>

@@ -27,6 +27,16 @@ export const API_ENDPOINTS = {
   CLINIC_OPTIONS: `${API_PROXY_BASE}/v1/clinics/options`,
   CLINIC_BY_ID: (id: string) => `${API_PROXY_BASE}/v1/clinics/${id}`,
 
+  // Catálogo de exames similares (painel de curadoria)
+  EXAMS: `${API_PROXY_BASE}/v1/exams`,
+  EXAM_BY_ID: (id: string) => `${API_PROXY_BASE}/v1/exams/${id}`,
+  EXAM_STATS: `${API_PROXY_BASE}/v1/exams/stats`,
+  EXAM_VARIATIONS: (parentId: string) => `${API_PROXY_BASE}/v1/exams/${parentId}/variations`,
+  EXAM_VARIATION_BY_ID: (id: string) => `${API_PROXY_BASE}/v1/exams/variations/${id}`,
+  EXAM_PENDENCIES: `${API_PROXY_BASE}/v1/exams/pendencies`,
+  EXAM_CONFLICTS: `${API_PROXY_BASE}/v1/exams/conflicts`,
+  EXAM_CONFLICT_RESOLVE: (id: string) => `${API_PROXY_BASE}/v1/exams/conflicts/${id}/resolve`,
+
   // Documents (Legacy - pode dar timeout)
   PROCESS_DOCUMENT_STREAM: `${API_PROXY_BASE}/v1/processar-documento-stream`,
 
@@ -55,6 +65,9 @@ export const API_ENDPOINTS = {
 
   // Audit Logs
   AUDIT_LOGS: `${API_PROXY_BASE}/v1/audit-logs`,
+
+  // Dashboard de indicadores
+  DASHBOARD_INDICADORES: `${API_PROXY_BASE}/v1/dashboard/indicadores`,
 
   // Maintenance
   MAINTENANCE_STATUS: "/api/maintenance-status",

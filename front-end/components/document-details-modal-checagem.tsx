@@ -42,6 +42,11 @@ interface DocumentDetailsModalChecagemProps {
   /** Avisa o cronômetro de revisão que o PDF foi aberto fora da aba. */
   onAbrirPdfExterno?: () => void
   documentLoading?: boolean
+  /**
+   * Papéis que acompanham a checagem sem decidir (VIEWER, CURATOR). Só esconde
+   * os botões; o PATCH da decisão é barrado no back-end por `require_checker`.
+   */
+  somenteLeitura?: boolean
 }
 
 export function DocumentDetailsModalChecagem({
@@ -54,6 +59,7 @@ export function DocumentDetailsModalChecagem({
   documentUrl,
   onAbrirPdfExterno,
   documentLoading,
+  somenteLeitura = false,
 }: DocumentDetailsModalChecagemProps) {
   const [motivo, setMotivo] = useState("")
   const [showRejectDialog, setShowRejectDialog] = useState(false)
@@ -558,7 +564,12 @@ export function DocumentDetailsModalChecagem({
               </div>
             )}
             <div className="flex gap-2 ml-auto">
-              {isPending && (
+              {isPending && somenteLeitura && (
+                <span className="self-center text-sm text-muted-foreground">
+                  Somente leitura
+                </span>
+              )}
+              {isPending && !somenteLeitura && (
                 <>
                   <Button
                     variant="outline"

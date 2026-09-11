@@ -259,6 +259,11 @@ def _setup_logs(resource) -> None:
     handler = LoggingHandler(
         level=getattr(_logging, nivel, _logging.INFO), logger_provider=provider
     )
+    # Mesmo filtro dos handlers locais: sem ele, os logs saem sem request_id e
+    # sem o contexto do usuario.
+    from app.core.logging import ContextoDaRequisicaoFilter
+
+    handler.addFilter(ContextoDaRequisicaoFilter())
     _logging.getLogger().addHandler(handler)
     _providers.append(provider)
     logger.info(f"OTEL logs exportando via OTLP (nivel {nivel})")

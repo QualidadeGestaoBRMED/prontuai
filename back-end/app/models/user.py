@@ -8,8 +8,19 @@ class UserRole(str, Enum):
     """Roles de usuários no sistema"""
     ADMIN = "ADMIN"      # Acesso total + gerenciar usuários
     MANAGER = "MANAGER"  # Gestor: igual ao ADMIN, exceto exclusões e operações de sistema
+    CURATOR = "CURATOR"  # Curadoria do catálogo de exames + Menu Principal em somente leitura
+    VIEWER = "VIEWER"    # Visualizador: dashboard de indicadores + Menu Principal em somente leitura
     CHECKER = "CHECKER"  # Apenas checagem de exames
     SENDER = "SENDER"    # Apenas enviar documentos (pendentes)
+
+
+# Papéis sem clinic_id, que leem documentos de TODAS as clínicas. O SENDER é o
+# único preso a uma clínica. Fonte única: antes esta lista era copiada em três
+# lugares (rota de documentos e duas consultas), e um papel novo precisava ser
+# lembrado em cada um — esquecer um deles fazia o papel cair no ramo do SENDER.
+GLOBAL_READ_ROLES = frozenset({
+    UserRole.ADMIN, UserRole.MANAGER, UserRole.CHECKER, UserRole.VIEWER, UserRole.CURATOR,
+})
 
 
 class User(BaseModel):

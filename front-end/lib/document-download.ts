@@ -1,5 +1,6 @@
 import { API_ENDPOINTS } from "@/lib/config"
 import { authFetch } from "@/lib/auth-fetch"
+import { DocumentoArquivadoError, lerDocumentoArquivado } from "@/lib/document-archive"
 
 type DownloadOptions = {
   id: string
@@ -11,6 +12,10 @@ export async function downloadDocumentPdf(options: DownloadOptions) {
 
   const response = await authFetch(API_ENDPOINTS.DOCUMENT_VIEW(id))
   if (!response.ok) {
+    // Arquivado tem tratamento próprio: é estado esperado, com caminho de
+    // recuperação, e não um erro de download.
+    const arquivado = await lerDocumentoArquivado(response)
+    if (arquivado) throw new DocumentoArquivadoError(arquivado)
     const detail = await response.text().catch(() => "Erro ao baixar documento")
     throw new Error(detail)
   }

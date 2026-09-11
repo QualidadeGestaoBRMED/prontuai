@@ -10,6 +10,20 @@ import time
 
 logger = logging.getLogger(__name__)
 
+# Papéis que decidem documentos e por isso avisam o autor do upload. Os demais
+# (SENDER, VIEWER, CURATOR) só criam notificação para si mesmos.
+_NOTIFICAM_AUTOR_DO_DOCUMENTO = (UserRole.ADMIN, UserRole.MANAGER, UserRole.CHECKER)
+
+
+def _link_interno(url: str) -> bool:
+    """Link de notificação só pode apontar para dentro do app.
+
+    `//host` e `/\\host` são interpretados pelo navegador como outro domínio,
+    por isso não basta começar com barra.
+    """
+    return url.startswith("/") and not url.startswith(("//", "/\\"))
+
+
 router = APIRouter(prefix="/notifications", tags=["Notificações"])
 
 @router.get("", response_model=list[Notification])
@@ -49,10 +63,20 @@ async def create_notification(
     payload: NotificationCreate,
     current_user: User = Depends(get_current_user)
 ):
+    if payload.action_url and not _link_interno(payload.action_url):
+        raise HTTPException(
+            status_code=422,  # literal: o nome da constante mudou entre versões do Starlette
+            detail="action_url deve ser um caminho interno do ProntuAI (ex.: /historico)",
+        )
     try:
         clinic_id = payload.clinic_id
-        recipient_user_id = payload.user_id
-        recipient_user_email = payload.user_email
+        # O destinatário NUNCA vem do payload. `user_id`/`user_email` deixavam
+        # qualquer papel — inclusive VIEWER e CURATOR, que são só leitura —
+        # entregar título e mensagem livres a qualquer usuário (phishing interno).
+        # O front nunca usou esses campos: quem recebe sai do documento ou é o
+        # próprio autor da chamada.
+        recipient_user_id = None
+        recipient_user_email = None
         doc = None
 
         if payload.document_id:
@@ -60,9 +84,10 @@ async def create_notification(
             if not doc:
                 raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Documento não encontrado")
             clinic_id = doc.clinic_id or clinic_id
-            if not recipient_user_id:
+            # Avisar o autor do documento é o fluxo da Checagem (aprovado,
+            # rejeitado). Só quem decide documentos notifica terceiros.
+            if current_user.role in _NOTIFICAM_AUTOR_DO_DOCUMENTO:
                 recipient_user_id = doc.uploaded_by_user_id
-            if not recipient_user_email:
                 recipient_user_email = doc.uploaded_by_user_email
 
         if current_user.role == UserRole.SENDER:

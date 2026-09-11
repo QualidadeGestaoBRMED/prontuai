@@ -39,6 +39,11 @@ require_cmd docker sha256sum
 
 # Nao concorre com a purga. Espera ate 1h; se nao conseguir, FALHA — backup do
 # dia que nao acontece precisa aparecer como unit falho no journal.
+# Reporta o resultado para o coletor OTel na saida, com a duracao medida. Vai
+# ANTES do lock: assim uma espera que estoure o tempo tambem e reportada, em
+# vez de o job sumir em silencio.
+track_job "db-backup"
+
 db_maintenance_lock "${DB_LOCK_WAIT:-3600}" fail
 
 # Via systemd, POSTGRES_USER/etc chegam pelo EnvironmentFile. Rodando na mao,

@@ -160,10 +160,22 @@ def decode_token(token: str) -> TokenData:
         clinic_id: Optional[str] = payload.get("clinic_id")
         scope: Optional[str] = payload.get("scope")
 
+        # Token de acesso é o único SEM `scope`. Os outros têm uso próprio e não
+        # podem virar credencial das rotas comuns:
+        #   upload  -> vale só na rota de upload direto;
+        #   refresh -> vale só em /v1/auth/refresh. Aceitá-lo aqui transformava um
+        #              token de 30 dias em acesso pleno, e o logout não o
+        #              invalidava, porque este caminho nunca consulta a sessão.
         if scope == "upload":
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Token de upload não é válido para esta rota",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        if scope is not None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Este token não é um token de acesso",
                 headers={"WWW-Authenticate": "Bearer"},
             )
 
@@ -353,6 +365,22 @@ async def require_management(current_user: User = Depends(get_current_user)) -> 
     return current_user
 
 
+async def require_exam_catalog(current_user: User = Depends(get_current_user)) -> User:
+    """
+    Requer ADMIN ou CURATOR.
+
+    Deliberadamente **não** inclui MANAGER: o catálogo de exames define o que o
+    motor reconhece em cada prontuário, e essa curadoria foi separada da gestão
+    administrativa. Por isso não usa `require_management`.
+    """
+    if current_user.role not in [UserRole.ADMIN, UserRole.CURATOR]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Apenas administradores ou curadores podem acessar o catálogo de exames"
+        )
+    return current_user
+
+
 async def get_current_upload_user(
     credentials: HTTPAuthorizationCredentials = Depends(security)
 ) -> User:
@@ -416,6 +444,57 @@ async def get_current_upload_user(
 
     set_user_context(user)
     return user
+
+
+# Quem LÊ documentos (prontuários, PDFs, resultado da análise). É uma lista de
+# PERMISSÃO de propósito: as rotas de leitura só restringiam o SENDER por
+# clínica e deixavam passar qualquer outro papel — um papel novo herdava acesso
+# a todo prontuário sem ninguém decidir isso.
+#
+# VIEWER e CURATOR leem, mas não escrevem: aprovar/rejeitar exige
+# `require_checker` e enviar exige `require_sender`, e nenhum dos dois os inclui.
+DOCUMENT_ROLES = (
+    UserRole.ADMIN, UserRole.MANAGER, UserRole.CHECKER, UserRole.SENDER,
+    UserRole.VIEWER, UserRole.CURATOR,
+)
+
+
+async def require_document_reader(current_user: User = Depends(get_current_user)) -> User:
+    """
+    Requer um papel que trabalhe com documentos.
+
+    O recorte por clínica do SENDER continua dentro de cada rota; esta guarda
+    só decide quem pode chegar até ele. VIEWER e CURATOR entram em modo somente
+    leitura — a escrita é barrada pelas guardas das rotas de escrita.
+    """
+    if current_user.role not in DOCUMENT_ROLES:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Seu perfil não tem acesso a documentos"
+        )
+    return current_user
+
+
+# Quem vê o dashboard de indicadores. Lista única: o front espelha esta mesma
+# regra em `usePermissions.canViewDashboard`, e as duas precisam andar juntas.
+DASHBOARD_ROLES = (UserRole.ADMIN, UserRole.VIEWER)
+
+
+async def require_dashboard(current_user: User = Depends(get_current_user)) -> User:
+    """
+    Requer um papel com acesso ao dashboard de indicadores.
+
+    Deliberadamente **não** inclui MANAGER: os indicadores (volume por clínica,
+    acurácia da IA, cobertura das expedições) foram separados da gestão
+    administrativa e ganharam um papel próprio, o VIEWER. Por isso não usa
+    `require_management`.
+    """
+    if current_user.role not in DASHBOARD_ROLES:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Seu perfil não tem acesso ao dashboard de indicadores"
+        )
+    return current_user
 
 
 async def require_checker(current_user: User = Depends(get_current_user)) -> User:

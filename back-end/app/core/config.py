@@ -20,6 +20,13 @@ class Settings:
     LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
     LOG_FORMAT = os.getenv("LOG_FORMAT", "plain")
     AUDIT_LOG_ENABLED = os.getenv("AUDIT_LOG_ENABLED", "true").lower() == "true"
+
+    # Varredura determinística do markdown pelos termos do catálogo de exames.
+    # Só ACRESCENTA candidatos; nunca remove. Ver exam_catalog_source.varrer_markdown.
+    EXAM_CATALOG_MARKDOWN_SCAN = os.getenv("EXAM_CATALOG_MARKDOWN_SCAN", "true").lower() == "true"
+    # Exigir dígito perto do termo encontrado (evidência de resultado, não de
+    # citação de protocolo). Desligar aumenta cobertura e o risco de falso positivo.
+    EXAM_CATALOG_SCAN_REQUIRE_VALUE = os.getenv("EXAM_CATALOG_SCAN_REQUIRE_VALUE", "true").lower() == "true"
     AUDIT_LOG_ALL_REQUESTS = os.getenv("AUDIT_LOG_ALL_REQUESTS", "false").lower() == "true"
     # Configurações do FAQ
     CAMINHO_INDEX_FAQ = os.getenv("CAMINHO_INDEX_FAQ", "data/faq_index.faiss")
@@ -95,6 +102,14 @@ class Settings:
     DOCUMENT_STORAGE_DIR = os.getenv(
         "DOCUMENT_STORAGE_DIR",
         os.path.join(BASE_DIR, "data", "uploads"),
+    )
+
+    # Quem recupera um documento arquivado — completa a frase "Para recuperá-lo,
+    # entre em contato com ___." mostrada no 410. Inclua o artigo no valor.
+    # Configurável para trocar o responsável sem deploy de código.
+    DOCUMENT_ARCHIVE_CONTACT = os.getenv(
+        "DOCUMENT_ARCHIVE_CONTACT",
+        "o setor de Qualidade e Gestão",
     )
 
     # Google Drive (upload após aprovação)

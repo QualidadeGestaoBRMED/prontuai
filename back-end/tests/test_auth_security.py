@@ -97,6 +97,37 @@ def test_decode_token_rejects_upload_scope_on_regular_routes(monkeypatch: pytest
     assert "upload" in exc_info.value.detail.lower()
 
 
+def test_decode_token_rejects_refresh_token_as_access(monkeypatch: pytest.MonkeyPatch):
+    """Refresh token (30 dias) não pode servir de token de acesso.
+
+    Regressão real: `decode_token` só recusava scope=upload, e um refresh token
+    abria /v1/users e /v1/audit-logs. Logout não resolvia, porque este caminho
+    não consulta a sessão de refresh.
+    """
+    auth = load_auth_module(monkeypatch, FakeUserDB())
+    refresh, *_ = auth.create_refresh_token(
+        {"sub": "admin@grupobrmed.com.br", "role": "ADMIN", "name": "Admin"}
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        auth.decode_token(refresh)
+
+    assert exc_info.value.status_code == 401
+
+
+def test_decode_token_rejects_unknown_scope(monkeypatch: pytest.MonkeyPatch):
+    """Escopo desconhecido também é recusado: a regra é lista de permissão."""
+    auth = load_auth_module(monkeypatch, FakeUserDB())
+    token = auth.create_access_token(
+        {"sub": "admin@grupobrmed.com.br", "role": "ADMIN", "name": "Admin", "scope": "qualquer"}
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        auth.decode_token(token)
+
+    assert exc_info.value.status_code == 401
+
+
 def test_assert_auth_security_configuration_rejects_weak_secret_in_production(
     monkeypatch: pytest.MonkeyPatch,
 ):
