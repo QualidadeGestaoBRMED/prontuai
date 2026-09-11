@@ -104,12 +104,12 @@ class Settings:
         os.path.join(BASE_DIR, "data", "uploads"),
     )
 
-    # Texto de contato mostrado quando o usuário tenta abrir um documento já
-    # arquivado (410). Configurável para o time trocar o responsável sem
-    # precisar de deploy de código.
+    # Quem recupera um documento arquivado — completa a frase "Para recuperá-lo,
+    # entre em contato com ___." mostrada no 410. Inclua o artigo no valor.
+    # Configurável para trocar o responsável sem deploy de código.
     DOCUMENT_ARCHIVE_CONTACT = os.getenv(
         "DOCUMENT_ARCHIVE_CONTACT",
-        "o administrador do ProntuAI",
+        "o setor de Qualidade e Gestão",
     )
 
     # Google Drive (upload após aprovação)

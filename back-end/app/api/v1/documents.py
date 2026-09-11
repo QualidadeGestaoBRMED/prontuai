@@ -570,9 +570,13 @@ async def view_document(document_id: str, current_user: User = Depends(require_d
                     status_code=status.HTTP_410_GONE,
                     detail={
                         "code": "documento_arquivado",
+                        # Sem a data: archived_at está em UTC e o fuso é de
+                        # quem lê. O front monta a frase com a data local;
+                        # esta serve a quem consome a API diretamente.
                         "message": (
                             "Este documento foi arquivado e não está mais disponível "
-                            "para visualização direta. Solicite a recuperação ao responsável."
+                            "para visualização. Para recuperá-lo, entre em contato com "
+                            f"{settings.DOCUMENT_ARCHIVE_CONTACT}."
                         ),
                         "archived_at": archived_at.isoformat(),
                         "filename": document.filename,

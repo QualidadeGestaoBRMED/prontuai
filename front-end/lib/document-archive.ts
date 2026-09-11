@@ -10,7 +10,6 @@
  */
 
 export type DocumentoArquivadoInfo = {
-  message: string
   archivedAt?: string
   filename?: string
   contact?: string
@@ -30,29 +29,42 @@ export async function lerDocumentoArquivado(
     const detail = data?.detail
     if (!detail || detail.code !== "documento_arquivado") return null
     return {
-      message: detail.message,
       archivedAt: detail.archived_at,
       filename: detail.filename,
       contact: detail.contact,
     }
   } catch {
-    // 410 sem corpo reconhecível ainda é "arquivado"; cai numa mensagem
-    // genérica em vez de virar erro de rede.
-    return { message: "Este documento foi arquivado e não está mais disponível para visualização." }
+    // 410 sem corpo reconhecível ainda é "arquivado"; cai na frase sem data e
+    // sem contato, em vez de virar erro de rede.
+    return {}
   }
 }
 
-/** Monta a mensagem exibida ao usuário, com data e contato quando houver. */
+/**
+ * Monta a mensagem exibida ao usuário.
+ *
+ * A data é formatada AQUI, no navegador, e não no back-end: archived_at chega
+ * em UTC, e só o navegador sabe o fuso de quem está lendo. Formatada no
+ * servidor, um arquivamento feito à noite apareceria com a data do dia
+ * seguinte.
+ *
+ * O contato vem de DOCUMENT_ARCHIVE_CONTACT no back-end e já traz o artigo
+ * ("o setor de Qualidade e Gestão"), para a frase concordar com qualquer
+ * valor configurado.
+ */
 export function mensagemDocumentoArquivado(info: DocumentoArquivadoInfo): string {
-  const partes = [info.message]
+  let quando = ""
   if (info.archivedAt) {
     const data = new Date(info.archivedAt)
-    if (!Number.isNaN(data.getTime())) {
-      partes.push(`Arquivado em ${data.toLocaleDateString("pt-BR")}.`)
-    }
+    if (!Number.isNaN(data.getTime())) quando = ` em ${data.toLocaleDateString("pt-BR")}`
   }
-  if (info.contact) partes.push(`Contato: ${info.contact}.`)
-  return partes.join(" ")
+  const recuperacao = info.contact
+    ? `entre em contato com ${info.contact}`
+    : "solicite ao responsável"
+  return (
+    `Este documento foi arquivado${quando} e não está mais disponível para visualização. ` +
+    `Para recuperá-lo, ${recuperacao}.`
+  )
 }
 
 /** Erro lançado por downloadDocumentPdf quando o documento está arquivado. */
