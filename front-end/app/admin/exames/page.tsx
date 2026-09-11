@@ -40,6 +40,9 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
+  SelectGroup,
+  SelectLabel,
+  SelectSeparator,
 } from "@/components/ui/select";
 import { API_ENDPOINTS } from "@/lib/config";
 import { authFetch } from "@/lib/auth-fetch";
@@ -96,10 +99,42 @@ interface CatalogStats {
 }
 
 /** Extrai a mensagem de erro do backend (409 traz o motivo da colisão). */
-async function mensagemDeErro(response: Response, fallback: string) {
+/** Limites do nome, espelhados de `ExamParentCreate`/`ExamVariationCreate` no back-end. */
+const NOME_MIN = 2;
+const NOME_MAX = 180;
+
+/** Motivo pelo qual um nome não pode ser enviado, ou null se estiver ok. */
+function problemaNoNome(nome: string, rotulo = "O nome"): string | null {
+  const limpo = nome.trim();
+  if (limpo.length < NOME_MIN) return `${rotulo} precisa ter pelo menos ${NOME_MIN} caracteres`;
+  if (limpo.length > NOME_MAX) return `${rotulo} pode ter no máximo ${NOME_MAX} caracteres`;
+  return null;
+}
+
+/**
+ * Mensagem de erro da API, SEMPRE como texto.
+ *
+ * O FastAPI responde 422 com `detail` sendo uma LISTA de objetos
+ * ({type, loc, msg, input, ctx}). Repassar isso direto para o toast derrubava a
+ * aplicação inteira ("Objects are not valid as a React child"), porque o
+ * Toaster fica no layout raiz. Aqui a lista vira uma frase em português.
+ */
+async function mensagemDeErro(response: Response, fallback: string): Promise<string> {
   try {
     const corpo = await response.json();
-    return corpo?.detail || fallback;
+    const detail = corpo?.detail;
+    if (typeof detail === "string" && detail) return detail;
+    if (Array.isArray(detail)) {
+      const frases = detail.map((erro) => {
+        const ctx = erro?.ctx ?? {};
+        if (erro?.type === "string_too_short") return `precisa ter pelo menos ${ctx.min_length ?? NOME_MIN} caracteres`;
+        if (erro?.type === "string_too_long") return `pode ter no máximo ${ctx.max_length ?? NOME_MAX} caracteres`;
+        return null;
+      });
+      const conhecidas = frases.filter((f): f is string => Boolean(f));
+      if (conhecidas.length > 0) return `${fallback}: o nome ${conhecidas.join("; ")}`;
+    }
+    return fallback;
   } catch {
     return fallback;
   }
@@ -226,6 +261,14 @@ export default function ExamesAdminPage() {
   // como reativá-lo pelo painel.
   const [incluirInativos, setIncluirInativos] = useState(false);
   const [paraDesativar, setParaDesativar] = useState<ExamParent | null>(null);
+  // Remover variação é exclusão definitiva: sempre passa por confirmação.
+  const [paraRemover, setParaRemover] = useState<{
+    id: string;
+    nome: string;
+    parentId: string;
+    ocorrencias: number | null;
+  } | null>(null);
+  const [removendo, setRemovendo] = useState(false);
   const [alterandoSituacao, setAlterandoSituacao] = useState(false);
 
   // Detalhe expandido: pai -> variações carregadas
@@ -378,8 +421,18 @@ export default function ExamesAdminPage() {
   };
 
   const criarExame = async () => {
-    if (!formNome.trim()) {
-      toast.error("Informe o nome do exame");
+    const problema = problemaNoNome(formNome);
+    if (problema) {
+      toast.error(problema);
+      return;
+    }
+    const variacaoRuim = formVariacoes
+      .map((valor) => valor.trim())
+      .filter(Boolean)
+      .map((valor) => ({ valor, problema: problemaNoNome(valor, "A variação") }))
+      .find((v) => v.problema);
+    if (variacaoRuim) {
+      toast.error(`${variacaoRuim.problema}: "${variacaoRuim.valor}"`);
       return;
     }
     setSalvando(true);
@@ -439,6 +492,11 @@ export default function ExamesAdminPage() {
 
   const salvarEdicao = async () => {
     if (!emEdicao) return;
+    const problema = problemaNoNome(formNome);
+    if (problema) {
+      toast.error(problema);
+      return;
+    }
     setSalvando(true);
     try {
       const response = await authFetch(API_ENDPOINTS.EXAM_BY_ID(emEdicao.id), {
@@ -545,6 +603,11 @@ export default function ExamesAdminPage() {
 
     try {
       for (const nome of entradas) {
+        const problema = problemaNoNome(nome, "A variação");
+        if (problema) {
+          falhas.push({ valor: nome, erro: problema });
+          continue;
+        }
         try {
           const response = await authFetch(API_ENDPOINTS.EXAM_VARIATIONS(parentId), {
             method: "POST",
@@ -589,6 +652,8 @@ export default function ExamesAdminPage() {
   };
 
   const removerVariacao = async (variationId: string, parentId: string) => {
+    if (removendo) return;
+    setRemovendo(true);
     try {
       const response = await authFetch(
         API_ENDPOINTS.EXAM_VARIATION_BY_ID(variationId),
@@ -606,6 +671,9 @@ export default function ExamesAdminPage() {
     } catch (error) {
       console.error("Erro:", error);
       toast.error("Erro ao remover variação");
+    } finally {
+      setRemovendo(false);
+      setParaRemover(null);
     }
   };
 
@@ -882,11 +950,28 @@ export default function ExamesAdminPage() {
                             colSpan={5}
                             className="px-6 py-12 text-center text-gray-500"
                           >
-                            Nenhum exame encontrado. Rode{" "}
-                            <code className="text-xs bg-gray-100 px-1 py-0.5 rounded">
-                              scripts/seed_exam_catalog.py
-                            </code>{" "}
-                            para importar o CSV.
+                            {/* Lista vazia quase sempre é filtro, não catálogo
+                                vazio. A instrução de rodar o script de importação
+                                aparecia aqui para o curador, que não tem como
+                                rodá-lo — e era enganosa numa busca sem resultado. */}
+                            {buscaAplicada || filtroStatus !== "todos" || somenteSemVariacao ? (
+                              <>
+                                Nenhum exame corresponde à busca ou aos filtros.
+                                {!incluirInativos && (
+                                  <>
+                                    {" "}Exames desativados só aparecem com{" "}
+                                    <span className="font-medium">Incluir inativos</span>.
+                                  </>
+                                )}
+                              </>
+                            ) : incluirInativos ? (
+                              "O catálogo ainda está vazio. Cadastre o primeiro exame em + Novo Exame."
+                            ) : (
+                              <>
+                                Nenhum exame ativo. Exames desativados aparecem com{" "}
+                                <span className="font-medium">Incluir inativos</span>.
+                              </>
+                            )}
                           </td>
                         </tr>
                       ) : (
@@ -991,7 +1076,12 @@ export default function ExamesAdminPage() {
                                                 variant="outline"
                                                 size="sm"
                                                 onClick={() =>
-                                                  removerVariacao(variacao.id, parent.id)
+                                                  setParaRemover({
+                                                    id: variacao.id,
+                                                    nome: variacao.name,
+                                                    parentId: parent.id,
+                                                    ocorrencias: variacao.occurrences ?? null,
+                                                  })
                                                 }
                                               >
                                                 Remover
@@ -1090,17 +1180,43 @@ export default function ExamesAdminPage() {
                               <SelectValue placeholder="Escolha o exame pai..." />
                             </SelectTrigger>
                             <SelectContent>
-                              {paisOrdenados.map((pai) => (
-                                <SelectItem key={pai.id} value={pai.id}>
-                                  {pai.name}
-                                  {conflito.candidate_parents.some(
-                                    (nome) =>
-                                      nome.toLowerCase() === pai.name.toLowerCase()
-                                  )
-                                    ? "  ← candidato"
-                                    : ""}
-                                </SelectItem>
-                              ))}
+                              {/* Candidatos primeiro: numa disputa entre 2 ou 3
+                                  nomes, obrigar o curador a rolar ~140 exames em
+                                  ordem alfabética para achá-los era o gargalo. O
+                                  resto continua disponível abaixo (e a digitação
+                                  do Select salta direto para o item). */}
+                              {(() => {
+                                const ehCandidato = (nome: string) =>
+                                  conflito.candidate_parents.some(
+                                    (candidato) =>
+                                      candidato.trim().toLowerCase() === nome.trim().toLowerCase()
+                                  );
+                                const candidatos = paisOrdenados.filter((pai) => ehCandidato(pai.name));
+                                const demais = paisOrdenados.filter((pai) => !ehCandidato(pai.name));
+                                return (
+                                  <>
+                                    {candidatos.length > 0 && (
+                                      <SelectGroup>
+                                        <SelectLabel>Candidatos</SelectLabel>
+                                        {candidatos.map((pai) => (
+                                          <SelectItem key={pai.id} value={pai.id}>
+                                            {pai.name}
+                                          </SelectItem>
+                                        ))}
+                                      </SelectGroup>
+                                    )}
+                                    {candidatos.length > 0 && demais.length > 0 && <SelectSeparator />}
+                                    <SelectGroup>
+                                      <SelectLabel>Todos os exames</SelectLabel>
+                                      {demais.map((pai) => (
+                                        <SelectItem key={pai.id} value={pai.id}>
+                                          {pai.name}
+                                        </SelectItem>
+                                      ))}
+                                    </SelectGroup>
+                                  </>
+                                );
+                              })()}
                             </SelectContent>
                           </Select>
                           <Button
@@ -1146,6 +1262,9 @@ export default function ExamesAdminPage() {
                   value={formNome}
                   onChange={(e) => setFormNome(e.target.value)}
                 />
+                {formNome.trim() && problemaNoNome(formNome) && (
+                  <p className="mt-1 text-xs text-red-600">{problemaNoNome(formNome)}</p>
+                )}
               </div>
 
               <div>
@@ -1213,7 +1332,7 @@ export default function ExamesAdminPage() {
               >
                 Cancelar
               </Button>
-              <Button onClick={criarExame} disabled={salvando || !formNome.trim()}>
+              <Button onClick={criarExame} disabled={salvando || problemaNoNome(formNome) !== null}>
                 {salvando ? "Criando..." : "Criar Exame"}
               </Button>
             </DialogFooter>
@@ -1238,6 +1357,9 @@ export default function ExamesAdminPage() {
                   value={formNome}
                   onChange={(e) => setFormNome(e.target.value)}
                 />
+                {formNome.trim() && problemaNoNome(formNome) && (
+                  <p className="mt-1 text-xs text-red-600">{problemaNoNome(formNome)}</p>
+                )}
               </div>
 
               <div>
@@ -1288,8 +1410,55 @@ export default function ExamesAdminPage() {
               >
                 Cancelar
               </Button>
-              <Button onClick={salvarEdicao} disabled={salvando || !formNome.trim()}>
+              <Button onClick={salvarEdicao} disabled={salvando || problemaNoNome(formNome) !== null}>
                 {salvando ? "Salvando..." : "Salvar"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Remoção de variação: ao contrário de desativar, apaga de vez. Sem
+            esta confirmação um clique bastava — e depois que a linha sumia, o
+            botão da variação seguinte ficava exatamente sob o cursor. */}
+        <Dialog
+          open={paraRemover !== null}
+          onOpenChange={(aberto) => {
+            if (!aberto && !removendo) setParaRemover(null);
+          }}
+        >
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Remover variação</DialogTitle>
+              <DialogDescription>
+                Tem certeza que deseja remover esta variação?
+              </DialogDescription>
+            </DialogHeader>
+            <div className="py-4">
+              <div className="bg-red-50 border border-red-200 rounded-md p-4 text-sm text-red-800">
+                <p>
+                  <span className="font-semibold">{paraRemover?.nome}</span> deixa de
+                  ser reconhecida na comparação
+                  {paraRemover?.ocorrencias
+                    ? ` (aparece em ${paraRemover.ocorrencias} documento${paraRemover.ocorrencias === 1 ? "" : "s"})`
+                    : ""}
+                  .
+                </p>
+                <p className="mt-2">
+                  A remoção <span className="font-semibold">não pode ser desfeita</span>:
+                  para usar esse nome de novo, será preciso cadastrá-lo outra vez.
+                </p>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setParaRemover(null)} disabled={removendo}>
+                Cancelar
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={() => paraRemover && removerVariacao(paraRemover.id, paraRemover.parentId)}
+                disabled={removendo}
+              >
+                {removendo ? "Removendo..." : "Remover variação"}
               </Button>
             </DialogFooter>
           </DialogContent>
