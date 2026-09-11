@@ -100,22 +100,22 @@ export function AbaUtilizacao({
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.55fr)_minmax(0,1fr)]">
         {/* Documentos enviados: volume em barra, taxas em linha por cima */}
         <div className={`${CARTAO} px-[22px] pt-5 pb-[18px]`}>
-          <div className="flex items-start justify-between gap-4">
+          <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
             <div>
               <div className={TITULO}>Documentos enviados</div>
               <div className={SUB}>
                 {visao.graficoLegenda} · volume, % liberados e % com pendência · último ponto em andamento
               </div>
             </div>
-            <div className="flex gap-3.5 text-xs text-[#767A7B]">
-              <div className="flex items-center gap-1.5">
+            <div className="flex shrink-0 gap-3.5 text-xs text-[#767A7B]">
+              <div className="flex items-center gap-1.5 whitespace-nowrap">
                 <div className="size-2.5 rounded-[2px] bg-[#193B4F]" />
                 Docs
               </div>
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-1.5 whitespace-nowrap">
                 <div className="h-[2.5px] w-3 bg-[#00AFAA]" />% liberados
               </div>
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-1.5 whitespace-nowrap">
                 <div className="h-[2.5px] w-3 bg-[#CC851E]" />% pendência
               </div>
             </div>
@@ -211,23 +211,23 @@ export function AbaUtilizacao({
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
         <div className={`${CARTAO} px-[22px] pt-5 pb-[18px]`}>
-          <div className="flex items-start justify-between gap-4">
+          <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
             <div>
               <div className={TITULO}>Expedições por prazo</div>
               <div className={SUB}>
                 {visao.graficoLegenda} · antecipadas, em dia e atrasadas · prazo capturado a partir de jun/26
               </div>
             </div>
-            <div className="flex gap-3 text-xs text-[#767A7B]">
-              <div className="flex items-center gap-1.5">
+            <div className="flex shrink-0 gap-3 text-xs text-[#767A7B]">
+              <div className="flex items-center gap-1.5 whitespace-nowrap">
                 <div className="size-2.5 rounded-[2px] bg-[#7EBFCC]" />
                 Antecipada
               </div>
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-1.5 whitespace-nowrap">
                 <div className="size-2.5 rounded-[2px] bg-[#00AFAA]" />
                 Em dia
               </div>
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-1.5 whitespace-nowrap">
                 <div className="size-2.5 rounded-[2px] bg-[#B4453A]" />
                 Atrasada
               </div>

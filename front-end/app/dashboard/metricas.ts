@@ -458,14 +458,21 @@ export function calcularVisao({ dados, filtro, comparar, verTodasClinicas }: Opc
 
   const concordanciaDireta = soma(accAtual, "ok_aprovou") + soma(accAtual, "ok_rejeitou");
   const jeitinhoTotal = soma(accAtual, "div_aprovou_jeitinho") + soma(accAtual, "div_rejeitou_jeitinho");
-  const riscoReal = soma(accAtual, "div_aprovou") - soma(accAtual, "div_aprovou_jeitinho");
+  // Contas por janela: o valor do card e o delta dele precisam medir a MESMA
+  // grandeza. Antes o delta comparava só uma parcela (div_aprovou bruto,
+  // falha_aprovou) e divergia do número exibido.
+  const riscoRealDe = (arr: PontoAcuracia[]) =>
+    soma(arr, "div_aprovou") - soma(arr, "div_aprovou_jeitinho");
+  const falhasDe = (arr: PontoAcuracia[]) =>
+    soma(arr, "falha_rejeitou") + soma(arr, "falha_aprovou");
+  const riscoReal = riscoRealDe(accAtual);
   const divRejeitou = soma(accAtual, "div_rejeitou") - soma(accAtual, "div_rejeitou_jeitinho");
-  const falhasTecnicas = soma(accAtual, "falha_rejeitou") + soma(accAtual, "falha_aprovou");
+  const falhasTecnicas = falhasDe(accAtual);
 
-  const varAcc = (campo: keyof PontoAcuracia) => {
+  const varAcc = (conta: (arr: PontoAcuracia[]) => number) => {
     if (!comparavel) return "";
-    const a = soma(accAtual, campo);
-    const b = soma(accAnterior, campo);
+    const a = conta(accAtual);
+    const b = conta(accAnterior);
     if (!b) return a ? "novo" : "";
     return `${a >= b ? "+" : "-"}${Math.abs(((a - b) / b) * 100).toFixed(0)}%`;
   };
@@ -652,14 +659,14 @@ export function calcularVisao({ dados, filtro, comparar, verTodasClinicas }: Opc
       kpiAcc(
         "Aprovações derrubadas",
         fmt(riscoReal),
-        varAcc("div_aprovou"),
+        varAcc(riscoRealDe),
         "down",
         "IA liberou e o revisor barrou — é o risco real",
       ),
       kpiAcc(
         "Falhas técnicas",
         fmt(falhasTecnicas),
-        varAcc("falha_aprovou"),
+        varAcc(falhasDe),
         "down",
         "não leu CPF/CNPJ · fora da conta de acurácia",
       ),
