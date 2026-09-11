@@ -136,6 +136,171 @@ groups:
         labels:
           severity: critical
 
+
+      - uid: prontuai-job-backup-atrasado
+        title: Backup do Postgres sem sucesso ha mais de 26h
+        condition: C
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            relativeTimeRange:
+              from: 600
+              to: 0
+            model:
+              datasource:
+                type: prometheus
+                uid: prometheus
+              expr: "time() - max(job_last_success_timestamp_seconds{task=\"db-backup\"})"
+              refId: A
+              queryType: range
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              type: classic_conditions
+              conditions:
+                - evaluator:
+                    type: gt
+                    params:
+                      - 93600
+                  operator:
+                    type: and
+                  reducer:
+                    type: last
+                  query:
+                    params:
+                      - A
+        for: 10m
+        noDataState: Alerting
+        execErrState: Error
+        annotations:
+          summary: "O backup diario do Postgres nao conclui com sucesso ha mais de 26 horas"
+          description: "O alerta e sobre a IDADE do ultimo sucesso, nao sobre erro: pega tambem timer que nao disparou, script travado ou maquina desligada — casos em que nenhum exit code e gerado. Veja: journalctl -u prontuai-db-backup.service -n 50. Sem dado significa que o job nunca reportou sucesso."
+        labels:
+          severity: critical
+
+      - uid: prontuai-job-purga-atrasada
+        title: Purga semanal sem sucesso ha mais de 9 dias
+        condition: C
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            relativeTimeRange:
+              from: 600
+              to: 0
+            model:
+              datasource:
+                type: prometheus
+                uid: prometheus
+              expr: "time() - max(job_last_success_timestamp_seconds{task=\"db-purge\"})"
+              refId: A
+              queryType: range
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              type: classic_conditions
+              conditions:
+                - evaluator:
+                    type: gt
+                    params:
+                      - 777600
+                  operator:
+                    type: and
+                  reducer:
+                    type: last
+                  query:
+                    params:
+                      - A
+        for: 30m
+        noDataState: Alerting
+        execErrState: Error
+        annotations:
+          summary: "A purga semanal de registros transitorios nao conclui ha mais de 9 dias"
+          description: "Janela de 9 dias da folga para uma execucao pulada pelo lock com o backup. Veja: journalctl -u prontuai-db-purge.service -n 50."
+        labels:
+          severity: warning
+
+      - uid: prontuai-job-arquivamento-atrasado
+        title: Arquivamento de documentos sem sucesso ha mais de 10 dias
+        condition: C
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            relativeTimeRange:
+              from: 600
+              to: 0
+            model:
+              datasource:
+                type: prometheus
+                uid: prometheus
+              expr: "time() - max(job_last_success_timestamp_seconds{task=\"arquivamento-drive\"})"
+              refId: A
+              queryType: range
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              type: classic_conditions
+              conditions:
+                - evaluator:
+                    type: gt
+                    params:
+                      - 864000
+                  operator:
+                    type: and
+                  reducer:
+                    type: last
+                  query:
+                    params:
+                      - A
+        for: 30m
+        noDataState: Alerting
+        execErrState: Error
+        annotations:
+          summary: "O arquivamento semanal de documentos nao conclui ha mais de 10 dias"
+          description: "Sem ele o disco da EC2 volta a encher: sao ~8 GB de documentos por mes. Veja: journalctl -u prontuai-archive-drive.service -n 50."
+        labels:
+          severity: warning
+
+      - uid: prontuai-job-com-falha
+        title: Job de manutencao terminou com erro
+        condition: C
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            relativeTimeRange:
+              from: 600
+              to: 0
+            model:
+              datasource:
+                type: prometheus
+                uid: prometheus
+              expr: "max by (task) (job_last_exit_code)"
+              refId: A
+              queryType: range
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              type: classic_conditions
+              conditions:
+                - evaluator:
+                    type: gt
+                    params:
+                      - 0
+                  operator:
+                    type: and
+                  reducer:
+                    type: last
+                  query:
+                    params:
+                      - A
+        for: 5m
+        noDataState: Alerting
+        execErrState: Error
+        annotations:
+          summary: "Um job de manutencao do banco terminou com codigo diferente de zero"
+          description: "Complementa os alertas de atraso: aqui o job rodou e falhou, entao o erro esta no journal da unit correspondente."
+        labels:
+          severity: warning
+
       - uid: prontuai-db-down
         title: Postgres sem scrape (exporter ou banco fora do ar?)
         condition: C

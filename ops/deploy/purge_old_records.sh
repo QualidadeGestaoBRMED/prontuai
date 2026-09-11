@@ -35,6 +35,11 @@ require_cmd docker
 # extra de MVCC, e o dump ja nao enxergaria as linhas removidas. Espera ate
 # 30min; se o backup ainda estiver rodando, PULA — a purga e semanal e perder
 # uma execucao nao tem consequencia, ao contrario de perder um backup.
+# Reporta o resultado para o coletor OTel na saida, com a duracao medida. Vai
+# ANTES do lock: assim uma espera que estoure o tempo tambem e reportada, em
+# vez de o job sumir em silencio.
+track_job "db-purge"
+
 db_maintenance_lock "${DB_LOCK_WAIT:-1800}" skip
 
 DB_DEPLOY_DIR="${DB_DEPLOY_DIR:-/home/ec2-user/prontuai-db}"
