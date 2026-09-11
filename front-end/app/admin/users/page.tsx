@@ -455,20 +455,28 @@ export default function UsersAdminPage() {
                           </span>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm space-x-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => openEditModal(user)}
-                          >
-                            Editar
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleToggleActive(user)}
-                          >
-                            {user.is_active ? "Desativar" : "Ativar"}
-                          </Button>
+                          {/* Espelha `_assert_manager_can_edit` do back-end: o
+                              gestor só edita CHECKER/SENDER e nunca ativa ou
+                              desativa. Esconder aqui é só para não oferecer um
+                              botão que o servidor vai recusar. */}
+                          {(canAssignAdmin || user.role === "CHECKER" || user.role === "SENDER") && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => openEditModal(user)}
+                            >
+                              Editar
+                            </Button>
+                          )}
+                          {canAssignAdmin && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleToggleActive(user)}
+                            >
+                              {user.is_active ? "Desativar" : "Ativar"}
+                            </Button>
+                          )}
                         </td>
                       </tr>
                     ))

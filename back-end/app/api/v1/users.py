@@ -1,8 +1,9 @@
 """
 Endpoints de gerenciamento de usuários (ADMIN e MANAGER).
 
-MANAGER pode listar, criar e editar usuários, mas não pode desativar (delete)
-nem criar/promover usuários ADMIN.
+MANAGER pode listar usuários e criar/editar só CHECKER e SENDER. Não ativa nem
+desativa ninguém (nem pelo DELETE, nem pelo PATCH de `is_active`) e não mexe em
+ADMIN, MANAGER, CURATOR ou VIEWER.
 """
 from fastapi import APIRouter, HTTPException, status, Depends
 from typing import List
@@ -31,6 +32,35 @@ def _assert_manager_cannot_touch_admin(actor: User, target_role: UserRole | None
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Gestores só podem atribuir as roles CHECKER e SENDER"
+        )
+
+
+def _assert_manager_can_edit(actor: User, target_id: str, user_update: UserUpdate) -> None:
+    """
+    O que o MANAGER pode fazer ao EDITAR um usuário existente.
+
+    `_assert_manager_cannot_touch_admin` olha só o papel que está sendo
+    atribuído; faltava olhar quem está sendo editado e o que muda. Sem isto um
+    MANAGER rebaixava outro MANAGER (ou um VIEWER/CURATOR) para SENDER e
+    desativava ou reativava contas pelo PATCH — contornando o DELETE, que é só
+    de ADMIN, e podendo devolver acesso a quem um ADMIN tinha tirado.
+
+    - alvo: só CHECKER e SENDER, os mesmos papéis que ele pode atribuir;
+    - `is_active`: não pode mudar. Mandar o valor atual passa, porque o modal de
+      edição da tela sempre envia o campo junto com nome e papel.
+    """
+    target = user_db.get_user_by_id(target_id)
+    if target is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuário não encontrado")
+    if target.role not in (UserRole.CHECKER, UserRole.SENDER):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Gestores só podem alterar usuários CHECKER e SENDER"
+        )
+    if user_update.is_active is not None and user_update.is_active != target.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Apenas administradores podem ativar ou desativar usuários"
         )
 
 
@@ -145,12 +175,7 @@ async def update_user(
     """
     _assert_manager_cannot_touch_admin(admin, user_update.role)
     if admin.role == UserRole.MANAGER:
-        target = user_db.get_user_by_id(user_id)
-        if target and target.role == UserRole.ADMIN:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Gestores não podem alterar usuários ADMIN"
-            )
+        _assert_manager_can_edit(admin, user_id, user_update)
 
     try:
         user = user_db.update_user(
