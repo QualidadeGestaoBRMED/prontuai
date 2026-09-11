@@ -6,7 +6,7 @@ from fastapi.responses import FileResponse
 from typing import List, Any
 from app.core.auth import get_current_user, require_admin, require_checker, require_document_reader
 from app.core.database import user_db
-from app.models.user import User, UserRole
+from app.models.user import User, UserRole, GLOBAL_READ_ROLES
 from app.models.document import (
     Document,
     DocumentUpdate,
@@ -76,7 +76,7 @@ def _load_documents(
     compact: bool,
     user_id: str | None = None,
 ) -> List[Document]:
-    if role in [UserRole.CHECKER, UserRole.ADMIN, UserRole.MANAGER]:
+    if role in GLOBAL_READ_ROLES:
         documents = user_db.get_all_documents(use_compact_payload=compact)
         logger.debug(f"[DOCUMENTS] {role.value} listou {len(documents)} documentos (todas clínicas)")
     else:

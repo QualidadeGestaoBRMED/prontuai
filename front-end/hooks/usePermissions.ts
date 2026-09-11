@@ -11,6 +11,13 @@ export type UserRole = "ADMIN" | "MANAGER" | "CURATOR" | "VIEWER" | "CHECKER" | 
  */
 export const DASHBOARD_ROLES: UserRole[] = ["ADMIN", "VIEWER"];
 
+/**
+ * Papéis que VEEM as telas do Menu Principal, mas não agem nelas: não enviam
+ * documento nem aprovam/rejeitam. Aqui só se escondem os botões — quem barra a
+ * escrita de verdade é o back-end (`require_checker` / `require_sender`).
+ */
+export const READ_ONLY_ROLES: UserRole[] = ["VIEWER", "CURATOR"];
+
 export interface PermissionsHook {
   user: any;
   role?: UserRole;
@@ -21,6 +28,8 @@ export interface PermissionsHook {
   canCurateExams: boolean;
   /** Dashboard de indicadores. MANAGER fica de fora — ver `DASHBOARD_ROLES`. */
   canViewDashboard: boolean;
+  /** Vê o Menu Principal sem poder agir — ver `READ_ONLY_ROLES`. */
+  isReadOnly: boolean;
   isChecker: boolean;
   isSender: boolean;
   canManageUsers: boolean;
@@ -38,6 +47,7 @@ function buildPermissions(role: UserRole | undefined) {
   // Curadoria do catálogo é separada da gestão: MANAGER não entra de propósito.
   const canCurateExams = role === "ADMIN" || role === "CURATOR";
   const canViewDashboard = role !== undefined && DASHBOARD_ROLES.includes(role);
+  const isReadOnly = role !== undefined && READ_ONLY_ROLES.includes(role);
   const isChecker = role === "CHECKER" || isManagement;
   const isSender = role === "SENDER" || isManagement;
 
@@ -46,6 +56,7 @@ function buildPermissions(role: UserRole | undefined) {
     isManagement,
     canCurateExams,
     canViewDashboard,
+    isReadOnly,
     isChecker,
     isSender,
     canManageUsers: isManagement,

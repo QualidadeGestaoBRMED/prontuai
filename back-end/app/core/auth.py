@@ -434,11 +434,17 @@ async def get_current_upload_user(
     return user
 
 
-# Quem lê documentos (prontuários, PDFs, resultado da análise). É uma lista de
+# Quem LÊ documentos (prontuários, PDFs, resultado da análise). É uma lista de
 # PERMISSÃO de propósito: as rotas de leitura só restringiam o SENDER por
-# clínica e deixavam passar qualquer outro papel — um papel novo (CURATOR,
-# VIEWER) herdava acesso a todo prontuário sem ninguém decidir isso.
-DOCUMENT_ROLES = (UserRole.ADMIN, UserRole.MANAGER, UserRole.CHECKER, UserRole.SENDER)
+# clínica e deixavam passar qualquer outro papel — um papel novo herdava acesso
+# a todo prontuário sem ninguém decidir isso.
+#
+# VIEWER e CURATOR leem, mas não escrevem: aprovar/rejeitar exige
+# `require_checker` e enviar exige `require_sender`, e nenhum dos dois os inclui.
+DOCUMENT_ROLES = (
+    UserRole.ADMIN, UserRole.MANAGER, UserRole.CHECKER, UserRole.SENDER,
+    UserRole.VIEWER, UserRole.CURATOR,
+)
 
 
 async def require_document_reader(current_user: User = Depends(get_current_user)) -> User:
@@ -446,8 +452,8 @@ async def require_document_reader(current_user: User = Depends(get_current_user)
     Requer um papel que trabalhe com documentos.
 
     O recorte por clínica do SENDER continua dentro de cada rota; esta guarda
-    só decide quem pode chegar até ele. CURATOR e VIEWER ficam de fora: um cuida
-    do catálogo, o outro só vê indicadores agregados.
+    só decide quem pode chegar até ele. VIEWER e CURATOR entram em modo somente
+    leitura — a escrita é barrada pelas guardas das rotas de escrita.
     """
     if current_user.role not in DOCUMENT_ROLES:
         raise HTTPException(

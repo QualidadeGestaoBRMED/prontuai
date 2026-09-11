@@ -17,6 +17,7 @@ import { DocumentDetailsModalChecagem } from "@/components/document-details-moda
 import { RequireRole } from "@/components/require-role"
 import { useDocumentsPaged } from "@/hooks/use-documents-paged"
 import { useReviewTimer } from "@/hooks/use-review-timer"
+import { usePermissions } from "@/hooks/usePermissions"
 import { useClinicOptions } from "@/hooks/use-clinic-options"
 import { documentToProcessResult } from "@/lib/document-mapper"
 import { API_ENDPOINTS } from "@/lib/config"
@@ -55,6 +56,7 @@ export default function Page() {
   // Cronometragem da revisão: sobe junto do PATCH da decisão, sem UI e sem
   // requisição extra. Ver docs/tempo-de-revisao-desenho.md.
   const reviewTimer = useReviewTimer()
+  const { isReadOnly } = usePermissions()
   const {
     options: clinicOptions,
     loading: clinicOptionsLoading,
@@ -251,7 +253,7 @@ export default function Page() {
   }
 
   return (
-    <RequireRole allowedRoles={["ADMIN", "MANAGER", "CHECKER"]}>
+    <RequireRole allowedRoles={["ADMIN", "MANAGER", "CHECKER", "VIEWER", "CURATOR"]}>
       <SidebarProvider>
         <AppSidebar />
         <SidebarInset className="bg-sidebar group/sidebar-inset">
@@ -383,6 +385,7 @@ export default function Page() {
           onAbrirPdfExterno={
             selectedResult ? () => reviewTimer.registrarPdfExterno(selectedResult.id) : undefined
           }
+          somenteLeitura={isReadOnly}
           documentUrl={documentPreviewUrl}
           documentLoading={documentPreviewLoading}
         />

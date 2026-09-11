@@ -14,7 +14,7 @@ from typing import List, Optional
 from datetime import datetime, timezone
 from sqlalchemy import create_engine, text, func, or_, and_, case
 from sqlalchemy.orm import sessionmaker, Session, defer
-from app.models.user import User, UserCreate, UserUpdate, UserRole
+from app.models.user import User, UserCreate, UserUpdate, UserRole, GLOBAL_READ_ROLES
 from app.models.clinic import Clinic, ClinicCreate, ClinicUpdate
 from app.models.document import Document, DocumentCreate, DocumentUpdate
 from app.models.notification import Notification, NotificationCreate, NotificationUpdate
@@ -1216,7 +1216,7 @@ class PostgresUserDatabase:
 
             base_query = session.query(DocumentModel).options(*query_options)
 
-            if role in [UserRole.CHECKER, UserRole.ADMIN, UserRole.MANAGER]:
+            if role in GLOBAL_READ_ROLES:
                 scoped_query = base_query
             else:
                 if not clinic_id:
@@ -1294,7 +1294,7 @@ class PostgresUserDatabase:
                 ).label("pending_review"),
             )
 
-            if role in [UserRole.CHECKER, UserRole.ADMIN, UserRole.MANAGER]:
+            if role in GLOBAL_READ_ROLES:
                 scoped_summary_query = summary_query
             else:
                 if not clinic_id:

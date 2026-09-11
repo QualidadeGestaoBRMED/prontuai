@@ -29,6 +29,7 @@ import { downloadDocumentPdf } from "@/lib/document-download"
 import { DocumentoArquivadoError } from "@/lib/document-archive"
 import { toast } from "sonner"
 import { RequireRole } from "@/components/require-role"
+import { usePermissions } from "@/hooks/usePermissions"
 
 type PageState = "upload" | "processing" | "completed"
 
@@ -54,7 +55,8 @@ function PageContent() {
     process.env.NEXT_PUBLIC_DEV_AUTH_BYPASS === "true"
   const searchParams = useSearchParams()
   const router = useRouter()
-  const autoOpenUpload = searchParams.get("reenviar") === "1"
+  const { isReadOnly } = usePermissions()
+  const autoOpenUpload = searchParams.get("reenviar") === "1" && !isReadOnly
   const initialSearch =
     searchParams.get("filename") || searchParams.get("cpf") || undefined
   const [pageState, setPageState] = useState<PageState>("upload")
@@ -202,7 +204,7 @@ function PageContent() {
   }
 
   return (
-    <RequireRole allowedRoles={["SENDER", "ADMIN", "MANAGER"]}>
+    <RequireRole allowedRoles={["SENDER", "ADMIN", "MANAGER", "VIEWER", "CURATOR"]}>
     <SidebarProvider>
       {activeProcess && (
         <ProcessProgressBar
@@ -239,13 +241,15 @@ function PageContent() {
                   <div className="text-center space-y-2 mb-8">
                     <h2 className="text-3xl font-bold">Bem-vindo!</h2>
                     <p className="text-muted-foreground">
-                      Faça upload dos documentos médicos para validação automática
+                      {isReadOnly
+                        ? "Seu perfil é somente leitura: acompanhe os envios em Pendentes e Histórico."
+                        : "Faça upload dos documentos médicos para validação automática"}
                     </p>
                   </div>
                   <DocumentUploadZone
                     onProcessFiles={handleProcessFiles}
                     autoOpen={autoOpenUpload}
-                    disabled={hasInFlight}
+                    disabled={hasInFlight || isReadOnly}
                   />
                 </div>
               )}

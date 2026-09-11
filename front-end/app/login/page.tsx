@@ -21,6 +21,8 @@ export default function LoginPage() {
       router.replace("/checagem");
     } else if (role === "VIEWER") {
       router.replace("/dashboard");
+    } else if (role === "CURATOR") {
+      router.replace("/admin/exames");
     } else {
       router.replace("/anexar-prontuario");
     }
