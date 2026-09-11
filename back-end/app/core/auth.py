@@ -160,10 +160,22 @@ def decode_token(token: str) -> TokenData:
         clinic_id: Optional[str] = payload.get("clinic_id")
         scope: Optional[str] = payload.get("scope")
 
+        # Token de acesso é o único SEM `scope`. Os outros têm uso próprio e não
+        # podem virar credencial das rotas comuns:
+        #   upload  -> vale só na rota de upload direto;
+        #   refresh -> vale só em /v1/auth/refresh. Aceitá-lo aqui transformava um
+        #              token de 30 dias em acesso pleno, e o logout não o
+        #              invalidava, porque este caminho nunca consulta a sessão.
         if scope == "upload":
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Token de upload não é válido para esta rota",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        if scope is not None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Este token não é um token de acesso",
                 headers={"WWW-Authenticate": "Bearer"},
             )
 
