@@ -89,3 +89,53 @@ def test_manager_editando_usuario_inexistente_da_404(monkeypatch):
     with pytest.raises(HTTPException) as exc:
         users._assert_manager_can_edit(MANAGER, "fantasma", UserUpdate(name="x"))
     assert exc.value.status_code == 404
+
+
+# ── notificações ─────────────────────────────────────────────────────────────
+
+DOC = types.SimpleNamespace(id="doc1", clinic_id="c1", uploaded_by_user_id="autor",
+                           uploaded_by_user_email="autor@grupobrmed.com.br")
+
+
+def criar(notif, payload, quem):
+    return asyncio.run(notif.create_notification(payload=payload, current_user=quem))
+
+
+@pytest.mark.parametrize("papel", [UserRole.VIEWER, UserRole.CURATOR, UserRole.CHECKER, UserRole.ADMIN])
+def test_destinatario_nunca_vem_do_payload(monkeypatch, papel):
+    """Antes: qualquer papel (até VIEWER, que é só leitura) mirava qualquer usuário."""
+    banco = BancoFalso()
+    notif = carregar(monkeypatch, banco, "app.api.v1_notifications")
+    quem = usuario("quem", papel)
+    criar(notif, NotificationCreate(user_id="vitima", user_email="vitima@x", type="warning",
+                                    title="documento rejeitado", message="reenvie aqui"), quem)
+    assert banco.criadas[-1].user_id == "quem"
+
+
+def test_checker_avisa_autor_pelo_documento(monkeypatch):
+    """O fluxo legítimo da Checagem continua: aprovado/rejeitado chega ao autor."""
+    banco = BancoFalso(documentos=[DOC])
+    notif = carregar(monkeypatch, banco, "app.api.v1_notifications")
+    criar(notif, NotificationCreate(document_id="doc1", type="document_approved", title="t", message="m"),
+          usuario("checador", UserRole.CHECKER))
+    assert banco.criadas[-1].user_id == "autor"
+
+
+@pytest.mark.parametrize("papel", [UserRole.VIEWER, UserRole.CURATOR])
+def test_somente_leitura_nao_avisa_autor_pelo_documento(monkeypatch, papel):
+    banco = BancoFalso(documentos=[DOC])
+    notif = carregar(monkeypatch, banco, "app.api.v1_notifications")
+    criar(notif, NotificationCreate(document_id="doc1", type="info", title="t", message="m"),
+          usuario("leitor", papel))
+    assert banco.criadas[-1].user_id == "leitor"
+
+
+@pytest.mark.parametrize("link", ["//evil.com", "/\\evil.com", "https://evil.com", "javascript:alert(1)"])
+def test_link_externo_em_notificacao_e_recusado(monkeypatch, link):
+    banco = BancoFalso()
+    notif = carregar(monkeypatch, banco, "app.api.v1_notifications")
+    with pytest.raises(HTTPException) as exc:
+        criar(notif, NotificationCreate(type="info", title="t", message="m", action_url=link),
+              usuario("checador", UserRole.CHECKER))
+    assert exc.value.status_code == 422
+    assert banco.criadas == []
