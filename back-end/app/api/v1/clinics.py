@@ -7,7 +7,7 @@ from typing import List
 from app.core.auth import require_management, get_current_user
 from app.core.database import user_db
 from app.core import metrics
-from app.models.user import User, UserRole
+from app.models.user import User, UserRole, GLOBAL_READ_ROLES
 from app.models.clinic import Clinic, ClinicCreate, ClinicUpdate
 from app.core.pii import mask_identifier
 import logging
@@ -81,7 +81,10 @@ async def list_clinic_options(current_user: User = Depends(get_current_user)):
     Disponível a ADMIN, MANAGER e CHECKER — não expõe CNPJ, telefone ou endereço.
     """
     try:
-        if current_user.role not in [UserRole.ADMIN, UserRole.MANAGER, UserRole.CHECKER]:
+        # Mesma regra de quem vê documentos de todas as clínicas: as opções servem
+        # justamente ao filtro por clínica dessas telas. O SENDER fica de fora
+        # porque só enxerga a própria.
+        if current_user.role not in GLOBAL_READ_ROLES:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Sem permissão para listar opções de clínicas",
