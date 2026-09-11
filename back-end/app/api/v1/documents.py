@@ -4,7 +4,7 @@ Endpoints para gerenciamento de documentos.
 from fastapi import APIRouter, HTTPException, status, Depends, Query, Request, BackgroundTasks
 from fastapi.responses import FileResponse
 from typing import List, Any
-from app.core.auth import get_current_user, require_admin, require_checker
+from app.core.auth import get_current_user, require_admin, require_checker, require_document_reader
 from app.core.database import user_db
 from app.models.user import User, UserRole
 from app.models.document import (
@@ -262,7 +262,7 @@ def _attach_clinic_names(documents: list[Document]) -> None:
 
 @router.get("/paged", response_model=PaginatedDocumentsResponse)
 async def list_documents_paged(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_document_reader),
     queue: DocumentQueue | None = Query(None, description="Fila para otimizar a consulta"),
     compact: bool = Query(True, description="Remove campos pesados do payload para melhorar performance"),
     page: int = Query(1, ge=1),
@@ -348,7 +348,7 @@ async def list_documents_paged(
 @router.get("", response_model=List[Document])
 async def list_documents(
     request: Request,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_document_reader),
     compact: bool = Query(True, description="Remove campos pesados do payload para melhorar performance"),
     cache_seconds: int = Query(5, ge=0, le=_DOCS_CACHE_MAX_SECONDS, description="Cache em memória para aliviar latência do DB"),
     stale_seconds: int = Query(30, ge=0, le=_DOCS_STALE_MAX_SECONDS, description="Permite retornar cache expirado enquanto atualiza em background")
@@ -431,7 +431,7 @@ async def list_documents(
 
 
 @router.get("/{document_id}", response_model=Document)
-async def get_document(document_id: str, current_user: User = Depends(get_current_user)):
+async def get_document(document_id: str, current_user: User = Depends(require_document_reader)):
     """
     Obtém detalhes de um documento específico.
 
@@ -474,7 +474,7 @@ async def get_document(document_id: str, current_user: User = Depends(get_curren
 
 
 @router.get("/{document_id}/view")
-async def view_document(document_id: str, current_user: User = Depends(get_current_user)):
+async def view_document(document_id: str, current_user: User = Depends(require_document_reader)):
     """
     Retorna o arquivo original do documento para visualização.
 
