@@ -28,22 +28,24 @@ import {
 } from "./metricas";
 
 /**
- * "hoje às 07:00" / "ontem às 07:00" / "09/09 às 07:00". A referência é o
- * relógio de quem está olhando; o back-end manda ISO com fuso.
+ * "Última atualização às 7:00". O horário é o `gerado_em` do back-end — muda
+ * tanto na rotina das 7h quanto no botão "Atualizar", então o texto acompanha
+ * o que foi apertado sem nenhum estado extra aqui.
+ *
+ * Fora do dia de hoje o texto ganha a data: antes das 7h o número na tela
+ * ainda é o de ontem, e "às 7:00" sozinho sugeriria o de hoje.
  */
-function formatarMomento(data: Date): string {
-  const hora = data.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+function textoUltimaAtualizacao(data: Date): string {
+  const hora = data.toLocaleTimeString("pt-BR", { hour: "numeric", minute: "2-digit" });
   const dia = (d: Date) => d.toLocaleDateString("pt-BR");
   const hoje = new Date();
   const ontem = new Date(hoje);
   ontem.setDate(hoje.getDate() - 1);
-  const amanha = new Date(hoje);
-  amanha.setDate(hoje.getDate() + 1);
 
-  if (dia(data) === dia(hoje)) return `hoje às ${hora}`;
-  if (dia(data) === dia(ontem)) return `ontem às ${hora}`;
-  if (dia(data) === dia(amanha)) return `amanhã às ${hora}`;
-  return `${data.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })} às ${hora}`;
+  if (dia(data) === dia(hoje)) return `Última atualização às ${hora}`;
+  if (dia(data) === dia(ontem)) return `Última atualização ontem às ${hora}`;
+  const dataCurta = data.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+  return `Última atualização em ${dataCurta} às ${hora}`;
 }
 
 export default function DashboardPage() {
@@ -56,7 +58,6 @@ export default function DashboardPage() {
   const {
     dados,
     geradoEm,
-    proximaAtualizacao,
     carregando,
     atualizando,
     erro,
@@ -104,10 +105,7 @@ export default function DashboardPage() {
                   </div>
                   {geradoEm && (
                     <div className="mt-1.5 text-[12.5px] text-[#767A7B]">
-                      Dados de {formatarMomento(geradoEm)}
-                      {proximaAtualizacao
-                        ? ` · próxima atualização automática ${formatarMomento(proximaAtualizacao)}`
-                        : ""}
+                      {textoUltimaAtualizacao(geradoEm)}
                     </div>
                   )}
                 </div>
