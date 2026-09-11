@@ -60,33 +60,34 @@ def was_audit_logged() -> bool:
     return bool(audit_logged_ctx.get())
 
 
-def _instalar_fabrica_de_contexto() -> None:
-    """Copia o contexto da requisição para dentro de cada LogRecord.
+class ContextoDaRequisicaoFilter(logging.Filter):
+    """Copia o contexto da requisição para dentro do LogRecord.
 
-    O JsonFormatter lê os contextvars direto, mas o handler OTLP (que exporta
-    os logs para o collector) só enxerga o que está no record. Sem isso os logs
+    O JsonFormatter lê os contextvars direto, mas o handler OTLP (que exporta os
+    logs para o coletor) só enxerga o que está no record. Sem isto os logs
     chegariam ao Loki sem request_id e sem user_email — justamente os campos
     pelos quais o dashboard de exploração filtra.
 
-    Encadeia com a fábrica anterior em vez de substituí-la, para conviver com o
-    LoggingInstrumentor, que também instala a sua (trace_id/span_id).
+    É um Filter, e não uma fábrica de LogRecord, de propósito. A fábrica roda na
+    CRIAÇÃO do record, antes de `extra=` ser aplicado; quando alguém loga com
+    extra={"request_id": ...} — como main.py fazia no audit — o logging levanta
+    KeyError("Attempt to overwrite 'request_id' in LogRecord") e a linha se
+    perde. O Filter roda depois, e o hasattr abaixo faz o `extra` explícito
+    vencer em vez de colidir.
     """
-    anterior = logging.getLogRecordFactory()
-    if getattr(anterior, "_prontuai_contexto", False):
-        return
 
-    def fabrica(*args, **kwargs):
-        record = anterior(*args, **kwargs)
+    CAMPOS = ("user_id", "user_email", "user_role", "clinic_id")
+
+    def filter(self, record: logging.LogRecord) -> bool:
         request_id = request_id_ctx.get()
         if request_id and not hasattr(record, "request_id"):
             record.request_id = request_id
-        for chave, valor in (user_context_ctx.get() or {}).items():
+        contexto = user_context_ctx.get() or {}
+        for chave in self.CAMPOS:
+            valor = contexto.get(chave)
             if valor is not None and not hasattr(record, chave):
                 setattr(record, chave, valor)
-        return record
-
-    fabrica._prontuai_contexto = True
-    logging.setLogRecordFactory(fabrica)
+        return True
 
 
 class JsonFormatter(logging.Formatter):
@@ -156,7 +157,6 @@ class JsonFormatter(logging.Formatter):
 
 def setup_logging(log_file: str = "logs/app.log"):
     os.makedirs(os.path.dirname(log_file), exist_ok=True)
-    _instalar_fabrica_de_contexto()
     log_level = os.getenv("LOG_LEVEL", "INFO").upper()
     log_format = os.getenv("LOG_FORMAT", "plain").lower()
     no_timestamp = os.getenv("LOG_NO_TIMESTAMP", "false").lower() == "true"
@@ -175,6 +175,11 @@ def setup_logging(log_file: str = "logs/app.log"):
         ),
         logging.StreamHandler(),
     ]
+    # O filtro vai em cada handler, nao no logger: filtro de logger so vale para
+    # records criados por aquele logger, e nao para os que sobem por propagacao.
+    for handler in handlers:
+        handler.addFilter(ContextoDaRequisicaoFilter())
+
     if log_format == "json":
         formatter = JsonFormatter()
         for handler in handlers:
