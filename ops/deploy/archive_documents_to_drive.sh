@@ -50,12 +50,13 @@
 #   ARCHIVE_RCLONE_REMOTE  destino, ex.: gdrive:prontuai/arquivo  (OBRIGATORIA)
 #   ARCHIVE_RCLONE_FLAGS   flags extras do rclone
 #   ARCHIVE_AFTER_DAYS     idade minima para arquivar (default 20)
-#   ARCHIVE_GATE           aprovado | decidido (default aprovado)
+#   ARCHIVE_GATE           decidido | aprovado (default decidido)
 #   ARCHIVE_ORPHAN_MODE    keep | archive (default keep) — arquivo sem linha no banco
 #   ARCHIVE_BATCH          arquivos por lote de copy/check/delete (default 200)
 #   ARCHIVE_MAX_FILES      teto de arquivos nesta execucao (default 0 = sem teto)
 #   ARCHIVE_WORK_DIR       onde ficam as listas e os relatorios (default <source>/../arquivo-tmp)
 #   ARCHIVE_DRY_RUN        "true" nao envia e nao apaga (default false)
+#   ARCHIVE_DB_CONTAINER   container do Postgres (default prontuai-db; staging: prontuai-db-stg)
 #   DB_DEPLOY_DIR          onde esta o .env do banco (default /home/ec2-user/prontuai-db)
 #   POSTGRES_USER, POSTGRES_DB   credenciais/nome do banco
 set -euo pipefail
@@ -67,7 +68,7 @@ source "$SCRIPT_DIR/lib.sh"
 SRC="${ARCHIVE_SOURCE_DIR:-/home/ec2-user/prontuai/data/uploads}"
 REMOTE="${ARCHIVE_RCLONE_REMOTE:-}"
 DIAS="${ARCHIVE_AFTER_DAYS:-20}"
-GATE="${ARCHIVE_GATE:-aprovado}"
+GATE="${ARCHIVE_GATE:-decidido}"
 ORPHAN_MODE="${ARCHIVE_ORPHAN_MODE:-keep}"
 LOTE="${ARCHIVE_BATCH:-200}"
 # Teto de arquivos por execucao. 0 = sem teto.
@@ -81,6 +82,15 @@ MAX_FILES="${ARCHIVE_MAX_FILES:-0}"
 WORK="${ARCHIVE_WORK_DIR:-$(dirname "$SRC")/arquivo-tmp}"
 DRY_RUN="${ARCHIVE_DRY_RUN:-false}"
 DB_DEPLOY_DIR="${DB_DEPLOY_DIR:-/home/ec2-user/prontuai-db}"
+# Container do Postgres consultado pelo portao e onde archived_at e gravado.
+#
+# Configuravel porque staging e producao rodam NA MESMA VPS, com
+# `prontuai-db` (producao) e `prontuai-db-stg` (staging, ver
+# back-end/docker-compose.stg.yml) lado a lado. Com o nome fixo, um teste "em
+# staging" apontando ARCHIVE_SOURCE_DIR para uploads-stg encontraria o banco de
+# PRODUCAO: consultaria aprovacoes de producao, gravaria archived_at em linhas
+# de producao e apagaria arquivos de staging com base nelas — sem erro nenhum.
+DB_CONTAINER="${ARCHIVE_DB_CONTAINER:-prontuai-db}"
 
 # --transfers=4: o gargalo aqui e latencia por arquivo, nao banda — sao muitos
 # PDFs pequenos, nao um zip de GB. --drive-stop-on-upload-limit para o script
@@ -114,8 +124,8 @@ fi
 POSTGRES_USER="${POSTGRES_USER:?POSTGRES_USER is required (defina no ambiente ou em $DB_DEPLOY_DIR/.env)}"
 POSTGRES_DB="${POSTGRES_DB:-prontuai}"
 
-docker inspect prontuai-db >/dev/null 2>&1 \
-  || die "Container prontuai-db nao encontrado. O arquivamento so roda com o banco no ar:
+docker inspect "$DB_CONTAINER" >/dev/null 2>&1 \
+  || die "Container $DB_CONTAINER nao encontrado. O arquivamento so roda com o banco no ar:
   sem o banco nao ha como saber o que ja passou pela checagem humana, e apagar
   por idade sozinha removeria documentos da fila de revisao."
 
@@ -150,6 +160,7 @@ RETIDOS="$WORK/relatorio-retidos.txt"
 ORFAOS="$WORK/relatorio-orfaos.txt"
 
 log "Origem:  $SRC"
+log "Banco:   $DB_CONTAINER (db=$POSTGRES_DB)"
 log "Destino: $REMOTE"
 log "Janela:  $DIAS dias | portao: $GATE | orfaos: $ORPHAN_MODE${DRY_RUN:+ | DRY_RUN=$DRY_RUN}"
 
@@ -196,21 +207,25 @@ fi
 # validation_status='validated' NAO serve: v1_brmed.py marca 'validated'
 # sozinho quando a IA nao acha exame faltante, antes de qualquer humano ver o
 # documento — e a fila de CHECAGEM do produto (api/v1/documents.py) trata
-# justamente esses como pendentes. reviewed_by so e gravado para ADMIN,
-# CHECKER ou MANAGER.
+# justamente esses como pendentes. As duas decisoes humanas gravam o revisor:
+# na aprovacao o back preenche reviewed_by com o e-mail de quem aprovou
+# (api/v1/documents.py); na rejeicao o front envia reviewed_by com o e-mail da
+# sessao (front-end/app/checagem/page.tsx). Ja a rejeicao AUTOMATICA da IA
+# (v1_brmed.py) nao tem revisor — e por isso fica no disco, aguardando checagem.
 case "$GATE" in
-  # Default. Sai do disco somente o que um humano APROVOU. Rejeitado por
-  # humano fica — leitura literal de "os que nao foram aprovados ficam".
-  aprovado)
-    COND="COALESCE(validation_status,'') = 'validated' AND COALESCE(reviewed_by,'') <> ''" ;;
-  # Sai do disco tudo que um humano DECIDIU, aprovando ou rejeitando. Libera
-  # mais espaco; use quando o rejeitado nao precisar mais ser reaberto.
+  # Default. Sai do disco tudo que um humano DECIDIU, aprovando ou rejeitando.
+  # Pendente, validated-so-pela-IA e rejected-so-pela-IA ficam: nenhum humano
+  # olhou ainda, e a tela de checagem precisa do arquivo.
   decidido)
     COND="COALESCE(reviewed_by,'') <> ''" ;;
+  # Mais conservador: sai somente o que um humano APROVOU; rejeitado por
+  # humano fica. Use se o rejeitado precisar continuar reabrivel.
+  aprovado)
+    COND="COALESCE(validation_status,'') = 'validated' AND COALESCE(reviewed_by,'') <> ''" ;;
 esac
 
 psql_run() {
-  docker exec -i prontuai-db psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1 -tA "$@"
+  docker exec -i "$DB_CONTAINER" psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1 -tA "$@"
 }
 
 psql_run -c "
@@ -395,7 +410,7 @@ processa_lote() {
         printf 'UPDATE documents SET archived_at = now()
                 WHERE regexp_replace(file_path, %s, %s) IN (SELECT base FROM _arquivados)
                   AND archived_at IS NULL;\n' "'^.*/'" "''"
-      } | docker exec -i prontuai-db psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1 -q; then
+      } | docker exec -i "$DB_CONTAINER" psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1 -q; then
     # Nao apaga sem ter marcado: o arquivo ficaria inacessivel com erro
     # generico. A copia no Drive ja existe e o proximo run re-verifica rapido e
     # tenta marcar de novo, entao pular o delete e seguro e idempotente.

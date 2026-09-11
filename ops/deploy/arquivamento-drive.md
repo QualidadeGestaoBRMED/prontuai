@@ -27,11 +27,15 @@ Dois portões, via `ARCHIVE_GATE`:
 
 | `ARCHIVE_GATE` | Sai do disco | Fica no disco |
 |---|---|---|
-| `aprovado` (padrão) | `validated` **com** revisor humano | pendente, `validated` só pela IA, e **rejeitado por humano** |
-| `decidido` | qualquer coisa com revisor humano (aprovado **ou** rejeitado) | pendente e `validated` só pela IA |
+| `decidido` (padrão) | qualquer coisa com revisor humano (aprovado **ou** rejeitado) | pendente, `validated` só pela IA e `rejected` só pela IA |
+| `aprovado` | `validated` **com** revisor humano | o mesmo, e também o **rejeitado por humano** |
 
-O padrão é o conservador: rejeitado por humano continua no disco. Se o
-rejeitado não precisar mais ser reaberto, `ARCHIVE_GATE=decidido` libera mais.
+O padrão é `decidido`: toda decisão humana libera o arquivo, seja aprovação ou
+rejeição. As duas gravam o revisor — na aprovação o back preenche
+`reviewed_by`; na rejeição o front envia o e-mail da sessão
+(`front-end/app/checagem/page.tsx`). A rejeição **automática** da IA não tem
+revisor e continua no disco, porque ainda está na fila de checagem. Se o
+rejeitado por humano precisar continuar reabrível, use `ARCHIVE_GATE=aprovado`.
 
 ### Os três baldes do relatório
 
@@ -148,6 +152,26 @@ O script precisa do `POSTGRES_USER`/`POSTGRES_DB` que já estão nesse `.env`:
 ele consulta o banco para saber o que passou pela checagem humana, e **se
 recusa a rodar** com o container `prontuai-db` fora do ar — sem o banco, apagar
 por idade sozinha removeria documentos da fila de revisão.
+
+## Testando em staging — atenção ao banco
+
+Staging e produção rodam **na mesma VPS**, com os containers `prontuai-db`
+(produção) e `prontuai-db-stg` (staging) lado a lado. O script usa
+`prontuai-db` por padrão. Para testar em staging, **as duas** variáveis abaixo
+são obrigatórias — trocar só a pasta faria o script consultar e marcar o banco
+de **produção**, apagando arquivos de staging com base em aprovações de
+produção:
+
+```bash
+ARCHIVE_DB_CONTAINER=prontuai-db-stg \
+ARCHIVE_SOURCE_DIR=<pasta uploads-stg do host> \
+ARCHIVE_RCLONE_REMOTE=gdrive:prontuai/arquivo-staging \
+ARCHIVE_DRY_RUN=true ./archive_documents_to_drive.sh
+```
+
+Confira a linha `Banco:` no início do log antes de rodar sem dry-run. Use também
+um remote separado para staging, para o teste não misturar arquivos no Drive
+de produção.
 
 ## 3. Primeiro run (o acervo acumulado)
 
