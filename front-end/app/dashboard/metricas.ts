@@ -9,7 +9,6 @@
 import type {
   ClinicaDados,
   DadosDashboard,
-  ExameDados,
   PontoAcuracia,
   PontoSerie,
   SerieKey,
@@ -36,7 +35,7 @@ const CORES_RANK = ["#193B4F", "#007891", "#007891", "#00AFAA", "#00AFAA", "#7EB
 
 // ── filtros ──────────────────────────────────────────────────────────────────
 export type FiltroPeriodo = "Semanal" | "Mensal" | "Trimestral" | "Tudo";
-export type Aba = "utilizacao" | "acuracia" | "atuar";
+export type Aba = "utilizacao" | "acuracia";
 
 /**
  * Cada filtro define DUAS coisas: o período dos indicadores (KPIs, ranking e
@@ -61,7 +60,6 @@ export const ROTULO_FILTRO = (f: FiltroPeriodo) => PERIODOS[f].label;
 export const ABAS: { id: Aba; label: string }[] = [
   { id: "utilizacao", label: "Utilização" },
   { id: "acuracia", label: "Acurácia" },
-  { id: "atuar", label: "Onde atuar" },
 ];
 
 // ── textos de apoio ──────────────────────────────────────────────────────────
@@ -81,28 +79,6 @@ const TIPS_ACC: Record<string, string> = {
     "A IA liberou e o revisor barrou. É o erro com consequência: sem revisão, o documento teria passado.",
   "Falhas técnicas":
     "A IA não conseguiu ler o CPF/CNPJ ou achar o paciente. Não é julgamento, por isso fica fora da acurácia.",
-};
-
-/**
- * A extração devolve um rótulo técnico para a ação; aqui ele vira linguagem de
- * quem vai executar, com a razão logo abaixo.
- */
-const ACOES: Record<string, { label: string; por: string; cor: string }> = {
-  "dicionário de sinônimos": {
-    label: "Cadastrar outros nomes",
-    por: "o exame estava no prontuário, mas escrito de um jeito que a IA não reconhece",
-    cor: CORES.alerta,
-  },
-  "reforçar a detecção": {
-    label: "Corrigir a leitura",
-    por: "a IA deu o exame como presente, mas ele não estava no prontuário",
-    cor: CORES.negativo,
-  },
-  "marcar na grade como exame externo": {
-    label: "Marcar como exame externo",
-    por: "o exame realmente não vem no PDF: é consultado em outro sistema",
-    cor: CORES.petroleo,
-  },
 };
 
 export const AJUDA_ACURACIA = [
@@ -293,54 +269,6 @@ export interface FatorPenteFino {
   tip: string;
 }
 
-export interface CardResumo {
-  label: string;
-  valor: string;
-  nota: string;
-  cor: string;
-}
-
-export interface Projecao {
-  causa: string;
-  detalhe: string;
-  cor: string;
-  casos: string;
-  de: string;
-  para: string;
-  ganho: string;
-  largura: string;
-}
-
-export interface LegendaAcao {
-  label: string;
-  por: string;
-  cor: string;
-  qtd: string;
-}
-
-export interface BarraExame {
-  mes: string;
-  mesCurto: string;
-  valor: string;
-  h: number;
-  cor: string;
-  tip: string;
-}
-
-export interface LinhaExame {
-  exame: string;
-  total: string;
-  acao: string;
-  acaoPor: string;
-  acaoCor: string;
-  acaoSec: string;
-  acaoSecCor: string;
-  chips: { texto: string; cor: string }[];
-  tendencia: string;
-  tendenciaCor: string;
-  barras: BarraExame[];
-}
-
 export interface VisaoDashboard {
   rangeLabel: string;
   compareLabel: string;
@@ -363,13 +291,6 @@ export interface VisaoDashboard {
   penteFino: FatorPenteFino[];
   notaSemJustificativa: string;
   porTipo: LinhaMatriz[];
-
-  temExames: boolean;
-  resumoAtuar: CardResumo[];
-  projecoes: Projecao[];
-  projecaoTotal: string;
-  legendaAcoes: LegendaAcao[];
-  ondeAtuar: LinhaExame[];
 }
 
 export interface OpcoesVisao {
@@ -558,45 +479,6 @@ export function calcularVisao({ dados, filtro, comparar, verTodasClinicas }: Opc
     ["IA rejeitou → humano aprovou", divRejeitou, false, CORES.alerta],
     ["IA aprovou → humano rejeitou", riscoReal, false, CORES.negativo],
   ];
-
-  /**
-   * Exames recortados pelo período. As séries por exame usam as mesmas chaves
-   * das demais, então o casamento é exato em qualquer granularidade; quando a
-   * extração não traz o detalhe, caímos para os meses cobertos.
-   */
-  const exameNoPeriodo = (e: ExameDados) => {
-    const serie = e.series?.[cfg.periodo.serie];
-    let alarme = 0;
-    let externo = 0;
-    let escape = 0;
-    if (serie) {
-      atual.forEach((pt) => {
-        const x = serie[pt.chave];
-        if (x) {
-          alarme += x.alarme;
-          externo += x.externo;
-          escape += x.escape;
-        }
-      });
-    } else {
-      atual
-        .map((pt) => pt.chave.slice(0, 7))
-        .forEach((m) => {
-          const x = e.por_mes?.[m];
-          if (x) {
-            alarme += x.alarme;
-            externo += x.externo;
-            escape += x.escape;
-          }
-        });
-    }
-    return { ...e, alarme, externo, escape, total: alarme + externo + escape };
-  };
-
-  const exames = (dados.exames || [])
-    .map(exameNoPeriodo)
-    .filter((e) => e.total > 0)
-    .sort((x, y) => y.total - x.total);
 
   // ---- por que a acurácia não está maior -----------------------------------
   const fatores: [string, number, string][] = (
@@ -826,177 +708,5 @@ export function calcularVisao({ dados, filtro, comparar, verTodasClinicas }: Opc
       peso: Math.round(pct(count, Math.max(1, ...situacoes.map((s) => s[1])))),
       cor,
     })),
-
-    temExames: exames.length > 0,
-
-    resumoAtuar: (() => {
-      const somaEx = (f: (e: (typeof exames)[number]) => number) => exames.reduce((a, e) => a + f(e), 0);
-      const totalRevisados = dados.totais?.revisados || 0;
-      // O número sozinho engana: ancoramos tudo no volume de documentos
-      // revisados, que é a escala real do problema.
-      const emDocs = (n: number) =>
-        totalRevisados ? `${num(pct(n, totalRevisados))} dos ${fmt(totalRevisados)} documentos revisados` : "";
-      const total = somaEx((e) => e.total);
-      return [
-        {
-          label: "Ocorrências no total",
-          valor: fmt(total),
-          nota: `${emDocs(total)}, em ${fmt(exames.length)} exames`,
-          cor: CORES.tinta,
-        },
-        {
-          label: "Nome não reconhecido",
-          valor: fmt(somaEx((e) => e.alarme)),
-          nota: `${emDocs(somaEx((e) => e.alarme))} · gera retrabalho, não risco`,
-          cor: CORES.alerta,
-        },
-        {
-          label: "Passou sem estar no prontuário",
-          valor: fmt(somaEx((e) => e.escape)),
-          nota: `${emDocs(somaEx((e) => e.escape))} · é o que gera risco`,
-          cor: CORES.negativo,
-        },
-        {
-          label: "Vem de outro sistema",
-          valor: fmt(somaEx((e) => e.externo)),
-          nota: `${emDocs(somaEx((e) => e.externo))} · a IA estava certa`,
-          cor: CORES.petroleo,
-        },
-      ];
-    })(),
-
-    /**
-     * "Se corrigir X, a acurácia vai de A para B." As contagens por causa são
-     * por documento, então entram direto no numerador.
-     */
-    projecoes: (() => {
-      const linhas = [
-        {
-          causa: "Cadastrar os outros nomes dos exames",
-          detalhe: "casos em que a IA não reconheceu um exame que estava no prontuário",
-          n: soma(accAtual, "mot_matching_ia"),
-          cor: CORES.alerta,
-        },
-        {
-          causa: "Corrigir a leitura dos exames",
-          detalhe: "casos em que a IA deu como presente um exame que faltava",
-          n: soma(accAtual, "mot_exame_nao_detectado"),
-          cor: CORES.negativo,
-        },
-        {
-          causa: "Implementar as regras formais do ASO",
-          detalhe: "carimbo ilegível, página cortada, marcação de aptidão, datas",
-          n: soma(accAtual, "mot_regra_formal"),
-          cor: CORES.agua,
-        },
-      ].filter((l) => l.n > 0);
-
-      const maxGanho = Math.max(1, ...linhas.map((l) => pct(l.n, baseAcc)));
-      return linhas
-        .sort((a, b) => b.n - a.n)
-        .map((l) => {
-          const nova = pct(acertos + l.n, baseAcc);
-          return {
-            causa: l.causa,
-            detalhe: l.detalhe,
-            cor: l.cor,
-            casos: `${fmt(l.n)} documentos`,
-            de: num(acuracia),
-            para: num(nova),
-            ganho: `+${(nova - acuracia).toFixed(1).replace(".", ",")} p.p.`,
-            largura: `${Math.round((pct(l.n, baseAcc) / maxGanho) * 100)}%`,
-          };
-        });
-    })(),
-
-    projecaoTotal: (() => {
-      const n =
-        soma(accAtual, "mot_matching_ia") +
-        soma(accAtual, "mot_exame_nao_detectado") +
-        soma(accAtual, "mot_regra_formal");
-      if (!n || !baseAcc) return "";
-      return `Corrigindo as três frentes, a acurácia iria de ${num(acuracia)} para ${num(pct(acertos + n, baseAcc))} no período.`;
-    })(),
-
-    legendaAcoes: Object.keys(ACOES).map((k) => ({
-      label: ACOES[k].label,
-      por: ACOES[k].por,
-      cor: ACOES[k].cor,
-      qtd: fmt(exames.filter((e) => e.acao === k).reduce((a, e) => a + e.total, 0)),
-    })),
-
-    ondeAtuar: exames.slice(0, 12).map((e) => {
-      const mensal = dados.series?.mensal ?? [];
-      const serie = mensal.map((p) => {
-        const m = p.chave.slice(0, 7);
-        const x = e.por_mes?.[m] || { alarme: 0, externo: 0, escape: 0 };
-        const total = x.alarme + x.externo + x.escape;
-        return {
-          mes: rotuloMes(p.chave),
-          total,
-          alarme: x.alarme,
-          externo: x.externo,
-          escape: x.escape,
-          // ocorrências a cada mil documentos — comparável entre meses de
-          // volume muito diferente
-          taxa: p.docs ? (total / p.docs) * 1000 : 0,
-        };
-      });
-      const maxSerie = Math.max(1, ...serie.map((s) => s.total));
-      const comDado = serie.filter((s) => s.total > 0);
-      const ult = comDado[comDado.length - 1] || { taxa: 0, total: 0 };
-      const pen = comDado[comDado.length - 2] || null;
-      const dir = !pen
-        ? "sem histórico"
-        : Math.abs(ult.taxa - pen.taxa) < 0.3
-          ? "estável"
-          : ult.taxa < pen.taxa
-            ? "melhorou"
-            : "piorou";
-      const taxaTxt = (t: number) => `${t.toFixed(1).replace(".", ",")}/mil`;
-
-      /**
-       * Cada causa tem uma ação própria. Ordenamos por peso: a maior vira a
-       * recomendação principal; uma segunda causa relevante vira secundária,
-       * para não esconder exames com problema misto.
-       */
-      const causas = [
-        { n: e.alarme, chave: "dicionário de sinônimos", chip: "nome não reconhecido" },
-        { n: e.escape, chave: "reforçar a detecção", chip: "passou sem estar no prontuário" },
-        { n: e.externo, chave: "marcar na grade como exame externo", chip: "vem de outro sistema" },
-      ]
-        .filter((c) => c.n > 0)
-        .sort((x, y) => y.n - x.n);
-
-      const prim = causas[0] ? ACOES[causas[0].chave] : { label: "—", por: "", cor: MUTED };
-      const sec = causas[1] && causas[1].n >= e.total * 0.25 ? causas[1] : null;
-
-      return {
-        exame: e.exame,
-        total: fmt(e.total),
-        acao: prim.label,
-        acaoPor: prim.por,
-        acaoCor: prim.cor,
-        acaoSec: sec ? `e também: ${ACOES[sec.chave].label.toLowerCase()} (${fmt(sec.n)})` : "",
-        acaoSecCor: sec ? ACOES[sec.chave].cor : MUTED,
-        chips: causas.map((c) => ({ texto: `${fmt(c.n)} ${c.chip}`, cor: ACOES[c.chave].cor })),
-        tendencia: !pen
-          ? "sem histórico para comparar"
-          : dir === "estável"
-            ? `estável (${taxaTxt(ult.taxa)})`
-            : `${dir}: ${taxaTxt(pen.taxa)} → ${taxaTxt(ult.taxa)}`,
-        tendenciaCor: dir === "melhorou" ? POS : dir === "piorou" ? NEG : MUTED,
-        barras: serie.map((s) => ({
-          mes: s.mes,
-          mesCurto: s.mes.slice(0, 3),
-          valor: s.total ? fmt(s.total) : "",
-          h: s.total ? Math.max(3, Math.round((s.total / maxSerie) * 58)) : 0,
-          cor: s.escape > s.alarme + s.externo ? CORES.negativo : CORES.alerta,
-          tip: s.total
-            ? `${s.mes} — ${fmt(s.total)} ocorrência${s.total > 1 ? "s" : ""} (${taxaTxt(s.taxa)} documentos)`
-            : `${s.mes} — nenhuma ocorrência`,
-        })),
-      };
-    }),
   };
 }

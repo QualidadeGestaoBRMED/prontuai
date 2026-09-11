@@ -5,9 +5,10 @@
 -- entre o que a análise mede e o que a tela mostra vira discussão sobre número,
 -- não sobre produto. Ao atualizar, copie o arquivo inteiro de novo.
 --
--- O bloco 'revisao' (tempo de revisão, datado por reviewed_at) e 'extracao_dia'
--- vêm junto e são descartados no serviço — o dashboard ainda não os consome.
--- Vale podar aqui quando der para rodar a consulta e medir o ganho.
+-- Os blocos 'revisao' (tempo de revisão, datado por reviewed_at),
+-- 'extracao_dia' e 'exames' (da aba "Onde atuar", removida) vêm junto e são
+-- descartados no serviço — o dashboard não os consome. Podá-los aqui deixaria
+-- a consulta mais rápida, ao custo de ela deixar de ser idêntica ao relatorio9.
 --
 -- Painel completo: utilizacao + acuracia + exames + extracao (datados por
 -- created_at) e tempo de revisao (datado por reviewed_at, sob a chave

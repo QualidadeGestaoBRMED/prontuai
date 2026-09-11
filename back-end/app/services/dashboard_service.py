@@ -40,8 +40,9 @@ logger = logging.getLogger(__name__)
 _SQL_PATH = os.path.join(os.path.dirname(__file__), "sql", "dashboard_indicadores.sql")
 
 # Seções que o dashboard consome. O resto do que a consulta devolve ('revisao',
-# 'extracao_dia') é descartado para não trafegar ~30 KB que ninguém lê.
-SECOES = ("periodo", "totais", "series", "acuracia", "clinicas", "exames")
+# 'extracao_dia' e 'exames', que alimentava a aba "Onde atuar", removida) é
+# descartado para não trafegar ~70 KB que ninguém lê.
+SECOES = ("periodo", "totais", "series", "acuracia", "clinicas")
 
 # Virada do dia: a partir daqui o número do dia anterior é considerado velho.
 # O fuso é explícito porque o container roda em UTC — sem isso, "7h" viraria 4h
@@ -179,11 +180,10 @@ def _consultar() -> dict[str, Any]:
     dados["proxima_atualizacao"] = proxima_virada(momento).isoformat()
 
     logger.info(
-        "[DASHBOARD] indicadores calculados em %.1fs (ambiente=%s, clinicas=%s, exames=%s)",
+        "[DASHBOARD] indicadores calculados em %.1fs (ambiente=%s, clinicas=%s)",
         time.monotonic() - inicio,
         dados["ambiente"],
         len(dados.get("clinicas") or []),
-        len(dados.get("exames") or []),
     )
     return dados
 

@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/dialog";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 
-import { AbaAcuracia, AbaOndeAtuar, AbaUtilizacao } from "./abas";
+import { AbaAcuracia, AbaUtilizacao } from "./abas";
 import { useDadosDashboard } from "./dados";
 import {
   ABAS,
@@ -222,7 +222,6 @@ export default function DashboardPage() {
                   {aba === "acuracia" && (
                     <AbaAcuracia visao={visao} onAjuda={() => setAjudaAberta(true)} />
                   )}
-                  {aba === "atuar" && <AbaOndeAtuar visao={visao} />}
                 </>
               )}
             </div>

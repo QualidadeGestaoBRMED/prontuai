@@ -66,22 +66,6 @@ export interface ClinicaDados {
   series: Partial<Record<SerieKey, Record<string, PontoClinica>>>;
 }
 
-/** Ocorrências de um exame: nome não reconhecido, externo e escape. */
-export interface OcorrenciaExame {
-  alarme: number;
-  externo: number;
-  escape: number;
-}
-
-export interface ExameDados extends OcorrenciaExame {
-  exame: string;
-  /** Rótulo técnico da ação; traduzido para linguagem de execução em `metricas.ts`. */
-  acao: string;
-  total: number;
-  por_mes: Record<string, OcorrenciaExame>;
-  series?: Partial<Record<SerieKey, Record<string, OcorrenciaExame>>>;
-}
-
 export interface DadosDashboard {
   periodo: { doc_mais_antigo: string; doc_mais_recente: string };
   totais: {
@@ -94,7 +78,6 @@ export interface DadosDashboard {
   series: Record<SerieKey, PontoSerie[]>;
   acuracia: Record<SerieKey, PontoAcuracia[]>;
   clinicas: ClinicaDados[];
-  exames: ExameDados[];
   /**
    * Expedições de clínicas credenciadas por dia de atendimento — denominador de
    * "Expedições via ProntuAI". Único campo que não sai do banco: o back-end lê
