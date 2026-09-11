@@ -1,4 +1,5 @@
 """Indicadores do dashboard. Leitura agregada, restrita à gestão."""
+import asyncio
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -25,7 +26,10 @@ async def indicadores(
     completa, para trocar de período não custar uma ida ao banco.
     """
     try:
-        return obter_indicadores(forcar=forcar)
+        # A consulta é I/O bloqueante de vários segundos. Num handler `async`
+        # ela roda no event loop e trava TODA a API enquanto varre o banco —
+        # medido: /health saiu de 1,5ms para 4,7s. Fora dele, só quem pediu espera.
+        return await asyncio.to_thread(obter_indicadores, forcar)
     except DashboardIndisponivel as exc:
         logger.warning("[DASHBOARD] %s pediu indicadores e a consulta falhou", current_user.email)
         raise HTTPException(

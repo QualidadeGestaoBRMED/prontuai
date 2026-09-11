@@ -269,7 +269,14 @@ export function AbaUtilizacao({
 
       <div className={`${CARTAO} px-[22px] pt-5 pb-2`}>
         <div className={TITULO}>Adoção por clínica</div>
-        <div className={SUB}>Top 6 por volume · documentos enviados, revisados e liberados</div>
+        {/* O rótulo acompanha o "ver todas" do ranking: as duas tabelas leem a
+            mesma lista, então dizer "top 6" com 43 linhas na tela seria mentira. */}
+        <div className={SUB}>
+          {visao.adocao.length === visao.totalClinicas
+            ? `Todas as ${visao.totalClinicas} clínicas`
+            : `Top ${visao.adocao.length} por volume`}{" "}
+          · documentos enviados, revisados e liberados
+        </div>
         <div className="mt-4 overflow-x-auto">
           <div className="min-w-[720px]">
             <div

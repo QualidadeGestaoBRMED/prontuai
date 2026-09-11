@@ -72,6 +72,10 @@ _sql: Optional[str] = None
 _expedicoes: Optional[dict[str, int]] = None
 # (validade, dados): a partir de `validade` o cache é considerado vencido.
 _cache: Optional[tuple[datetime, dict[str, Any]]] = None
+# Sobe a cada cálculo concluído. Serve para quem esperou no lock descobrir que
+# outra thread já fez o trabalho — inclusive num `forcar`, onde a validade do
+# cache é a mesma antes e depois e não daria para comparar.
+_versao = 0
 _lock = threading.Lock()
 
 
@@ -190,10 +194,15 @@ def obter_indicadores(forcar: bool = False) -> dict[str, Any]:
     O lock serializa o cálculo: sem ele, N requisições simultâneas com o cache
     frio disparariam N varreduras no banco ao mesmo tempo.
     """
-    global _cache, _expedicoes
+    global _cache, _expedicoes, _versao
 
     if not forcar and _cache and agora() < _cache[0]:
         return _cache[1]
+
+    # Lido ANTES de disputar o lock: se mudar enquanto esperamos, foi porque
+    # outra thread recalculou e o resultado dela serve — vários cliques no
+    # "Atualizar" ao mesmo tempo custam uma varredura, não uma por clique.
+    versao_ao_pedir = _versao
 
     if forcar:
         # Releitura da extração do BRNET junto: trocar a planilha no disco e
@@ -201,7 +210,8 @@ def obter_indicadores(forcar: bool = False) -> dict[str, Any]:
         _expedicoes = None
 
     with _lock:
-        # Outra thread pode ter preenchido o cache enquanto esperávamos.
+        if _cache and _versao != versao_ao_pedir:
+            return _cache[1]
         if not forcar and _cache and agora() < _cache[0]:
             return _cache[1]
         try:
@@ -210,6 +220,7 @@ def obter_indicadores(forcar: bool = False) -> dict[str, Any]:
             logger.error("[DASHBOARD] falha ao calcular indicadores: %s", exc)
             raise DashboardIndisponivel(str(exc)) from exc
         _cache = (proxima_virada(agora()), dados)
+        _versao += 1
         return dados
 
 
@@ -247,7 +258,9 @@ async def atualizacao_diaria_loop() -> None:
             if agora() < alvo:
                 continue  # ainda não é a hora: só terminou uma fatia da espera
         try:
-            obter_indicadores(forcar=True)
+            # `obter_indicadores` faz I/O bloqueante de vários segundos; chamada
+            # direta aqui congelaria o event loop e, com ele, a API inteira.
+            await asyncio.to_thread(obter_indicadores, True)
             logger.info("[DASHBOARD] indicadores atualizados pela rotina diária")
         except DashboardIndisponivel as exc:
             # Falhar aqui não pode derrubar o loop: no dia seguinte ele tenta de

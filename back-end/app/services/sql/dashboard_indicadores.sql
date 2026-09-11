@@ -12,6 +12,21 @@
 -- Painel completo: utilizacao + acuracia + exames + extracao (datados por
 -- created_at) e tempo de revisao (datado por reviewed_at, sob a chave
 -- 'revisao'). Merge de relatorio6.sql + relatorio7.sql.
+
+-- result_payload e TEXT, e uma unica linha invalida fazia o cast derrubar a
+-- consulta INTEIRA ("invalid input syntax for type json") -- ou seja, o painel
+-- todo, para sempre, por causa de um documento. O guarda abaixo faz a linha
+-- torta virar NULL e so ela se perder.
+--
+-- Por que CASE e nao funcao: a consulta roda em transacao READ ONLY, onde
+-- CREATE FUNCTION (mesmo em pg_temp) e recusado. E o CASE garante a ordem --
+-- o cast so acontece no ramo verdadeiro, enquanto condicoes soltas no WHERE o
+-- planejador pode reordenar.
+--
+-- `LIKE '{%'` e a convencao do resto do codigo e pega NULL, vazio e texto
+-- legado; `pg_input_is_valid` pega tambem JSON truncado, e exige Postgres 16+
+-- (producao roda 17, staging 16).
+
 WITH lim AS (
     SELECT min(created_at) AS ini, max(created_at) AS fim FROM documents
 ),
@@ -66,14 +81,17 @@ doc AS (
     SELECT
         d.id, d.clinic_id, d.validation_status, d.created_at,
         (h.document_id IS NOT NULL) AS revisado,
-        CASE WHEN (d.result_payload::jsonb #>> '{brmed_result,data_previsao_liberacao}')
+        CASE WHEN (p.payload #>> '{brmed_result,data_previsao_liberacao}')
                   ~ '^\d{2}/\d{2}/\d{4}$'
-             THEN to_date(d.result_payload::jsonb #>> '{brmed_result,data_previsao_liberacao}',
+             THEN to_date(p.payload #>> '{brmed_result,data_previsao_liberacao}',
                           'DD/MM/YYYY')
         END AS previsao,
         COALESCE(d.reviewed_at, d.updated_at)::date AS liberado_em
     FROM documents d
     LEFT JOIN humano h ON h.document_id = d.id
+    CROSS JOIN LATERAL (SELECT CASE WHEN d.result_payload LIKE '{%'
+                              AND pg_input_is_valid(d.result_payload, 'jsonb')
+                         THEN d.result_payload::jsonb END AS payload) p
 ),
 agg AS (
     SELECT
@@ -221,7 +239,7 @@ acc AS (
 -- escape -> IA deu o exame como presente e o revisor apontou a falta
 revertidos AS (
     SELECT d.id, d.created_at, ia.ia_status, h.humano_status,
-           d.result_payload::jsonb -> 'tabela_comparacao' AS tabela,
+           p.payload -> 'tabela_comparacao' AS tabela,
            lower(translate(btrim(COALESCE(
                CASE WHEN h.humano_status = 'validated' THEN d.approval_reason
                     ELSE d.rejection_reason END, '')),
@@ -229,7 +247,10 @@ revertidos AS (
     FROM ia
     JOIN humano h ON h.document_id = ia.document_id AND h.humano_em >= ia.ia_em
     JOIN documents d ON d.id = ia.document_id
-    WHERE jsonb_typeof(d.result_payload::jsonb -> 'tabela_comparacao') = 'array'
+    CROSS JOIN LATERAL (SELECT CASE WHEN d.result_payload LIKE '{%'
+                              AND pg_input_is_valid(d.result_payload, 'jsonb')
+                         THEN d.result_payload::jsonb END AS payload) p
+    WHERE jsonb_typeof(p.payload -> 'tabela_comparacao') = 'array'
       AND ((ia.ia_status = 'pending' AND h.humano_status = 'validated')
         OR (ia.ia_status = 'validated' AND h.humano_status = 'rejected'))
 ),

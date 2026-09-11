@@ -106,6 +106,13 @@ def test_falha_no_banco_vira_erro_de_dominio(monkeypatch):
         ds.obter_indicadores()
 
 
+def _dispara(n, forcar=False):
+    threads = [threading.Thread(target=ds.obter_indicadores, args=(forcar,)) for _ in range(n)]
+    for t in threads:
+        t.start()
+    return threads
+
+
 def test_chamadas_simultaneas_consultam_uma_vez_so(monkeypatch):
     """Com o cache frio, N requisições ao mesmo tempo não podem virar N varreduras."""
     chamadas = []
@@ -118,14 +125,48 @@ def test_chamadas_simultaneas_consultam_uma_vez_so(monkeypatch):
 
     monkeypatch.setattr(ds, "_consultar", lento)
 
-    threads = [threading.Thread(target=ds.obter_indicadores) for _ in range(4)]
-    for t in threads:
-        t.start()
+    threads = _dispara(4)
     liberar.set()
     for t in threads:
         t.join(timeout=10)
 
     assert chamadas == [1]
+
+
+def test_forcar_simultaneo_nao_vira_uma_varredura_por_clique(monkeypatch):
+    """Vários "Atualizar" ao mesmo tempo custam uma varredura, não uma por clique.
+
+    Regressão real: o lock serializava mas não deduplicava o caminho `forcar`,
+    e 6 pedidos simultâneos viravam 6 varreduras de 7s enfileiradas (40s no total).
+    """
+    chamadas = []
+    liberar = threading.Event()
+
+    def lento():
+        chamadas.append(1)
+        liberar.wait(timeout=5)
+        return resposta(len(chamadas))
+
+    monkeypatch.setattr(ds, "_consultar", lento)
+
+    threads = _dispara(6, forcar=True)
+    liberar.set()
+    for t in threads:
+        t.join(timeout=10)
+
+    assert chamadas == [1], f"{len(chamadas)} varreduras para 6 cliques simultâneos"
+
+
+def test_forcar_sequencial_continua_recalculando(monkeypatch):
+    """A dedupe não pode transformar o botão em no-op para quem clica depois."""
+    chamadas = []
+    monkeypatch.setattr(ds, "_consultar", lambda: (chamadas.append(1), resposta(len(chamadas)))[1])
+
+    ds.obter_indicadores(forcar=True)
+    ds.obter_indicadores(forcar=True)
+    ds.obter_indicadores(forcar=True)
+
+    assert len(chamadas) == 3
 
 
 # ── extração de expedições do BRNET (arquivo no disco, fora do git) ──────────
