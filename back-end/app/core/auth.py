@@ -451,11 +451,11 @@ async def get_current_upload_user(
 # clínica e deixavam passar qualquer outro papel — um papel novo herdava acesso
 # a todo prontuário sem ninguém decidir isso.
 #
-# VIEWER e CURATOR leem, mas não escrevem: aprovar/rejeitar exige
-# `require_checker` e enviar exige `require_sender`, e nenhum dos dois os inclui.
+# CURATOR lê, mas não escreve: aprovar/rejeitar exige `require_checker` e
+# enviar exige `require_sender`, e nenhum dos dois o inclui.
 DOCUMENT_ROLES = (
     UserRole.ADMIN, UserRole.MANAGER, UserRole.CHECKER, UserRole.SENDER,
-    UserRole.VIEWER, UserRole.CURATOR,
+    UserRole.CURATOR,
 )
 
 
@@ -464,7 +464,7 @@ async def require_document_reader(current_user: User = Depends(get_current_user)
     Requer um papel que trabalhe com documentos.
 
     O recorte por clínica do SENDER continua dentro de cada rota; esta guarda
-    só decide quem pode chegar até ele. VIEWER e CURATOR entram em modo somente
+    só decide quem pode chegar até ele. O CURATOR entra em modo somente
     leitura — a escrita é barrada pelas guardas das rotas de escrita.
     """
     if current_user.role not in DOCUMENT_ROLES:
@@ -477,17 +477,17 @@ async def require_document_reader(current_user: User = Depends(get_current_user)
 
 # Quem vê o dashboard de indicadores. Lista única: o front espelha esta mesma
 # regra em `usePermissions.canViewDashboard`, e as duas precisam andar juntas.
-DASHBOARD_ROLES = (UserRole.ADMIN, UserRole.VIEWER)
+DASHBOARD_ROLES = (UserRole.ADMIN, UserRole.MANAGER)
 
 
 async def require_dashboard(current_user: User = Depends(get_current_user)) -> User:
     """
     Requer um papel com acesso ao dashboard de indicadores.
 
-    Deliberadamente **não** inclui MANAGER: os indicadores (volume por clínica,
-    acurácia da IA, cobertura das expedições) foram separados da gestão
-    administrativa e ganharam um papel próprio, o VIEWER. Por isso não usa
-    `require_management`.
+    Hoje a lista é a mesma de `require_management` (ADMIN e MANAGER), mas a
+    guarda é própria de propósito: quem vê os indicadores já mudou duas vezes
+    sem que a gestão administrativa mudasse junto, e com esta separação a troca
+    é uma linha em `DASHBOARD_ROLES`.
     """
     if current_user.role not in DASHBOARD_ROLES:
         raise HTTPException(

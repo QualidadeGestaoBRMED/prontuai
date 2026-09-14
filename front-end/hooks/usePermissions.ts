@@ -2,21 +2,21 @@
 
 import { useSession } from "next-auth/react";
 
-export type UserRole = "ADMIN" | "MANAGER" | "CURATOR" | "VIEWER" | "CHECKER" | "SENDER";
+export type UserRole = "ADMIN" | "MANAGER" | "CURATOR" | "CHECKER" | "SENDER";
 
 /**
  * Quem vê o dashboard de indicadores. Espelho de `DASHBOARD_ROLES` em
  * back-end/app/core/auth.py — é o back-end que protege o dado; esta lista só
  * decide o que aparece na tela. Mude as duas juntas.
  */
-export const DASHBOARD_ROLES: UserRole[] = ["ADMIN", "VIEWER"];
+export const DASHBOARD_ROLES: UserRole[] = ["ADMIN", "MANAGER"];
 
 /**
  * Papéis que VEEM as telas do Menu Principal, mas não agem nelas: não enviam
  * documento nem aprovam/rejeitam. Aqui só se escondem os botões — quem barra a
  * escrita de verdade é o back-end (`require_checker` / `require_sender`).
  */
-export const READ_ONLY_ROLES: UserRole[] = ["VIEWER", "CURATOR"];
+export const READ_ONLY_ROLES: UserRole[] = ["CURATOR"];
 
 export interface PermissionsHook {
   user: any;

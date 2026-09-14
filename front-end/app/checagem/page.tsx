@@ -253,7 +253,7 @@ export default function Page() {
   }
 
   return (
-    <RequireRole allowedRoles={["ADMIN", "MANAGER", "CHECKER", "VIEWER", "CURATOR"]}>
+    <RequireRole allowedRoles={["ADMIN", "MANAGER", "CHECKER", "CURATOR"]}>
       <SidebarProvider>
         <AppSidebar />
         <SidebarInset className="bg-sidebar group/sidebar-inset">

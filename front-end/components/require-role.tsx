@@ -66,9 +66,6 @@ export function RequireRole({
     if (userRole === "CURATOR") {
       redirect("/admin/exames");
     }
-    if (userRole === "VIEWER") {
-      redirect("/dashboard");
-    }
     if (userRole === "CHECKER") {
       redirect("/checagem");
     }

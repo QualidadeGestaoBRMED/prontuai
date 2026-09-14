@@ -3,7 +3,7 @@ Endpoints de gerenciamento de usuários (ADMIN e MANAGER).
 
 MANAGER pode listar usuários e criar/editar só CHECKER e SENDER. Não ativa nem
 desativa ninguém (nem pelo DELETE, nem pelo PATCH de `is_active`) e não mexe em
-ADMIN, MANAGER, CURATOR ou VIEWER.
+ADMIN, MANAGER ou CURATOR.
 """
 from fastapi import APIRouter, HTTPException, status, Depends
 from typing import List
@@ -22,12 +22,11 @@ def _assert_manager_cannot_touch_admin(actor: User, target_role: UserRole | None
     """
     Impede escalada de privilégio: MANAGER só atribui roles CHECKER/SENDER.
 
-    CURATOR e VIEWER entram nesta lista porque o MANAGER não acessa nem o
-    catálogo de exames nem o dashboard — se pudesse atribuir esses papéis,
-    bastaria criar um usuário para contornar isso.
+    CURATOR entra nesta lista porque o MANAGER não acessa o catálogo de exames
+    — se pudesse atribuir o papel, bastaria criar um usuário para contornar isso.
     """
     if actor.role == UserRole.MANAGER and target_role in (
-        UserRole.ADMIN, UserRole.MANAGER, UserRole.CURATOR, UserRole.VIEWER
+        UserRole.ADMIN, UserRole.MANAGER, UserRole.CURATOR
     ):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -41,7 +40,7 @@ def _assert_manager_can_edit(actor: User, target_id: str, user_update: UserUpdat
 
     `_assert_manager_cannot_touch_admin` olha só o papel que está sendo
     atribuído; faltava olhar quem está sendo editado e o que muda. Sem isto um
-    MANAGER rebaixava outro MANAGER (ou um VIEWER/CURATOR) para SENDER e
+    MANAGER rebaixava outro MANAGER (ou um CURATOR) para SENDER e
     desativava ou reativava contas pelo PATCH — contornando o DELETE, que é só
     de ADMIN, e podendo devolver acesso a quem um ADMIN tinha tirado.
 
@@ -108,10 +107,9 @@ async def create_user(
 
             logger.info(f"Criando usuário SENDER {user_create.email} para clínica {clinic.name} ({clinic_id})")
 
-        # CHECKER, ADMIN, MANAGER, CURATOR e VIEWER não devem ter clinic_id
+        # CHECKER, ADMIN, MANAGER e CURATOR não devem ter clinic_id
         if user_create.role in [
             UserRole.CHECKER, UserRole.ADMIN, UserRole.MANAGER, UserRole.CURATOR,
-            UserRole.VIEWER,
         ]:
             clinic_id = None
 

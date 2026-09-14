@@ -19,8 +19,6 @@ export default function LoginPage() {
     const role = session?.user?.role;
     if (role === "CHECKER") {
       router.replace("/checagem");
-    } else if (role === "VIEWER") {
-      router.replace("/dashboard");
     } else if (role === "CURATOR") {
       router.replace("/admin/exames");
     } else {

@@ -220,7 +220,7 @@ function PendentesContent() {
 
 export default function PendentesPage() {
   return (
-    <RequireRole allowedRoles={["ADMIN", "MANAGER", "SENDER", "VIEWER", "CURATOR"]}>
+    <RequireRole allowedRoles={["ADMIN", "MANAGER", "SENDER", "CURATOR"]}>
       <Suspense fallback={null}>
         <PendentesContent />
       </Suspense>

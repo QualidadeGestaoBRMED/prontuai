@@ -43,7 +43,7 @@ interface DocumentDetailsModalChecagemProps {
   onAbrirPdfExterno?: () => void
   documentLoading?: boolean
   /**
-   * Papéis que acompanham a checagem sem decidir (VIEWER, CURATOR). Só esconde
+   * Papéis que acompanham a checagem sem decidir (hoje o CURATOR). Só esconde
    * os botões; o PATCH da decisão é barrado no back-end por `require_checker`.
    */
   somenteLeitura?: boolean

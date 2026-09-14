@@ -9,7 +9,6 @@ class UserRole(str, Enum):
     ADMIN = "ADMIN"      # Acesso total + gerenciar usuários
     MANAGER = "MANAGER"  # Gestor: igual ao ADMIN, exceto exclusões e operações de sistema
     CURATOR = "CURATOR"  # Curadoria do catálogo de exames + Menu Principal em somente leitura
-    VIEWER = "VIEWER"    # Visualizador: dashboard de indicadores + Menu Principal em somente leitura
     CHECKER = "CHECKER"  # Apenas checagem de exames
     SENDER = "SENDER"    # Apenas enviar documentos (pendentes)
 
@@ -19,7 +18,7 @@ class UserRole(str, Enum):
 # lugares (rota de documentos e duas consultas), e um papel novo precisava ser
 # lembrado em cada um — esquecer um deles fazia o papel cair no ramo do SENDER.
 GLOBAL_READ_ROLES = frozenset({
-    UserRole.ADMIN, UserRole.MANAGER, UserRole.CHECKER, UserRole.VIEWER, UserRole.CURATOR,
+    UserRole.ADMIN, UserRole.MANAGER, UserRole.CHECKER, UserRole.CURATOR,
 })
 
 

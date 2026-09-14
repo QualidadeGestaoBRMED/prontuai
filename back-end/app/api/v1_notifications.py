@@ -11,7 +11,7 @@ import time
 logger = logging.getLogger(__name__)
 
 # Papéis que decidem documentos e por isso avisam o autor do upload. Os demais
-# (SENDER, VIEWER, CURATOR) só criam notificação para si mesmos.
+# (SENDER e CURATOR) só criam notificação para si mesmos.
 _NOTIFICAM_AUTOR_DO_DOCUMENTO = (UserRole.ADMIN, UserRole.MANAGER, UserRole.CHECKER)
 
 
@@ -71,7 +71,7 @@ async def create_notification(
     try:
         clinic_id = payload.clinic_id
         # O destinatário NUNCA vem do payload. `user_id`/`user_email` deixavam
-        # qualquer papel — inclusive VIEWER e CURATOR, que são só leitura —
+        # qualquer papel — inclusive o CURATOR, que é só leitura —
         # entregar título e mensagem livres a qualquer usuário (phishing interno).
         # O front nunca usou esses campos: quem recebe sai do documento ou é o
         # próprio autor da chamada.

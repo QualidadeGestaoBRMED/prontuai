@@ -60,9 +60,9 @@ def carregar(monkeypatch, banco, modulo):
 MANAGER = usuario("gestor", UserRole.MANAGER)
 
 
-@pytest.mark.parametrize("papel_alvo", [UserRole.ADMIN, UserRole.MANAGER, UserRole.CURATOR, UserRole.VIEWER])
+@pytest.mark.parametrize("papel_alvo", [UserRole.ADMIN, UserRole.MANAGER, UserRole.CURATOR])
 def test_manager_nao_edita_papeis_fora_de_checker_e_sender(monkeypatch, papel_alvo):
-    """Antes: MANAGER rebaixava outro MANAGER (ou VIEWER/CURATOR) para SENDER."""
+    """Antes: MANAGER rebaixava outro MANAGER (ou um CURATOR) para SENDER."""
     users = carregar(monkeypatch, BancoFalso([usuario("alvo", papel_alvo)]), "app.api.v1.users")
     with pytest.raises(HTTPException) as exc:
         users._assert_manager_can_edit(MANAGER, "alvo", UserUpdate(role=UserRole.SENDER))
@@ -101,9 +101,9 @@ def criar(notif, payload, quem):
     return asyncio.run(notif.create_notification(payload=payload, current_user=quem))
 
 
-@pytest.mark.parametrize("papel", [UserRole.VIEWER, UserRole.CURATOR, UserRole.CHECKER, UserRole.ADMIN])
+@pytest.mark.parametrize("papel", [UserRole.CURATOR, UserRole.CHECKER, UserRole.ADMIN])
 def test_destinatario_nunca_vem_do_payload(monkeypatch, papel):
-    """Antes: qualquer papel (até VIEWER, que é só leitura) mirava qualquer usuário."""
+    """Antes: qualquer papel (até o CURATOR, que é só leitura) mirava qualquer usuário."""
     banco = BancoFalso()
     notif = carregar(monkeypatch, banco, "app.api.v1_notifications")
     quem = usuario("quem", papel)
@@ -121,7 +121,7 @@ def test_checker_avisa_autor_pelo_documento(monkeypatch):
     assert banco.criadas[-1].user_id == "autor"
 
 
-@pytest.mark.parametrize("papel", [UserRole.VIEWER, UserRole.CURATOR])
+@pytest.mark.parametrize("papel", [UserRole.CURATOR])
 def test_somente_leitura_nao_avisa_autor_pelo_documento(monkeypatch, papel):
     banco = BancoFalso(documentos=[DOC])
     notif = carregar(monkeypatch, banco, "app.api.v1_notifications")
