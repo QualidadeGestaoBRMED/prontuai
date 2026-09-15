@@ -1102,6 +1102,7 @@ class PostgresUserDatabase:
             quality_score=model.quality_score,
             mandatory_coverage=model.mandatory_coverage,
             archived_at=_as_utc(getattr(model, "archived_at", None)),
+            storage_filename=(getattr(model, "file_path", None) or "").rsplit("/", 1)[-1] or None,
             created_at=_as_utc(model.created_at),
             updated_at=_as_utc(model.updated_at)
         )

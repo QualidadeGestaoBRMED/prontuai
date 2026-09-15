@@ -39,6 +39,13 @@ class Document(BaseModel):
     # disco. Serve para a UI avisar que a recuperação é manual, em vez de
     # mostrar erro genérico.
     archived_at: Optional[datetime] = None
+    # Nome do arquivo como ele existe no armazenamento (e, portanto, no Drive):
+    # "<uuid-do-upload>_<nome-sanitizado>.pdf". É o que Qualidade e Gestão
+    # precisa para localizar o PDF no arquivo morto — o `id` do documento NÃO
+    # serve, porque o prefixo do arquivo é o job_id gerado no upload, não ele.
+    # Só o basename: o caminho completo continua fora da resposta (file_path
+    # tem exclude=True) para não expor a árvore de diretórios do servidor.
+    storage_filename: Optional[str] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 

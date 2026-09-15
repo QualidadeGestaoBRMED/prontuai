@@ -94,6 +94,11 @@ export const documentToProcessResult = (doc: DocumentApi): ProcessResult => {
     examesExtras,
     result: normalizedPayload,
     submittedBy: doc.uploaded_by_user_email || "-",
+    // Sem toDate aqui de propósito: ele devolve a data de HOJE quando o valor
+    // é nulo (é o comportamento que os outros campos querem), e isso faria
+    // todo documento não arquivado parecer arquivado.
+    archivedAt: doc.archived_at ? toDate(doc.archived_at) : undefined,
+    storageFilename: doc.storage_filename || undefined,
     reviewedBy: payload.reviewed_by || doc.reviewed_by || undefined,
     reviewedAt: payload.reviewed_at
       ? toDate(payload.reviewed_at)

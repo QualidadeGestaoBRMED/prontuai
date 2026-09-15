@@ -154,6 +154,23 @@ export function DocumentDetailsModal({
                 <p className="text-sm text-muted-foreground">Enviado por</p>
                 <p className="text-sm">{result.submittedBy}</p>
               </div>
+              {result.archivedAt && (
+                <div className="col-span-2 rounded-md border border-amber-200 bg-amber-50 p-3">
+                  <p className="text-sm font-medium text-amber-900">
+                    Arquivado no Drive em{" "}
+                    {format(result.archivedAt, "dd/MM/yyyy", { locale: ptBR })}
+                  </p>
+                  <p className="mt-1 text-xs text-amber-800">
+                    O PDF não está mais no servidor. Para recuperá-lo, peça ao setor de
+                    Qualidade e Gestão o arquivo abaixo:
+                  </p>
+                  {result.storageFilename && (
+                    <p className="mt-2 break-all rounded bg-white/70 px-2 py-1 font-mono text-xs text-amber-900">
+                      {result.storageFilename}
+                    </p>
+                  )}
+                </div>
+              )}
               {result.reviewedBy && (
                 <div>
                   <p className="text-sm text-muted-foreground">Revisado por</p>

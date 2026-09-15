@@ -65,6 +65,44 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib.sh
 source "$SCRIPT_DIR/lib.sh"
 
+DB_DEPLOY_DIR="${DB_DEPLOY_DIR:-/home/ec2-user/prontuai-db}"
+
+# Carrega o .env do banco SEM sobrescrever o que ja veio do ambiente.
+#
+# Duas regras, e as duas ja custaram caro:
+#
+# 1. Tem que rodar ANTES de resolver REMOTE, DIAS, GATE etc. Com o `.` do
+#    arquivo la embaixo, junto do POSTGRES_USER, uma ARCHIVE_RCLONE_REMOTE
+#    definida so no .env fazia o script morrer em "nao definida" na execucao
+#    manual. O systemd nao denunciava: o unit carrega o mesmo arquivo por
+#    EnvironmentFile, entao pelo timer a variavel ja chegava pelo ambiente.
+#
+# 2. So preenche o que esta vazio. Um `set -a; . .env` sobrescreve o ambiente,
+#    e entao um ARCHIVE_GATE gravado no .env venceria o
+#    `ARCHIVE_GATE=aprovado ./script.sh` de quem esta rodando. Num script que
+#    apaga prontuario, a intencao de quem digitou o comando tem que vencer.
+carregar_env_do_banco() {
+  local arquivo="$1" linha nome valor
+  [ -f "$arquivo" ] || return 0
+  while IFS= read -r linha || [ -n "$linha" ]; do
+    linha="${linha#"${linha%%[![:space:]]*}"}"          # tira espaco a esquerda
+    case "$linha" in ''|'#'*) continue ;; esac          # vazia ou comentario
+    linha="${linha#export }"
+    case "$linha" in *=*) ;; *) continue ;; esac
+    nome="${linha%%=*}"
+    case "$nome" in ''|*[!A-Za-z0-9_]*) continue ;; esac
+    if [ -n "${!nome:-}" ]; then continue; fi           # ambiente vence
+    valor="${linha#*=}"
+    valor="${valor%"${valor##*[![:space:]]}"}"          # tira espaco a direita
+    case "$valor" in
+      \"*\") valor="${valor#\"}"; valor="${valor%\"}" ;;
+      \'*\') valor="${valor#\'}"; valor="${valor%\'}" ;;
+    esac
+    export "$nome=$valor"
+  done < "$arquivo"
+}
+carregar_env_do_banco "$DB_DEPLOY_DIR/.env"
+
 SRC="${ARCHIVE_SOURCE_DIR:-/home/ec2-user/prontuai/data/uploads}"
 REMOTE="${ARCHIVE_RCLONE_REMOTE:-}"
 DIAS="${ARCHIVE_AFTER_DAYS:-20}"
@@ -81,7 +119,6 @@ LOTE="${ARCHIVE_BATCH:-200}"
 MAX_FILES="${ARCHIVE_MAX_FILES:-0}"
 WORK="${ARCHIVE_WORK_DIR:-$(dirname "$SRC")/arquivo-tmp}"
 DRY_RUN="${ARCHIVE_DRY_RUN:-false}"
-DB_DEPLOY_DIR="${DB_DEPLOY_DIR:-/home/ec2-user/prontuai-db}"
 # Container do Postgres consultado pelo portao e onde archived_at e gravado.
 #
 # Configuravel porque o banco de staging se chama `prontuai-db-stg` (ver
@@ -115,11 +152,6 @@ track_job "arquivamento-drive"
 # uma execucao nao tem consequencia, ao contrario de perder um backup.
 db_maintenance_lock "${DB_LOCK_WAIT:-1800}" skip
 
-if [ -z "${POSTGRES_USER:-}" ] && [ -f "$DB_DEPLOY_DIR/.env" ]; then
-  set -a
-  . "$DB_DEPLOY_DIR/.env"
-  set +a
-fi
 POSTGRES_USER="${POSTGRES_USER:?POSTGRES_USER is required (defina no ambiente ou em $DB_DEPLOY_DIR/.env)}"
 POSTGRES_DB="${POSTGRES_DB:-prontuai}"
 

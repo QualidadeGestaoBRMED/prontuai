@@ -21,6 +21,8 @@ export type DocumentApi = {
   confidence_score?: number | null
   quality_score?: number | null
   mandatory_coverage?: number | null
+  archived_at?: string | null
+  storage_filename?: string | null
   created_at?: string | null
   updated_at?: string | null
 }

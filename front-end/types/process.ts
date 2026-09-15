@@ -84,6 +84,12 @@ export interface ProcessResult {
   submittedBy: string  // Email do usuário (vem do NextAuth)
   reviewedBy?: string
   reviewedAt?: Date
+  // Quando o PDF saiu do disco para o arquivo morto no Drive.
+  archivedAt?: Date
+  // Nome do arquivo no Drive. É por ele que se recupera um documento
+  // arquivado — o `id` acima não serve, porque o prefixo do arquivo é o
+  // job_id do upload, e não o id do documento.
+  storageFilename?: string
 }
 
 // Estrutura de resposta do backend (da API existente)
