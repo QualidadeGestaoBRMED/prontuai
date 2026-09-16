@@ -139,6 +139,16 @@ try:
         description="Tempo ativo de revisão humana, da abertura da tela à decisão",
     )
 
+    # Parecer humano sobre o acerto da IA, coletado no modal do fim da checagem.
+    # É opcional, então o denominador NÃO é o REVISAO_HUMANA: a razão entre os
+    # dois mede adesão ao formulário, não acurácia. A categoria vai como
+    # atributo (bounded pela lista de `app/models/feedback.py`); `notes` é texto
+    # livre com PII em potencial e nunca vira atributo.
+    FEEDBACK_CHECAGEM = _meter.create_counter(
+        "prontuai_feedback_checagem",
+        description="Pareceres do revisor sobre o resultado da IA (correto | correto com ajustes | incorreto)",
+    )
+
     DOCUMENTOS_ENVIADOS = _meter.create_counter(
         "prontuai_documentos_enviados",
         description="Documentos recebidos no upload, antes do processamento (workflow pode falhar depois)",
@@ -177,6 +187,7 @@ except ImportError:  # pragma: no cover - ambiente sem opentelemetry-api
     VALIDACAO_DOCUMENTOS = _NoopInstrument()
     REVISAO_HUMANA = _NoopInstrument()
     REVISAO_DURACAO = _NoopInstrument()
+    FEEDBACK_CHECAGEM = _NoopInstrument()
     DOCUMENTOS_ENVIADOS = _NoopInstrument()
     CLINICAS_CRIADAS = _NoopInstrument()
     USUARIOS_CRIADOS = _NoopInstrument()

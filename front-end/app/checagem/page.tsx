@@ -14,6 +14,7 @@ import { useSession } from "next-auth/react"
 import { ProcessResult } from "@/types/process"
 import { lerDocumentoArquivado, mensagemDocumentoArquivado } from "@/lib/document-archive"
 import { DocumentDetailsModalChecagem } from "@/components/document-details-modal-checagem"
+import { FeedbackChecagemDialog, type FeedbackAlvo } from "@/components/feedback-checagem-dialog"
 import { RequireRole } from "@/components/require-role"
 import { useDocumentsPaged } from "@/hooks/use-documents-paged"
 import { useReviewTimer } from "@/hooks/use-review-timer"
@@ -29,6 +30,10 @@ export default function Page() {
   const [selectedResult, setSelectedResult] = useState<ProcessResult | null>(null)
   const [documentPreviewUrl, setDocumentPreviewUrl] = useState<string | null>(null)
   const [documentPreviewLoading, setDocumentPreviewLoading] = useState(false)
+  // Parecer sobre o acerto da IA, aberto pela decisão. Vive aqui, e não dentro
+  // do modal de detalhes, porque quem decide é este componente: o modal só
+  // dispara handleAprovar/handleRejeitar e se fecha.
+  const [feedbackAlvo, setFeedbackAlvo] = useState<FeedbackAlvo | null>(null)
   const { updateProcessResultStatus, addNotification, unreadCount, activeProcess, setNotificationCenterOpen } =
     useNotifications()
   const {
@@ -139,6 +144,38 @@ export default function Page() {
     }
   }
 
+  // Chamado no fim das duas decisões, sempre depois do reviewTimer.encerrar():
+  // o tempo gasto respondendo o parecer não entra na métrica de revisão.
+  //
+  // Recebe o `result` por parâmetro em vez de refazer o find em dbResults:
+  // quando o filtro da tela é "pendente", o documento recém-decidido já saiu da
+  // lista no refresh anterior e a busca voltaria vazia.
+  //
+  // Dele saem o nome do paciente e a tabela de comparação — é ela que vira a
+  // lista de exames em que o revisor aponta cada motivo, a mesma que ele acabou
+  // de conferir no modal de detalhes. Vazia quando o processamento não gerou
+  // comparação; aí o modal cai só no campo de digitar.
+  //
+  // Vale para as duas decisões: aprovar e rejeitar encerram a checagem do mesmo
+  // jeito, e o parecer é sobre o acerto da IA, não sobre o veredito.
+  //
+  // `decisao` vem indefinida quando a entrada é o botão "Avaliar IA" de um
+  // documento já decidido: ali o texto do cabeçalho não fala da decisão, porque
+  // ela pode ter sido tomada dias atrás, por outra pessoa.
+  const abrirFeedback = (
+    id: string,
+    decisao: "aprovado" | "rejeitado" | undefined,
+    result?: ProcessResult,
+  ) => {
+    if (isReadOnly) return
+    setFeedbackAlvo({
+      documentId: id,
+      paciente: result?.patientName,
+      decisao,
+      exames: result?.result?.tabela_comparacao ?? [],
+    })
+  }
+
   const handleAprovar = async (id: string, approvalReason: string) => {
     const reviewTiming = reviewTimer.encerrar(id)
     const result = dbResults.find((r) => r.id === id)
@@ -191,6 +228,7 @@ export default function Page() {
     }
 
     toast.success("Documento aprovado")
+    abrirFeedback(id, "aprovado", result)
   }
 
   const handleRejeitar = async (id: string, motivo: string) => {
@@ -238,6 +276,7 @@ export default function Page() {
     }
 
     toast.error("Documento rejeitado")
+    abrirFeedback(id, "rejeitado", result)
   }
 
   const handleViewDetails = (id: string) => {
@@ -385,10 +424,14 @@ export default function Page() {
           onAbrirPdfExterno={
             selectedResult ? () => reviewTimer.registrarPdfExterno(selectedResult.id) : undefined
           }
+          onAvaliarIA={
+            selectedResult ? () => abrirFeedback(selectedResult.id, undefined, selectedResult) : undefined
+          }
           somenteLeitura={isReadOnly}
           documentUrl={documentPreviewUrl}
           documentLoading={documentPreviewLoading}
         />
+        <FeedbackChecagemDialog alvo={feedbackAlvo} onClose={() => setFeedbackAlvo(null)} />
       </SidebarProvider>
     </RequireRole>
   )

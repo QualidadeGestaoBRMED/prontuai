@@ -2,7 +2,7 @@
 
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
-import { CheckIcon, XIcon, Download, Loader2 } from "lucide-react"
+import { CheckIcon, XIcon, Download, Loader2, MessageSquareIcon } from "lucide-react"
 import { useState } from "react"
 import {
   Dialog,
@@ -43,6 +43,13 @@ interface DocumentDetailsModalChecagemProps {
   onAbrirPdfExterno?: () => void
   documentLoading?: boolean
   /**
+   * Abre o parecer sobre o acerto da IA de um documento JÁ decidido. Documento
+   * pendente não recebe o botão: ali o parecer entra sozinho, logo depois da
+   * decisão. Aqui é a segunda chance — para quem pulou na hora, ou mudou de
+   * ideia depois de ver o documento de novo.
+   */
+  onAvaliarIA?: () => void
+  /**
    * Papéis que acompanham a checagem sem decidir (hoje o CURATOR). Só esconde
    * os botões; o PATCH da decisão é barrado no back-end por `require_checker`.
    */
@@ -59,6 +66,7 @@ export function DocumentDetailsModalChecagem({
   documentUrl,
   onAbrirPdfExterno,
   documentLoading,
+  onAvaliarIA,
   somenteLeitura = false,
 }: DocumentDetailsModalChecagemProps) {
   const [motivo, setMotivo] = useState("")
@@ -568,6 +576,21 @@ export function DocumentDetailsModalChecagem({
                 <span className="self-center text-sm text-muted-foreground">
                   Somente leitura
                 </span>
+              )}
+              {!isPending && !somenteLeitura && onAvaliarIA && (
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    // Fecha este modal antes de abrir o de parecer: dois Dialogs
+                    // empilhados brigam pelo foco.
+                    onOpenChange(false)
+                    onAvaliarIA()
+                  }}
+                  className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                >
+                  <MessageSquareIcon className="size-4 mr-2" />
+                  Avaliar IA
+                </Button>
               )}
               {isPending && !somenteLeitura && (
                 <>

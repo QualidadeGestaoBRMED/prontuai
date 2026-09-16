@@ -90,6 +90,16 @@ def check_if_migration_needed() -> tuple[bool, list[str]]:
             logger.warning("⚠️  Migration 007 necessária: coluna archived_at não existe")
             migrations_needed.append("007_add_archived_at.sql")
 
+        # Verificar migration 008: tabela de feedback da checagem
+        cursor.execute("""
+            SELECT table_name
+            FROM information_schema.tables
+            WHERE table_name='document_feedbacks'
+        """)
+        if not cursor.fetchone():
+            logger.warning("⚠️  Migration 008 necessária: tabela document_feedbacks não existe")
+            migrations_needed.append("008_add_document_feedback.sql")
+
         cursor.close()
         conn.close()
 

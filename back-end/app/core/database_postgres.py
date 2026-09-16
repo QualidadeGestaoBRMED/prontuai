@@ -17,6 +17,7 @@ from sqlalchemy.orm import sessionmaker, Session, defer
 from app.models.user import User, UserCreate, UserUpdate, UserRole, GLOBAL_READ_ROLES
 from app.models.clinic import Clinic, ClinicCreate, ClinicUpdate
 from app.models.document import Document, DocumentCreate, DocumentUpdate
+from app.models.feedback import DocumentFeedback
 from app.models.notification import Notification, NotificationCreate, NotificationUpdate
 from app.models.audit_log import AuditLog, AuditLogCreate
 from app.models.exam import (
@@ -42,6 +43,7 @@ from app.core.db.models import (
     ExamParentModel,
     ExamVariationModel,
     ExamVariationConflictModel,
+    DocumentFeedbackModel,
 )
 
 logger = logging.getLogger(__name__)
@@ -1610,6 +1612,107 @@ class PostgresUserDatabase:
                 query = query.filter(DocumentModel.clinic_id == clinic_id)
             model = query.order_by(DocumentModel.uploaded_at.desc()).first()
             return self._model_to_document(model, include_ocr_markdown=False, use_compact_payload=True) if model else None
+        finally:
+            session.close()
+
+    # ------------------------------------------------------------------
+    # Feedback da checagem (parecer humano sobre o acerto da IA)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _model_to_document_feedback(model: DocumentFeedbackModel) -> DocumentFeedback:
+        return DocumentFeedback(
+            id=model.id,
+            document_id=model.document_id,
+            status=model.status,
+            issue_categories=list(model.issue_categories or []),
+            issue_items=list(model.issue_items or []),
+            document_issues=list(model.document_issues or []),
+            notes=model.notes,
+            reviewed_by_email=model.reviewed_by_email,
+            reviewed_by_id=model.reviewed_by_id,
+            created_at=model.created_at,
+            updated_at=model.updated_at,
+        )
+
+    def get_document_feedback(self, document_id: str) -> Optional[DocumentFeedback]:
+        """Parecer do documento, ou None quando ele nunca foi avaliado."""
+        session = self._get_session()
+        try:
+            model = (
+                session.query(DocumentFeedbackModel)
+                .filter(DocumentFeedbackModel.document_id == document_id)
+                .first()
+            )
+            return self._model_to_document_feedback(model) if model else None
+        finally:
+            session.close()
+
+    def upsert_document_feedback(
+        self,
+        document_id: str,
+        status: str,
+        issue_categories: List[str],
+        issue_items: List[dict],
+        document_issues: List[str],
+        notes: Optional[str],
+        reviewed_by_id: Optional[str] = None,
+        reviewed_by_email: Optional[str] = None,
+    ) -> DocumentFeedback:
+        """
+        Cria ou substitui o parecer do documento.
+
+        Substitui por inteiro, não faz merge: reavaliar é reescrever a resposta,
+        e um merge deixaria categoria de uma versão antiga grudada num parecer
+        que já mudou de status. `created_at` é preservado — o `updated_at` é que
+        conta a reavaliação, e o par dos dois diz se houve mudança de opinião.
+
+        É um SELECT seguido de INSERT, então dois pareceres simultâneos no mesmo
+        documento podem passar os dois pelo SELECT e colidir no unique de
+        `document_id`. Hoje isso não acontece (a app roda com WORKERS=1 e o
+        handler é síncrono), mas a proteção é barata: o segundo escritor cai no
+        IntegrityError, relê a linha que o primeiro criou e atualiza. Sem ela, o
+        dia em que alguém subir um segundo worker vira 500 na cara do revisor.
+        """
+        import uuid
+
+        from sqlalchemy.exc import IntegrityError
+
+        def _gravar(session: Session, criar_se_faltar: bool) -> DocumentFeedbackModel:
+            model = (
+                session.query(DocumentFeedbackModel)
+                .filter(DocumentFeedbackModel.document_id == document_id)
+                .first()
+            )
+            if model is None:
+                if not criar_se_faltar:
+                    raise RuntimeError(
+                        f"Parecer de {document_id} sumiu entre a colisão e o retry."
+                    )
+                model = DocumentFeedbackModel(id=str(uuid.uuid4()), document_id=document_id)
+                session.add(model)
+            model.status = status
+            model.issue_categories = list(issue_categories or [])
+            model.issue_items = list(issue_items or [])
+            model.document_issues = list(document_issues or [])
+            model.notes = notes
+            model.reviewed_by_id = reviewed_by_id
+            model.reviewed_by_email = reviewed_by_email
+            session.commit()
+            session.refresh(model)
+            return model
+
+        session = self._get_session()
+        try:
+            try:
+                return self._model_to_document_feedback(_gravar(session, True))
+            except IntegrityError:
+                # Outro escritor criou a linha entre o nosso SELECT e o INSERT.
+                session.rollback()
+                return self._model_to_document_feedback(_gravar(session, False))
+        except Exception:
+            session.rollback()
+            raise
         finally:
             session.close()
 
