@@ -259,6 +259,30 @@ export function FeedbackChecagemDialog({ alvo, onClose }: Props) {
         (apontouAlgo && semExame.length === 0 && notas.trim().length > 0)),
   );
 
+  /**
+   * O que falta para poder enviar, na ordem em que aparece no formulário.
+   *
+   * Existe porque o botão desabilitado não explica nada: no teste em tela, um
+   * motivo aceso sem exame escolhido deixava o revisor diante de um botão cinza
+   * e um rodapé dizendo "leva menos de um minuto", sem pista do que fazer. A
+   * mensagem de `enviar()` nunca aparecia — botão desabilitado não dispara
+   * clique.
+   */
+  const pendencia = (() => {
+    if (!precisaDetalhes || formularioValido) return null;
+    // O motivo aceso e vazio vem ANTES do "marque o que a IA errou": com um chip
+    // aceso, o revisor já marcou — pedir que marque de novo mandaria ele olhar
+    // para o lugar errado da tela.
+    if (semExame.length > 0) {
+      const rotulos = semExame
+        .map((c) => CATEGORIAS_EXAME.find((x) => x.valor === c)?.rotulo ?? c)
+        .join(", ");
+      return `Escolha ao menos um exame para: ${rotulos}.`;
+    }
+    if (!apontouAlgo) return "Marque o que a IA errou — em algum exame ou no documento.";
+    return "Descreva o que aconteceu.";
+  })();
+
   async function enviar() {
     if (!alvo || !status || !formularioValido) {
       setErro(
@@ -521,8 +545,15 @@ export function FeedbackChecagemDialog({ alvo, onClose }: Props) {
         )}
 
         <DialogFooter className="sm:justify-between">
-          <p className="text-xs text-muted-foreground">
-            {apontouAlgo
+          <p
+            className={cn(
+              "text-xs",
+              pendencia ? "text-amber-700" : "text-muted-foreground",
+            )}
+          >
+            {pendencia
+              ? pendencia
+              : apontouAlgo
               ? [
                   itens.length > 0 &&
                     `${itens.length} ${itens.length === 1 ? "exame" : "exames"}`,
