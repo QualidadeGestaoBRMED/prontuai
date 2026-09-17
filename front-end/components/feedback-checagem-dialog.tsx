@@ -33,19 +33,38 @@ import {
 export type FeedbackAlvo = {
   documentId: string;
   paciente?: string;
+  cpf?: string;
   /**
-   * Preenchida quando o modal veio logo depois da decisão. Indefinida quando
-   * veio do botão "Avaliar IA" de um documento já decidido — nesse caso a
-   * decisão pode ser antiga, e de outra pessoa, então não se fala dela.
+   * "decisao": o diálogo veio de Aprovar/Rejeitar e a decisão AINDA NÃO foi
+   * tomada — ele confirma a decisão e, de quebra, coleta o parecer.
+   * "avaliacao": veio do botão "Avaliar IA" de um documento já decidido; aqui
+   * só se coleta o parecer.
    */
+  modo: "decisao" | "avaliacao";
+  /** No modo "decisao", qual decisão está sendo confirmada. */
   decisao?: "aprovado" | "rejeitado";
   /** Tabela de comparação do documento — a mesma que o revisor acabou de conferir. */
   exames: TabelaComparacaoItem[];
 };
 
+/** O que sai do diálogo quando ele confirma uma decisão. */
+export type DecisaoConfirmada = {
+  /** Motivo da rejeição. Vazio numa aprovação: aprovar não pede justificativa. */
+  justificativa: string;
+  /** Parecer sobre a IA, ou null quando o revisor optou por não avaliar. */
+  parecer: DocumentFeedbackInput | null;
+};
+
 type Props = {
   alvo: FeedbackAlvo | null;
   onClose: () => void;
+  /**
+   * Só no modo "decisao". Grava a decisão e, se houver, o parecer — nesta
+   * ordem, porque o back-end recusa parecer de documento sem decisão humana
+   * (409). Deve lançar em caso de falha: o diálogo fica aberto com tudo
+   * preenchido, para o revisor não perder o que digitou.
+   */
+  onConfirmarDecisao?: (dados: DecisaoConfirmada) => Promise<void>;
 };
 
 /** Exames marcados e exames digitados, por categoria. */
@@ -81,13 +100,14 @@ const ORDEM_VEREDITO: Record<string, number> = {
  * Abre depois de `reviewTimer.encerrar()`, então o tempo gasto respondendo não
  * entra na métrica de tempo de revisão (ver docs/tempo-de-revisao-desenho.md).
  */
-export function FeedbackChecagemDialog({ alvo, onClose }: Props) {
+export function FeedbackChecagemDialog({ alvo, onClose, onConfirmarDecisao }: Props) {
   const [status, setStatus] = useState<FeedbackStatus | "">("");
   const [categorias, setCategorias] = useState<string[]>([]);
   const [selecao, setSelecao] = useState<Selecao>({});
   const [rascunhos, setRascunhos] = useState<Record<string, string>>({});
   const [problemasDoc, setProblemasDoc] = useState<string[]>([]);
   const [notas, setNotas] = useState("");
+  const [justificativa, setJustificativa] = useState("");
   const [carregando, setCarregando] = useState(false);
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
@@ -106,8 +126,12 @@ export function FeedbackChecagemDialog({ alvo, onClose }: Props) {
     setRascunhos({});
     setProblemasDoc([]);
     setNotas("");
+    setJustificativa("");
     setErro(null);
     setExistente(null);
+    // No modo "decisao" o documento ainda nem foi decidido: não existe parecer
+    // anterior para buscar, e o GET só atrasaria a abertura.
+    if (alvo.modo === "decisao") return;
     setCarregando(true);
     authFetch(API_ENDPOINTS.DOCUMENT_FEEDBACK(alvo.documentId))
       .then((r) => (r.ok ? r.json() : null))
@@ -253,11 +277,24 @@ export function FeedbackChecagemDialog({ alvo, onClose }: Props) {
   // Um problema de documento sozinho já basta: nome corrompido é erro real da IA
   // e não tem exame a que amarrar.
   const apontouAlgo = itens.length > 0 || problemasDoc.length > 0;
-  const formularioValido = Boolean(
+  const parecerValido = Boolean(
     status &&
       (!precisaDetalhes ||
         (apontouAlgo && semExame.length === 0 && notas.trim().length > 0)),
   );
+
+  const modoDecisao = alvo?.modo === "decisao";
+  const rejeitando = alvo?.decisao === "rejeitado";
+  // Só a rejeição pede texto, e ele é obrigatório: é o que o remetente lê na
+  // notificação para saber o que corrigir. Aprovar não pede nada — quando há o
+  // que dizer sobre o acerto da IA, o lugar disso é o parecer abaixo.
+  const decisaoValida = !modoDecisao || !rejeitando || justificativa.trim().length > 0;
+  // No modo decisão o parecer é opcional: sem status escolhido, aprova/rejeita
+  // e pronto. Mas começar a preencher e parar no meio não passa — seria enviar
+  // motivo sem exame, que é o que o formato existe para impedir.
+  const parecerPendente = modoDecisao ? Boolean(status) && !parecerValido : !parecerValido;
+  const podeEnviar = modoDecisao ? decisaoValida && !parecerPendente : parecerValido;
+  const formularioValido = podeEnviar;
 
   /**
    * O que falta para poder enviar, na ordem em que aparece no formulário.
@@ -269,7 +306,8 @@ export function FeedbackChecagemDialog({ alvo, onClose }: Props) {
    * clique.
    */
   const pendencia = (() => {
-    if (!precisaDetalhes || formularioValido) return null;
+    if (modoDecisao && !decisaoValida) return "Informe o motivo da rejeição.";
+    if (!precisaDetalhes || parecerValido) return null;
     // O motivo aceso e vazio vem ANTES do "marque o que a IA errou": com um chip
     // aceso, o revisor já marcou — pedir que marque de novo mandaria ele olhar
     // para o lugar errado da tela.
@@ -282,6 +320,37 @@ export function FeedbackChecagemDialog({ alvo, onClose }: Props) {
     if (!apontouAlgo) return "Marque o que a IA errou — em algum exame ou no documento.";
     return "Descreva o que aconteceu.";
   })();
+
+  function montarParecer(): DocumentFeedbackInput | null {
+    if (!status) return null;
+    return {
+      status,
+      issue_items: precisaDetalhes ? itens : [],
+      document_issues: precisaDetalhes ? problemasDoc : [],
+      notes: precisaDetalhes ? notas.trim() : null,
+    };
+  }
+
+  async function confirmarDecisao() {
+    if (!alvo || !onConfirmarDecisao || !podeEnviar) return;
+    setSalvando(true);
+    setErro(null);
+    try {
+      // Não chama onClose(): depois de decidir, quem fecha (e fecha também o
+      // modal de detalhes atrás) é a página. Fechar por aqui passaria pelo
+      // caminho de cancelamento, que religa o cronômetro de revisão e deixaria
+      // um acumulador órfão tiquetaqueando num documento já decidido.
+      await onConfirmarDecisao({
+        justificativa: justificativa.trim(),
+        parecer: montarParecer(),
+      });
+    } catch (e) {
+      // A página não gravou: o diálogo fica aberto com tudo preenchido.
+      setErro(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSalvando(false);
+    }
+  }
 
   async function enviar() {
     if (!alvo || !status || !formularioValido) {
@@ -330,20 +399,72 @@ export function FeedbackChecagemDialog({ alvo, onClose }: Props) {
     <Dialog open={!!alvo} onOpenChange={(aberto) => !aberto && !salvando && onClose()}>
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Como foi o resultado da IA?</DialogTitle>
+          <DialogTitle>
+            {modoDecisao
+              ? rejeitando
+                ? "Rejeitar documento"
+                : "Confirmar aprovação"
+              : "Como foi o resultado da IA?"}
+          </DialogTitle>
           <DialogDescription>
-            Documento
-            {alvo?.paciente ? (
+            {modoDecisao ? (
               <>
-                {" de "}
-                <strong>{alvo.paciente}</strong>
+                {rejeitando ? "Rejeitando" : "Aprovando"} o documento
+                {alvo?.paciente ? (
+                  <>
+                    {" de "}
+                    <strong>{alvo.paciente}</strong>
+                  </>
+                ) : null}
+                {alvo?.cpf ? ` (CPF: ${alvo.cpf})` : ""}.
               </>
-            ) : null}
-            {alvo?.decisao ? ` ${alvo.decisao}.` : "."} Esta resposta é opcional e não
-            muda a decisão registrada — ela alimenta a medição de acurácia e a correção
-            do motor de comparação.
+            ) : (
+              <>
+                Documento
+                {alvo?.paciente ? (
+                  <>
+                    {" de "}
+                    <strong>{alvo.paciente}</strong>
+                  </>
+                ) : null}
+                . Esta resposta é opcional e não muda a decisão registrada — ela
+                alimenta a medição de acurácia e a correção do motor de comparação.
+              </>
+            )}
           </DialogDescription>
         </DialogHeader>
+
+        {modoDecisao && rejeitando && (
+          <label className="block">
+            <span className="text-xs font-semibold uppercase tracking-[.08em] text-muted-foreground">
+              Motivo da rejeição <span className="text-red-600">*</span>
+            </span>
+            <Textarea
+              value={justificativa}
+              onChange={(e) => {
+                setJustificativa(e.target.value);
+                setErro(null);
+              }}
+              rows={2}
+              maxLength={2000}
+              placeholder="Ex.: documento ilegível, exames faltantes."
+              className="mt-2"
+            />
+          </label>
+        )}
+
+        {modoDecisao && (
+          <div className="border-t pt-3">
+            <p className="text-sm font-medium text-foreground">
+              Como foi o resultado da IA?{" "}
+              <span className="font-normal text-muted-foreground">— opcional</span>
+            </p>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              Não muda a decisão acima. Alimenta a medição de acurácia e a correção do
+              motor de comparação.
+            </p>
+          </div>
+        )}
 
         {carregando && (
           <p className="flex items-center gap-2 py-2 text-sm text-muted-foreground">
@@ -564,15 +685,34 @@ export function FeedbackChecagemDialog({ alvo, onClose }: Props) {
                   .join(" · ")
               : existente
                 ? `Já avaliado por ${existente.reviewed_by_email ?? "outro revisor"}.`
-                : "Responder leva menos de um minuto — e é opcional."}
+                : modoDecisao
+                  ? "Pode seguir sem avaliar: o parecer é opcional."
+                  : "Responder leva menos de um minuto — e é opcional."}
           </p>
           <div className="flex gap-2">
             <Button variant="ghost" onClick={onClose} disabled={salvando}>
-              Agora não
+              {modoDecisao ? "Cancelar" : "Agora não"}
             </Button>
-            <Button onClick={enviar} disabled={salvando || carregando || !formularioValido}>
+            <Button
+              onClick={modoDecisao ? confirmarDecisao : enviar}
+              disabled={salvando || carregando || !podeEnviar}
+              className={
+                modoDecisao && !rejeitando ? "bg-green-600 hover:bg-green-700" : undefined
+              }
+              variant={modoDecisao && rejeitando ? "destructive" : "default"}
+            >
               {salvando && <Loader2Icon className="animate-spin" />}
-              {existente ? "Salvar alterações" : "Enviar parecer"}
+              {modoDecisao
+                ? status
+                  ? rejeitando
+                    ? "Rejeitar e enviar parecer"
+                    : "Aprovar e enviar parecer"
+                  : rejeitando
+                    ? "Rejeitar"
+                    : "Aprovar"
+                : existente
+                  ? "Salvar alterações"
+                  : "Enviar parecer"}
             </Button>
           </div>
         </DialogFooter>

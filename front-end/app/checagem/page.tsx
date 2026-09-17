@@ -14,7 +14,11 @@ import { useSession } from "next-auth/react"
 import { ProcessResult } from "@/types/process"
 import { lerDocumentoArquivado, mensagemDocumentoArquivado } from "@/lib/document-archive"
 import { DocumentDetailsModalChecagem } from "@/components/document-details-modal-checagem"
-import { FeedbackChecagemDialog, type FeedbackAlvo } from "@/components/feedback-checagem-dialog"
+import {
+  FeedbackChecagemDialog,
+  type DecisaoConfirmada,
+  type FeedbackAlvo,
+} from "@/components/feedback-checagem-dialog"
 import { RequireRole } from "@/components/require-role"
 import { useDocumentsPaged } from "@/hooks/use-documents-paged"
 import { useReviewTimer } from "@/hooks/use-review-timer"
@@ -144,36 +148,89 @@ export default function Page() {
     }
   }
 
-  // Chamado no fim das duas decisões, sempre depois do reviewTimer.encerrar():
-  // o tempo gasto respondendo o parecer não entra na métrica de revisão.
-  //
-  // Recebe o `result` por parâmetro em vez de refazer o find em dbResults:
-  // quando o filtro da tela é "pendente", o documento recém-decidido já saiu da
-  // lista no refresh anterior e a busca voltaria vazia.
-  //
-  // Dele saem o nome do paciente e a tabela de comparação — é ela que vira a
-  // lista de exames em que o revisor aponta cada motivo, a mesma que ele acabou
-  // de conferir no modal de detalhes. Vazia quando o processamento não gerou
-  // comparação; aí o modal cai só no campo de digitar.
-  //
-  // Vale para as duas decisões: aprovar e rejeitar encerram a checagem do mesmo
-  // jeito, e o parecer é sobre o acerto da IA, não sobre o veredito.
-  //
-  // `decisao` vem indefinida quando a entrada é o botão "Avaliar IA" de um
-  // documento já decidido: ali o texto do cabeçalho não fala da decisão, porque
-  // ela pode ter sido tomada dias atrás, por outra pessoa.
-  const abrirFeedback = (
-    id: string,
-    decisao: "aprovado" | "rejeitado" | undefined,
-    result?: ProcessResult,
-  ) => {
+  /**
+   * Abre o diálogo que CONFIRMA a decisão e, de quebra, coleta o parecer.
+   * Substitui os dois AlertDialogs que viviam dentro do modal de detalhes: o
+   * parecer precisa aparecer ANTES da aprovação, e empilhar mais um diálogo
+   * depois da confirmação daria três telas em sequência.
+   *
+   * Pausa o cronômetro de revisão. Sem isso, o tempo de preencher o parecer
+   * entraria no `review_active_ms` e o painel de tempo de revisão daria um
+   * salto sem explicação no dia do deploy — `fechar` guarda o acumulado, então
+   * cancelar e voltar não perde nada (ver docs/tempo-de-revisao-desenho.md).
+   */
+  const solicitarDecisao = (decisao: "aprovado" | "rejeitado") => {
+    if (isReadOnly || !selectedResult) return
+    const result = selectedResult
+    reviewTimer.fechar(result.id)
+    setFeedbackAlvo({
+      documentId: result.id,
+      paciente: result.patientName,
+      cpf: result.cpf,
+      modo: "decisao",
+      decisao,
+      exames: result.result?.tabela_comparacao ?? [],
+    })
+  }
+
+  /** Avaliar a IA num documento JÁ decidido, pelo botão do modal de detalhes. */
+  const abrirAvaliacao = (result: ProcessResult) => {
     if (isReadOnly) return
     setFeedbackAlvo({
-      documentId: id,
-      paciente: result?.patientName,
-      decisao,
-      exames: result?.result?.tabela_comparacao ?? [],
+      documentId: result.id,
+      paciente: result.patientName,
+      cpf: result.cpf,
+      modo: "avaliacao",
+      exames: result.result?.tabela_comparacao ?? [],
     })
+  }
+
+  /**
+   * Fechar SEM decidir: devolve o cronômetro para onde estava e deixa o modal
+   * de detalhes aberto atrás, para ele continuar de onde parou.
+   */
+  const fecharFeedback = () => {
+    if (feedbackAlvo?.modo === "decisao") reviewTimer.abrir(feedbackAlvo.documentId)
+    setFeedbackAlvo(null)
+  }
+
+  /**
+   * Grava a decisão e, se houver, o parecer — nesta ordem. O back-end recusa
+   * parecer de documento sem decisão humana (409), então o parecer é coletado
+   * antes e persistido depois. Lança se a decisão falhar: o diálogo continua
+   * aberto com tudo preenchido.
+   */
+  const confirmarDecisao = async ({ justificativa, parecer }: DecisaoConfirmada) => {
+    const alvo = feedbackAlvo
+    if (!alvo?.decisao) return
+    if (alvo.decisao === "aprovado") await handleAprovar(alvo.documentId, justificativa)
+    else await handleRejeitar(alvo.documentId, justificativa)
+
+    // Decisão gravada: fecha o diálogo e o modal de detalhes que ficou atrás.
+    // Não passa por `fecharFeedback` de propósito — lá o cronômetro é religado,
+    // o que aqui criaria um acumulador órfão num documento já decidido.
+    setFeedbackAlvo(null)
+    setSelectedResult(null)
+    setDocumentPreviewUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev)
+      return null
+    })
+
+    if (!parecer) return
+    try {
+      const resposta = await authFetch(API_ENDPOINTS.DOCUMENT_FEEDBACK(alvo.documentId), {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(parecer),
+      })
+      if (!resposta.ok) throw new Error(`HTTP ${resposta.status}`)
+      toast.success("Obrigado pelo parecer!")
+    } catch (error) {
+      // A decisão já foi gravada: perder o parecer não pode desfazê-la nem
+      // prender o revisor no diálogo.
+      console.error("[CHECAGEM] Falha ao salvar o parecer", error)
+      toast.error("A decisão foi registrada, mas o parecer não pôde ser salvo.")
+    }
   }
 
   const handleAprovar = async (id: string, approvalReason: string) => {
@@ -207,6 +264,7 @@ export default function Page() {
       await refresh(true)
     } catch (error) {
       console.error("[CHECAGEM] Falha ao aprovar documento", error)
+      throw error
     }
 
     if (result) {
@@ -228,7 +286,6 @@ export default function Page() {
     }
 
     toast.success("Documento aprovado")
-    abrirFeedback(id, "aprovado", result)
   }
 
   const handleRejeitar = async (id: string, motivo: string) => {
@@ -258,6 +315,7 @@ export default function Page() {
       await refresh(true)
     } catch (error) {
       console.error("[CHECAGEM] Falha ao rejeitar documento", error)
+      throw error
     }
 
     if (result) {
@@ -276,7 +334,6 @@ export default function Page() {
     }
 
     toast.error("Documento rejeitado")
-    abrirFeedback(id, "rejeitado", result)
   }
 
   const handleViewDetails = (id: string) => {
@@ -418,20 +475,21 @@ export default function Page() {
             }
           }}
           result={selectedResult}
-          onAprovar={handleAprovar}
-          onRejeitar={handleRejeitar}
           onViewDocument={selectedResult ? () => handleViewDocument(selectedResult) : undefined}
           onAbrirPdfExterno={
             selectedResult ? () => reviewTimer.registrarPdfExterno(selectedResult.id) : undefined
           }
-          onAvaliarIA={
-            selectedResult ? () => abrirFeedback(selectedResult.id, undefined, selectedResult) : undefined
-          }
+          onAvaliarIA={selectedResult ? () => abrirAvaliacao(selectedResult) : undefined}
+          onSolicitarDecisao={solicitarDecisao}
           somenteLeitura={isReadOnly}
           documentUrl={documentPreviewUrl}
           documentLoading={documentPreviewLoading}
         />
-        <FeedbackChecagemDialog alvo={feedbackAlvo} onClose={() => setFeedbackAlvo(null)} />
+        <FeedbackChecagemDialog
+          alvo={feedbackAlvo}
+          onClose={fecharFeedback}
+          onConfirmarDecisao={confirmarDecisao}
+        />
       </SidebarProvider>
     </RequireRole>
   )

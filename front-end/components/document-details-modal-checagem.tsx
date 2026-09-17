@@ -3,7 +3,6 @@
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import { CheckIcon, XIcon, Download, Loader2, MessageSquareIcon } from "lucide-react"
-import { useState } from "react"
 import {
   Dialog,
   DialogContent,
@@ -11,22 +10,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
 import { ProcessResult } from "@/types/process"
 import ExamesComparativoTable from "@/components/exames-comparativo-table"
 import { cn } from "@/lib/utils"
@@ -35,8 +22,12 @@ interface DocumentDetailsModalChecagemProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   result: ProcessResult | null
-  onAprovar: (id: string, approvalReason: string) => void
-  onRejeitar: (id: string, motivo: string) => void
+  /**
+   * Pede à página que abra o diálogo de decisão. A confirmação (e o parecer
+   * sobre a IA) mora lá: o parecer precisa aparecer ANTES da aprovação, e
+   * empilhar mais um diálogo em cima deste daria três telas em sequência.
+   */
+  onSolicitarDecisao?: (decisao: "aprovado" | "rejeitado") => void
   onViewDocument?: () => void
   documentUrl?: string | null
   /** Avisa o cronômetro de revisão que o PDF foi aberto fora da aba. */
@@ -60,8 +51,7 @@ export function DocumentDetailsModalChecagem({
   open,
   onOpenChange,
   result,
-  onAprovar,
-  onRejeitar,
+  onSolicitarDecisao,
   onViewDocument,
   documentUrl,
   onAbrirPdfExterno,
@@ -69,11 +59,6 @@ export function DocumentDetailsModalChecagem({
   onAvaliarIA,
   somenteLeitura = false,
 }: DocumentDetailsModalChecagemProps) {
-  const [motivo, setMotivo] = useState("")
-  const [showRejectDialog, setShowRejectDialog] = useState(false)
-  const [showApproveDialog, setShowApproveDialog] = useState(false)
-  const [approvalReason, setApprovalReason] = useState("")
-
   if (!result) return null
   const showPreview = Boolean(documentUrl || documentLoading)
   const previewSrc = documentUrl
@@ -142,31 +127,16 @@ export function DocumentDetailsModalChecagem({
     return <Badge variant="secondary">{status}</Badge>
   }
 
-  const handleAprovar = () => {
-    const reason = approvalReason.trim()
-    onAprovar(result.id, reason)
-    setApprovalReason("")
-    setShowApproveDialog(false)
-    onOpenChange(false)
-  }
-
-  const handleRejeitar = () => {
-    if (motivo.trim()) {
-      onRejeitar(result.id, motivo)
-      setMotivo("")
-      setShowRejectDialog(false)
-      onOpenChange(false)
-    }
-  }
-
   const isPending = !result.reviewedBy
-  const requiresApprovalReason =
-    isPending && (result.status === "pending_review" || result.status === "rejected")
-  const handleApproveDialogChange = (open: boolean) => {
-    setShowApproveDialog(open)
-    if (!open) {
-      setApprovalReason("")
-    }
+
+  // Este modal FICA ABERTO atrás do diálogo de decisão. Empilhar é o que já
+  // acontecia com os AlertDialogs que o diálogo substituiu, então o Radix dá
+  // conta; e fechar aqui tirava da vista a comparação de exames justamente
+  // quando o parecer pergunta "em quais exames?".
+  //
+  // Quem fecha os dois é a página, e só depois da decisão gravada.
+  const pedirDecisao = (decisao: "aprovado" | "rejeitado") => {
+    onSolicitarDecisao?.(decisao)
   }
   return (
     <>
@@ -596,14 +566,14 @@ export function DocumentDetailsModalChecagem({
                 <>
                   <Button
                     variant="outline"
-                    onClick={() => setShowRejectDialog(true)}
+                    onClick={() => pedirDecisao("rejeitado")}
                     className="text-red-600 hover:text-red-700 hover:bg-red-50"
                   >
                     <XIcon className="size-4 mr-2" />
                     Rejeitar
                   </Button>
                   <Button
-                    onClick={() => setShowApproveDialog(true)}
+                    onClick={() => pedirDecisao("aprovado")}
                     className="bg-green-600 hover:bg-green-700"
                   >
                     <CheckIcon className="size-4 mr-2" />
@@ -619,77 +589,6 @@ export function DocumentDetailsModalChecagem({
         </DialogContent>
       </Dialog>
 
-      {/* Approve Confirmation Dialog */}
-      <AlertDialog open={showApproveDialog} onOpenChange={handleApproveDialogChange}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Confirmar aprovação</AlertDialogTitle>
-            <AlertDialogDescription className="text-foreground">
-              Confirme a aprovação do documento do paciente{" "}
-              <strong>{result.patientName}</strong> (CPF: {result.cpf}).
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          {requiresApprovalReason && (
-            <div className="space-y-2 py-4">
-              <Label htmlFor="approvalReason" className="text-foreground">
-                Justificativa da aprovação
-              </Label>
-              <Textarea
-                id="approvalReason"
-                placeholder="Ex: Revisão humana confirmou os exames exigidos."
-                value={approvalReason}
-                onChange={(e) => setApprovalReason(e.target.value)}
-                rows={4}
-              />
-            </div>
-          )}
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleAprovar}
-              disabled={requiresApprovalReason && !approvalReason.trim()}
-              className="bg-green-600 hover:bg-green-700"
-            >
-              Aprovar
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      {/* Reject Confirmation Dialog */}
-      <AlertDialog open={showRejectDialog} onOpenChange={setShowRejectDialog}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Rejeitar documento</AlertDialogTitle>
-            <AlertDialogDescription className="text-foreground">
-              Informe o motivo da rejeição do documento do paciente{" "}
-              <strong>{result.patientName}</strong> (CPF: {result.cpf}).
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <div className="space-y-2 py-4">
-            <Label htmlFor="motivo" className="text-foreground">Motivo da rejeição</Label>
-            <Textarea
-              id="motivo"
-              placeholder="Ex: Documento ilegível, exames faltantes, etc."
-              value={motivo}
-              onChange={(e) => setMotivo(e.target.value)}
-              rows={4}
-            />
-          </div>
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setMotivo("")}>
-              Cancelar
-            </AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleRejeitar}
-              disabled={!motivo.trim()}
-              className="bg-red-600 hover:bg-red-700"
-            >
-              Rejeitar
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </>
   )
 }
