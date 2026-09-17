@@ -38,7 +38,8 @@ except ImportError:
 from app.core.config import settings
 from app.services.patient_name_extractor import extract_patient_name_from_markdown
 from app.core import metrics
-from app.core.pii import mask_cpf, mask_identifier
+from app.core.pii import mask_cpf, mask_identifier, mask_name
+from app.core import pii_redaction
 
 logger = logging.getLogger(__name__)
 
@@ -86,18 +87,6 @@ Não invente exames e ignore informações irrelevantes.
 Retorne os nomes dos exames em caixa alta.
 """
 
-PROMPT_EXTRAIR_CPF = """
-Você é um assistente de extração de dados altamente preciso.
-Sua tarefa é extrair o CPF (apenas números, sem pontuação) de um texto.
-ATENÇÃO: Se houver um CPF imediatamente após uma sigla de UF (por exemplo, CE/12345678909, SP/12345678901, etc),
-você DEVE priorizar e retornar esse CPF, ignorando outros CPFs que possam aparecer no texto.
-Se houver mais de um padrão UF/CPF, retorne o primeiro que aparecer.
-Se não houver nenhum CPF após UF, aí sim retorne o primeiro CPF de 11 dígitos encontrado.
-Responda APENAS com um objeto JSON válido, sem nenhum texto adicional antes ou depois.
-O formato do JSON deve ser: {"cpf": "<cpf_extraido>"}.
-Se o CPF não for encontrado, use o valor null para a chave "cpf".
-"""
-
 NON_EXAM_TERMS = {
     "BR MED",
     "BRMED",
@@ -128,6 +117,10 @@ def filtrar_exames(exames: List[str]) -> List[str]:
             continue
         if normalizado in NON_EXAM_TERMS:
             continue
+        # Rede de segurança da redação: se o modelo ecoar um marcador ([NOME],
+        # [CPF]...) como se fosse exame, ele morre aqui.
+        if pii_redaction.contem_marcador(normalizado):
+            continue
         if re.search(r"\bBR\s*MED\b", normalizado):
             continue
         if "SAUDE CORPORATIVA" in normalizado:
@@ -137,28 +130,6 @@ def filtrar_exames(exames: List[str]) -> List[str]:
         vistos.add(normalizado)
         filtrados.append(exame)
     return filtrados
-
-def extrair_cpf_ia(markdown: str) -> str:
-    """Extrai CPF do markdown usando LLM."""
-    user_prompt = f"""Texto:\n{markdown}"""
-    try:
-        response = client.chat.completions.create(
-            model=MODELO_GPT,
-            messages=[
-                {"role": "system", "content": PROMPT_EXTRAIR_CPF},
-                {"role": "user", "content": user_prompt}
-            ],
-            temperature=0,
-            response_format={"type": "json_object"}
-        )
-        data = json.loads(response.choices[0].message.content)
-        return data.get("cpf")
-    except json.JSONDecodeError:
-        return None
-    except Exception as e:
-        print(f"Erro ao extrair CPF via IA: {e}")
-        return None
-
 
 def processar_arquivo_docling(file) -> str:
     """Processa o arquivo com Docling e retorna o markdown extraído."""
@@ -1091,10 +1062,42 @@ def processar_arquivo_textract(
         logger.info(f"[OCR] Fluxo Textract assíncrono completo em {time.perf_counter() - start_total:.2f}s")
 
 
-def extrair_exames_ia(markdown: str) -> Dict[str, Any]:
-    """Extrai apenas exames do markdown usando LLM."""
+def extrair_exames_ia(
+    markdown: str,
+    valores_cadastrais: Optional[List[Optional[str]]] = None,
+) -> Dict[str, Any]:
+    """Extrai apenas exames do markdown usando LLM, sem enviar dados cadastrais.
+
+    O que a chamada devolve é só a lista de exames, então nada do cabeçalho
+    cadastral precisa sair do ambiente. `valores_cadastrais` recebe o que o
+    pipeline local já extraiu (nome, CPF, CNPJ, passaporte) para que essas
+    ocorrências sejam apagadas até onde não há rótulo de campo — cabeçalho e
+    rodapé repetidos em cada página, por exemplo.
+
+    A redação fica *dentro* da função, e não no chamador, para que uma chamada
+    nova escrita no futuro herde a proteção sem depender de lembrete.
+    """
+    texto = pii_redaction.redigir_para_llm(
+        markdown,
+        valores_conhecidos=valores_cadastrais or (),
+        # A data de realização fica: sem ela o modelo perde a âncora
+        # "NOME DO EXAME - DATA" e descarta a linha do exame junto.
+        preservar_datas=True,
+    )
+
+    # Conferência antes de enviar. A redação é heurística; esta checagem é o que
+    # dá garantia por chamada, inclusive em layout nunca visto. Falha fechada: o
+    # `except` abaixo devolve "sem exames", e o filtro determinístico do
+    # workflow recupera os exames do markdown cru, que nunca sai do ambiente.
+    try:
+        pii_redaction.verificar_payload(texto, valores_cadastrais or ())
+    except pii_redaction.VazamentoDeDadoCadastral as e:
+        logger.error("[OCR] Envio à OpenAI bloqueado: %s", e)
+        metrics.PII_EGRESSO_BLOQUEADO.add(1)
+        return {"exames": [], "erro": f"Envio bloqueado pela conferência de PII: {e}"}
+
     user_prompt = f"""Texto:
-{markdown}"""
+{texto}"""
     try:
         response = client.chat.completions.create(
             model=MODELO_GPT,
@@ -1464,13 +1467,10 @@ async def _ocr_pipeline_impl(file, salvar_markdown=True, progress_hook: Optional
 
     # Extrair CPF localmente
     logger.info("[OCR] Extraindo CPF via regex...")
+    # Só extração local: CPF é dado cadastral e não sai do ambiente. Quando o
+    # regex não acha, o documento segue sem CPF e cai na checagem humana — que
+    # é o desfecho correto, e não um CPF adivinhado por um serviço externo.
     cpf_extraido = extrair_cpf_regex(markdown)
-    if not cpf_extraido and markdown:
-        logger.info("[OCR] CPF não encontrado via regex. Tentando extração via IA...")
-        try:
-            cpf_extraido = await asyncio.to_thread(extrair_cpf_ia, markdown)
-        except Exception as e:
-            logger.warning(f"[OCR] Falha ao extrair CPF via IA: {e}")
     logger.info(f"[OCR] CPF extraído: {mask_cpf(cpf_extraido) if cpf_extraido else 'Nenhum CPF encontrado'}")
 
     # Extrair passaporte e CNPJ via regex
@@ -1490,12 +1490,16 @@ async def _ocr_pipeline_impl(file, salvar_markdown=True, progress_hook: Optional
 
     patient_name = extract_patient_name_from_markdown(markdown)
     logger.info(
-        f"[OCR] Nome do paciente extraído: {patient_name if patient_name else 'Nenhum nome encontrado'}"
+        f"[OCR] Nome do paciente extraído: {mask_name(patient_name) if patient_name else 'Nenhum nome encontrado'}"
     )
 
     # Extrair exames via IA
     logger.info("[OCR] Iniciando extração de exames via OpenAI GPT...")
-    exames_info = await asyncio.to_thread(extrair_exames_ia, markdown)
+    exames_info = await asyncio.to_thread(
+        extrair_exames_ia,
+        markdown,
+        [patient_name, cpf_extraido, cnpj_extraido, passaporte_extraido],
+    )
     exames_extraidos = exames_info.get("exames", [])
     logger.info(f"[OCR] Exames extraídos: {len(exames_extraidos)} encontrados - {exames_extraidos}")
 
@@ -1535,36 +1539,33 @@ async def ocr_pipeline(file, salvar_markdown=True, progress_hook: Optional[Calla
     async with semaphore:
         return await _ocr_pipeline_impl(file, salvar_markdown=salvar_markdown, progress_hook=progress_hook)
 
-PROMPT_EXTRAIR_TODOS_CPFS = """
-Você é um assistente de extração de dados altamente preciso.
-Sua tarefa é extrair TODOS os CPFs (apenas números, sem pontuação) de um texto.
-Retorne uma lista de CPFs encontrados.
-Responda APENAS com um objeto JSON válido, sem nenhum texto adicional antes ou depois.
-O formato do JSON deve ser: {\"cpfs\": [\"<cpf1>\", \"<cpf2>\"]}.
-Se nenhum CPF for encontrado, use uma lista vazia [] para a chave \"cpfs\".
-"""
+def extrair_todos_cpfs_regex(markdown: str, exclude_cpf: Optional[str] = None) -> List[str]:
+    """Todos os CPFs válidos do texto, na ordem em que aparecem.
 
-async def extrair_todos_cpfs_ia(markdown: str, exclude_cpf: Optional[str] = None) -> List[str]:
-    """Extrai todos os CPFs do markdown usando LLM, opcionalmente excluindo um CPF."""
-    user_prompt = f"""Texto:\n{markdown}"""
-    if exclude_cpf:
-        user_prompt += f"\nExcluir CPF: {exclude_cpf}"
-
-    try:
-        response = client.chat.completions.create(
-            model=MODELO_GPT,
-            messages=[
-                {"role": "system", "content": PROMPT_EXTRAIR_TODOS_CPFS},
-                {"role": "user", "content": user_prompt}
-            ],
-            temperature=0,
-            response_format={"type": "json_object"}
-        )
-        data = json.loads(response.choices[0].message.content)
-        cpfs = [cpf for cpf in data.get("cpfs", []) if cpf != exclude_cpf]
-        return cpfs
-    except json.JSONDecodeError:
+    Substitui a antiga extração por LLM, que mandava o documento inteiro para
+    fora. CPF tem dígito verificador: a checagem local é mais confiável que o
+    modelo — e determinística, enquanto o LLM variava entre execuções sobre o
+    mesmo texto. Linhas de CNPJ e passaporte são puladas para não capturar
+    número de outro tipo que por acaso passe no cálculo.
+    """
+    if not markdown:
         return []
-    except Exception as e:
-        print(f"Erro ao extrair todos os CPFs via IA: {e}")
-        return [] 
+
+    excluir = _digits_only(exclude_cpf)
+    encontrados: List[str] = []
+    vistos = set()
+
+    for linha in markdown.splitlines():
+        if _line_mentions_any(linha, ("PASSAPORTE", "PASSPORT", "CNPJ")):
+            continue
+        for match in re.finditer(
+            r"\b\d{3}[\.\s-]{0,5}\d{3}[\.\s-]{0,5}\d{3}[\.\s-]{0,5}\d{2}\b", linha
+        ):
+            digitos = _digits_only(match.group(0))
+            if not _is_valid_cpf(digitos) or digitos == excluir or digitos in vistos:
+                continue
+            vistos.add(digitos)
+            encontrados.append(digitos)
+
+    return encontrados
+

@@ -115,7 +115,6 @@ def test_full_integration_workflow(mock_prontuai, test_case):
     # Moca a extração da IA com os dados esperados para este caso específico
     with (
         patch('app.services.ocr_service.extrair_exames_ia', return_value=test_case["expected_ocr_extraction"]) as mock_exames_ia,
-        patch('app.services.ocr_service.extrair_cpf_ia', return_value=test_case["expected_ocr_extraction"]["cpf"]) as mock_cpf_ia,
         patch('app.services.ocr_service.extrair_cpf_regex', return_value=test_case.get("mock_regex_cpf", None)) as mock_regex_cpf,
         patch('app.services.brmed_service.consultar_exames_prontuai', return_value={**test_case["mock_brmed_exams"], "source": "prontuai_api", "cpf_processado": test_case["expected_ocr_extraction"]["cpf"], "cnpj_processado": "12345678000190"}) as mock_prontuai
     ):
@@ -150,8 +149,7 @@ def test_full_integration_workflow(mock_prontuai, test_case):
 
         # Garante que os mocks foram chamados como esperado
         mock_exames_ia.assert_called_once()
-        if test_case.get("mock_regex_cpf") is None: # Se o regex foi mocada para falhar, a IA do CPF deve ser chamada
-            mock_cpf_ia.assert_called_once()
-        else: # Caso contrário, a IA do CPF não deve ser chamada
-            mock_cpf_ia.assert_not_called()
+        # Não há mais fallback de CPF por LLM: CPF é dado cadastral e a extração
+        # é exclusivamente local. Regex sem resultado significa documento sem
+        # CPF, que segue para a checagem humana.
         mock_prontuai.assert_called_once() # A chamada externa agora é feita pela API ProntuAI

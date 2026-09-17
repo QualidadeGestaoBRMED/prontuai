@@ -23,13 +23,12 @@ NOME: CARLOS EDUARDO FONSECA BARBOSA
         lambda _file_path: markdown,
     )
     monkeypatch.setattr(ocr_service, "extrair_cpf_regex", lambda _markdown: None)
-    monkeypatch.setattr(ocr_service, "extrair_cpf_ia", lambda _markdown: None)
     monkeypatch.setattr(ocr_service, "extrair_passaporte_regex", lambda _markdown: None)
     monkeypatch.setattr(ocr_service, "extrair_cnpj_regex", lambda _markdown: None)
     monkeypatch.setattr(
         ocr_service,
         "extrair_exames_ia",
-        lambda _markdown: {"exames": []},
+        lambda _markdown, _valores_cadastrais=None: {"exames": []},
     )
 
     result = await ocr_service._ocr_pipeline_impl(upload, salvar_markdown=False)

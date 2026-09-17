@@ -112,6 +112,12 @@ try:
         description="Fallbacks do Textract para OCR local (Docling)",
     )
 
+    # Sem sufixo `_total`: o collector acrescenta (ver cabeçalho do arquivo).
+    PII_EGRESSO_BLOQUEADO = _meter.create_counter(
+        "prontuai_pii_egresso_bloqueado",
+        description="Envios à OpenAI barrados por dado cadastral remanescente",
+    )
+
     PRONTUAI_API_CONSULTAS = _meter.create_counter(
         "prontuai_api_consultas",
         description="Consultas à API externa ProntuAI",
@@ -182,6 +188,7 @@ except ImportError:  # pragma: no cover - ambiente sem opentelemetry-api
     OCR_DURACAO = _NoopInstrument()
     TEXTRACT_TIMEOUT = _NoopInstrument()
     OCR_FALLBACK_DOCLING = _NoopInstrument()
+    PII_EGRESSO_BLOQUEADO = _NoopInstrument()
     PRONTUAI_API_CONSULTAS = _NoopInstrument()
     CONFIANCA_SCORE = _NoopInstrument()
     VALIDACAO_DOCUMENTOS = _NoopInstrument()
