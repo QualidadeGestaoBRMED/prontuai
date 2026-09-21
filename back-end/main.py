@@ -290,6 +290,24 @@ async def request_logging_middleware(request: Request, call_next):
                         except Exception:
                             pass
             audit_context = get_audit_context()
+            # `set_audit_context()` grava num contextvar, e contextvar escrito
+            # dentro do handler NÃO sobe até aqui: `BaseHTTPMiddleware` executa
+            # o handler em outra task, que recebe uma cópia do contexto. Já
+            # `request.state` é o mesmo objeto nas duas pontas — inclusive
+            # quando o handler termina levantando HTTPException. É por ele que
+            # os handlers enriquecem a trilha; ver `app/api/v1/auth.py`.
+            audit_state = getattr(request.state, "audit", None) or {}
+            if audit_state:
+                audit_context = {**audit_context, **audit_state}
+                # Rotas de autenticação identificam o sujeito sem Bearer algum
+                # (no login ele ainda não existe; na recusa, nunca vai existir).
+                if audit_state.get("user_email"):
+                    user_context = {
+                        "user_id": audit_state.get("user_id"),
+                        "user_email": audit_state.get("user_email"),
+                        "user_role": audit_state.get("user_role"),
+                        "clinic_id": audit_state.get("clinic_id"),
+                    }
             user_db.create_audit_log(
                 AuditLogCreate(
                     user_id=user_context.get("user_id"),

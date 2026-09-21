@@ -119,8 +119,25 @@ def _login(core_auth, fake_db, email="user@test.com"):
     return token, family_id
 
 
-async def _refresh(api_auth, token):
-    return await api_auth.refresh_token(api_auth.RefreshRequest(refresh_token=token))
+class FakeRequest:
+    """Request mínimo: os handlers de auth só escrevem a trilha em `.state`."""
+
+    def __init__(self):
+        self.state = types.SimpleNamespace()
+
+    @property
+    def audit(self) -> dict:
+        return getattr(self.state, "audit", None) or {}
+
+    @property
+    def motivo(self):
+        return self.audit.get("metadata", {}).get("motivo")
+
+
+async def _refresh(api_auth, token, request=None):
+    return await api_auth.refresh_token(
+        api_auth.RefreshRequest(refresh_token=token), request or FakeRequest()
+    )
 
 
 @pytest.mark.asyncio
@@ -129,8 +146,12 @@ async def test_refresh_rotates_token(monkeypatch):
     core_auth, api_auth = load_modules(monkeypatch, fake_db)
     token, family_id = _login(core_auth, fake_db)
 
-    response = await _refresh(api_auth, token)
+    sucesso_req = FakeRequest()
+    response = await _refresh(api_auth, token, sucesso_req)
 
+    assert sucesso_req.audit["action"] == "auth.refresh.success"
+    assert sucesso_req.audit["user_email"] == "user@test.com"
+    assert sucesso_req.audit["user_role"] == "ADMIN"
     assert response.access_token
     assert response.refresh_token
     assert response.refresh_token != token
@@ -150,9 +171,14 @@ async def test_refresh_reuse_revokes_family(monkeypatch):
     first = await _refresh(api_auth, token)
 
     # Reuso do token antigo (fora da janela de graça) deve falhar...
+    reuse_req = FakeRequest()
     with pytest.raises(HTTPException) as excinfo:
-        await _refresh(api_auth, token)
+        await _refresh(api_auth, token, reuse_req)
     assert excinfo.value.status_code == 401
+    # ...e deixar na trilha o evento mais grave da rota, com de quem era.
+    assert reuse_req.audit["action"] == "auth.refresh.reuse_detected"
+    assert reuse_req.audit["user_email"] == "user@test.com"
+    assert reuse_req.audit["metadata"]["family_id"] == family_id
 
     # ...e revogar a família inteira, incluindo o token novo.
     with pytest.raises(HTTPException):
@@ -172,9 +198,13 @@ async def test_refresh_reuse_within_grace_does_not_revoke_family(monkeypatch):
 
     # Corrida benigna (duas abas): reuso logo após a rotação nega a
     # requisição mas mantém a família viva.
+    grace_req = FakeRequest()
     with pytest.raises(HTTPException) as excinfo:
-        await _refresh(api_auth, token)
+        await _refresh(api_auth, token, grace_req)
     assert excinfo.value.status_code == 401
+    # Corrida não é roubo: a trilha precisa distinguir os dois.
+    assert grace_req.audit["action"] == "auth.refresh.denied"
+    assert grace_req.motivo == "reuso_em_corrida"
 
     second = await _refresh(api_auth, first.refresh_token)
     assert second.refresh_token
@@ -189,9 +219,12 @@ async def test_refresh_without_session_row_rejected(monkeypatch):
     # Token assinado corretamente mas sem sessão persistida (pré-rotação)
     token, _, _, _ = core_auth.create_refresh_token(data=token_data)
 
+    expirada_req = FakeRequest()
     with pytest.raises(HTTPException) as excinfo:
-        await _refresh(api_auth, token)
+        await _refresh(api_auth, token, expirada_req)
     assert excinfo.value.status_code == 401
+    assert expirada_req.motivo == "sessao_expirada"
+    assert expirada_req.audit["user_email"] == "user@test.com"
 
 
 @pytest.mark.asyncio
@@ -201,9 +234,11 @@ async def test_refresh_inactive_user_rejected(monkeypatch):
     fake_db.add_user("user@test.com", is_active=False)
     token, _ = _login(core_auth, fake_db, "user@test.com")
 
+    inativo_req = FakeRequest()
     with pytest.raises(HTTPException) as excinfo:
-        await _refresh(api_auth, token)
+        await _refresh(api_auth, token, inativo_req)
     assert excinfo.value.status_code == 401
+    assert inativo_req.motivo == "usuario_inativo"
 
 
 @pytest.mark.asyncio
@@ -212,8 +247,12 @@ async def test_logout_revokes_family(monkeypatch):
     core_auth, api_auth = load_modules(monkeypatch, fake_db)
     token, _ = _login(core_auth, fake_db)
 
-    result = await api_auth.logout(api_auth.RefreshRequest(refresh_token=token))
+    logout_req = FakeRequest()
+    result = await api_auth.logout(api_auth.RefreshRequest(refresh_token=token), logout_req)
     assert result == {"success": True}
+    assert logout_req.audit["action"] == "auth.logout.success"
+    assert logout_req.audit["user_email"] == "user@test.com"
+    assert logout_req.audit["metadata"]["sessoes_revogadas"] == 1
 
     with pytest.raises(HTTPException):
         await _refresh(api_auth, token)
