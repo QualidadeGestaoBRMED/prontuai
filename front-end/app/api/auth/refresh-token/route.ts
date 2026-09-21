@@ -1,13 +1,15 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getToken, encode } from "next-auth/jwt"
 import { API_URL } from "@/lib/config"
-
-const useSecureCookies = process.env.NEXTAUTH_URL?.startsWith("https://") ?? process.env.NODE_ENV === "production"
-const COOKIE_NAME = useSecureCookies ? "__Secure-next-auth.session-token" : "next-auth.session-token"
-const SESSION_MAX_AGE = Number(process.env.NEXTAUTH_SESSION_MAX_AGE || 60 * 60 * 8)
+import {
+  SESSION_COOKIE_NAME,
+  SESSION_MAX_AGE,
+  sessionTokenParams,
+  useSecureCookies,
+} from "@/lib/session-cookie"
 
 export async function POST(request: NextRequest) {
-  const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET })
+  const token = await getToken({ req: request, ...sessionTokenParams })
 
   if (!token?.refreshToken) {
     return NextResponse.json({ error: "no_refresh_token" }, { status: 401 })
@@ -39,7 +41,7 @@ export async function POST(request: NextRequest) {
     })
 
     const res = NextResponse.json({ ok: true })
-    res.cookies.set(COOKIE_NAME, encoded, {
+    res.cookies.set(SESSION_COOKIE_NAME, encoded, {
       httpOnly: true,
       secure: useSecureCookies,
       sameSite: "lax",

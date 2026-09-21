@@ -20,6 +20,12 @@ function ErrorContent() {
           description: "Você não tem permissão para acessar esta aplicação.",
           details: "A aplicação é de uso exclusivo da BR MED. Se você acha que isso está errado, entre em contato com o time de Credenciados BR MED para verificar suas permissões de acesso.",
         };
+      case "BackendUnavailable":
+        return {
+          title: "Serviço Indisponível",
+          description: "Não conseguimos falar com o servidor do ProntuAI agora.",
+          details: "Isso não é falta de permissão: o serviço está fora do ar ou instável. Tente novamente em alguns minutos; se persistir, avise o suporte técnico.",
+        };
       case "Configuration":
         return {
           title: "Erro de Configuração",

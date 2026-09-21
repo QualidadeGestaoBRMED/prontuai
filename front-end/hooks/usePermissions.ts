@@ -26,7 +26,7 @@ export interface PermissionsHook {
   isManagement: boolean;
   /** ADMIN ou CURATOR: curadoria do catálogo de exames. MANAGER fica de fora. */
   canCurateExams: boolean;
-  /** Dashboard de indicadores. MANAGER fica de fora — ver `DASHBOARD_ROLES`. */
+  /** Dashboard de indicadores: ADMIN e MANAGER — ver `DASHBOARD_ROLES`. */
   canViewDashboard: boolean;
   /** Vê o Menu Principal sem poder agir — ver `READ_ONLY_ROLES`. */
   isReadOnly: boolean;
