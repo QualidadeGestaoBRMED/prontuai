@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getToken } from "next-auth/jwt"
 import { API_URL } from "@/lib/config"
+import { sessionTokenParams } from "@/lib/session-cookie"
 
 const HOP_BY_HOP_HEADERS = new Set([
   "connection",
@@ -66,7 +67,7 @@ async function proxy(request: NextRequest, context: { params: Promise<{ path: st
     return NextResponse.json({ detail: "Proxy path inválido." }, { status: 400 })
   }
 
-  const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET })
+  const token = await getToken({ req: request, ...sessionTokenParams })
   const bearerToken = typeof token?.accessToken === "string" ? token.accessToken : undefined
   const devBypassEnabled =
     process.env.NODE_ENV !== "production" &&

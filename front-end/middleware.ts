@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import type { NextFetchEvent, NextRequest } from "next/server";
 import { withAuth } from "next-auth/middleware";
+import { SESSION_COOKIE_NAME } from "@/lib/session-cookie";
 
 const bypassAuth =
   process.env.NODE_ENV !== "production" &&
@@ -9,6 +10,11 @@ const bypassAuth =
 const authMiddleware = withAuth({
   pages: {
     signIn: "/login",
+  },
+  // O nome do cookie tem de ser o mesmo que o handler do NextAuth escreve;
+  // ver `lib/session-cookie.ts`. O `withAuth` só repassa `name` ao getToken.
+  cookies: {
+    sessionToken: { name: SESSION_COOKIE_NAME },
   },
 });
 
@@ -20,5 +26,5 @@ export default function middleware(req: NextRequest, event: NextFetchEvent) {
 }
 
 export const config = {
-  matcher: ["/anexar-prontuario", "/checagem", "/dashboard", "/insights", "/historico", "/pendentes", "/admin/:path*"],
+  matcher: ["/anexar-prontuario", "/chat", "/checagem", "/dashboard", "/insights", "/historico", "/pendentes", "/admin/:path*"],
 };
