@@ -9,9 +9,8 @@ import type { DadosDashboard } from "./tipos";
 
 /**
  * Resposta de `GET /v1/dashboard/indicadores`. As séries saem do banco do
- * ambiente em que o back-end está rodando (dev, staging ou produção) e
- * `expedicoes_dia` sai de um arquivo no disco do servidor — nada aqui vem de
- * dado commitado.
+ * ambiente em que o back-end está rodando (dev, staging ou produção) e os
+ * campos de expedição saem da API do BRNET — nada aqui vem de dado commitado.
  */
 type RespostaIndicadores = DadosDashboard & {
   /** APP_ENV do back-end. */
@@ -85,10 +84,16 @@ export function useDadosDashboard(): EstadoDashboard {
       })
       .then((corpo) => {
         if (cancelado) return;
-        // `expedicoes_dia` pode vir vazio (servidor sem a extração do BRNET);
+        // Os campos do BRNET podem faltar (API fora, ou back-end anterior a eles);
         // nesse caso o KPI de cobertura cai no total absoluto, que é o
         // comportamento correto — ver `metricas.ts`.
-        setDados({ ...corpo, expedicoes_dia: corpo.expedicoes_dia ?? {} });
+        setDados({
+          ...corpo,
+          expedicoes_dia: corpo.expedicoes_dia ?? {},
+          expedicoes_prontuai_dia: corpo.expedicoes_prontuai_dia ?? {},
+          expedicoes_desde: corpo.expedicoes_desde ?? null,
+          clinicas_sem_prontuai: corpo.clinicas_sem_prontuai ?? null,
+        });
         setAmbiente(corpo.ambiente ?? null);
         setGeradoEm(comoData(corpo.gerado_em));
         setProximaAtualizacao(comoData(corpo.proxima_atualizacao));

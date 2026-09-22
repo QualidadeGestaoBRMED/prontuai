@@ -220,7 +220,7 @@ export function AbaUtilizacao({
         <div className={`${CARTAO} px-[22px] pt-5 pb-[18px]`}>
           <div className={TITULO}>Cobertura das expedições</div>
           <div className={SUB}>
-            % das expedições da empresa que passaram pelo ProntuAI · meta 100%
+            % dos pedidos atendidos nas credenciadas que passaram pelo ProntuAI · meta 100%
           </div>
           <BarrasPercentuais series={visao.coberturaSeries} cor="#00AFAA" />
         </div>
@@ -272,6 +272,43 @@ export function AbaUtilizacao({
             ))}
           </div>
         </div>
+      </div>
+
+      <div className={`${CARTAO} px-[22px] pt-5 pb-2`}>
+        <div className={TITULO}>Clínicas com expedições previstas fora do ProntuAI</div>
+        <div className={SUB}>
+          {visao.semProntuai === null
+            ? "Lista indisponível: não foi possível consultar o BRNET na última atualização"
+            : `${visao.semProntuai.length} credenciadas · ${visao.pedidosSemProntuai} pedidos com previsão de liberação a partir de hoje · menos de 3 documentos no ProntuAI`}
+        </div>
+        {visao.semProntuai && visao.semProntuai.length > 0 && (
+          <div className="mt-4 max-h-[420px] overflow-auto">
+            <div className="min-w-[640px]">
+              <div
+                className={`${CABECALHO_TABELA} sticky top-0 grid grid-cols-[2fr_1.4fr_1fr_1fr_1fr] gap-x-[18px] border-b border-[#DFE0E2] bg-white px-1 pb-2.5`}
+              >
+                <div>Clínica</div>
+                <div>Cidade</div>
+                <div>Previstos</div>
+                <div>Próxima</div>
+                <div>Docs</div>
+              </div>
+              {visao.semProntuai.map((c) => (
+                <div
+                  key={`${c.name}-${c.local}`}
+                  className={`${styles.tip} grid grid-cols-[2fr_1.4fr_1fr_1fr_1fr] items-center gap-x-[18px] border-b border-[#F3F3F3] px-1 py-3 text-[13.5px] text-[#193B4F]`}
+                  data-tip={c.tip}
+                >
+                  <div className="min-w-0 truncate">{c.name}</div>
+                  <div className="min-w-0 truncate text-[#767A7B]">{c.local}</div>
+                  <div className="font-medium">{c.pedidos}</div>
+                  <div>{c.proxima}</div>
+                  <div className="text-[#767A7B]">{c.docs}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

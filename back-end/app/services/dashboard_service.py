@@ -24,11 +24,10 @@ import asyncio
 import json
 import logging
 import os
-import re
 import threading
 import time
-from datetime import datetime, timedelta
-from typing import Any, Optional
+from datetime import date, datetime, timedelta
+from typing import Any, NamedTuple, Optional
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import text
@@ -55,22 +54,71 @@ FUSO = ZoneInfo(os.getenv("DASHBOARD_REFRESH_TZ", "America/Sao_Paulo"))
 # uma conexão presa segurando worker.
 TIMEOUT_MS = int(os.getenv("DASHBOARD_STATEMENT_TIMEOUT_MS", "120000"))
 
-# Expedições de clínicas credenciadas, por dia: denominador do indicador
-# "Expedições via ProntuAI". É o único dado do painel que NÃO sai do banco — vem
-# de uma extração do BRNET (rel_expedição_credenciadas_final.xlsx) convertida
-# para JSON no formato {"YYYY-MM-DD": inteiro}.
+# Expedições de clínicas credenciadas: o único dado do painel que NÃO sai do
+# banco — vem da API de monitoramento de credenciados do BRNET. Substituiu a
+# planilha exportada à mão (rel_expedição_credenciadas_final.xlsx), que parava
+# no dia da exportação; em jul/26 as duas fontes diferem em 0,3%.
 #
-# Fica fora do repositório de propósito: é volume de operação, e dado de
-# produção não tem por que viajar no git nem no bundle do browser. Sem o
-# arquivo, o painel de cobertura some e o KPI cai no total absoluto — degradar
-# assim é melhor do que inventar um denominador.
-EXPEDICOES_PATH = os.getenv(
-    "DASHBOARD_EXPEDICOES_PATH",
-    os.path.join(Settings.BASE_DIR, "data", "expedicoes_credenciadas.json"),
-)
+# Cada documento guarda o `pedido_exame_id` do BRNET no result_payload desde
+# 29/05/26, e 99,6% deles aparecem na API. Essa ligação exata alimenta:
+#   * "Expedições via ProntuAI": pedidos atendidos no dia que têm documento
+#     liberado ÷ pedidos atendidos no dia. Contar pedido, e não documento, tira
+#     o reenvio da conta (127 pedidos com mais de um documento liberado inflavam
+#     o KPI em 4–5 pp em ago–set/26);
+#   * a lista de credenciados com previsão futura que não usam o ProntuAI.
+#
+# A API filtra pelo mês de SOLICITAÇÃO e o painel conta pelo dia de ATENDIMENTO.
+# Medido em mar–ago/26: 86% dos atendimentos caem no mês da solicitação, 13% no
+# seguinte e 0,2% dois meses depois. Daí as duas constantes:
+#   * busca-se desde dois meses antes do primeiro documento, para o primeiro mês
+#     do painel sair completo;
+#   * os três meses de solicitação mais recentes ainda ganham atendimentos e são
+#     buscados de novo a cada cálculo; os mais antigos ficam no cache do processo.
+# Cada mês custa ~7 s e ~10 MB, por isso a busca é paralela e limitada.
+MESES_ANTES_DO_ATENDIMENTO = 2
+MESES_EM_ABERTO = 3
+# A partir de quantos documentos ligados um credenciado "usa o ProntuAI". Um
+# documento avulso (unidade vizinha, conta interna enviando por outra clínica)
+# não pode tirar o credenciado da lista.
+MIN_DOCUMENTOS_USA_PRONTUAI = 3
+BUSCAS_SIMULTANEAS = int(os.getenv("DASHBOARD_EXPEDICOES_CONCORRENCIA", "4"))
+# Calcular o painel no startup. Os testes desligam: a app sobe a cada teste e
+# cada subida iria ao banco e ao BRNET de verdade.
+AQUECER_NO_STARTUP = os.getenv("DASHBOARD_AQUECER_NO_STARTUP", "true").lower() == "true"
 
 _sql: Optional[str] = None
-_expedicoes: Optional[dict[str, int]] = None
+
+
+class _Pedido(NamedTuple):
+    """O mínimo de um pedido do BRNET que o painel usa — sem dado de paciente."""
+
+    atendimento: Optional[str]  # ISO; None enquanto não atendido
+    credenciado: str            # rótulo "CIDADE - UF - NOME"
+    cidade: Optional[str]
+    uf: Optional[str]
+    nome: Optional[str]
+    previsao: Optional[str]     # ISO da previsão de liberação
+    liberado: bool
+
+
+# (ano, mês) de solicitação -> pedido_exame_id -> resumo.
+_pedidos_mes: dict[tuple[int, int], dict[int, _Pedido]] = {}
+
+# Documentos por pedido do BRNET, das mesmas clínicas que o painel conta.
+_SQL_DOCS_POR_PEDIDO = r"""
+WITH d AS (
+    SELECT d.validation_status, d.created_at,
+           CASE WHEN d.result_payload LIKE '{%' AND pg_input_is_valid(d.result_payload, 'jsonb')
+                THEN d.result_payload::jsonb #>> '{brmed_result,pedido_exame_id}' END AS pedido
+    FROM documents d
+    JOIN clinics c ON c.id = d.clinic_id
+    WHERE c.name NOT IN ('teste', 'testando', 'Clinica Default')
+)
+SELECT pedido::bigint, count(*), bool_or(validation_status = 'validated'), min(created_at)::date
+FROM d WHERE pedido ~ '^\d{1,18}$'
+GROUP BY pedido
+"""
+
 # (validade, dados): a partir de `validade` o cache é considerado vencido.
 _cache: Optional[tuple[datetime, dict[str, Any]]] = None
 # Sobe a cada cálculo concluído. Serve para quem esperou no lock descobrir que
@@ -78,9 +126,6 @@ _cache: Optional[tuple[datetime, dict[str, Any]]] = None
 # cache é a mesma antes e depois e não daria para comparar.
 _versao = 0
 _lock = threading.Lock()
-
-
-_DIA = re.compile(r"\d{4}-\d{2}-\d{2}")
 
 
 class DashboardIndisponivel(RuntimeError):
@@ -111,43 +156,147 @@ def _carregar_sql() -> str:
     return _sql
 
 
-def _carregar_expedicoes() -> dict[str, int]:
-    """Lê a extração do BRNET do disco. Ausência e formato torto não são erro.
+def _meses_entre(inicio: tuple[int, int], fim: tuple[int, int]) -> list[tuple[int, int]]:
+    ano, mes = inicio
+    meses = []
+    while (ano, mes) <= fim:
+        meses.append((ano, mes))
+        ano, mes = (ano + 1, 1) if mes == 12 else (ano, mes + 1)
+    return meses
 
-    Este número não é do banco, então não pode derrubar o resto do painel: se o
-    arquivo não existir, o dashboard funciona inteiro menos a cobertura.
-    """
-    global _expedicoes
-    if _expedicoes is not None:
-        return _expedicoes
 
-    if not os.path.exists(EXPEDICOES_PATH):
-        logger.warning(
-            "[DASHBOARD] %s não existe: cobertura de expedições fica indisponível",
-            EXPEDICOES_PATH,
+def _mes_deslocado(ano: int, mes: int, delta: int) -> tuple[int, int]:
+    total = ano * 12 + (mes - 1) + delta
+    return total // 12, total % 12 + 1
+
+
+async def _buscar_pedidos_mes(ano: int, mes: int, sem: asyncio.Semaphore) -> dict[int, _Pedido]:
+    from app.services.accredited_monitoring_service import consultar_monitoramento_credenciados
+
+    async with sem:
+        registros = await consultar_monitoramento_credenciados(mes, ano)
+    return {
+        r.pedido_exame_id: _Pedido(
+            atendimento=r.data_atendimento.isoformat() if r.data_atendimento else None,
+            credenciado=r.credenciado.rotulo,
+            cidade=r.credenciado.cidade,
+            uf=r.credenciado.uf,
+            nome=r.credenciado.nome,
+            previsao=r.data_previsao.isoformat() if r.data_previsao else None,
+            liberado=r.data_liberacao is not None,
         )
-        _expedicoes = {}
-        return _expedicoes
+        for r in registros
+    }
 
-    try:
-        with open(EXPEDICOES_PATH, encoding="utf-8") as fh:
-            bruto = json.load(fh)
-        # O arquivo é gerado por conversão manual de planilha: valida a forma em
-        # vez de confiar. Entrada torta é descartada, não derruba o resto.
-        limpo = {
-            str(dia): int(qtd)
-            for dia, qtd in (bruto or {}).items()
-            if _DIA.fullmatch(str(dia)) and isinstance(qtd, (int, float))
-        }
-        descartadas = len(bruto or {}) - len(limpo)
-        if descartadas:
-            logger.warning("[DASHBOARD] %s entradas inválidas em %s", descartadas, EXPEDICOES_PATH)
-        logger.info("[DASHBOARD] %s dias de expedições carregados", len(limpo))
-        _expedicoes = limpo
-    except Exception as exc:  # noqa: BLE001 - arquivo externo, nunca derruba o painel
-        logger.error("[DASHBOARD] falha ao ler %s: %s", EXPEDICOES_PATH, exc)
-        _expedicoes = {}
-    return _expedicoes
+
+async def _buscar_pedidos(meses: list[tuple[int, int]]) -> list[Any]:
+    sem = asyncio.Semaphore(BUSCAS_SIMULTANEAS)
+    return await asyncio.gather(
+        *(_buscar_pedidos_mes(ano, mes, sem) for ano, mes in meses),
+        return_exceptions=True,
+    )
+
+
+def _carregar_pedidos(doc_mais_antigo: Optional[str]) -> Optional[dict[int, _Pedido]]:
+    """Pedidos do BRNET desde antes do primeiro documento. None se incompleto.
+
+    Mês que nunca foi buscado com sucesso deixa o resultado incompleto, e
+    denominador faltando inflaria a cobertura: melhor não mostrar. Mês em aberto
+    que falha reaproveita a última busca boa.
+    """
+    if not doc_mais_antigo:
+        return None
+
+    primeiro = datetime.strptime(str(doc_mais_antigo)[:10], "%Y-%m-%d")
+    hoje = agora()
+    atual = (hoje.year, hoje.month)
+    meses = _meses_entre(_mes_deslocado(primeiro.year, primeiro.month, -MESES_ANTES_DO_ATENDIMENTO), atual)
+    em_aberto = set(_meses_entre(_mes_deslocado(*atual, -(MESES_EM_ABERTO - 1)), atual))
+    buscar = [m for m in meses if m in em_aberto or m not in _pedidos_mes]
+
+    inicio = time.monotonic()
+    # Roda em thread (asyncio.to_thread no router e no loop diário): não há event
+    # loop aqui, então asyncio.run é seguro.
+    resultados = asyncio.run(_buscar_pedidos(buscar)) if buscar else []
+    falhas = []
+    for mes, resultado in zip(buscar, resultados):
+        if isinstance(resultado, BaseException):
+            falhas.append(mes)
+            logger.error("[DASHBOARD] expedições %02d/%s indisponíveis: %s", mes[1], mes[0], resultado)
+        else:
+            _pedidos_mes[mes] = resultado
+
+    faltando = [m for m in meses if m not in _pedidos_mes]
+    logger.info(
+        "[DASHBOARD] expedições: %s meses buscados em %.1fs, %s falhas, %s sem dado",
+        len(buscar), time.monotonic() - inicio, len(falhas), len(faltando),
+    )
+    if faltando:
+        return None
+
+    pedidos: dict[int, _Pedido] = {}
+    for mes in meses:
+        pedidos.update(_pedidos_mes[mes])
+    return pedidos
+
+
+def _primeiro_dia_ligado(primeiro_doc: Optional[date]) -> Optional[str]:
+    """Primeiro dia com cobertura medível: o 1º do mês do primeiro documento
+    com pedido. Começar no dia exato deixaria o primeiro ponto do gráfico mensal
+    com poucos dias rotulado como o mês inteiro; pular o mês perderia jun/26,
+    que já tem 89% dos documentos ligados."""
+    if not primeiro_doc:
+        return None
+    return date(primeiro_doc.year, primeiro_doc.month, 1).isoformat()
+
+
+def _cruzar_expedicoes(
+    pedidos: Optional[dict[int, _Pedido]],
+    docs_por_pedido: dict[int, tuple[int, bool]],
+    hoje: date,
+) -> dict[str, Any]:
+    """Liga pedidos do BRNET a documentos do ProntuAI pelo pedido_exame_id."""
+    if pedidos is None:
+        return {"expedicoes_dia": {}, "expedicoes_prontuai_dia": {}, "clinicas_sem_prontuai": None}
+
+    atendidos: dict[str, int] = {}
+    via_prontuai: dict[str, int] = {}
+    docs_por_credenciado: dict[str, int] = {}
+    for pid, p in pedidos.items():
+        qtd_docs, liberado_no_prontuai = docs_por_pedido.get(pid, (0, False))
+        if qtd_docs:
+            docs_por_credenciado[p.credenciado] = docs_por_credenciado.get(p.credenciado, 0) + qtd_docs
+        if p.atendimento:
+            atendidos[p.atendimento] = atendidos.get(p.atendimento, 0) + 1
+            if liberado_no_prontuai:
+                via_prontuai[p.atendimento] = via_prontuai.get(p.atendimento, 0) + 1
+
+    hoje_iso = hoje.isoformat()
+    previstos: dict[str, dict[str, Any]] = {}
+    for p in pedidos.values():
+        if p.liberado or not p.previsao or p.previsao < hoje_iso:
+            continue
+        if docs_por_credenciado.get(p.credenciado, 0) >= MIN_DOCUMENTOS_USA_PRONTUAI:
+            continue
+        item = previstos.setdefault(p.credenciado, {
+            "credenciado": p.credenciado,
+            "nome": p.nome or p.credenciado,
+            "cidade": p.cidade,
+            "uf": p.uf,
+            "pedidos_previstos": 0,
+            "proxima_previsao": p.previsao,
+            "documentos": docs_por_credenciado.get(p.credenciado, 0),
+        })
+        item["pedidos_previstos"] += 1
+        item["proxima_previsao"] = min(item["proxima_previsao"], p.previsao)
+
+    return {
+        "expedicoes_dia": atendidos,
+        "expedicoes_prontuai_dia": via_prontuai,
+        "clinicas_sem_prontuai": sorted(
+            previstos.values(), key=lambda c: (-c["pedidos_previstos"], c["credenciado"])
+        ),
+    }
 
 
 def _consultar() -> dict[str, Any]:
@@ -167,6 +316,12 @@ def _consultar() -> dict[str, Any]:
                 {"ms": str(TIMEOUT_MS)},
             )
             linha = conn.execute(text(_carregar_sql())).scalar()
+            docs_por_pedido: dict[int, tuple[int, bool]] = {}
+            primeiro_doc_ligado: Optional[date] = None
+            for pedido, qtd, liberado, criado in conn.execute(text(_SQL_DOCS_POR_PEDIDO)):
+                docs_por_pedido[int(pedido)] = (int(qtd), bool(liberado))
+                if primeiro_doc_ligado is None or criado < primeiro_doc_ligado:
+                    primeiro_doc_ligado = criado
 
     if not linha:
         raise DashboardIndisponivel("a consulta não devolveu nada")
@@ -174,7 +329,9 @@ def _consultar() -> dict[str, Any]:
     bruto = json.loads(linha)
     dados = {secao: bruto.get(secao) for secao in SECOES}
     momento = agora()
-    dados["expedicoes_dia"] = _carregar_expedicoes()
+    pedidos = _carregar_pedidos((bruto.get("periodo") or {}).get("doc_mais_antigo"))
+    dados.update(_cruzar_expedicoes(pedidos, docs_por_pedido, momento.date()))
+    dados["expedicoes_desde"] = _primeiro_dia_ligado(primeiro_doc_ligado)
     dados["ambiente"] = Settings.APP_ENV
     dados["gerado_em"] = momento.isoformat()
     dados["proxima_atualizacao"] = proxima_virada(momento).isoformat()
@@ -194,7 +351,7 @@ def obter_indicadores(forcar: bool = False) -> dict[str, Any]:
     O lock serializa o cálculo: sem ele, N requisições simultâneas com o cache
     frio disparariam N varreduras no banco ao mesmo tempo.
     """
-    global _cache, _expedicoes, _versao
+    global _cache, _versao
 
     if not forcar and _cache and agora() < _cache[0]:
         return _cache[1]
@@ -203,11 +360,6 @@ def obter_indicadores(forcar: bool = False) -> dict[str, Any]:
     # outra thread recalculou e o resultado dela serve — vários cliques no
     # "Atualizar" ao mesmo tempo custam uma varredura, não uma por clique.
     versao_ao_pedir = _versao
-
-    if forcar:
-        # Releitura da extração do BRNET junto: trocar a planilha no disco e
-        # apertar "Atualizar" na tela basta, sem reiniciar o processo.
-        _expedicoes = None
 
     with _lock:
         if _cache and _versao != versao_ao_pedir:
@@ -227,12 +379,11 @@ def obter_indicadores(forcar: bool = False) -> dict[str, Any]:
 def invalidar_cache() -> None:
     """Usado por testes e por quem precisar derrubar o cache sem recalcular.
 
-    Solta também a extração de expedições: trocar o arquivo no disco e pedir
-    `?forcar=true` passa a ser suficiente, sem reiniciar o processo.
+    Solta também os meses de pedidos já buscados no BRNET.
     """
-    global _cache, _expedicoes
+    global _cache
     _cache = None
-    _expedicoes = None
+    _pedidos_mes.clear()
 
 
 async def atualizacao_diaria_loop() -> None:
@@ -248,6 +399,14 @@ async def atualizacao_diaria_loop() -> None:
         MINUTO_ATUALIZACAO,
         FUSO.key,
     )
+    # Aquecimento: sem ele, o primeiro acesso depois de um deploy esperaria a
+    # varredura do banco mais a busca de todos os meses de expedição no BRNET.
+    if AQUECER_NO_STARTUP:
+        try:
+            await asyncio.to_thread(obter_indicadores)
+        except DashboardIndisponivel as exc:
+            logger.error("[DASHBOARD] aquecimento falhou: %s", exc)
+
     alvo = proxima_virada()
     while True:
         espera = (alvo - agora()).total_seconds()
