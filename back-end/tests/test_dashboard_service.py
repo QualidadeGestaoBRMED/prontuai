@@ -8,9 +8,8 @@ Rodar sem o conftest, que importa main.py e exige DATABASE_URL:
 
     PYTHONPATH=back-end pytest back-end/tests/test_dashboard_service.py -q --noconftest
 """
-import json
 import threading
-from datetime import datetime
+from datetime import date, datetime
 
 import pytest
 
@@ -169,37 +168,118 @@ def test_forcar_sequencial_continua_recalculando(monkeypatch):
     assert len(chamadas) == 3
 
 
-# ── extração de expedições do BRNET (arquivo no disco, fora do git) ──────────
+# ── expedições do BRNET (API de monitoramento de credenciados) ─────────────
+
+HOJE = datetime(2026, 9, 22, 10, 0, tzinfo=ds.FUSO)
 
 
-def test_expedicoes_ausentes_nao_derrubam_o_painel(monkeypatch, tmp_path):
-    """Servidor sem a extração: o resto do dashboard continua funcionando."""
-    monkeypatch.setattr(ds, "EXPEDICOES_PATH", str(tmp_path / "nao-existe.json"))
-    assert ds._carregar_expedicoes() == {}
+def pedido(atendimento=None, credenciado="RECIFE - PE - CLINICA A", previsao=None, liberado=False):
+    cidade, uf, nome = credenciado.split(" - ", 2)
+    return ds._Pedido(atendimento, credenciado, cidade, uf, nome, previsao, liberado)
 
 
-def test_expedicoes_validas_sao_carregadas(monkeypatch, tmp_path):
-    arquivo = tmp_path / "exp.json"
-    arquivo.write_text(json.dumps({"2026-08-03": 396, "2026-08-04": 351}))
-    monkeypatch.setattr(ds, "EXPEDICOES_PATH", str(arquivo))
-    assert ds._carregar_expedicoes() == {"2026-08-03": 396, "2026-08-04": 351}
+def _api_falsa(monkeypatch, por_mes, hoje=HOJE):
+    """Troca a busca de um mês por um dicionário; registra os meses pedidos."""
+    pedidos = []
+
+    async def falso(ano, mes, sem):
+        pedidos.append((ano, mes))
+        resultado = por_mes.get((ano, mes), {})
+        if isinstance(resultado, Exception):
+            raise resultado
+        return resultado
+
+    monkeypatch.setattr(ds, "_buscar_pedidos_mes", falso)
+    monkeypatch.setattr(ds, "agora", lambda: hoje)
+    return pedidos
 
 
-def test_expedicoes_com_lixo_descarta_so_o_lixo(monkeypatch, tmp_path):
-    """O arquivo vem de conversão manual de planilha — entrada torta acontece."""
-    arquivo = tmp_path / "exp.json"
-    arquivo.write_text(json.dumps({
-        "2026-08-03": 396,
-        "03/08/2026": 100,     # formato de data errado
-        "2026-08-04": "trezentos",  # valor não numérico
-        "total": 496,          # linha de totalizador da planilha
-    }))
-    monkeypatch.setattr(ds, "EXPEDICOES_PATH", str(arquivo))
-    assert ds._carregar_expedicoes() == {"2026-08-03": 396}
+def test_pedidos_de_meses_de_solicitacao_diferentes_se_juntam(monkeypatch):
+    _api_falsa(monkeypatch, {(2026, 8): {1: pedido("2026-09-02")}, (2026, 9): {2: pedido("2026-09-02")}})
+    assert set(ds._carregar_pedidos("2026-09-10")) == {1, 2}
 
 
-def test_json_quebrado_nao_levanta(monkeypatch, tmp_path):
-    arquivo = tmp_path / "exp.json"
-    arquivo.write_text("{isso não é json")
-    monkeypatch.setattr(ds, "EXPEDICOES_PATH", str(arquivo))
-    assert ds._carregar_expedicoes() == {}
+def test_busca_dois_meses_antes_do_primeiro_documento(monkeypatch):
+    meses = _api_falsa(monkeypatch, {})
+    ds._carregar_pedidos("2026-08-15")
+    assert sorted(meses) == [(2026, 6), (2026, 7), (2026, 8), (2026, 9)]
+
+
+def test_so_meses_em_aberto_sao_buscados_de_novo(monkeypatch):
+    meses = _api_falsa(monkeypatch, {})
+    ds._carregar_pedidos("2026-05-01")
+    meses.clear()
+    ds._carregar_pedidos("2026-05-01")
+    assert sorted(meses) == [(2026, 7), (2026, 8), (2026, 9)]
+
+
+def test_mes_nunca_buscado_com_falha_deixa_incompleto(monkeypatch):
+    """Denominador faltando inflaria a cobertura; melhor não mostrar."""
+    _api_falsa(monkeypatch, {(2026, 7): RuntimeError("BRNET fora")})
+    assert ds._carregar_pedidos("2026-09-01") is None
+
+
+def test_mes_em_aberto_com_falha_reaproveita_a_ultima_busca(monkeypatch):
+    _api_falsa(monkeypatch, {(2026, 9): {1: pedido("2026-09-01")}})
+    ds._carregar_pedidos("2026-09-01")
+
+    _api_falsa(monkeypatch, {(2026, 9): RuntimeError("BRNET fora")})
+    assert set(ds._carregar_pedidos("2026-09-01")) == {1}
+
+
+def test_sem_documento_nao_busca_nada(monkeypatch):
+    meses = _api_falsa(monkeypatch, {})
+    assert ds._carregar_pedidos(None) is None
+    assert meses == []
+
+
+def test_virada_de_ano(monkeypatch):
+    meses = _api_falsa(monkeypatch, {}, hoje=datetime(2027, 1, 5, 10, 0, tzinfo=ds.FUSO))
+    ds._carregar_pedidos("2026-12-20")
+    assert sorted(meses) == [(2026, 10), (2026, 11), (2026, 12), (2027, 1)]
+
+
+def test_cobertura_conta_pedido_e_nao_documento():
+    """Pedido com dois documentos liberados é uma expedição só."""
+    pedidos = {1: pedido("2026-09-01"), 2: pedido("2026-09-01"), 3: pedido("2026-09-02"), 4: pedido(None)}
+    docs = {1: (2, True), 3: (1, False)}
+    r = ds._cruzar_expedicoes(pedidos, docs, date(2026, 9, 22))
+    assert r["expedicoes_dia"] == {"2026-09-01": 2, "2026-09-02": 1}
+    assert r["expedicoes_prontuai_dia"] == {"2026-09-01": 1}
+
+
+def test_clinicas_sem_prontuai_usam_o_limite_de_documentos():
+    a, b, c = "RECIFE - PE - CLINICA A", "NATAL - RN - CLINICA B", "SALVADOR - BA - CLINICA C"
+    pedidos = {
+        # A: 3 documentos no histórico -> usa o ProntuAI, fica fora da lista
+        1: pedido("2026-08-01", a), 2: pedido("2026-08-02", a), 3: pedido(None, a, "2026-09-25"),
+        # B: 2 documentos -> abaixo do limite, entra
+        4: pedido("2026-08-01", b), 5: pedido(None, b, "2026-09-30"), 6: pedido(None, b, "2026-09-23"),
+        # C: sem documento; previsão passada e pedido já liberado não contam
+        7: pedido(None, c, "2026-09-24"), 8: pedido(None, c, "2026-09-01"), 9: pedido(None, c, "2026-09-26", True),
+    }
+    docs = {1: (2, True), 2: (1, True), 4: (2, True)}
+    lista = ds._cruzar_expedicoes(pedidos, docs, date(2026, 9, 22))["clinicas_sem_prontuai"]
+    assert [(x["credenciado"], x["pedidos_previstos"], x["proxima_previsao"], x["documentos"]) for x in lista] == [
+        (b, 2, "2026-09-23", 2),
+        (c, 1, "2026-09-24", 0),
+    ]
+    assert lista[0]["nome"] == "CLINICA B" and lista[0]["uf"] == "RN"
+
+
+def test_previsao_de_hoje_ainda_e_futura():
+    pedidos = {1: pedido(None, previsao="2026-09-22")}
+    assert len(ds._cruzar_expedicoes(pedidos, {}, date(2026, 9, 22))["clinicas_sem_prontuai"]) == 1
+
+
+def test_brnet_indisponivel_esvazia_tudo_sem_inventar():
+    r = ds._cruzar_expedicoes(None, {1: (1, True)}, date(2026, 9, 22))
+    assert r == {"expedicoes_dia": {}, "expedicoes_prontuai_dia": {}, "clinicas_sem_prontuai": None}
+
+
+@pytest.mark.parametrize(
+    "primeiro, esperado",
+    [(date(2026, 6, 2), "2026-06-01"), (date(2026, 6, 1), "2026-06-01"), (date(2026, 12, 31), "2026-12-01"), (None, None)],
+)
+def test_primeiro_dia_ligado_e_o_primeiro_do_mes(primeiro, esperado):
+    assert ds._primeiro_dia_ligado(primeiro) == esperado

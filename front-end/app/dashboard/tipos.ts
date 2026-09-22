@@ -2,8 +2,8 @@
  * Contrato dos dados do dashboard de indicadores.
  *
  * É o que `GET /v1/dashboard/indicadores` devolve — a consulta roda no banco do
- * ambiente em que o back-end está (dev, staging ou produção). A exceção é
- * `expedicoes_dia`, que não sai do banco: ver `dados.ts`.
+ * ambiente em que o back-end está (dev, staging ou produção). A exceção são os
+ * campos `expedicoes_*` e `clinicas_sem_prontuai`, que vêm da API do BRNET.
  */
 
 /** Granularidade da série. A chave de cada ponto é a data de início (ISO). */
@@ -66,6 +66,21 @@ export interface ClinicaDados {
   series: Partial<Record<SerieKey, Record<string, PontoClinica>>>;
 }
 
+/** Credenciado com previsão de liberação a partir de hoje que não usa o ProntuAI. */
+export interface ClinicaSemProntuai {
+  /** Rótulo do BRNET, "CIDADE - UF - NOME". */
+  credenciado: string;
+  nome: string;
+  cidade: string | null;
+  uf: string | null;
+  /** Pedidos ainda não liberados com previsão a partir de hoje. */
+  pedidos_previstos: number;
+  /** ISO. */
+  proxima_previsao: string;
+  /** Documentos ligados no ProntuAI em todo o histórico — abaixo de 3. */
+  documentos: number;
+}
+
 export interface DadosDashboard {
   periodo: { doc_mais_antigo: string; doc_mais_recente: string };
   totais: {
@@ -79,11 +94,24 @@ export interface DadosDashboard {
   acuracia: Record<SerieKey, PontoAcuracia[]>;
   clinicas: ClinicaDados[];
   /**
-   * Expedições de clínicas credenciadas por dia de atendimento — denominador de
-   * "Expedições via ProntuAI". Único campo que não sai do banco: o back-end lê
-   * de um arquivo no disco, fora do git (ver `dashboard_service.EXPEDICOES_PATH`).
-   * Vem vazio quando o servidor não tem a extração — aí o KPI mostra o total
-   * absoluto em vez de uma cobertura inventada.
+   * Pedidos atendidos em clínicas credenciadas, por dia de atendimento —
+   * denominador de "Expedições via ProntuAI". Vem da API de monitoramento de
+   * credenciados do BRNET (ver `dashboard_service._cruzar_expedicoes`). Vazio
+   * quando algum mês não pôde ser buscado — aí o KPI mostra o total absoluto em
+   * vez de uma cobertura inventada.
    */
   expedicoes_dia: Record<string, number>;
+  /**
+   * Numerador: dos mesmos pedidos, os que têm documento liberado no ProntuAI,
+   * ligados pelo `pedido_exame_id`. Conta pedido, não documento — reenvio não
+   * infla a cobertura.
+   */
+  expedicoes_prontuai_dia: Record<string, number>;
+  /**
+   * Primeiro dia (ISO) em que a ligação por pedido existe. Antes dele não há
+   * como medir cobertura, e o painel não mostra.
+   */
+  expedicoes_desde: string | null;
+  /** null quando o BRNET não pôde ser consultado. */
+  clinicas_sem_prontuai: ClinicaSemProntuai[] | null;
 }
