@@ -14,6 +14,12 @@ class Settings:
     PRONTUAI_SERVICE_TOKEN = os.getenv("PRONTUAI_SERVICE_TOKEN")
     PRONTUAI_CLIENT_NAME = os.getenv("PRONTUAI_CLIENT_NAME")
     PRONTUAI_API_TIMEOUT_SECONDS = float(os.getenv("PRONTUAI_API_TIMEOUT_SECONDS", "20"))
+    # Monitoramento de credenciados: credencial por usuário (Service-Token + Username).
+    # Sem as variáveis próprias, cai no token do ProntuAI, que hoje também é aceito.
+    ACCREDITED_MONITORING_SERVICE_TOKEN = os.getenv("ACCREDITED_MONITORING_SERVICE_TOKEN") or PRONTUAI_SERVICE_TOKEN
+    ACCREDITED_MONITORING_USERNAME = os.getenv("ACCREDITED_MONITORING_USERNAME") or PRONTUAI_CLIENT_NAME
+    # O mês inteiro vem numa resposta só (~7 MB)
+    ACCREDITED_MONITORING_TIMEOUT_SECONDS = float(os.getenv("ACCREDITED_MONITORING_TIMEOUT_SECONDS", "60"))
     USE_PRONTUAI_PATIENTS_EXAMS = os.getenv("USE_PRONTUAI_PATIENTS_EXAMS", "false").lower() == "true"
     MODELO_GPT = os.getenv("MODELO_GPT", "gpt-4o-mini")
     LOG_FILE = os.getenv("LOG_FILE", "logs/app.log")
