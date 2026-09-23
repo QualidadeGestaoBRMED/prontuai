@@ -85,6 +85,9 @@ interface ExamPendency {
   name_normalized: string;
   documents: number;
   requests: number;
+  never_found: boolean;
+  /** Pai ativo com o mesmo nome normalizado; null = sem pai no catálogo. */
+  parent_id: string | null;
 }
 
 interface CatalogStats {
@@ -95,10 +98,23 @@ interface CatalogStats {
   variations_total: number;
   conflicts_pending: number;
   terms_without_vector?: number;
+  pendencies_total?: number;
   brnet_never_found?: number;
 }
 
-/** Extrai a mensagem de erro do backend (409 traz o motivo da colisão). */
+/**
+ * Classe de aba/filtro ligado ou desligado.
+ *
+ * O `variant="default"` do Button pinta com `--primary`, que é a mesma cor do
+ * fundo da página: a aba ativa ficava invisível e a inativa (outline, branca)
+ * parecia a selecionada.
+ */
+function classeAlternancia(ligado: boolean): string {
+  return ligado
+    ? "bg-white text-[#193B4F] border border-white font-semibold shadow hover:bg-white/90"
+    : "bg-transparent text-white border border-white/40 hover:bg-white/10 hover:text-white";
+}
+
 /** Limites do nome, espelhados de `ExamParentCreate`/`ExamVariationCreate` no back-end. */
 const NOME_MIN = 2;
 const NOME_MAX = 180;
@@ -273,6 +289,8 @@ export default function ExamesAdminPage() {
 
   // Detalhe expandido: pai -> variações carregadas
   const [expandido, setExpandido] = useState<string | null>(null);
+  // Espelho síncrono de `expandido`, lido quando uma resposta chega.
+  const expandidoRef = useRef<string | null>(null);
   const [detalhe, setDetalhe] = useState<ExamParentDetail | null>(null);
   const [novasVariacoes, setNovasVariacoes] = useState<string[]>([""]);
   const [errosVariacao, setErrosVariacao] = useState<(string | null)[]>([]);
@@ -389,22 +407,37 @@ export default function ExamesAdminPage() {
     if (aba === "conflitos") carregarConflitos();
   }, [aba, carregarConflitos]);
 
-  const abrirDetalhe = async (parent: ExamParent) => {
-    if (expandido === parent.id) {
-      setExpandido(null);
-      setDetalhe(null);
-      setNovasVariacoes([""]);
-      setErrosVariacao([]);
-      return;
-    }
-    setExpandido(parent.id);
+  /**
+   * Busca o detalhe e só o aplica se o pai ainda for o expandido.
+   *
+   * Sem essa checagem, abrir dois pais em sequência deixava a resposta mais
+   * lenta vencer: a linha de um exame mostrava as variações de outro, e o
+   * "Remover" dali apagava a variação errada.
+   */
+  const recarregarDetalhe = async (parentId: string): Promise<boolean> => {
+    const response = await authFetch(API_ENDPOINTS.EXAM_BY_ID(parentId));
+    if (!response.ok) return false;
+    const dados: ExamParentDetail = await response.json();
+    if (expandidoRef.current === parentId) setDetalhe(dados);
+    return true;
+  };
+
+  const expandir = (parentId: string | null) => {
+    expandidoRef.current = parentId;
+    setExpandido(parentId);
     setDetalhe(null);
     setNovasVariacoes([""]);
     setErrosVariacao([]);
+  };
+
+  const abrirDetalhe = async (parent: ExamParent) => {
+    if (expandido === parent.id) {
+      expandir(null);
+      return;
+    }
+    expandir(parent.id);
     try {
-      const response = await authFetch(API_ENDPOINTS.EXAM_BY_ID(parent.id));
-      if (!response.ok) throw new Error("Erro ao carregar variações");
-      setDetalhe(await response.json());
+      if (!(await recarregarDetalhe(parent.id))) throw new Error("Erro ao carregar variações");
     } catch (error) {
       console.error("Erro:", error);
       toast.error("Erro ao carregar variações");
@@ -458,7 +491,17 @@ export default function ExamesAdminPage() {
         return;
       }
 
-      toast.success("Exame criado");
+      // O back descarta em silêncio variação repetida ou igual ao nome do pai;
+      // sem este aviso, o curador digitava três e via uma sem saber por quê.
+      const criado: ExamParentDetail = await response.json();
+      const ignoradas = variacoes.length - (criado.variations?.length ?? 0);
+      if (ignoradas > 0) {
+        toast.warning(
+          `Exame criado, mas ${ignoradas} variaç${ignoradas === 1 ? "ão foi ignorada" : "ões foram ignoradas"}: repetida${ignoradas === 1 ? "" : "s"} ou igual${ignoradas === 1 ? "" : "is"} ao nome do exame`
+        );
+      } else {
+        toast.success("Exame criado");
+      }
       setModalCriar(false);
       limparFormulario();
       carregarParents();
@@ -469,6 +512,23 @@ export default function ExamesAdminPage() {
       toast.error("Erro ao criar exame");
     } finally {
       setSalvando(false);
+    }
+  };
+
+  /**
+   * Pendência que já tem pai: leva ao catálogo com o pai aberto, onde o
+   * curador acrescenta as variações. Abrir "Novo Exame" aqui só rendia 409.
+   */
+  const abrirPaiDaPendencia = async (pendencia: ExamPendency) => {
+    if (!pendencia.parent_id) return;
+    setBusca(pendencia.name);
+    setBuscaAplicada(pendencia.name);
+    setAba("catalogo");
+    expandir(pendencia.parent_id);
+    try {
+      if (!(await recarregarDetalhe(pendencia.parent_id))) throw new Error();
+    } catch {
+      toast.error("Erro ao carregar variações");
     }
   };
 
@@ -506,7 +566,8 @@ export default function ExamesAdminPage() {
           name: formNome.trim(),
           status: formStatus,
           is_external: formExterno,
-          notes: formNotas.trim() || null,
+          // String vazia apaga a observação; `null` o back lê como "não mexer".
+          notes: formNotas.trim(),
         }),
       });
 
@@ -520,10 +581,7 @@ export default function ExamesAdminPage() {
       limparFormulario();
       carregarParents();
       carregarStats();
-      if (expandido) {
-        const atualizado = await authFetch(API_ENDPOINTS.EXAM_BY_ID(expandido));
-        if (atualizado.ok) setDetalhe(await atualizado.json());
-      }
+      if (expandidoRef.current) await recarregarDetalhe(expandidoRef.current);
     } catch (error) {
       console.error("Erro:", error);
       toast.error("Erro ao salvar exame");
@@ -568,10 +626,7 @@ export default function ExamesAdminPage() {
       setParaDesativar(null);
       // O desativado sai da listagem padrão; fechar o detalhe evita deixar as
       // variações de um exame que não está mais na tabela abertas embaixo.
-      if (!ativando && expandido === parent.id) {
-        setExpandido(null);
-        setDetalhe(null);
-      }
+      if (!ativando && expandidoRef.current === parent.id) expandir(null);
       carregarParents();
       carregarStats();
     } catch (error) {
@@ -634,8 +689,7 @@ export default function ExamesAdminPage() {
         toast.success(
           sucessos === 1 ? "Variação adicionada" : `${sucessos} variações adicionadas`
         );
-        const atualizado = await authFetch(API_ENDPOINTS.EXAM_BY_ID(parentId));
-        if (atualizado.ok) setDetalhe(await atualizado.json());
+        await recarregarDetalhe(parentId);
         carregarParents();
         carregarStats();
       }
@@ -664,8 +718,7 @@ export default function ExamesAdminPage() {
         return;
       }
       toast.success("Variação removida");
-      const atualizado = await authFetch(API_ENDPOINTS.EXAM_BY_ID(parentId));
-      if (atualizado.ok) setDetalhe(await atualizado.json());
+      await recarregarDetalhe(parentId);
       carregarParents();
       carregarStats();
     } catch (error) {
@@ -674,6 +727,31 @@ export default function ExamesAdminPage() {
     } finally {
       setRemovendo(false);
       setParaRemover(null);
+    }
+  };
+
+  /**
+   * Desativa ou reativa uma variação. O motor já ignorava variação inativa,
+   * mas o painel não tinha como mudar isso nem mostrava a diferença.
+   */
+  const alternarVariacao = async (variacao: ExamVariation, parentId: string) => {
+    try {
+      const response = await authFetch(API_ENDPOINTS.EXAM_VARIATION_BY_ID(variacao.id), {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ is_active: !variacao.is_active }),
+      });
+      if (!response.ok) {
+        toast.error(await mensagemDeErro(response, "Erro ao atualizar variação"));
+        return;
+      }
+      toast.success(variacao.is_active ? "Variação desativada" : "Variação ativada");
+      await recarregarDetalhe(parentId);
+      carregarParents();
+      carregarStats();
+    } catch (error) {
+      console.error("Erro:", error);
+      toast.error("Erro ao atualizar variação");
     }
   };
 
@@ -752,23 +830,23 @@ export default function ExamesAdminPage() {
             {/* Abas */}
             <div className="mb-4 flex gap-2">
               <Button
-                variant={aba === "pendencias" ? "default" : "outline"}
                 size="sm"
+                className={classeAlternancia(aba === "pendencias")}
                 onClick={() => setAba("pendencias")}
               >
                 Pendências
-                {stats?.brnet_never_found ? ` (${stats.brnet_never_found})` : ""}
+                {stats?.pendencies_total ? ` (${stats.pendencies_total})` : ""}
               </Button>
               <Button
-                variant={aba === "catalogo" ? "default" : "outline"}
                 size="sm"
+                className={classeAlternancia(aba === "catalogo")}
                 onClick={() => setAba("catalogo")}
               >
                 Catálogo
               </Button>
               <Button
-                variant={aba === "conflitos" ? "default" : "outline"}
                 size="sm"
+                className={classeAlternancia(aba === "conflitos")}
                 onClick={() => setAba("conflitos")}
               >
                 Conflitos de importação
@@ -777,7 +855,7 @@ export default function ExamesAdminPage() {
             </div>
 
             {aba === "pendencias" ? (
-              /* Pendências: exames que o BRNET pede e a comparação nunca achou */
+              /* Pendências: sem pai no catálogo, ou nunca encontrado em documento algum */
               <div className="bg-white rounded-lg shadow overflow-hidden">
                 <table className="w-full">
                   <thead className="bg-gray-50 border-b">
@@ -811,27 +889,48 @@ export default function ExamesAdminPage() {
                     ) : pendencias.length === 0 ? (
                       <tr>
                         <td colSpan={3} className="px-6 py-12 text-center text-gray-500">
-                          Nenhuma pendência: todo exame que o BRNET pede tem pai no catálogo.
+                          Nenhuma pendência: todo exame que o BRNET pede tem pai no catálogo e
+                          já foi encontrado em algum documento.
                         </td>
                       </tr>
                     ) : (
                       pendencias.map((pendencia) => (
-                        <tr key={pendencia.name_normalized} className="hover:bg-gray-50">
-                          <td className="px-6 py-4 text-sm font-medium">
-                            {pendencia.name}
-                            <div className="text-xs text-gray-400 font-normal mt-0.5">
-                              {pendencia.name_normalized}
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 text-sm text-gray-600">
-                            {pendencia.documents.toLocaleString("pt-BR")}
-                          </td>
-                          <td className="px-6 py-4 text-sm">
-                            <Button size="sm" onClick={() => cadastrarPendencia(pendencia)}>
-                              Cadastrar
-                            </Button>
-                          </td>
-                        </tr>
+                          <tr
+                            key={pendencia.name_normalized}
+                            // Só a cor sinaliza o nunca encontrado; sem pai se lê pelo
+                            // botão (Cadastrar × Ver variações).
+                            className={pendencia.never_found ? "bg-red-50 hover:bg-red-100" : "hover:bg-gray-50"}
+                            title={
+                              pendencia.never_found
+                                ? "A comparação nunca encontrou este exame em documento algum"
+                                : undefined
+                            }
+                          >
+                            <td className="px-6 py-4 text-sm font-medium">
+                              {pendencia.name}
+                              <div className="text-xs text-gray-400 font-normal mt-0.5">
+                                {pendencia.name_normalized}
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 text-sm text-gray-600">
+                              {pendencia.documents.toLocaleString("pt-BR")}
+                            </td>
+                            <td className="px-6 py-4 text-sm">
+                              {pendencia.parent_id ? (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => abrirPaiDaPendencia(pendencia)}
+                                >
+                                  Ver variações
+                                </Button>
+                              ) : (
+                                <Button size="sm" onClick={() => cadastrarPendencia(pendencia)}>
+                                  Cadastrar
+                                </Button>
+                              )}
+                            </td>
+                          </tr>
                       ))
                     )}
                   </tbody>
@@ -884,14 +983,14 @@ export default function ExamesAdminPage() {
                   </Select>
                   <Button
                     size="sm"
-                    variant={somenteSemVariacao ? "default" : "outline"}
+                    className={classeAlternancia(somenteSemVariacao)}
                     onClick={() => setSomenteSemVariacao((v) => !v)}
                   >
                     Sem variações
                   </Button>
                   <Button
                     size="sm"
-                    variant={incluirInativos ? "default" : "outline"}
+                    className={classeAlternancia(incluirInativos)}
                     onClick={() => setIncluirInativos((v) => !v)}
                     title="Exames desativados ficam fora da listagem padrão"
                   >
@@ -1063,8 +1162,18 @@ export default function ExamesAdminPage() {
                                               key={variacao.id}
                                               className="flex items-center gap-2 text-sm"
                                             >
-                                              <span className="flex-1">
+                                              <span
+                                                className={`flex-1 ${variacao.is_active ? "" : "text-gray-400 line-through"}`}
+                                              >
                                                 {variacao.name}
+                                                {!variacao.is_active && (
+                                                  <span
+                                                    className="ml-2 px-2 py-0.5 text-xs rounded-full bg-red-100 text-red-800 no-underline inline-block"
+                                                    title="Variação desativada: a comparação não a usa"
+                                                  >
+                                                    Inativa
+                                                  </span>
+                                                )}
                                                 {variacao.occurrences != null && (
                                                   <span className="ml-2 text-xs text-gray-500">
                                                     {variacao.occurrences} ocorrência
@@ -1072,6 +1181,13 @@ export default function ExamesAdminPage() {
                                                   </span>
                                                 )}
                                               </span>
+                                              <Button
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() => alternarVariacao(variacao, parent.id)}
+                                              >
+                                                {variacao.is_active ? "Desativar" : "Ativar"}
+                                              </Button>
                                               <Button
                                                 variant="outline"
                                                 size="sm"

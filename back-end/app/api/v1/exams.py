@@ -121,14 +121,14 @@ async def list_pendencies(
     current_user: User = Depends(require_exam_catalog),
 ):
     """
-    Exames que o BRNET pede e que a análise nunca encontrou, em nenhum documento.
+    Exames que o BRNET pede e que estão sem pai no catálogo ou nunca foram
+    encontrados.
 
-    A regra é de evidência, não de catálogo: exame já encontrado alguma vez não
-    é pendência, porque cadastrá-lo não muda o resultado. Ordenado por
-    quantidade de documentos em que o BRNET pediu o exame.
+    Nunca encontrados vêm primeiro (alerta no painel), depois quem o BRNET mais
+    pede. Regra completa em `listar_pendencias_catalogo`.
     """
     try:
-        return user_db.listar_exames_nunca_encontrados(limit=limit)
+        return user_db.listar_pendencias_catalogo(limit=limit)
     except Exception as e:
         logger.exception(f"[EXAMS] Erro ao listar pendências: {e}")
         raise HTTPException(
@@ -220,6 +220,7 @@ async def update_variation(
 ):
     """Renomeia, ativa/desativa, ou move a variação para outro pai."""
     try:
+        nome_anterior = user_db.get_exam_variation_name(variation_id)
         variacao = user_db.update_exam_variation(
             variation_id=variation_id,
             name=payload.name,
@@ -233,9 +234,8 @@ async def update_variation(
                 detail="Variação não encontrada",
             )
 
-        await _pos_escrita(
-            [(variacao.id, variacao.name, True)] if payload.name is not None else []
-        )
+        renomeou = payload.name is not None and variacao.name != nome_anterior
+        await _pos_escrita([(variacao.id, variacao.name, True)] if renomeou else [])
 
         set_audit_context({"variation_id": variation_id, "parent_id": variacao.parent_id})
         logger.info(f"[EXAMS] {current_user.email} atualizou variação {variation_id}")
@@ -398,6 +398,7 @@ async def update_parent(
 ):
     """Atualiza exame pai. Campos ausentes no corpo ficam como estão."""
     try:
+        anterior = user_db.get_exam_parent(parent_id)
         pai = user_db.update_exam_parent(
             parent_id=parent_id,
             name=payload.name,
@@ -412,9 +413,12 @@ async def update_parent(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Exame não encontrado",
             )
-        # Invalida sempre; vetoriza só quando o nome muda, porque renomear torna
-        # o vetor antigo obsoleto.
-        await _pos_escrita([(pai.id, pai.name, False)] if payload.name is not None else [])
+        # Invalida sempre; vetoriza só quando o nome de fato muda, porque
+        # renomear torna o vetor antigo obsoleto. O painel manda o nome em todo
+        # salvamento, então comparar com o anterior evita uma chamada à OpenAI
+        # a cada edição de observação.
+        renomeou = anterior is not None and pai.name != anterior.name
+        await _pos_escrita([(pai.id, pai.name, False)] if renomeou else [])
 
         set_audit_context({"parent_id": parent_id, "name": pai.name, "status": pai.status})
         logger.info(f"[EXAMS] {current_user.email} atualizou exame pai {parent_id}")

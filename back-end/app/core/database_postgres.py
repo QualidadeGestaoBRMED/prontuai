@@ -1822,6 +1822,9 @@ class PostgresUserDatabase:
                     ExamVariationModel.parent_id.label("parent_id"),
                     func.count(ExamVariationModel.id).label("total"),
                 )
+                # Variação desativada não vale na comparação: contá-la fazia o
+                # pai parecer coberto por um sinônimo que o motor ignora.
+                .filter(ExamVariationModel.is_active.is_(True))
                 .group_by(ExamVariationModel.parent_id)
                 .subquery()
             )
@@ -1838,7 +1841,12 @@ class PostgresUserDatabase:
             if only_without_variations:
                 query = query.filter(func.coalesce(contagem.c.total, 0) == 0)
             if search:
-                termo = f"%{normalizar_termo(search)}%"
+                normalizado = normalizar_termo(search)
+                if not normalizado:
+                    # Só pontuação ("%", "_", "-"): normalizada vira vazia, e
+                    # "%%" casaria o catálogo inteiro.
+                    return [], 0
+                termo = f"%{normalizado}%"
                 # Busca pelo nome normalizado do pai ou de qualquer variação dele.
                 pais_por_variacao = (
                     session.query(ExamVariationModel.parent_id)
@@ -1883,7 +1891,9 @@ class PostgresUserDatabase:
                 .order_by(ExamVariationModel.name_normalized.asc())
                 .all()
             )
-            base = self._model_to_exam_parent(modelo, len(variacoes))
+            base = self._model_to_exam_parent(
+                modelo, sum(1 for v in variacoes if v.is_active)
+            )
             return ExamParentDetail(
                 **base.model_dump(),
                 variations=[self._model_to_exam_variation(v) for v in variacoes],
@@ -2002,7 +2012,8 @@ class PostgresUserDatabase:
             if is_active is not None:
                 modelo.is_active = is_active
             if notes is not None:
-                modelo.notes = notes
+                # None = "não mexer"; string vazia = apagar a observação.
+                modelo.notes = notes.strip() or None
 
             modelo.updated_at = datetime.utcnow()
             modelo.updated_by = actor
@@ -2118,6 +2129,17 @@ class PostgresUserDatabase:
         finally:
             session.close()
 
+    def get_exam_variation_name(self, variation_id: str) -> Optional[str]:
+        """Nome atual da variação, ou None se ela não existe."""
+        session = self._get_session()
+        try:
+            linha = session.query(ExamVariationModel.name).filter(
+                ExamVariationModel.id == variation_id
+            ).first()
+            return linha[0] if linha else None
+        finally:
+            session.close()
+
     def delete_exam_variation(self, variation_id: str) -> bool:
         """Remove uma variação."""
         session = self._get_session()
@@ -2222,21 +2244,27 @@ class PostgresUserDatabase:
             pais_com_variacao = (
                 session.query(ExamVariationModel.parent_id).distinct().subquery()
             )
+            # Uma chamada só: a consulta de pendências varre todos os documentos.
+            pendencias = self.listar_pendencias_catalogo(limit=10000)
+            # Pai desativado não vale na comparação; contá-lo como "confirmado no
+            # BRNET" ou "sem variação" inflava o cabeçalho.
+            pai_ativo = ExamParentModel.is_active.is_(True)
             return ExamCatalogStats(
                 parents_total=session.query(func.count(ExamParentModel.id)).scalar() or 0,
                 parents_ativo=session.query(func.count(ExamParentModel.id))
-                .filter(ExamParentModel.status == "ativo")
+                .filter(pai_ativo, ExamParentModel.status == "ativo")
                 .scalar()
                 or 0,
                 parents_quarentena=session.query(func.count(ExamParentModel.id))
-                .filter(ExamParentModel.status == "quarentena")
+                .filter(pai_ativo, ExamParentModel.status == "quarentena")
                 .scalar()
                 or 0,
                 parents_sem_variacao=session.query(func.count(ExamParentModel.id))
                 .filter(
+                    pai_ativo,
                     ~ExamParentModel.id.in_(
                         session.query(pais_com_variacao.c.parent_id)
-                    )
+                    ),
                 )
                 .scalar()
                 or 0,
@@ -2245,7 +2273,8 @@ class PostgresUserDatabase:
                 .filter(ExamVariationConflictModel.resolution.is_(None))
                 .scalar()
                 or 0,
-                brnet_never_found=len(self.listar_exames_nunca_encontrados(limit=10000)),
+                pendencies_total=len(pendencias),
+                brnet_never_found=sum(1 for p in pendencias if p.never_found),
                 terms_without_vector=sum(
                     session.query(func.count(modelo.id))
                     .filter(modelo.embedding.is_(None))
@@ -2383,24 +2412,28 @@ class PostgresUserDatabase:
         "  AND elem->>'status' = 'encontrado'"
     )
 
-    def listar_exames_nunca_encontrados(self, limit: int = 200) -> List[ExamPendency]:
+    def listar_pendencias_catalogo(self, limit: int = 200) -> List[ExamPendency]:
         """
-        Exames que o BRNET pede e que a análise **nunca** encontrou, em nenhum
-        documento.
+        Exames que o BRNET pede e que merecem olhar da curadoria.
 
-        A regra é de evidência, não de catálogo. Um exame já encontrado alguma
-        vez não é pendência: cadastrá-lo não muda o resultado. A regra anterior
-        ("sem pai no catálogo") inflava a lista — media 70 exames, dos quais 69
-        já eram encontrados. O caso que expôs isso foi o TSH: sem pai nenhum, e
-        encontrado em 140 de 140 documentos, porque `_filtrar_exames_ocr` aceita
-        todo nome que o BRNET pediu, com ou sem catálogo.
+        Junta as duas regras que o painel já teve:
+
+        - **sem pai** no catálogo (regra original): sem pai, o exame não tem
+          sinônimo nenhum;
+        - **nunca encontrado** em documento algum (regra de evidência): é o
+          caso mais grave, e vem com alerta no painel.
+
+        Faltante **não** é critério: exame com pai e já encontrado alguma vez
+        não entra, porque faltante não prova falha do catálogo — o exame pode
+        realmente não estar no prontuário.
+
+        Só pai **ativo** conta como pai: o motor ignora pai desativado.
 
         A normalização roda em **Python**, não em SQL: as reescritas de sigla de
         `normalizar_termo` (gama-GT → GGT, entre outras) não existem no banco, e
         reimplementá-las em SQL faria as duas divergirem em silêncio.
 
-        Ordena por número de documentos em que o BRNET pediu o exame — que aqui
-        é a fila de trabalho de verdade, já que nenhum deles foi encontrado.
+        Ordem: nunca encontrados primeiro, depois quem o BRNET mais pede.
         """
         session = self._get_session()
         try:
@@ -2431,20 +2464,32 @@ class PostgresUserDatabase:
                 if chave:
                     ja_encontrados.add(chave)
 
-            pendencias = [
-                ExamPendency(
-                    name=item["name"],
-                    name_normalized=chave,
-                    documents=item["documents"],
-                    requests=item["requests"],
+            pai_por_chave = {
+                chave: pid
+                for pid, chave in session.query(
+                    ExamParentModel.id, ExamParentModel.name_normalized
+                ).filter(ExamParentModel.is_active.is_(True))
+            }
+
+            pendencias = []
+            for chave, item in agregado.items():
+                parent_id = pai_por_chave.get(chave)
+                nunca = chave not in ja_encontrados
+                if parent_id and not nunca:
+                    continue
+                pendencias.append(
+                    ExamPendency(
+                        name=item["name"],
+                        name_normalized=chave,
+                        documents=item["documents"],
+                        requests=item["requests"],
+                        never_found=nunca,
+                        parent_id=parent_id,
+                    )
                 )
-                for chave, item in agregado.items()
-                if chave not in ja_encontrados
-            ]
-            pendencias.sort(key=lambda p: (-p.documents, p.name))
+            pendencias.sort(
+                key=lambda p: (not p.never_found, -p.documents, p.name)
+            )
             return pendencias[:limit]
         finally:
             session.close()
-
-    def contar_exames_nunca_encontrados(self) -> int:
-        return len(self.listar_exames_nunca_encontrados(limit=10000))
