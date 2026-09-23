@@ -137,16 +137,18 @@ class ExamConflictResolution(BaseModel):
 
 class ExamPendency(BaseModel):
     """
-    Exame que o BRNET pede e o catálogo não tem como pai.
-
-    É a pendência de curadoria mais consequente: sem pai, a comparação nunca
-    encontra o exame — nem por sinônimo, nem pela varredura do markdown.
+    Exame que o BRNET pede e que merece olhar da curadoria: sem pai ativo no
+    catálogo, ou nunca encontrado em documento algum.
     """
     name: str
     name_normalized: str
     # Documentos em que o BRNET pediu este exame: a exposição do problema.
     documents: int = 0
     requests: int = 0
+    # Nunca encontrado em documento algum: o caso mais grave, com alerta no painel.
+    never_found: bool = False
+    # Pai ativo com o mesmo nome normalizado; None = sem pai no catálogo.
+    parent_id: Optional[str] = None
 
 
 class ExamCatalogStats(BaseModel):
@@ -159,5 +161,7 @@ class ExamCatalogStats(BaseModel):
     conflicts_pending: int = 0
     # `embedding IS NULL` é o marcador de pendência; não há tabela de fila.
     terms_without_vector: int = 0
-    # Nomes que o BRNET pede e que a análise nunca encontrou em documento algum.
+    # Linhas da aba Pendências (sem pai ou nunca encontrado).
+    pendencies_total: int = 0
+    # Subconjunto das pendências que a análise nunca encontrou em documento algum.
     brnet_never_found: int = 0
