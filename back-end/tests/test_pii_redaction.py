@@ -46,6 +46,21 @@ class TestNaoVaza:
         texto = red.redigir_para_llm(f"rodape {CPF_VALIDO} {CNPJ_VALIDO} fim")
         assert "529" not in texto and "11.222" not in texto
 
+    @pytest.mark.parametrize("cpf", ["529.982,24725", "529,982,247-25", "529.982.247,25"])
+    def test_cpf_solto_com_virgula_do_ocr(self, cpf):
+        """O OCR troca ponto/hífen por vírgula; visto num prontuário real."""
+        texto = red.redigir_para_llm(f"HEMOGRAMA 12/03/2026 {cpf} ASSINATURA", preservar_datas=True)
+        assert "982" not in texto
+        assert "HEMOGRAMA 12/03/2026" in texto
+
+    def test_cnpj_solto_com_virgula_do_ocr(self):
+        texto = red.redigir_para_llm("rodape 11.222.333/0001,81 fim")
+        assert "11.222" not in texto and red.CNPJ in texto
+
+    def test_valor_conhecido_com_virgula_do_ocr(self):
+        texto = red.redigir_para_llm("via 529.982,247 25", valores_conhecidos=["52998224725"])
+        assert "982" not in texto
+
     def test_valor_conhecido_some_onde_nao_ha_rotulo(self):
         """O nome se repete em cabeçalho e rodapé de cada página, sem rótulo."""
         texto = red.redigir_para_llm(
@@ -186,6 +201,11 @@ class TestNaoEstraga:
         ],
     )
     def test_linha_de_exame_sobrevive_intacta(self, linha):
+        assert red.redigir_para_llm(linha, preservar_datas=True).strip() == linha
+
+    def test_lista_de_valores_com_virgula_fica(self):
+        """Vírgula é também separador de lista: sem dígito de CPF válido, fica."""
+        linha = "AUDIOMETRIA 250, 500, 100, 20"
         assert red.redigir_para_llm(linha, preservar_datas=True).strip() == linha
 
     def test_data_de_realizacao_do_exame_fica(self):
@@ -330,7 +350,9 @@ class TestConferenciaDeSaida:
         "texto",
         [
             f"## HEMOGRAMA\nCPF {CPF_VALIDO}",
+            "## HEMOGRAMA\n529.982,24725",
             f"## HEMOGRAMA\n{CNPJ_VALIDO}",
+            "## HEMOGRAMA\n11.222.333/0001,81",
             "## HEMOGRAMA\ncontato ana@exemplo.com",
             "## HEMOGRAMA\n(21) 98765-4321",
             "## HEMOGRAMA\nCEP 25522-000",
@@ -343,6 +365,7 @@ class TestConferenciaDeSaida:
     def test_cpf_invalido_nao_dispara_falso_positivo(self):
         """Número de 11 dígitos que não passa no dígito verificador não é CPF."""
         red.verificar_payload("## HEMOGRAMA\nprotocolo 123.456.789-00")
+        red.verificar_payload("## HEMOGRAMA\nprotocolo 123.456,78900")
 
     def test_valor_conhecido_do_documento_e_barrado(self):
         with pytest.raises(red.VazamentoDeDadoCadastral):
