@@ -17,7 +17,10 @@ export interface PontoSerie {
   revisados: number;
   validados: number;
   rejeitados: number;
-  /** Expedições por prazo. Só é capturado a partir de jun/26. */
+  /**
+   * Prazo pela previsão gravada no processamento, misturando clínica e técnico.
+   * O painel não usa mais: ver `prazo_clinica_dia` e `prazo_tecnico_dia`.
+   */
   antecipada: number;
   em_dia: number;
   atrasada: number;
@@ -114,4 +117,18 @@ export interface DadosDashboard {
   expedicoes_desde: string | null;
   /** null quando o BRNET não pôde ser consultado. */
   clinicas_sem_prontuai: ClinicaSemProntuai[] | null;
+  /**
+   * Envio do prontuário pela clínica comparado ao prazo do credenciado no BRNET,
+   * por dia de envio. Um documento por entrega (reenvio conta de novo).
+   */
+  prazo_clinica_dia: Record<string, Prazos>;
+  /**
+   * Aprovação pelo técnico de credenciados comparada ao prazo da BR MED (um dia
+   * útil depois do da clínica), por dia de aprovação. Só aprovações humanas — a
+   * automática da IA fica de fora.
+   */
+  prazo_tecnico_dia: Record<string, Prazos>;
 }
+
+/** [antecipado, no dia, atrasado]. */
+export type Prazos = [number, number, number];

@@ -283,3 +283,61 @@ def test_brnet_indisponivel_esvazia_tudo_sem_inventar():
 )
 def test_primeiro_dia_ligado_e_o_primeiro_do_mes(primeiro, esperado):
     assert ds._primeiro_dia_ligado(primeiro) == esperado
+
+
+# ── expedições por prazo: clínica x técnico de credenciados ─────────────────
+
+
+def test_cada_lado_e_medido_contra_o_proprio_prazo():
+    """Clínica tem até 03/09; a BR MED, um dia útil depois (04/09)."""
+    pedidos = {1: pedido("2026-09-01", previsao="2026-09-03")}
+    docs = [(1, date(2026, 9, 3), date(2026, 9, 4), date(2026, 9, 4))]
+    r = ds._cruzar_prazos(pedidos, docs)
+    assert r["prazo_clinica_dia"] == {"2026-09-03": [0, 1, 0]}   # clínica no dia
+    assert r["prazo_tecnico_dia"] == {"2026-09-04": [0, 1, 0]}   # técnico no dia, não atrasado
+
+
+def test_atraso_da_clinica_nao_vira_atraso_do_tecnico():
+    pedidos = {1: pedido(previsao="2026-09-03")}
+    docs = [(1, date(2026, 9, 4), date(2026, 9, 4), date(2026, 9, 4))]
+    r = ds._cruzar_prazos(pedidos, docs)
+    assert r["prazo_clinica_dia"] == {"2026-09-04": [0, 0, 1]}
+    assert r["prazo_tecnico_dia"] == {"2026-09-04": [0, 1, 0]}
+
+
+def test_prazo_classifica_antecipado_no_dia_e_atrasado():
+    pedidos = {1: pedido(previsao="2026-09-10")}
+    docs = [
+        (1, date(2026, 9, 8), date(2026, 9, 10), date(2026, 9, 11)),
+        (1, date(2026, 9, 10), date(2026, 9, 12), date(2026, 9, 11)),
+    ]
+    r = ds._cruzar_prazos(pedidos, docs)
+    assert r["prazo_clinica_dia"] == {"2026-09-08": [1, 0, 0], "2026-09-10": [0, 1, 0]}
+    assert r["prazo_tecnico_dia"] == {"2026-09-10": [1, 0, 0], "2026-09-12": [0, 0, 1]}
+
+
+def test_prazo_conta_documento_e_nao_pedido():
+    """Reenvio é outra entrega da clínica."""
+    pedidos = {1: pedido(previsao="2026-09-10")}
+    docs = [(1, date(2026, 9, 8), None, None), (1, date(2026, 9, 8), None, None)]
+    assert ds._cruzar_prazos(pedidos, docs)["prazo_clinica_dia"] == {"2026-09-08": [2, 0, 0]}
+
+
+def test_aprovacao_da_ia_nao_entra_no_tecnico():
+    """Sem aprovação humana (None), o documento conta só do lado da clínica."""
+    pedidos = {1: pedido(previsao="2026-09-10")}
+    r = ds._cruzar_prazos(pedidos, [(1, date(2026, 9, 8), None, date(2026, 9, 11))])
+    assert r["prazo_clinica_dia"] == {"2026-09-08": [1, 0, 0]}
+    assert r["prazo_tecnico_dia"] == {}
+
+
+def test_sem_prazo_o_documento_fica_fora_daquele_lado():
+    pedidos = {1: pedido(previsao=None)}
+    docs = [(1, date(2026, 9, 8), date(2026, 9, 8), None), (99, date(2026, 9, 8), None, None)]
+    assert ds._cruzar_prazos(pedidos, docs) == {"prazo_clinica_dia": {}, "prazo_tecnico_dia": {}}
+
+
+def test_sem_brnet_o_tecnico_continua():
+    """O prazo da BR MED vem gravado no documento; só a clínica depende da API."""
+    r = ds._cruzar_prazos(None, [(1, date(2026, 9, 8), date(2026, 9, 9), date(2026, 9, 9))])
+    assert r == {"prazo_clinica_dia": {}, "prazo_tecnico_dia": {"2026-09-09": [0, 1, 0]}}

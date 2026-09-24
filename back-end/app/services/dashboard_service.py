@@ -119,6 +119,34 @@ FROM d WHERE pedido ~ '^\d{1,18}$'
 GROUP BY pedido
 """
 
+# Um documento por linha, para "Expedições por prazo". Datas convertidas de UTC
+# (é como created_at/reviewed_at são gravados) para o fuso do painel antes de
+# virar dia: prontuário enviado às 22h do dia da previsão é "no dia", não
+# atrasado. `liberado_pelo_tecnico` só existe quando um revisor humano aprovou —
+# aprovação automática da IA não é trabalho do técnico e fica fora da conta.
+#
+# `prazo_brmed` é a `data_previsao_liberacao` que o patients_exams do BRNET
+# devolve no processamento: o prazo da BR MED para o cliente. Medido em
+# 3.794 documentos, é sempre o prazo da clínica (data_previsao da API de
+# monitoramento = atendimento + prazo do credenciado em dias úteis) mais 1 dia
+# útil — o dia que o técnico tem para conferir e liberar.
+_SQL_PRAZOS = r"""
+SELECT
+    (d.result_payload::jsonb #>> '{brmed_result,pedido_exame_id}')::bigint AS pedido,
+    (d.created_at AT TIME ZONE 'UTC' AT TIME ZONE :fuso)::date AS enviado,
+    CASE WHEN d.validation_status = 'validated' AND d.reviewed_by IS NOT NULL
+         THEN (d.reviewed_at AT TIME ZONE 'UTC' AT TIME ZONE :fuso)::date END AS liberado_pelo_tecnico,
+    CASE WHEN d.result_payload::jsonb #>> '{brmed_result,data_previsao_liberacao}' ~ '^\d{2}/\d{2}/\d{4}$'
+         THEN to_date(d.result_payload::jsonb #>> '{brmed_result,data_previsao_liberacao}', 'DD/MM/YYYY')
+    END AS prazo_brmed
+FROM documents d
+JOIN clinics c ON c.id = d.clinic_id
+WHERE c.name NOT IN ('teste', 'testando', 'Clinica Default')
+  AND d.result_payload LIKE '{%'
+  AND pg_input_is_valid(d.result_payload, 'jsonb')
+  AND d.result_payload::jsonb #>> '{brmed_result,pedido_exame_id}' ~ '^\d{1,18}$'
+"""
+
 # (validade, dados): a partir de `validade` o cache é considerado vencido.
 _cache: Optional[tuple[datetime, dict[str, Any]]] = None
 # Sobe a cada cálculo concluído. Serve para quem esperou no lock descobrir que
@@ -299,6 +327,45 @@ def _cruzar_expedicoes(
     }
 
 
+def _classificar_prazo(evento: date, alvo: date) -> int:
+    """0 = antecipado, 1 = no dia, 2 = atrasado (posição na lista do dia)."""
+    return 0 if evento < alvo else (1 if evento == alvo else 2)
+
+
+def _cruzar_prazos(
+    pedidos: Optional[dict[int, _Pedido]],
+    documentos: list[tuple[int, date, Optional[date], Optional[date]]],
+) -> dict[str, Any]:
+    """Envio da clínica e liberação do técnico, cada um contra o próprio prazo.
+
+    O BRNET tem dois prazos por pedido, e cada lado responde pelo seu:
+      * clínica: o envio do prontuário contra o prazo do credenciado
+        (data_previsao da API de monitoramento, buscada a cada atualização);
+      * técnico de credenciados: a aprovação contra o prazo da BR MED
+        (data_previsao_liberacao do patients_exams, um dia útil depois).
+    Comparar o técnico com o prazo da clínica o cobraria por um dia que não é
+    dele.
+
+    Conta DOCUMENTO, não pedido: cada envio é uma entrega da clínica e cada
+    aprovação é uma liberação do técnico. Cada lado é datado pelo próprio
+    evento — a clínica pelo dia do envio, o técnico pelo dia da aprovação. Sem
+    o prazo correspondente, o documento fica fora daquele lado.
+
+    Formato: {"YYYY-MM-DD": [antecipado, no_dia, atrasado]}. Sem o BRNET o lado
+    da clínica vem vazio; o do técnico não depende da API e continua.
+    """
+    clinica: dict[str, list[int]] = {}
+    tecnico: dict[str, list[int]] = {}
+    for pedido, enviado, liberado, prazo_brmed in documentos:
+        p = (pedidos or {}).get(pedido)
+        if p and p.previsao:
+            prazo_clinica = date.fromisoformat(p.previsao)
+            clinica.setdefault(enviado.isoformat(), [0, 0, 0])[_classificar_prazo(enviado, prazo_clinica)] += 1
+        if liberado and prazo_brmed:
+            tecnico.setdefault(liberado.isoformat(), [0, 0, 0])[_classificar_prazo(liberado, prazo_brmed)] += 1
+    return {"prazo_clinica_dia": clinica, "prazo_tecnico_dia": tecnico}
+
+
 def _consultar() -> dict[str, Any]:
     """Roda a consulta e devolve só as seções do dashboard."""
     # Import tardio: `app.core.database` falha em fail-fast sem DATABASE_URL, e
@@ -322,6 +389,10 @@ def _consultar() -> dict[str, Any]:
                 docs_por_pedido[int(pedido)] = (int(qtd), bool(liberado))
                 if primeiro_doc_ligado is None or criado < primeiro_doc_ligado:
                     primeiro_doc_ligado = criado
+            documentos = [
+                (int(pedido), enviado, liberado, prazo_brmed)
+                for pedido, enviado, liberado, prazo_brmed in conn.execute(text(_SQL_PRAZOS), {"fuso": FUSO.key})
+            ]
 
     if not linha:
         raise DashboardIndisponivel("a consulta não devolveu nada")
@@ -331,6 +402,7 @@ def _consultar() -> dict[str, Any]:
     momento = agora()
     pedidos = _carregar_pedidos((bruto.get("periodo") or {}).get("doc_mais_antigo"))
     dados.update(_cruzar_expedicoes(pedidos, docs_por_pedido, momento.date()))
+    dados.update(_cruzar_prazos(pedidos, documentos))
     dados["expedicoes_desde"] = _primeiro_dia_ligado(primeiro_doc_ligado)
     dados["ambiente"] = Settings.APP_ENV
     dados["gerado_em"] = momento.isoformat()

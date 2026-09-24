@@ -11,6 +11,7 @@ import type {
   DadosDashboard,
   PontoAcuracia,
   PontoSerie,
+  Prazos,
   SerieKey,
 } from "./tipos";
 
@@ -174,6 +175,18 @@ function expedicoesEntre(
   return Math.round(total);
 }
 
+/** Soma [antecipado, no dia, atrasado] dos dias entre `ini` e `fim`. */
+function prazosEntre(porDia: Record<string, Prazos>, ini: Date, fim: Date): Prazos {
+  const total: Prazos = [0, 0, 0];
+  const d = new Date(ini.getTime());
+  while (d <= fim) {
+    const dia = porDia[`${pad(d.getUTCFullYear())}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`];
+    if (dia) for (let i = 0; i < 3; i++) total[i] += dia[i] || 0;
+    d.setUTCDate(d.getUTCDate() + 1);
+  }
+  return total;
+}
+
 /**
  * Soma os pontos de uma clínica que caem no período. As chaves das séries por
  * clínica são as mesmas da série geral, então o casamento é exato.
@@ -227,6 +240,13 @@ export interface BarraExpedicao {
   hDia: number;
   hAtr: number;
   tip: string;
+}
+
+/** Um dos dois gráficos de prazo — clínica ou técnico de credenciados. */
+export interface GraficoPrazo {
+  barras: BarraExpedicao[];
+  /** "93% antecipados ou no dia", na janela do gráfico. */
+  resumo: string;
 }
 
 export interface LinhaRanking {
@@ -287,7 +307,8 @@ export interface VisaoDashboard {
   kpiPrimary: Kpi[];
   docsSeries: BarraDocs[];
   coberturaSeries: BarraPercentual[];
-  expSeries: BarraExpedicao[];
+  prazoClinica: GraficoPrazo;
+  prazoTecnico: GraficoPrazo;
   ranking: LinhaRanking[];
   totalClinicas: number;
   adocao: LinhaAdocao[];
@@ -373,7 +394,46 @@ export function calcularVisao({ dados, filtro, comparar, verTodasClinicas }: Opc
 
   const bar = (v: number, max: number, h: number) => (v <= 0 ? 0 : Math.max(3, Math.round((v / max) * h)));
   const maxDocs = Math.max(1, ...grafico.map((p) => p.docs));
-  const maxExp = Math.max(1, ...grafico.map((p) => p.antecipada + p.em_dia + p.atrasada));
+
+  /** Primeiro e último dia de um ponto do gráfico (semana ou mês). */
+  const faixaDoPonto = (chave: string) => {
+    const a = partes(chave);
+    const ini = new Date(Date.UTC(a.y, a.m - 1, a.d));
+    const fim =
+      cfg.grafico.serie === "semanal"
+        ? new Date(Date.UTC(a.y, a.m - 1, a.d + 6))
+        : new Date(Date.UTC(a.y, a.m, 0));
+    return { ini, fim };
+  };
+
+  const graficoPrazo = (porDia: Record<string, Prazos>, noun: [string, string]): GraficoPrazo => {
+    const [sing, plur] = noun;
+    const pontos = grafico.map((p) => {
+      const { ini, fim } = faixaDoPonto(p.chave);
+      return { chave: p.chave, v: prazosEntre(porDia, ini, fim) };
+    });
+    const maxP = Math.max(1, ...pontos.map(({ v }) => v[0] + v[1] + v[2]));
+    const soma: Prazos = [0, 0, 0];
+    pontos.forEach(({ v }) => v.forEach((n, i) => (soma[i] += n)));
+    const tot = soma[0] + soma[1] + soma[2];
+    const q = (n: number) => `${fmt(n)} ${n === 1 ? sing : plur}`;
+    return {
+      resumo: tot ? `${num(pct(soma[0] + soma[1], tot))} antecipados ou no dia · ${q(tot)}` : "",
+      barras: pontos.map(({ chave, v: [ant, dia, atr] }) => {
+        const t = ant + dia + atr;
+        return {
+          month: rotuloG(chave),
+          total: t ? fmt(t) : "—",
+          hAnt: bar(ant, maxP, 190),
+          hDia: bar(dia, maxP, 190),
+          hAtr: bar(atr, maxP, 190),
+          tip: t
+            ? `${rotuloG(chave)} — ${fmt(ant)} antecipados, ${fmt(dia)} no dia, ${fmt(atr)} atrasados (${num(pct(atr, t))} atrasados)`
+            : `${rotuloG(chave)} — sem ${plur} com previsão`,
+        };
+      }),
+    };
+  };
 
   // ---- cobertura: pedidos do BRNET com documento liberado no ProntuAI --------
   // Numerador e denominador contam pedidos, pelo dia de atendimento.
@@ -601,19 +661,8 @@ export function calcularVisao({ dados, filtro, comparar, verTodasClinicas }: Opc
       }));
     })(),
 
-    expSeries: grafico.map((p) => {
-      const tot = p.antecipada + p.em_dia + p.atrasada;
-      return {
-        month: rotuloG(p.chave),
-        total: tot ? fmt(tot) : "—",
-        hAnt: bar(p.antecipada, maxExp, 190),
-        hDia: bar(p.em_dia, maxExp, 190),
-        hAtr: bar(p.atrasada, maxExp, 190),
-        tip: tot
-          ? `${rotuloG(p.chave)} — ${fmt(p.antecipada)} antecipadas, ${fmt(p.em_dia)} em dia, ${fmt(p.atrasada)} atrasadas`
-          : `${rotuloG(p.chave)} — sem prazo registrado`,
-      };
-    }),
+    prazoClinica: graficoPrazo(dados.prazo_clinica_dia || {}, ["envio", "envios"]),
+    prazoTecnico: graficoPrazo(dados.prazo_tecnico_dia || {}, ["liberação", "liberações"]),
 
     ranking: clinicas.map((c, i) => {
       const v = !comparavel

@@ -93,6 +93,8 @@ export function useDadosDashboard(): EstadoDashboard {
           expedicoes_prontuai_dia: corpo.expedicoes_prontuai_dia ?? {},
           expedicoes_desde: corpo.expedicoes_desde ?? null,
           clinicas_sem_prontuai: corpo.clinicas_sem_prontuai ?? null,
+          prazo_clinica_dia: corpo.prazo_clinica_dia ?? {},
+          prazo_tecnico_dia: corpo.prazo_tecnico_dia ?? {},
         });
         setAmbiente(corpo.ambiente ?? null);
         setGeradoEm(comoData(corpo.gerado_em));
