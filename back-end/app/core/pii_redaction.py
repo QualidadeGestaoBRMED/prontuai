@@ -30,7 +30,7 @@ Estratégia em três passadas, nesta ordem:
 import logging
 import re
 import unicodedata
-from typing import Iterable, Optional
+from typing import Callable, Iterable, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -225,8 +225,10 @@ _EMAIL_RE = re.compile(r"[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}")
 _CEP_RE = re.compile(r"\b\d{5}[-\s]?\d{3}\b")
 _TELEFONE_RE = re.compile(r"(?:\(\d{2}\)[ \t]*|\b(?:\+55[ \t]*)?\d{2}[ \t])9?\d{4}[-\s]?\d{4,5}")
 _DATA_RE = re.compile(r"\b\d{1,2}[/.\-]\d{1,2}[/.\-]\d{2,4}\b")
-_CPF_SOLTO_RE = re.compile(r"\b\d{3}[.\s-]{0,3}\d{3}[.\s-]{0,3}\d{3}[.\s-]{0,3}\d{2}\b")
-_CNPJ_SOLTO_RE = re.compile(r"\b\d{2}[.\s-]{0,3}\d{3}[.\s-]{0,3}\d{3}[/\s-]{0,3}\d{4}[-\s]{0,3}\d{2}\b")
+# A vírgula entra nos separadores porque o OCR troca ponto/hífen por ela
+# ("123.456,78909" num prontuário real). Ver `_substituir_identificador`.
+_CPF_SOLTO_RE = re.compile(r"\b\d{3}[.,\s-]{0,3}\d{3}[.,\s-]{0,3}\d{3}[.,\s-]{0,3}\d{2}\b")
+_CNPJ_SOLTO_RE = re.compile(r"\b\d{2}[.,\s-]{0,3}\d{3}[.,\s-]{0,3}\d{3}[/,\s-]{0,3}\d{4}[-,\s]{0,3}\d{2}\b")
 
 
 def _apenas_digitos(valor: Optional[str]) -> str:
@@ -283,13 +285,32 @@ def _redigir_campos_rotulados(linha: str) -> str:
     return "".join(partes)
 
 
+def _substituir_identificador(
+    encontrado: re.Match, marcador: str, digito_valido: Callable[[str], bool]
+) -> str:
+    """Troca o identificador solto pelo marcador.
+
+    Com vírgula no meio, só troca se passar no dígito verificador: vírgula é
+    também separador de lista e de decimal, e sem essa exigência uma sequência
+    de valores de exame ("250, 500, 100, 20") viraria marcador.
+    """
+    valor = encontrado.group(0)
+    if "," in valor and not digito_valido(valor):
+        return valor
+    return marcador
+
+
 def _redigir_valores_soltos(texto: str, preservar_datas: bool) -> str:
     """Apaga identificadores que aparecem fora de campo rotulado."""
     texto = _LOGRADOURO_RE.sub(ENDERECO, texto)
     texto = _DOUTOR_RE.sub(f"Dr. {NOME}", texto)
     texto = _EMAIL_RE.sub(EMAIL, texto)
-    texto = _CNPJ_SOLTO_RE.sub(CNPJ, texto)
-    texto = _CPF_SOLTO_RE.sub(CPF, texto)
+    texto = _CNPJ_SOLTO_RE.sub(
+        lambda m: _substituir_identificador(m, CNPJ, _digito_verificador_de_cnpj_valido), texto
+    )
+    texto = _CPF_SOLTO_RE.sub(
+        lambda m: _substituir_identificador(m, CPF, _digito_verificador_de_cpf_valido), texto
+    )
     texto = _TELEFONE_RE.sub(TELEFONE, texto)
     texto = _CEP_RE.sub(ENDERECO, texto)
     # A data entra por último: o padrão dela casaria pedaços de CPF/CNPJ
@@ -322,8 +343,8 @@ def _regex_de_valor_conhecido(valor: str) -> Optional[re.Pattern]:
     if digitos and len(digitos) == len(valor.replace(" ", "")):
         # Identificador numérico: aceita qualquer pontuação entre os dígitos,
         # porque o mesmo CPF sai "123.456.789-09" numa página e "12345678909"
-        # na outra.
-        return re.compile(r"[.\-/\s]{0,3}".join(re.escape(d) for d in digitos))
+        # na outra. A vírgula é troca comum do OCR por ponto ou hífen.
+        return re.compile(r"[.,\-/\s]{0,3}".join(re.escape(d) for d in digitos))
 
     tokens = [_regex_de_token(token) for token in valor.split()]
     if not tokens:
