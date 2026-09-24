@@ -307,7 +307,7 @@ export function AbaUtilizacao({
           <div className="mt-4 max-h-[420px] overflow-auto">
             <div className="min-w-[640px]">
               <div
-                className={`${CABECALHO_TABELA} sticky top-0 grid grid-cols-[2fr_1.4fr_1fr_1fr_1fr] gap-x-[18px] border-b border-[#DFE0E2] bg-white px-1 pb-2.5`}
+                className={`${CABECALHO_TABELA} sticky top-0 z-10 grid grid-cols-[2fr_1.4fr_1fr_1fr_1fr] gap-x-[18px] border-b border-[#DFE0E2] bg-white px-1 pb-2.5`}
               >
                 <div>Clínica</div>
                 <div>Cidade</div>
@@ -318,10 +318,13 @@ export function AbaUtilizacao({
               {visao.semProntuai.map((c) => (
                 <div
                   key={`${c.name}-${c.local}`}
-                  className={`${styles.tip} grid grid-cols-[2fr_1.4fr_1fr_1fr_1fr] items-center gap-x-[18px] border-b border-[#F3F3F3] px-1 py-3 text-[13.5px] text-[#193B4F]`}
-                  data-tip={c.tip}
+                  className={`${styles.linhaTip} grid grid-cols-[2fr_1.4fr_1fr_1fr_1fr] items-center gap-x-[18px] border-b border-[#F3F3F3] px-1 py-3 text-[13.5px] text-[#193B4F]`}
                 >
-                  <div className="min-w-0 truncate">{c.name}</div>
+                  <div className="min-w-0">
+                    <span className={`${styles.tip} ${styles.tipNome}`} data-tip={c.tip}>
+                      <span className="block truncate">{c.name}</span>
+                    </span>
+                  </div>
                   <div className="min-w-0 truncate text-[#767A7B]">{c.local}</div>
                   <div className="font-medium">{c.pedidos}</div>
                   <div>{c.proxima}</div>
