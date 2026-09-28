@@ -169,7 +169,7 @@ export default function Page() {
       cpf: result.cpf,
       modo: "decisao",
       decisao,
-      exames: result.result?.tabela_comparacao ?? [],
+      exames: result.result?.validation_result?.exames_faltantes ?? [],
     })
   }
 
@@ -181,7 +181,7 @@ export default function Page() {
       paciente: result.patientName,
       cpf: result.cpf,
       modo: "avaliacao",
-      exames: result.result?.tabela_comparacao ?? [],
+      exames: result.result?.validation_result?.exames_faltantes ?? [],
     })
   }
 
