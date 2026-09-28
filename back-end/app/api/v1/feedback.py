@@ -104,6 +104,21 @@ def _auditar(
         )
 
 
+def _revisado_por_humano(document) -> bool:
+    """
+    Houve decisão humana? A coluna `reviewed_by` não basta: em ~10% da base (489
+    documentos no dev, set/2026) o revisor só está no `result_payload`, de antes
+    de a coluna ser preenchida. A tela já os trata como revisados — o mapeador do
+    front faz `payload.reviewed_by || doc.reviewed_by`, e o PATCH da decisão cai
+    no payload do mesmo jeito — então olhar só a coluna mostrava o botão
+    "Avaliar IA" e devolvia 409 no envio.
+    """
+    if document.reviewed_by:
+        return True
+    payload = document.result_payload if isinstance(document.result_payload, dict) else {}
+    return bool(payload.get("reviewed_by") or payload.get("reviewedBy"))
+
+
 def _validar_payload(payload: DocumentFeedbackInput) -> None:
     """
     Coerência entre o parecer e os detalhes. Espelho de `_validar_review_payload`
@@ -174,7 +189,7 @@ async def put_document_feedback(
         document = user_db.get_document_by_id(document_id)
         if not document:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Documento não encontrado")
-        if not document.reviewed_by:
+        if not _revisado_por_humano(document):
             raise HTTPException(
                 status.HTTP_409_CONFLICT,
                 "Só é possível avaliar um documento já revisado por uma pessoa.",

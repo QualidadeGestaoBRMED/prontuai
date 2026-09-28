@@ -27,9 +27,10 @@ def usuario(uid, role):
     return User(id=uid, email=f"{uid}@grupobrmed.com.br", name=uid, role=role, is_active=True)
 
 
-def documento(doc_id="doc1", reviewed_by="checador@grupobrmed.com.br"):
+def documento(doc_id="doc1", reviewed_by="checador@grupobrmed.com.br", result_payload=None):
     return types.SimpleNamespace(
-        id=doc_id, clinic_id="c1", clinic_name="Clínica 1", reviewed_by=reviewed_by
+        id=doc_id, clinic_id="c1", clinic_name="Clínica 1", reviewed_by=reviewed_by,
+        result_payload=result_payload or {},
     )
 
 
@@ -347,6 +348,16 @@ def test_documento_sem_decisao_humana_da_409(monkeypatch):
     with pytest.raises(HTTPException) as exc:
         salvar(mod, banco, DocumentFeedbackInput(status="IA_CORRETA"))
     assert exc.value.status_code == 409
+
+
+def test_revisor_so_no_payload_conta_como_decisao_humana(monkeypatch):
+    """Legado: a coluna ficou vazia, mas o revisor está no result_payload. A tela
+    trata como revisado e mostra "Avaliar IA"; recusar aqui dava 409 no envio."""
+    banco = BancoFalso([documento(
+        reviewed_by=None, result_payload={"reviewed_by": "joice@grupobrmed.com.br"})])
+    mod = carregar(monkeypatch, banco)
+    salvo = salvar(mod, banco, DocumentFeedbackInput(status="IA_CORRETA"))
+    assert salvo.status == "IA_CORRETA"
 
 
 def test_get_de_documento_nunca_avaliado_devolve_none(monkeypatch):
