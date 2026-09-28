@@ -83,3 +83,49 @@
   top: calc(100% + 4px);
   bottom: auto;
 }
+
+/*
+ * Variante para linhas de lista com rolagem própria. Abrindo para cima ou para
+ * baixo, o balão da primeira ou da última linha visível sai da caixa e é
+ * cortado pela borda (overflow). Aqui ele abre ao lado, na altura da linha, e
+ * não escapa da caixa em nenhuma posição da rolagem.
+ *
+ * A âncora é o texto do nome (`.tipNome`, que encolhe até o tamanho do texto),
+ * para a seta apontar para ele e não para a coluna seguinte; o gatilho é a
+ * linha inteira (`.linhaTip`). O seletor do pai tem especificidade maior que
+ * `.tip:hover`, então vence também quando o mouse está sobre o próprio nome.
+ */
+.tipNome {
+  display: inline-block;
+  max-width: 100%;
+  vertical-align: middle;
+}
+
+.tipNome::after {
+  left: calc(100% + 12px);
+  top: 50%;
+  bottom: auto;
+  max-width: 360px;
+  text-align: left;
+  transform: translateY(-50%) scale(0.95);
+  transform-origin: left center;
+}
+
+.tipNome::before {
+  left: calc(100% + 8px);
+  top: 50%;
+  bottom: auto;
+  transform: translateY(-50%) rotate(45deg) scale(0.95);
+}
+
+.linhaTip:hover .tipNome::after {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(-50%) scale(1);
+}
+
+.linhaTip:hover .tipNome::before {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(-50%) rotate(45deg) scale(1);
+}

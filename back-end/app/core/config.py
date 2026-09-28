@@ -14,6 +14,12 @@ class Settings:
     PRONTUAI_SERVICE_TOKEN = os.getenv("PRONTUAI_SERVICE_TOKEN")
     PRONTUAI_CLIENT_NAME = os.getenv("PRONTUAI_CLIENT_NAME")
     PRONTUAI_API_TIMEOUT_SECONDS = float(os.getenv("PRONTUAI_API_TIMEOUT_SECONDS", "20"))
+    # Monitoramento de credenciados: credencial por usuário (Service-Token + Username).
+    # Sem as variáveis próprias, cai no token do ProntuAI, que hoje também é aceito.
+    ACCREDITED_MONITORING_SERVICE_TOKEN = os.getenv("ACCREDITED_MONITORING_SERVICE_TOKEN") or PRONTUAI_SERVICE_TOKEN
+    ACCREDITED_MONITORING_USERNAME = os.getenv("ACCREDITED_MONITORING_USERNAME") or PRONTUAI_CLIENT_NAME
+    # O mês inteiro vem numa resposta só (~7 MB)
+    ACCREDITED_MONITORING_TIMEOUT_SECONDS = float(os.getenv("ACCREDITED_MONITORING_TIMEOUT_SECONDS", "60"))
     USE_PRONTUAI_PATIENTS_EXAMS = os.getenv("USE_PRONTUAI_PATIENTS_EXAMS", "false").lower() == "true"
     MODELO_GPT = os.getenv("MODELO_GPT", "gpt-4o-mini")
     LOG_FILE = os.getenv("LOG_FILE", "logs/app.log")
@@ -78,7 +84,12 @@ class Settings:
     # JWT Authentication
     JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY")
     JWT_ALGORITHM = "HS256"
-    JWT_EXPIRATION_HOURS = int(os.getenv("JWT_EXPIRATION_HOURS", 8))
+    # Curto de propósito: o front renova o access token pela rotação de
+    # refresh, e o cookie de sessão do NextAuth dura 8h. Com 8h aqui os dois
+    # expiravam no mesmo instante, o refresh nunca alcançava um cookie vivo e
+    # o usuário era deslogado em vez de renovado. Mantenha bem abaixo de
+    # NEXTAUTH_SESSION_MAX_AGE.
+    JWT_EXPIRATION_HOURS = int(os.getenv("JWT_EXPIRATION_HOURS", 1))
     JWT_ISSUER = os.getenv("JWT_ISSUER", "prontuai-backend")
     JWT_AUDIENCE = os.getenv("JWT_AUDIENCE", "prontuai-frontend")
     JWT_MIN_SECRET_LENGTH = int(os.getenv("JWT_MIN_SECRET_LENGTH", 32))

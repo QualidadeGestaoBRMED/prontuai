@@ -2,7 +2,8 @@
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { useSession, signOut } from "next-auth/react";
+import { useSession } from "next-auth/react";
+import { logout } from "@/lib/logout";
 import { useMemo } from "react";
 import {
   DropdownMenu,
@@ -95,7 +96,7 @@ export default function UserDropdown() {
           className="gap-3 px-1"
           onSelect={(event) => {
             event.preventDefault();
-            signOut({ callbackUrl: "/" });
+            logout("/");
           }}
         >
           <RiLogoutCircleLine

@@ -869,7 +869,7 @@ async def _processar_documento_completo_impl(
         # No modo API, ao falhar no CPF inicial, tenta CPFs alternativos extraídos do documento.
         if markdown_content:
             await send_progress(45, "brmed", "Falha no CPF inicial, buscando CPFs alternativos...")
-            cpfs_alternativos = await ocr_service.extrair_todos_cpfs_ia(markdown_content, exclude_cpf=cpf_inicial)
+            cpfs_alternativos = ocr_service.extrair_todos_cpfs_regex(markdown_content, exclude_cpf=cpf_inicial)
             _log_event(
                 "prontuai_api_cpf_alternatives",
                 run_id=run_id,

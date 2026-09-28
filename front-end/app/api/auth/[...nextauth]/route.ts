@@ -1,6 +1,7 @@
 import NextAuth, { AuthOptions } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
 import { API_ENDPOINTS } from "@/lib/config";
+import { SESSION_MAX_AGE, useSecureCookies } from "@/lib/session-cookie";
 
 interface BackendAuthData {
   access_token: string;
@@ -9,7 +10,7 @@ interface BackendAuthData {
     id: string;
     email: string;
     name: string;
-    role: "ADMIN" | "MANAGER" | "CHECKER" | "SENDER";
+    role: "ADMIN" | "MANAGER" | "CURATOR" | "CHECKER" | "SENDER";
     is_active: boolean;
   };
 }
@@ -20,10 +21,25 @@ interface ExtendedProfile {
   backendData?: BackendAuthData;
 }
 
+// Indisponibilidade do back-end não é falta de permissão: antes, os dois
+// caminhos retornavam `false` e o usuário lia "você não tem permissão para
+// acessar esta aplicação" quando o back-end estava fora do ar.
+const BACKEND_UNAVAILABLE_URL = "/auth/error?error=BackendUnavailable";
+
 const authOptions: AuthOptions = {
+  // `useSecureCookies` explícito: sem ele o NextAuth deduzia o prefixo
+  // `__Secure-` da URL inferida do request, e os leitores do cookie deduziam
+  // de outro jeito. Ver `lib/session-cookie.ts`.
+  useSecureCookies,
   session: {
     strategy: "jwt",
-    maxAge: Number(process.env.NEXTAUTH_SESSION_MAX_AGE || 60 * 60 * 8), // 8h
+    maxAge: SESSION_MAX_AGE, // 8h
+    // `updateAge` precisa ser MENOR que `maxAge`, senão o cookie nunca é
+    // reemitido dentro da própria validade e a sessão vira um teto absoluto:
+    // o default do NextAuth é 24h, contra as 8h daqui. Com 1h o cookie
+    // acompanha o access token do back-end, que também dura ~1h, e a sessão
+    // desliza enquanto o usuário estiver ativo.
+    updateAge: Number(process.env.NEXTAUTH_SESSION_UPDATE_AGE || 60 * 60),
   },
   providers: [
     GoogleProvider({
@@ -61,8 +77,16 @@ const authOptions: AuthOptions = {
 
         if (!response.ok) {
           const error = await response.text();
-          console.error('Auth failed:', error);
-          return false;
+          console.error('Auth failed:', response.status, error);
+          // 401/403 são decisão do back-end sobre este usuário; 5xx e demais
+          // status são falha nossa. Separar os dois evita dizer "você não tem
+          // permissão" para quem só pegou o back-end fora do ar.
+          if (response.status === 401 || response.status === 403) {
+            return false;
+          }
+          // String de retorno = redirecionamento; é o contrato do callback
+          // `signIn` no NextAuth. `false` viraria "AccessDenied".
+          return BACKEND_UNAVAILABLE_URL;
         }
 
         const data = await response.json() as BackendAuthData;
@@ -74,7 +98,7 @@ const authOptions: AuthOptions = {
 
       } catch (error) {
         console.error('Auth error:', error);
-        return false;
+        return BACKEND_UNAVAILABLE_URL;
       }
     },
 

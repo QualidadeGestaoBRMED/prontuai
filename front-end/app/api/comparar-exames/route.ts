@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
 import { getToken } from "next-auth/jwt";
+import { sessionTokenParams } from "@/lib/session-cookie";
 
 const MAX_INPUT_CHARS = 12000;
 
@@ -12,7 +13,7 @@ function normalizeInputToText(value: unknown): string {
 }
 
 export async function POST(req: NextRequest) {
-  const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
+  const token = await getToken({ req, ...sessionTokenParams });
   const accessToken = typeof token?.accessToken === "string" ? token.accessToken : null;
   if (!accessToken) {
     return NextResponse.json({ error: "Não autenticado." }, { status: 401 });

@@ -7,6 +7,7 @@
  */
 import type {
   BarraPercentual,
+  GraficoPrazo,
   Kpi,
   VisaoDashboard,
 } from "./metricas";
@@ -45,6 +46,64 @@ function CartaoKpi({ kpi, onAjuda }: { kpi: Kpi; onAjuda?: () => void }) {
           {kpi.delta}
         </div>
         <div className="text-[12.5px] text-[#767A7B]">{kpi.sub}</div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Barras empilhadas de prazo contra a previsão do BRNET. Usado duas vezes: a
+ * clínica (envio) e o técnico de credenciados (liberação) são medidos à parte
+ * para o atraso de um não cair na conta do outro.
+ */
+function CartaoPrazo({ titulo, sub, grafico }: { titulo: string; sub: string; grafico: GraficoPrazo }) {
+  return (
+    <div className={`${CARTAO} px-[22px] pt-5 pb-[18px]`}>
+      <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
+        <div>
+          <div className={TITULO}>{titulo}</div>
+          <div className={SUB}>{sub}</div>
+          {grafico.resumo && (
+            <div className="mt-1.5 text-[13px] font-medium text-[#193B4F]">{grafico.resumo}</div>
+          )}
+        </div>
+        <div className="flex shrink-0 gap-3 text-xs text-[#767A7B]">
+          <div className="flex items-center gap-1.5 whitespace-nowrap">
+            <div className="size-2.5 rounded-[2px] bg-[#7EBFCC]" />
+            Antecipado
+          </div>
+          <div className="flex items-center gap-1.5 whitespace-nowrap">
+            <div className="size-2.5 rounded-[2px] bg-[#00AFAA]" />
+            No dia
+          </div>
+          <div className="flex items-center gap-1.5 whitespace-nowrap">
+            <div className="size-2.5 rounded-[2px] bg-[#B4453A]" />
+            Atrasado
+          </div>
+        </div>
+      </div>
+      <div className="mt-[22px] flex h-[220px] items-end gap-[2.6%]">
+        {grafico.barras.map((e, i) => (
+          <div
+            key={`${e.month}-${i}`}
+            className={`${styles.tip} flex flex-1 flex-col items-center gap-[7px]`}
+            data-tip={e.tip}
+          >
+            <div className="text-xs font-medium text-[#193B4F]">{e.total}</div>
+            <div className="flex w-full flex-col overflow-hidden rounded-[5px]">
+              <div className="bg-[#7EBFCC]" style={{ height: `${e.hAnt}px` }} />
+              <div className="bg-[#00AFAA]" style={{ height: `${e.hDia}px` }} />
+              <div className="bg-[#B4453A]" style={{ height: `${e.hAtr}px` }} />
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="mt-2.5 flex gap-[2.6%]">
+        {grafico.barras.map((e, i) => (
+          <div key={`${e.month}-${i}`} className="flex-1 text-center text-xs font-medium text-[#767A7B]">
+            {e.month}
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -169,61 +228,24 @@ export function AbaUtilizacao({
       </div>
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-        <div className={`${CARTAO} px-[22px] pt-5 pb-[18px]`}>
-          <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
-            <div>
-              <div className={TITULO}>Expedições por prazo</div>
-              <div className={SUB}>
-                {visao.graficoLegenda} · antecipadas, em dia e atrasadas · prazo capturado a partir de jun/26
-              </div>
-            </div>
-            <div className="flex shrink-0 gap-3 text-xs text-[#767A7B]">
-              <div className="flex items-center gap-1.5 whitespace-nowrap">
-                <div className="size-2.5 rounded-[2px] bg-[#7EBFCC]" />
-                Antecipada
-              </div>
-              <div className="flex items-center gap-1.5 whitespace-nowrap">
-                <div className="size-2.5 rounded-[2px] bg-[#00AFAA]" />
-                Em dia
-              </div>
-              <div className="flex items-center gap-1.5 whitespace-nowrap">
-                <div className="size-2.5 rounded-[2px] bg-[#B4453A]" />
-                Atrasada
-              </div>
-            </div>
-          </div>
-          <div className="mt-[22px] flex h-[220px] items-end gap-[2.6%]">
-            {visao.expSeries.map((e, i) => (
-              <div
-                key={`${e.month}-${i}`}
-                className={`${styles.tip} flex flex-1 flex-col items-center gap-[7px]`}
-                data-tip={e.tip}
-              >
-                <div className="text-xs font-medium text-[#193B4F]">{e.total}</div>
-                <div className="flex w-full flex-col overflow-hidden rounded-[5px]">
-                  <div className="bg-[#7EBFCC]" style={{ height: `${e.hAnt}px` }} />
-                  <div className="bg-[#00AFAA]" style={{ height: `${e.hDia}px` }} />
-                  <div className="bg-[#B4453A]" style={{ height: `${e.hAtr}px` }} />
-                </div>
-              </div>
-            ))}
-          </div>
-          <div className="mt-2.5 flex gap-[2.6%]">
-            {visao.expSeries.map((e, i) => (
-              <div key={`${e.month}-${i}`} className="flex-1 text-center text-xs font-medium text-[#767A7B]">
-                {e.month}
-              </div>
-            ))}
-          </div>
-        </div>
+        <CartaoPrazo
+          titulo="Envio da clínica × prazo do credenciado"
+          sub={`${visao.graficoLegenda} · prontuário enviado antes, no dia ou depois do prazo da clínica no BRNET`}
+          grafico={visao.prazoClinica}
+        />
+        <CartaoPrazo
+          titulo="Liberação do técnico de credenciados × prazo da BR MED"
+          sub={`${visao.graficoLegenda} · prazo da BR MED = 1 dia útil após o da clínica · só aprovações do técnico`}
+          grafico={visao.prazoTecnico}
+        />
+      </div>
 
-        <div className={`${CARTAO} px-[22px] pt-5 pb-[18px]`}>
-          <div className={TITULO}>Cobertura das expedições</div>
-          <div className={SUB}>
-            % das expedições da empresa que passaram pelo ProntuAI · meta 100%
-          </div>
-          <BarrasPercentuais series={visao.coberturaSeries} cor="#00AFAA" />
+      <div className={`${CARTAO} px-[22px] pt-5 pb-[18px]`}>
+        <div className={TITULO}>Cobertura das expedições</div>
+        <div className={SUB}>
+          % dos pedidos atendidos nas credenciadas que passaram pelo ProntuAI · meta 100%
         </div>
+        <BarrasPercentuais series={visao.coberturaSeries} cor="#00AFAA" />
       </div>
 
       <div className={`${CARTAO} px-[22px] pt-5 pb-2`}>
@@ -272,6 +294,46 @@ export function AbaUtilizacao({
             ))}
           </div>
         </div>
+      </div>
+
+      <div className={`${CARTAO} px-[22px] pt-5 pb-2`}>
+        <div className={TITULO}>Clínicas com expedições previstas fora do ProntuAI</div>
+        <div className={SUB}>
+          {visao.semProntuai === null
+            ? "Lista indisponível: não foi possível consultar o BRNET na última atualização"
+            : `${visao.semProntuai.length} credenciadas · ${visao.pedidosSemProntuai} pedidos com previsão de liberação a partir de hoje · menos de 3 documentos no ProntuAI`}
+        </div>
+        {visao.semProntuai && visao.semProntuai.length > 0 && (
+          <div className="mt-4 max-h-[420px] overflow-auto">
+            <div className="min-w-[640px]">
+              <div
+                className={`${CABECALHO_TABELA} sticky top-0 z-10 grid grid-cols-[2fr_1.4fr_1fr_1fr_1fr] gap-x-[18px] border-b border-[#DFE0E2] bg-white px-1 pb-2.5`}
+              >
+                <div>Clínica</div>
+                <div>Cidade</div>
+                <div>Previstos</div>
+                <div>Próxima</div>
+                <div>Docs</div>
+              </div>
+              {visao.semProntuai.map((c) => (
+                <div
+                  key={`${c.name}-${c.local}`}
+                  className={`${styles.linhaTip} grid grid-cols-[2fr_1.4fr_1fr_1fr_1fr] items-center gap-x-[18px] border-b border-[#F3F3F3] px-1 py-3 text-[13.5px] text-[#193B4F]`}
+                >
+                  <div className="min-w-0">
+                    <span className={`${styles.tip} ${styles.tipNome}`} data-tip={c.tip}>
+                      <span className="block truncate">{c.name}</span>
+                    </span>
+                  </div>
+                  <div className="min-w-0 truncate text-[#767A7B]">{c.local}</div>
+                  <div className="font-medium">{c.pedidos}</div>
+                  <div>{c.proxima}</div>
+                  <div className="text-[#767A7B]">{c.docs}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
