@@ -27,7 +27,7 @@ from pydantic import BaseModel, Field, ValidationError
 
 logger = logging.getLogger(__name__)
 
-from app.core.clients import client
+from app.core.clients import get_client
 
 # Caminhos para o índice de similaridade de exames
 logger.info(f"DEBUG: settings.BASE_DIR is {settings.BASE_DIR}")
@@ -80,7 +80,7 @@ async def gerar_embedding(texto: str) -> np.ndarray:
     """Gera embedding para um texto usando a API da OpenAI."""
     resp = None
     try:
-        resp = await client.embeddings.create(
+        resp = await get_client().embeddings.create(
             input=[texto],
             model=settings.MODELO_EMBEDDING
         )
@@ -676,7 +676,7 @@ async def comparar_exames_openai(exames_ocr: list[str], exames_brnet: list[str])
     """
 
     try:
-        response = await client.chat.completions.create(
+        response = await get_client().chat.completions.create(
             model=settings.MODELO_GPT,
             messages=[
                 {

@@ -12,7 +12,7 @@ import numpy as np
 import faiss
 import json
 from datetime import datetime
-from app.core.clients import client
+from app.core.clients import get_client
 import csv
 from pydantic import BaseModel, Field, ValidationError
 
@@ -73,7 +73,7 @@ async def gerar_embedding(texto: str) -> np.ndarray:
     """Gera embedding para um texto usando a API da OpenAI."""
     resp = None
     try:
-        resp = await client.embeddings.create(
+        resp = await get_client().embeddings.create(
             input=[texto],
             model=settings.MODELO_EMBEDDING
         )
@@ -327,7 +327,7 @@ async def comparar_exames_com_rag(exames_ocr: list[str], exames_brnet: list[str]
     """
 
     try:
-        response = await client.chat.completions.create(
+        response = await get_client().chat.completions.create(
             model=settings.MODELO_GPT,
             messages=[
                 {
