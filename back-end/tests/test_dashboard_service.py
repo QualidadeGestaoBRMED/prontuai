@@ -260,11 +260,34 @@ def test_clinicas_sem_prontuai_usam_o_limite_de_documentos():
     }
     docs = {1: (2, True), 2: (1, True), 4: (2, True)}
     lista = ds._cruzar_expedicoes(pedidos, docs, date(2026, 9, 22))["clinicas_sem_prontuai"]
-    assert [(x["credenciado"], x["pedidos_previstos"], x["proxima_previsao"], x["documentos"]) for x in lista] == [
-        (b, 2, "2026-09-23", 2),
-        (c, 1, "2026-09-24", 0),
+    assert [(x["credenciado"], x["pedidos_previstos"], x["documentos"]) for x in lista] == [
+        (b, 2, 2),
+        (c, 1, 0),
     ]
     assert lista[0]["nome"] == "CLINICA B" and lista[0]["uf"] == "RN"
+
+
+def test_previsoes_saem_quebradas_por_data_e_ordenadas():
+    cred = "RECIFE - PE - CLINICA A"
+    pedidos = {
+        1: pedido(None, cred, "2026-09-30"),
+        2: pedido(None, cred, "2026-09-23"),
+        3: pedido(None, cred, "2026-09-23"),
+        4: pedido(None, cred, "2026-09-01"),  # vencido: só contagem, sem data na lista
+    }
+    item = ds._cruzar_expedicoes(pedidos, {}, date(2026, 9, 22))["clinicas_sem_prontuai"][0]
+    assert item["previsoes"] == [
+        {"data": "2026-09-23", "pedidos": 2},
+        {"data": "2026-09-30", "pedidos": 1},
+    ]
+    assert item["pedidos_previstos"] == 3
+    assert item["vencidos"] == 1
+
+
+def test_credenciado_so_com_vencidos_fica_de_fora():
+    """A lista é de previsões futuras; sem nenhuma, o credenciado não entra."""
+    pedidos = {1: pedido(None, "NATAL - RN - CLINICA B", "2026-09-01")}
+    assert ds._cruzar_expedicoes(pedidos, {}, date(2026, 9, 22))["clinicas_sem_prontuai"] == []
 
 
 def test_previsao_de_hoje_ainda_e_futura():

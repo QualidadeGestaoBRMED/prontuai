@@ -126,10 +126,12 @@ GROUP BY pedido
 # aprovação automática da IA não é trabalho do técnico e fica fora da conta.
 #
 # `prazo_brmed` é a `data_previsao_liberacao` que o patients_exams do BRNET
-# devolve no processamento: o prazo da BR MED para o cliente. Medido em
-# 3.794 documentos, é sempre o prazo da clínica (data_previsao da API de
-# monitoramento = atendimento + prazo do credenciado em dias úteis) mais 1 dia
-# útil — o dia que o técnico tem para conferir e liberar.
+# devolve no processamento. O BRNET mantém DUAS previsões para o mesmo pedido e
+# devolve uma em cada endpoint: medindo 3.794 documentos, esta fica 1 dia útil
+# depois da `data_previsao` do monitoramento (2 dias em 3 casos), que por sua vez
+# é atendimento + prazo do credenciado em dias úteis. Como o BRNET calcula esse
+# dia a mais não está confirmado — só a diferença foi medida. É a previsão certa
+# para cobrar o técnico porque é a que o ProntuAI recebe no processamento.
 _SQL_PRAZOS = r"""
 SELECT
     (d.result_payload::jsonb #>> '{brmed_result,pedido_exame_id}')::bigint AS pedido,
@@ -283,7 +285,18 @@ def _cruzar_expedicoes(
     docs_por_pedido: dict[int, tuple[int, bool]],
     hoje: date,
 ) -> dict[str, Any]:
-    """Liga pedidos do BRNET a documentos do ProntuAI pelo pedido_exame_id."""
+    """Liga pedidos do BRNET a documentos do ProntuAI pelo pedido_exame_id.
+
+    A lista de credenciados fora do ProntuAI sai com a previsão **quebrada por
+    data** (`previsoes`), não só a mais próxima: o prazo do credenciado é de 1 a
+    3 dias úteis após o atendimento, então quase toda clínica tem algo vencendo
+    hoje e uma única data não distinguia ninguém (medido: 54% das linhas
+    mostravam o dia corrente).
+
+    Pedido pendente com previsão já vencida não tem data futura para mostrar e
+    sai só como contagem (`vencidos`), para não mudar o escopo da lista, que é
+    de previsões futuras. Credenciado que só tem vencidos fica de fora.
+    """
     if pedidos is None:
         return {"expedicoes_dia": {}, "expedicoes_prontuai_dia": {}, "clinicas_sem_prontuai": None}
 
@@ -301,8 +314,9 @@ def _cruzar_expedicoes(
 
     hoje_iso = hoje.isoformat()
     previstos: dict[str, dict[str, Any]] = {}
+    por_data: dict[str, dict[str, int]] = {}
     for p in pedidos.values():
-        if p.liberado or not p.previsao or p.previsao < hoje_iso:
+        if p.liberado or not p.previsao:
             continue
         if docs_por_credenciado.get(p.credenciado, 0) >= MIN_DOCUMENTOS_USA_PRONTUAI:
             continue
@@ -312,18 +326,30 @@ def _cruzar_expedicoes(
             "cidade": p.cidade,
             "uf": p.uf,
             "pedidos_previstos": 0,
-            "proxima_previsao": p.previsao,
+            "previsoes": [],
+            "vencidos": 0,
             "documentos": docs_por_credenciado.get(p.credenciado, 0),
         })
-        item["pedidos_previstos"] += 1
-        item["proxima_previsao"] = min(item["proxima_previsao"], p.previsao)
+        if p.previsao < hoje_iso:
+            item["vencidos"] += 1
+        else:
+            item["pedidos_previstos"] += 1
+            dias = por_data.setdefault(p.credenciado, {})
+            dias[p.previsao] = dias.get(p.previsao, 0) + 1
+
+    lista = []
+    for credenciado, item in previstos.items():
+        if not item["pedidos_previstos"]:
+            continue
+        dias = por_data[credenciado]
+        item["previsoes"] = [{"data": d, "pedidos": dias[d]} for d in sorted(dias)]
+        lista.append(item)
+    lista.sort(key=lambda c: (-c["pedidos_previstos"], c["credenciado"]))
 
     return {
         "expedicoes_dia": atendidos,
         "expedicoes_prontuai_dia": via_prontuai,
-        "clinicas_sem_prontuai": sorted(
-            previstos.values(), key=lambda c: (-c["pedidos_previstos"], c["credenciado"])
-        ),
+        "clinicas_sem_prontuai": lista,
     }
 
 

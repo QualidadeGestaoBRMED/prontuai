@@ -69,6 +69,13 @@ export interface ClinicaDados {
   series: Partial<Record<SerieKey, Record<string, PontoClinica>>>;
 }
 
+/** Pedidos previstos para um mesmo dia. */
+export interface PrevisaoDia {
+  /** ISO. */
+  data: string;
+  pedidos: number;
+}
+
 /** Credenciado com previsão de liberação a partir de hoje que não usa o ProntuAI. */
 export interface ClinicaSemProntuai {
   /** Rótulo do BRNET, "CIDADE - UF - NOME". */
@@ -78,8 +85,10 @@ export interface ClinicaSemProntuai {
   uf: string | null;
   /** Pedidos ainda não liberados com previsão a partir de hoje. */
   pedidos_previstos: number;
-  /** ISO. */
-  proxima_previsao: string;
+  /** Os mesmos pedidos, quebrados por data e em ordem crescente. */
+  previsoes: PrevisaoDia[];
+  /** Pendentes cuja previsão já passou — não têm data futura, só contagem. */
+  vencidos: number;
   /** Documentos ligados no ProntuAI em todo o histórico — abaixo de 3. */
   documentos: number;
 }
@@ -117,6 +126,8 @@ export interface DadosDashboard {
   expedicoes_desde: string | null;
   /** null quando o BRNET não pôde ser consultado. */
   clinicas_sem_prontuai: ClinicaSemProntuai[] | null;
+  /** Quando a consulta rodou (ISO com fuso) — origem do "hoje" dos rótulos. */
+  gerado_em?: string;
   /**
    * Envio do prontuário pela clínica comparado ao prazo do credenciado no BRNET,
    * por dia de envio. Um documento por entrega (reenvio conta de novo).

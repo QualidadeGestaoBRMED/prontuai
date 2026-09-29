@@ -1,5 +1,5 @@
 """
-Testes do `scripts/reprocessar_comparacao.py`.
+Testes do `scripts/reprocessar_documentos.py`.
 
 O script grava sobre documentos de produção, então o que precisa de rede de
 segurança não é o "caminho feliz" — é tudo aquilo que ele se recusa a fazer:
@@ -30,12 +30,12 @@ import pytest
 
 from app.services import validacao_service
 
-CAMINHO_SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "reprocessar_comparacao.py"
+CAMINHO_SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "reprocessar_documentos.py"
 
 
 def _carregar_script():
     """`scripts/` não é pacote — carrega pelo caminho, como faria o operador."""
-    spec = importlib.util.spec_from_file_location("reprocessar_comparacao", CAMINHO_SCRIPT)
+    spec = importlib.util.spec_from_file_location("reprocessar_documentos", CAMINHO_SCRIPT)
     modulo = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(modulo)
     return modulo
@@ -122,8 +122,18 @@ def auditoria_em_tmp(monkeypatch, tmp_path):
     monkeypatch.chdir(tmp_path)
 
 
-def _rodar(document_id="doc-1", aplicar=True, incluir_revisados=False):
-    return asyncio.run(script._reprocessar(document_id, aplicar, incluir_revisados))
+def _rodar(
+    document_id="doc-1",
+    aplicar=True,
+    incluir_revisados=False,
+    etapa=script.ETAPA_COMPARACAO,
+    padroes=None,
+):
+    if padroes is None:
+        padroes = script.ETAPAS[etapa]["padroes"]
+    return asyncio.run(
+        script._reprocessar(document_id, aplicar, incluir_revisados, etapa, padroes)
+    )
 
 
 # ── o que ele se recusa a fazer ─────────────────────────────────────────────
@@ -257,7 +267,7 @@ def test_payload_reconstruido_preenche_a_comparacao(banco, comparacao_ok):
     assert payload["validation_result"]["exames_faltantes"] == []
     assert campos["validation_status"] == "pending"
     # Rastro para excluir estes documentos da medição de acurácia do período.
-    assert payload["reprocessado_por"].endswith("reprocessar_comparacao.py")
+    assert payload["reprocessado_por"].endswith("reprocessar_documentos.py")
     assert payload["reprocessado_motivo"] == ERRO_COMPARACAO
 
 
@@ -313,8 +323,10 @@ def test_auditoria_registra_o_reprocessamento(banco, comparacao_ok):
     _rodar()
 
     (entrada,) = banco["auditorias"]
-    assert entrada.action == "documents.comparacao_reprocessada"
+    assert entrada.action == "documents.reprocessado"
     assert entrada.resource_id == "doc-1"
+    # A etapa entra na trilha: sem ela não se sabe de onde o dado novo veio.
+    assert entrada.metadata["etapa"] == script.ETAPA_COMPARACAO
     assert entrada.metadata["erro_original"] == ERRO_COMPARACAO
     assert entrada.metadata["exames_encontrados"] == 2
     assert entrada.metadata["decisao_humana_preservada"] is False
@@ -332,3 +344,197 @@ def test_identificador_mascarado_no_relatorio(banco, comparacao_ok):
     """O relatório vai para o terminal e para arquivo; CPF cru não pode sair."""
     resultado = _rodar()
     assert "12345678900" not in resultado["paciente"]
+
+
+# ── generalização por etapa e por erro ─────────────────────────────────────
+
+def test_like_reproduz_o_padrao_do_postgres():
+    """O mesmo padrão tem de casar no SQL e em Python; se divergirem, `--doc`
+    aceitaria documento que a varredura recusa (ou o contrário)."""
+    assert script._like("Erro ao comparar exames (fallback):%", ERRO_COMPARACAO)
+    assert script._like("formato_de_resposta_invalido", "formato_de_resposta_invalido")
+    assert not script._like("formato_de_resposta_invalido", "formato_de_resposta_invalido_x")
+    assert not script._like("Paciente não encontrado%", ERRO_COMPARACAO)
+    # Parênteses do erro real não podem ser lidos como grupo de regex.
+    assert script._like("%(fallback)%", ERRO_COMPARACAO)
+
+
+def test_erro_de_ocr_nao_e_reprocessavel(banco, comparacao_ok):
+    """O PDF não sobrevive (12 arquivos para 4861 documentos no dev), então falha
+    de leitura só se resolve com reenvio. O script tem de dizer isso, não tentar."""
+    banco["documento"] = _documento(payload={"erro": "Erro no OCR: falha ao ler o PDF"})
+
+    resultado = _rodar()
+
+    assert resultado["situacao"] == "inelegivel"
+    assert "reenvio" in resultado["detalhe"]
+    assert banco["updates"] == []
+
+
+def test_identificador_ausente_nao_e_reprocessavel(banco, comparacao_ok):
+    """A extração de CPF é regex determinística: reprocessar devolve o mesmo
+    resultado, então prometer conserto seria falso."""
+    banco["documento"] = _documento(
+        payload={"erro": "Não foi possível extrair um CPF válido ou consultar exames"}
+    )
+
+    resultado = _rodar(etapa=script.ETAPA_BRNET)
+
+    assert resultado["situacao"] == "inelegivel"
+    assert "regex determinística" in resultado["detalhe"]
+
+
+def test_erro_personalizado_por_padrao(banco, comparacao_ok):
+    """`--erro` é o que torna o script útil num erro novo, sem alterar código."""
+    banco["documento"] = _documento(payload={"erro": "Timeout na comparação após 60s"})
+
+    assert _rodar()["situacao"] == "inelegivel"
+    assert _rodar(padroes=["Timeout%"])["situacao"] == "ok"
+
+
+def test_sem_markdown_nao_reprocessa(banco, comparacao_ok):
+    banco["documento"] = _documento(ocr_markdown=None)
+
+    resultado = _rodar()
+
+    assert resultado["situacao"] == "inelegivel"
+    assert "ocr_markdown" in resultado["detalhe"]
+
+
+def test_comparacao_orienta_a_etapa_brnet_quando_falta_exigencia(banco, comparacao_ok):
+    """Mensagem útil em vez de recusa seca: é o caso de quem escolheu a etapa
+    errada."""
+    banco["documento"] = _documento(exams_brnet=[], payload={"exames_brnet": []})
+
+    resultado = _rodar()
+
+    assert resultado["situacao"] == "inelegivel"
+    assert "--etapa brnet" in resultado["detalhe"]
+
+
+# ── etapa brnet ────────────────────────────────────────────────────────────
+
+@pytest.fixture
+def brnet_ok(monkeypatch):
+    """Consulta externa que agora encontra o paciente e devolve a exigência."""
+    async def falso(cpf=None, passaporte=None, cnpj=None):
+        return {
+            "exames": ["HEMOGRAMA COMPLETO", "GLICOSE"],
+            "nome": "PACIENTE DE TESTE",
+            "cpf_processado": "12345678900",
+            "source": "prontuai_api",
+            "pedido_exame_id": 4321,
+            "tipo_identificador_consulta": "cpf",
+            "identificador_consulta": "12345678900",
+        }
+
+    monkeypatch.setattr(script.brmed_service, "consultar_exames_prontuai", falso)
+
+
+def _documento_sem_brnet():
+    return _documento(
+        exams_brnet=[],
+        payload={
+            "erro": "Paciente não encontrado para o CNPJ, CPF ou Passaporte informados.",
+            "exames_brnet": [],
+            "tabela_comparacao": [],
+        },
+    )
+
+
+def test_brnet_reconsulta_e_conclui(banco, brnet_ok, comparacao_ok):
+    """O caso transitório: o paciente foi cadastrado depois do envio."""
+    banco["documento"] = _documento_sem_brnet()
+
+    resultado = _rodar(etapa=script.ETAPA_BRNET)
+
+    assert resultado["situacao"] == "ok"
+    assert resultado["n_brnet"] == 2
+    (campos,) = banco["updates"]
+    payload = campos["result_payload"]
+    assert payload["exames_brnet"] == ["HEMOGRAMA COMPLETO", "GLICOSE"]
+    assert payload["brmed_result"]["pedido_exame_id"] == 4321
+    assert payload["erro"] is None
+    # As colunas que espelham a exigência acompanham, senão a tela divergiria.
+    assert campos["exams_brnet"] == ["HEMOGRAMA COMPLETO", "GLICOSE"]
+
+
+def test_brnet_falhando_de_novo_nao_grava(banco, comparacao_ok, monkeypatch):
+    async def falha(cpf=None, passaporte=None, cnpj=None):
+        return {"erro": "Paciente não encontrado para o CNPJ, CPF ou Passaporte informados."}
+
+    monkeypatch.setattr(script.brmed_service, "consultar_exames_prontuai", falha)
+    banco["documento"] = _documento_sem_brnet()
+
+    resultado = _rodar(etapa=script.ETAPA_BRNET)
+
+    assert resultado["situacao"] == "falhou_de_novo"
+    assert banco["updates"] == []
+
+
+def test_brnet_sem_exames_nao_grava(banco, comparacao_ok, monkeypatch):
+    """Consulta responde sem exigência nenhuma: gravar deixaria o documento
+    'liberado' por ausência de regra, pior que o erro atual."""
+    async def vazio(cpf=None, passaporte=None, cnpj=None):
+        return {"exames": [], "nome": "PACIENTE DE TESTE"}
+
+    monkeypatch.setattr(script.brmed_service, "consultar_exames_prontuai", vazio)
+    banco["documento"] = _documento_sem_brnet()
+
+    resultado = _rodar(etapa=script.ETAPA_BRNET)
+
+    assert resultado["situacao"] == "falhou_de_novo"
+    assert "sem exames obrigatórios" in resultado["detalhe"]
+    assert banco["updates"] == []
+
+
+def test_brnet_exige_identificador(banco, brnet_ok, comparacao_ok):
+    doc = _documento_sem_brnet()
+    doc.cpf = None
+    doc.result_payload = {**doc.result_payload, "cpf_processado": "Não encontrado"}
+    banco["documento"] = doc
+
+    resultado = _rodar(etapa=script.ETAPA_BRNET)
+
+    assert resultado["situacao"] == "inelegivel"
+    assert "identificador" in resultado["detalhe"] or "CPF" in resultado["detalhe"]
+
+
+def test_brnet_preserva_decisao_humana(banco, brnet_ok, comparacao_ok):
+    doc = _documento_sem_brnet()
+    doc.reviewed_by = "revisor@grupobrmed.com.br"
+    banco["documento"] = doc
+
+    resultado = _rodar(etapa=script.ETAPA_BRNET, incluir_revisados=True)
+
+    assert resultado["situacao"] == "ok"
+    (campos,) = banco["updates"]
+    assert "validation_status" not in campos
+    assert "reviewed_by" not in campos
+
+
+def test_nenhuma_etapa_altera_autoria(banco, brnet_ok, comparacao_ok):
+    """Vale para as duas etapas: nada que identifique origem ou envio vai no
+    update. Se alguém acrescentar um campo desses, este teste quebra."""
+    proibidos = {
+        "uploaded_by_user_id", "uploaded_by_user_email", "clinic_id",
+        "filename", "uploaded_at", "content_hash", "file_path",
+    }
+
+    _rodar()
+    banco["documento"] = _documento_sem_brnet()
+    _rodar(etapa=script.ETAPA_BRNET)
+
+    assert len(banco["updates"]) == 2
+    for campos in banco["updates"]:
+        assert proibidos.isdisjoint(campos)
+
+
+def test_catalogo_de_etapas_e_coerente():
+    """Cada etapa declara descrição e padrões, e nenhum padrão da etapa cai na
+    lista de erros sem conserto — seria uma promessa que o script não cumpre."""
+    for nome, cfg in script.ETAPAS.items():
+        assert cfg["descricao"]
+        assert cfg["padroes"]
+        for padrao in cfg["padroes"]:
+            assert script._motivo_sem_conserto(padrao.replace("%", "")) is None, (nome, padrao)
