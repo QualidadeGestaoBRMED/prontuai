@@ -5,10 +5,13 @@
  * aqui só tem layout. As medidas (tamanhos de fonte quebrados, alturas de
  * barra) vêm do protótipo aprovado e são intencionais.
  */
+import { useState } from "react";
+
 import type {
   BarraPercentual,
   GraficoPrazo,
   Kpi,
+  LinhaSemProntuai,
   VisaoDashboard,
 } from "./metricas";
 import styles from "./dashboard.module.css";
@@ -18,6 +21,59 @@ const TITULO = "text-[16.5px] font-semibold text-[#193B4F]";
 const SUB = "mt-[5px] text-[13px] text-[#767A7B]";
 const CABECALHO_TABELA =
   "text-[11.5px] font-medium uppercase tracking-[0.06em] text-[#767A7B]";
+const COLUNAS_SEM_PRONTUAI = "grid-cols-[2fr_1.3fr_0.9fr_1.3fr]";
+
+/**
+ * Linha da lista de credenciados fora do ProntuAI, com as datas previstas num
+ * painel que abre. A quebra por dia já esteve num balão de hover: com meia
+ * dúzia de datas virava um parágrafo, ilegível. Aqui cada data é uma linha.
+ */
+function LinhaClinica({ c }: { c: LinhaSemProntuai }) {
+  const [aberta, setAberta] = useState(false);
+  return (
+    <div className="border-b border-[#F3F3F3]">
+      <button
+        type="button"
+        onClick={() => setAberta((v) => !v)}
+        aria-expanded={aberta}
+        className={`grid w-full ${COLUNAS_SEM_PRONTUAI} items-center gap-x-[18px] rounded-[6px] px-1 py-3 text-left text-[13.5px] text-[#193B4F] transition-colors hover:bg-[#F7F9FA]`}
+      >
+        <div className="flex min-w-0 items-center gap-2">
+          <svg
+            viewBox="0 0 16 16"
+            aria-hidden="true"
+            className={`size-3.5 flex-none text-[#767A7B] transition-transform ${aberta ? "rotate-90" : ""}`}
+          >
+            <path d="M6 4l4 4-4 4" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          <span className="truncate">{c.name}</span>
+        </div>
+        <div className="min-w-0 truncate text-[#767A7B]">{c.local}</div>
+        <div className="font-medium tabular-nums">{c.pedidos}</div>
+        <div className="tabular-nums">{c.proxima}</div>
+      </button>
+
+      {aberta && (
+        <div className="mb-3 ml-[26px] mr-1 rounded-[10px] border border-[#DFE0E2] bg-[#FAFBFC] px-4 py-3">
+          <div className={CABECALHO_TABELA}>Datas das previsões</div>
+          <div className="mt-2.5 flex flex-col">
+            {c.datas.map((d) => (
+              <div
+                key={d.label}
+                className="flex items-baseline justify-between gap-6 border-b border-[#EDEFF0] py-[7px] text-[13px] last:border-b-0"
+              >
+                <span className="text-[#5F6B72]">{d.label}</span>
+                <span className="font-medium tabular-nums text-[#193B4F]">{d.pedidos}</span>
+              </div>
+            ))}
+          </div>
+          <div className="mt-2.5 text-[12.5px] text-[#767A7B]">{c.resumo}</div>
+          <div className="mt-1 text-[12px] text-[#9AA3A8]">{c.credenciado}</div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 function CartaoKpi({ kpi, onAjuda }: { kpi: Kpi; onAjuda?: () => void }) {
   return (
@@ -307,29 +363,15 @@ export function AbaUtilizacao({
           <div className="mt-4 max-h-[420px] overflow-auto">
             <div className="min-w-[640px]">
               <div
-                className={`${CABECALHO_TABELA} sticky top-0 z-10 grid grid-cols-[2fr_1.4fr_1fr_1fr_1fr] gap-x-[18px] border-b border-[#DFE0E2] bg-white px-1 pb-2.5`}
+                className={`${CABECALHO_TABELA} sticky top-0 z-10 grid ${COLUNAS_SEM_PRONTUAI} gap-x-[18px] border-b border-[#DFE0E2] bg-white px-1 pb-2.5`}
               >
                 <div>Clínica</div>
                 <div>Cidade</div>
                 <div>Previstos</div>
-                <div>Próxima</div>
-                <div>Docs</div>
+                <div>Próxima previsão</div>
               </div>
               {visao.semProntuai.map((c) => (
-                <div
-                  key={`${c.name}-${c.local}`}
-                  className={`${styles.linhaTip} grid grid-cols-[2fr_1.4fr_1fr_1fr_1fr] items-center gap-x-[18px] border-b border-[#F3F3F3] px-1 py-3 text-[13.5px] text-[#193B4F]`}
-                >
-                  <div className="min-w-0">
-                    <span className={`${styles.tip} ${styles.tipNome}`} data-tip={c.tip}>
-                      <span className="block truncate">{c.name}</span>
-                    </span>
-                  </div>
-                  <div className="min-w-0 truncate text-[#767A7B]">{c.local}</div>
-                  <div className="font-medium">{c.pedidos}</div>
-                  <div>{c.proxima}</div>
-                  <div className="text-[#767A7B]">{c.docs}</div>
-                </div>
+                <LinhaClinica key={`${c.name}-${c.local}`} c={c} />
               ))}
             </div>
           </div>

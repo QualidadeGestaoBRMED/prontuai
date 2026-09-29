@@ -271,13 +271,23 @@ export interface LinhaAdocao {
   tip: string;
 }
 
+/** Uma linha do painel "Datas das previsões". */
+export interface DataPrevista {
+  label: string;
+  pedidos: string;
+}
+
 export interface LinhaSemProntuai {
+  /** Rótulo completo do BRNET, mostrado ao expandir. */
+  credenciado: string;
   name: string;
   local: string;
   pedidos: number;
+  /** Primeira data prevista; a quebra por dia fica no painel expansível. */
   proxima: string;
-  docs: number;
-  tip: string;
+  datas: DataPrevista[];
+  /** Vencidos e documentos, no rodapé do painel. */
+  resumo: string;
 }
 
 export interface LinhaMatriz {
@@ -333,6 +343,8 @@ export interface OpcoesVisao {
 
 /** Escala do gráfico de acurácia: a métrica vive na faixa alta e 0–100 achataria. */
 const PISO_ACC = 70;
+
+const DIAS_ABBR = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"];
 
 export function calcularVisao({ dados, filtro, comparar, verTodasClinicas }: OpcoesVisao): VisaoDashboard {
   const cfg = PERIODOS[filtro] ?? PERIODOS.Mensal;
@@ -500,6 +512,26 @@ export function calcularVisao({ dados, filtro, comparar, verTodasClinicas }: Opc
       "up",
       `${fmt(viaProntuai)} de ${fmt(expEmpresa)} expedições${cortadoNaLigacao ? ` desde ${rotuloMes(dados.expedicoes_desde!)}` : ""} · meta 100%`,
     );
+  };
+
+  // ---- credenciados sem ProntuAI: datas previstas ---------------------------
+  // "hoje" vem do back-end (quando a consulta rodou), não do relógio do browser:
+  // o painel é recalculado uma vez por dia e o fuso do servidor é quem manda.
+  const hojeISO = (dados.gerado_em ?? "").slice(0, 10);
+  const amanhaISO = (() => {
+    if (!hojeISO) return "";
+    const q = partes(hojeISO);
+    const d = new Date(Date.UTC(q.y, q.m - 1, q.d + 1));
+    return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`;
+  })();
+  // No painel expandido o dia da semana importa: é o que responde "isso é pra
+  // semana que vem?" sem a pessoa ter que consultar o calendário.
+  const rotuloPrevisao = (iso: string) => {
+    const q = partes(iso);
+    const data = `${pad(q.d)}/${pad(q.m)}`;
+    if (iso === hojeISO) return `hoje, ${data}`;
+    if (iso === amanhaISO) return `amanhã, ${data}`;
+    return `${DIAS_ABBR[new Date(Date.UTC(q.y, q.m - 1, q.d)).getUTCDay()]}, ${data}`;
   };
 
   // ---- clínicas, no mesmo período dos indicadores --------------------------
@@ -703,17 +735,18 @@ export function calcularVisao({ dados, filtro, comparar, verTodasClinicas }: Opc
 
     semProntuai:
       dados.clinicas_sem_prontuai?.map((c) => {
-        const q = partes(c.proxima_previsao);
+        const q = partes(c.previsoes[0].data);
         const docs = c.documentos
           ? `${c.documentos} documento${c.documentos > 1 ? "s" : ""} no ProntuAI`
           : "nenhum documento no ProntuAI";
         return {
+          credenciado: c.credenciado,
           name: c.nome,
           local: c.cidade && c.uf ? `${c.cidade}/${c.uf}` : "—",
           pedidos: c.pedidos_previstos,
           proxima: `${pad(q.d)}/${pad(q.m)}`,
-          docs: c.documentos,
-          tip: `${c.credenciado} — ${fmt(c.pedidos_previstos)} previstos, o próximo em ${pad(q.d)}/${pad(q.m)}/${q.y}; ${docs}`,
+          datas: c.previsoes.map((p) => ({ label: rotuloPrevisao(p.data), pedidos: fmt(p.pedidos) })),
+          resumo: (c.vencidos ? `${fmt(c.vencidos)} com previsão vencida · ` : "") + docs,
         };
       }) ?? null,
     pedidosSemProntuai: (dados.clinicas_sem_prontuai ?? []).reduce((a, c) => a + c.pedidos_previstos, 0),
