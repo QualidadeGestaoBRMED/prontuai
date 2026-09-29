@@ -329,12 +329,13 @@ export function AbaUtilizacao({
             {visao.adocao.map((a) => (
               <div
                 key={a.name}
-                className={`${styles.tip} grid grid-cols-[2fr_1fr_1fr_1fr_1fr_1.2fr] items-center gap-x-[18px] border-b border-[#F3F3F3] px-1 py-3 text-[13.5px] text-[#193B4F]`}
-                data-tip={a.tip}
+                className={`${styles.linhaTip} grid grid-cols-[2fr_1fr_1fr_1fr_1fr_1.2fr] items-center gap-x-[18px] border-b border-[#F3F3F3] px-1 py-3 text-[13.5px] text-[#193B4F]`}
               >
                 <div className="flex min-w-0 items-center gap-2.5">
                   <div className="size-2 flex-shrink-0 rounded-full" style={{ background: a.statusColor }} />
-                  <div className="min-w-0 truncate">{a.name}</div>
+                  <span className={`${styles.tip} ${styles.tipNome} min-w-0`} data-tip={a.tip}>
+                    <span className="block truncate">{a.name}</span>
+                  </span>
                 </div>
                 <div>{a.users}</div>
                 <div>{a.docs}</div>
