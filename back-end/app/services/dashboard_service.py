@@ -395,6 +395,7 @@ def _cruzar_expedicoes(
             "expedicoes_prontuai_dia": {},
             "clinicas_sem_prontuai": None,
             "clinicas_com_prontuai": None,
+            "previstos_uf_dia": None,
         }
 
     clinica_por_pedido = clinica_por_pedido or {}
@@ -512,6 +513,13 @@ def _cruzar_expedicoes(
     sem: dict[str, dict[str, Any]] = {}
     datas_com: dict[str, dict[str, int]] = {}
     datas_sem: dict[str, dict[str, int]] = {}
+    # Previstos por UF e por dia, de cada lado do corte. Sai à parte das listas
+    # por clínica porque a UF é do CREDENCIADO, não do cadastro: um cadastro pode
+    # receber de credenciados em UFs diferentes, e atribuir a UF do cadastro
+    # inteiro colocaria os pedidos de uma praça na conta da outra. Por dia
+    # porque a janela de previsão é recortada na tela.
+    uf_com: dict[str, dict[str, int]] = {}
+    uf_sem: dict[str, dict[str, int]] = {}
 
     def novo(chave: str, nome: str, p: _Pedido, habilitada: bool) -> dict[str, Any]:
         return {
@@ -544,6 +552,8 @@ def _cruzar_expedicoes(
             item["pedidos_previstos"] += 1
             dias = datas.setdefault(chave, {})
             dias[p.previsao] = dias.get(p.previsao, 0) + 1
+            por_uf = (uf_com if habilitada else uf_sem).setdefault(p.uf or "—", {})
+            por_uf[p.previsao] = por_uf.get(p.previsao, 0) + 1
 
     # Cadastro habilitado sem previsto também entra: a adesão dele existe, e
     # cadastro que não usa a plataforma é justamente o que a tabela revela.
@@ -584,6 +594,7 @@ def _cruzar_expedicoes(
         # Credenciado sem cadastro e sem previsto não tem por que aparecer.
         "clinicas_sem_prontuai": finalizar(sem, datas_sem, True),
         "clinicas_com_prontuai": finalizar(com, datas_com, False),
+        "previstos_uf_dia": {"dentro": uf_com, "fora": uf_sem},
     }
 
 

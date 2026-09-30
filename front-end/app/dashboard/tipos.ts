@@ -162,6 +162,15 @@ export interface DadosDashboard {
    * inexistente, e é justamente o que a tabela revela.
    */
   clinicas_com_prontuai: CredenciadoPrevisto[] | null;
+  /**
+   * Previstos por UF e por dia, de cada lado do corte — a abertura por UF da
+   * comparação dentro × fora. Vem à parte das listas por clínica porque a UF é
+   * do CREDENCIADO: um cadastro pode receber de praças em UFs diferentes, e
+   * usar a UF do cadastro jogaria os pedidos de uma na conta da outra.
+   * `"—"` é o balde de credenciado sem UF no rótulo. null junto com as listas.
+   */
+  previstos_uf_dia: { dentro: Record<string, Record<string, number>>;
+                      fora: Record<string, Record<string, number>> } | null;
   /** Quando a consulta rodou (ISO com fuso) — origem do "hoje" dos rótulos. */
   gerado_em?: string;
   /**

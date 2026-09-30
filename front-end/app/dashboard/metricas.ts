@@ -317,6 +317,64 @@ export interface LinhaAdesao {
   tip: string;
 }
 
+/** Uma linha da abertura por UF da comparação dentro × fora (2.1). */
+export interface LinhaUf {
+  uf: string;
+  dentro: number;
+  fora: number;
+  total: number;
+  /** Fatia desta UF no total previsto do país, em %. */
+  pctTotal: number;
+  /** Quanto dos previstos da própria UF está dentro do ProntuAI, em %. */
+  pctDentro: number;
+  tip: string;
+}
+
+/**
+ * Comparação dentro × fora (2.1). Só previstos — nada de realizado entra aqui.
+ * `cobertura` é a única ponte permitida: base da 1.4 ÷ total de previstos.
+ */
+export interface ComparacaoPrevistos {
+  janela: string;
+  dentro: number;
+  fora: number;
+  total: number;
+  pctDentro: number;
+  pctFora: number;
+  dentroLabel: string;
+  foraLabel: string;
+  totalLabel: string;
+  /** base (1.4) ÷ total de previstos. null quando não há base medível. */
+  cobertura: number | null;
+  coberturaLabel: string;
+  porUf: LinhaUf[];
+}
+
+/**
+ * Uma linha de oportunidade (2.4): quanto dos previstos de uma clínica
+ * habilitada ainda não deve passar pelo ProntuAI.
+ */
+export interface LinhaOportunidade {
+  clinica: string;
+  local: string;
+  previstos: number;
+  adesao: number | null;
+  adesaoLabel: string;
+  /**
+   * previstos × (1 − adesão), **sem arredondar**. Adesão nula conta como 0 —
+   * ver `oportunidades`. O valor exato é o que faz a soma fechar com
+   * "previstos das habilitadas − base"; arredondar linha a linha e só depois
+   * somar erra por alguns pedidos, e o critério de aceite é uma igualdade.
+   */
+  oportunidade: number;
+  oportunidadeLabel: string;
+  /** Largura da barra, em % da maior oportunidade. */
+  pct: number;
+  /** Sem realizados no período: a oportunidade é um teto, não uma medida. */
+  semMedida: boolean;
+  tip: string;
+}
+
 /**
  * Projeção (1.4): quanto dos previstos das habilitadas deve passar pelo
  * ProntuAI. `base` é a soma linha a linha de previstos × adesão da tabela 1.3.
@@ -435,6 +493,13 @@ export interface VisaoDashboard {
   previstos: CardPrevistos | null;
   adesao: LinhaAdesao[] | null;
   projecao: CardProjecao | null;
+  comparacao: ComparacaoPrevistos | null;
+  oportunidades: LinhaOportunidade[] | null;
+  /**
+   * Insumos do simulador (2.3). O simulador não recalcula nada do painel: ele
+   * parte destes números e aplica a adesão escolhida sobre a seleção.
+   */
+  simulador: { base: number; totalPrevistos: number; adesaoHistorica: number | null } | null;
   /** Rótulo do filtro de período, para a tabela 1.3 dizer de onde vem cada coluna. */
   periodoLabel: string;
 
@@ -751,12 +816,75 @@ export function calcularVisao({ dados, filtro, comparar, verTodasClinicas }: Opc
     // prioridade de inclusão, e quem não tem nada previsto não é prioridade.
     .filter(({ dias }) => somaDias(dias) > 0);
 
+  // ---- 2.4: oportunidade nas clínicas já habilitadas ----------------------
+  // Pendência do backlog resolvida pelo próprio critério de aceite: "soma das
+  // oportunidades = previstos das habilitadas − base". Como a base (1.4) deixa
+  // a clínica sem adesão de fora, a única forma de a identidade fechar é a
+  // oportunidade dela ser os previstos INTEIROS, ou seja, adesão tratada como 0.
+  // Excluí-la da lista faria a soma não bater. `semMedida` marca esses casos na
+  // tela: ali a oportunidade é um teto, não uma medida.
+  const linhasOportunidade: LinhaOportunidade[] = linhasAdesao
+    .map((l) => ({ l, oportunidade: l.previstos * (1 - (l.adesao ?? 0) / 100) }))
+    .filter(({ oportunidade }) => oportunidade > 0)
+    .sort((a, b) => b.oportunidade - a.oportunidade)
+    .map(({ l, oportunidade }, _i, todas) => ({
+      clinica: l.clinica,
+      local: l.local,
+      previstos: l.previstos,
+      adesao: l.adesao,
+      adesaoLabel: l.adesaoLabel,
+      oportunidade,
+      oportunidadeLabel: fmt(Math.round(oportunidade)),
+      pct: Math.round(pct(oportunidade, todas[0].oportunidade)),
+      semMedida: l.adesao === null,
+      tip:
+        l.adesao === null
+          ? `${l.clinica} — sem realizados no período: os ${fmt(l.previstos)} previstos contam inteiros, é um teto`
+          : `${l.clinica} — ${fmt(l.previstos)} previstos a ${l.adesaoLabel} de adesão deixam ${fmt(Math.round(oportunidade))} pedidos fora`,
+    }));
+
   const previstosHabilitados = somaPrevistos;
   const previstosFora = linhasSemProntuai.reduce((a, { dias }) => a + somaDias(dias), 0);
   // Premissa assumida (pendência aberta): a adesão esperada de quem ainda não
   // usa é a média ponderada das que já usam. É o melhor estimador disponível
   // sem uma meta definida pelo time — e fica num ponto só para ser trocado.
   const adesaoEsperada = adesaoPonderada;
+
+  // ---- 2.1: comparação dentro × fora, aberta por UF -----------------------
+  // Só previstos. A cobertura prevista é a única ponte com o realizado, e ela
+  // vem da base da 1.4 — que já é previsto × adesão, não uma soma de grandezas.
+  const ufDia = dados.previstos_uf_dia;
+  // Mesma regra de `diasNaJanela`: sem data de referência não há janela, e sem
+  // janela não se conta previsto.
+  const somaUf = (porDia: Record<string, number>) =>
+    temJanela
+      ? Object.entries(porDia).reduce(
+          (a, [data, n]) => a + (data >= hojeISO && data <= fimJanelaISO ? n : 0),
+          0,
+        )
+      : 0;
+  const linhasUf: LinhaUf[] = (() => {
+    if (!ufDia) return [];
+    const ufs = [...new Set([...Object.keys(ufDia.dentro), ...Object.keys(ufDia.fora)])];
+    const totalGeral = previstosHabilitados + previstosFora;
+    return ufs
+      .map((uf) => {
+        const dentro = somaUf(ufDia.dentro[uf] ?? {});
+        const fora = somaUf(ufDia.fora[uf] ?? {});
+        const total = dentro + fora;
+        return {
+          uf,
+          dentro,
+          fora,
+          total,
+          pctTotal: pct(total, totalGeral),
+          pctDentro: pct(dentro, total),
+          tip: `${uf} — ${fmt(dentro)} previstos em clínicas habilitadas, ${fmt(fora)} fora (${num(pct(dentro, total))} dentro)`,
+        };
+      })
+      .filter((l) => l.total > 0)
+      .sort((a, b) => b.total - a.total);
+  })();
 
   // ---- acurácia: mesma janela de período e de gráfico da utilização --------
   const accP = dados.acuracia?.[cfg.periodo.serie] ?? [];
@@ -1001,6 +1129,42 @@ export function calcularVisao({ dados, filtro, comparar, verTodasClinicas }: Opc
       : null,
 
     periodoLabel: nomePeriodo(cfg.periodo.serie, atual),
+
+    comparacao: temBrnet
+      ? (() => {
+          const total = previstosHabilitados + previstosFora;
+          return {
+            janela: temJanela
+              ? `de hoje a ${dataCurta(fimJanelaISO)} · ${diasJanela} dias`
+              : "sem data de referência do back-end — previstos indisponíveis",
+            dentro: previstosHabilitados,
+            fora: previstosFora,
+            total,
+            pctDentro: pct(previstosHabilitados, total),
+            pctFora: pct(previstosFora, total),
+            dentroLabel: fmt(previstosHabilitados),
+            foraLabel: fmt(previstosFora),
+            totalLabel: fmt(total),
+            // Cobertura prevista da 2.1 = base da 1.4 ÷ TODOS os previstos,
+            // dentro e fora. Não é a adesão ponderada, que divide só pelos
+            // previstos das habilitadas com adesão medida.
+            cobertura: total && adesaoPonderada !== null ? pct(base, total) : null,
+            coberturaLabel:
+              total && adesaoPonderada !== null ? num(pct(base, total)) : "—",
+            porUf: linhasUf,
+          };
+        })()
+      : null,
+
+    oportunidades: temBrnet ? linhasOportunidade : null,
+
+    simulador: temBrnet
+      ? {
+          base,
+          totalPrevistos: previstosHabilitados + previstosFora,
+          adesaoHistorica: adesaoPonderada,
+        }
+      : null,
 
     previstos: temBrnet
       ? (() => {

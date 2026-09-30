@@ -355,6 +355,7 @@ def test_brnet_indisponivel_esvazia_tudo_sem_inventar():
         "expedicoes_prontuai_dia": {},
         "clinicas_sem_prontuai": None,
         "clinicas_com_prontuai": None,
+        "previstos_uf_dia": None,
     }
 
 
@@ -644,3 +645,47 @@ def test_cadastros_com_o_mesmo_nome_normalizado_se_fundem():
     assert ds._indexar_cadastros(["QUALIMETRA", "Qualimetra"]) == {"qualimetra": "QUALIMETRA"}
     # parêntese descartado pode colidir com um cadastro de nome igual sem ele
     assert ds._chave_nome("CISVIVER (CONDIÇÃO ESPECIAL)") == ds._chave_nome("Cisviver")
+
+
+# ── 2.1: previstos por UF, de cada lado do corte ───────────────────────────
+
+
+def test_previstos_por_uf_seguem_o_credenciado_nao_o_cadastro():
+    """Cadastro que recebe de duas praças não joga tudo na UF de uma delas."""
+    a, b = "RECIFE - PE - REDE X", "SALVADOR - BA - REDE X"
+    pedidos = {
+        1: pedido(None, a, "2026-09-25"), 2: pedido(None, a, "2026-09-25"),
+        3: pedido(None, b, "2026-09-26"),
+        4: pedido(None, "NATAL - RN - SEM CADASTRO", "2026-09-27"),
+    }
+    r = ds._cruzar_expedicoes(pedidos, {}, date(2026, 9, 22), {}, cadastros("Rede X"))
+    assert r["previstos_uf_dia"]["dentro"] == {"PE": {"2026-09-25": 2}, "BA": {"2026-09-26": 1}}
+    assert r["previstos_uf_dia"]["fora"] == {"RN": {"2026-09-27": 1}}
+    # a lista por clínica continua agregando as duas praças numa linha só
+    assert len(r["clinicas_com_prontuai"]) == 1
+    assert r["clinicas_com_prontuai"][0]["pedidos_previstos"] == 3
+
+
+def test_uf_por_dia_fecha_com_os_previstos_das_listas():
+    """Invariante da 2.1: dentro + fora por UF = total de previstos."""
+    pedidos = {
+        1: pedido(None, "RECIFE - PE - COM", "2026-09-25"),
+        2: pedido(None, "NATAL - RN - SEM", "2026-09-26"),
+        3: pedido(None, "NATAL - RN - SEM", "2026-09-01"),   # vencido, fora da conta
+        4: pedido(None, "NATAL - RN - SEM", "2026-09-28", True),  # liberado, fora da conta
+    }
+    r = ds._cruzar_expedicoes(pedidos, {}, date(2026, 9, 22), {}, cadastros("COM"))
+    soma_uf = sum(
+        n for lado in r["previstos_uf_dia"].values() for dias in lado.values() for n in dias.values()
+    )
+    soma_listas = sum(
+        c["pedidos_previstos"]
+        for c in r["clinicas_com_prontuai"] + r["clinicas_sem_prontuai"]
+    )
+    assert soma_uf == soma_listas == 2
+
+
+def test_credenciado_sem_uf_cai_num_balde_proprio():
+    pedidos = {1: ds._Pedido(None, "ROTULO SOLTO", None, None, None, "2026-09-25", False)}
+    r = ds._cruzar_expedicoes(pedidos, {}, date(2026, 9, 22), {}, cadastros())
+    assert r["previstos_uf_dia"]["fora"] == {"—": {"2026-09-25": 1}}

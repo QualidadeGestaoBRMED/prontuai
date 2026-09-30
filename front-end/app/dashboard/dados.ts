@@ -94,6 +94,7 @@ export function useDadosDashboard(): EstadoDashboard {
           expedicoes_desde: corpo.expedicoes_desde ?? null,
           clinicas_sem_prontuai: corpo.clinicas_sem_prontuai ?? null,
           clinicas_com_prontuai: corpo.clinicas_com_prontuai ?? null,
+          previstos_uf_dia: corpo.previstos_uf_dia ?? null,
           prazo_clinica_dia: corpo.prazo_clinica_dia ?? {},
           prazo_tecnico_dia: corpo.prazo_tecnico_dia ?? {},
         });

@@ -11,9 +11,11 @@ import type {
   BarraPercentual,
   CardPrevistos,
   CardProjecao,
+  ComparacaoPrevistos,
   GraficoPrazo,
   Kpi,
   LinhaAdesao,
+  LinhaOportunidade,
   LinhaPrevista,
   VisaoDashboard,
 } from "./metricas";
@@ -264,17 +266,290 @@ function CartaoProjecao({ card }: { card: CardProjecao }) {
   );
 }
 
-const COLUNAS_SEM_PRONTUAI = "grid-cols-[1.9fr_1.1fr_0.85fr_1.05fr_1.05fr_1fr]";
+/**
+ * 2.1 — dentro × fora, só em previstos. A cobertura prevista é a única ponte
+ * com o realizado, e vem pronta da base da 1.4: previsto × adesão, nunca uma
+ * soma ou divisão entre as duas grandezas.
+ */
+function CartaoComparacao({ c }: { c: ComparacaoPrevistos }) {
+  const [abrirUf, setAbrirUf] = useState(false);
+  return (
+    <div className={`${CARTAO} px-[22px] pt-5 pb-[18px]`}>
+      <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
+        <div>
+          <div className={TITULO}>Previsto dentro × fora do ProntuAI</div>
+          <div className={SUB}>{c.janela} · só pedidos previstos · {c.totalLabel} no total</div>
+        </div>
+        <div className="text-right">
+          <div className={`${styles.tip} ${styles.tipBaixo} text-[26px] font-medium leading-none tracking-[-0.025em] text-[#00AFAA] tabular-nums`}
+               data-tip="Base da projeção (1.4) dividida por TODOS os previstos, dentro e fora. Estima quanto do futuro deve passar pela plataforma.">
+            {c.coberturaLabel}
+          </div>
+          <div className="mt-1.5 text-[12.5px] text-[#767A7B]">cobertura prevista</div>
+        </div>
+      </div>
+
+      <div className="mt-[18px] flex h-[10px] w-full overflow-hidden rounded-[5px] bg-[#F3F3F3]">
+        <div style={{ width: `${c.pctDentro}%`, background: "#007891" }} />
+        <div style={{ width: `${c.pctFora}%`, background: "#CC851E" }} />
+      </div>
+
+      <div className="mt-[18px] grid grid-cols-1 gap-4 sm:grid-cols-2">
+        {[
+          { rotulo: "Dentro — cadastro habilitado", v: c.dentroLabel, p: c.pctDentro, cor: "#007891" },
+          { rotulo: "Fora do ProntuAI", v: c.foraLabel, p: c.pctFora, cor: "#CC851E" },
+        ].map((x) => (
+          <div key={x.rotulo} className="flex flex-col gap-1.5">
+            <div className="flex items-center gap-2">
+              <div className="size-2.5 flex-none rounded-[2px]" style={{ background: x.cor }} />
+              <div className="text-[13px] text-[#767A7B]">{x.rotulo}</div>
+            </div>
+            <div className="text-[22px] font-medium leading-none text-[#193B4F] tabular-nums">{x.v}</div>
+            <div className="text-[12.5px] text-[#767A7B]">
+              {x.p.toFixed(1).replace(".", ",")}% do total previsto
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {c.porUf.length > 0 && (
+        <>
+          <button
+            type="button"
+            onClick={() => setAbrirUf((v) => !v)}
+            aria-expanded={abrirUf}
+            className="mt-[18px] text-[12.5px] text-[#007891]"
+          >
+            {abrirUf ? "← Fechar abertura por UF" : `Abrir por UF (${c.porUf.length}) →`}
+          </button>
+          {abrirUf && (
+            <div className="mt-3 overflow-x-auto">
+              <div className="min-w-[620px]">
+                <div className={`${CABECALHO_TABELA} grid grid-cols-[0.6fr_1fr_1fr_1fr_1.4fr] gap-x-[18px] border-b border-[#DFE0E2] px-1 pb-2.5`}>
+                  <div>UF</div><div>Dentro</div><div>Fora</div><div>Total</div><div>% dentro</div>
+                </div>
+                {c.porUf.map((l) => (
+                  <div key={l.uf}
+                       className={`${styles.tip} grid grid-cols-[0.6fr_1fr_1fr_1fr_1.4fr] items-center gap-x-[18px] border-b border-[#F3F3F3] px-1 py-2.5 text-[13.5px] text-[#193B4F]`}
+                       data-tip={l.tip}>
+                    <div className="font-medium">{l.uf}</div>
+                    <div className="tabular-nums">{l.dentro}</div>
+                    <div className="tabular-nums">{l.fora}</div>
+                    <div className="tabular-nums text-[#767A7B]">{l.total}</div>
+                    <div className="flex items-center gap-2.5">
+                      <div className="h-1.5 flex-1 overflow-hidden rounded-[3px] bg-[#F3F3F3]">
+                        <div className="h-full rounded-[3px]" style={{ width: `${l.pctDentro}%`, background: "#007891" }} />
+                      </div>
+                      <div className="w-[46px] text-right tabular-nums">
+                        {l.pctDentro.toFixed(1).replace(".", ",")}%
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+/**
+ * 2.4 — oportunidade de elevar a adesão de quem já está dentro, para comparar
+ * com o esforço de incluir clínica nova. `previstos × (1 − adesão)`.
+ *
+ * Clínica sem realizados no período entra com os previstos inteiros e fica
+ * marcada: é a única forma de a soma fechar com `previstos habilitadas − base`,
+ * porque a base (1.4) também a deixa de fora. Ali o número é teto, não medida.
+ */
+function TabelaOportunidades({ linhas, periodo }: { linhas: LinhaOportunidade[]; periodo: string }) {
+  const [verTodas, setVerTodas] = useState(false);
+  const visiveis = verTodas ? linhas : linhas.slice(0, 8);
+  // Soma os valores EXATOS e arredonda uma vez só, no fim: é o que mantém a
+  // igualdade com "previstos das habilitadas − base" do critério de aceite.
+  const total = Math.round(linhas.reduce((a, l) => a + l.oportunidade, 0));
+  const semMedida = linhas.filter((l) => l.semMedida).length;
+  return (
+    <div className={`${CARTAO} px-[22px] pt-5 pb-[18px]`}>
+      <div className={TITULO}>Oportunidade nas clínicas já habilitadas</div>
+      <div className={SUB}>
+        Previstos × (1 − adesão) · adesão medida em {periodo} · {total.toLocaleString("pt-BR")} pedidos
+        previstos que hoje não devem passar pela plataforma
+      </div>
+      <div className="mt-[18px] flex flex-col gap-[13px]">
+        {visiveis.map((l) => (
+          <div key={l.clinica} className={`${styles.tip} flex flex-col gap-1.5`} data-tip={l.tip}>
+            <div className="flex items-baseline justify-between gap-2.5">
+              <div className="min-w-0 truncate text-[13.5px] text-[#193B4F]">
+                {l.clinica}
+                <span className="ml-2 text-[12px] text-[#9AA3A8]">{l.local}</span>
+              </div>
+              <div className="flex shrink-0 items-baseline gap-[9px]">
+                <div className="text-[13.5px] font-medium tabular-nums text-[#193B4F]">{l.oportunidadeLabel}</div>
+                <div className="w-[52px] text-right text-xs tabular-nums text-[#767A7B]">
+                  {l.semMedida ? "teto" : l.adesaoLabel}
+                </div>
+              </div>
+            </div>
+            <div className="h-[7px] overflow-hidden rounded-[4px] bg-[#F3F3F3]">
+              <div className="h-full rounded-[4px]"
+                   style={{ width: `${l.pct}%`, background: l.semMedida ? "#BFC3C6" : "#CC851E" }} />
+            </div>
+          </div>
+        ))}
+      </div>
+      {linhas.length > 8 && (
+        <button type="button" onClick={() => setVerTodas((v) => !v)} className="mt-4 text-left text-[12.5px] text-[#007891]">
+          {verTodas ? "← Ver só as 8 maiores" : `Ver todas as ${linhas.length} clínicas →`}
+        </button>
+      )}
+      {semMedida > 0 && (
+        <div className="mt-[18px] rounded-[10px] bg-[#F3F3F3] px-3.5 py-3 text-[12.5px] leading-[1.5] text-[#767A7B]">
+          <span className="font-medium text-[#A05E1E]">Premissa a confirmar:</span> {semMedida} clínica
+          {semMedida > 1 ? "s" : ""} sem realizados no período entra{semMedida > 1 ? "m" : ""} com os previstos
+          inteiros, por não haver adesão medida. É o que faz a soma fechar com “previstos das habilitadas menos a
+          base”, mas ali o número é um teto.
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * 2.3 — simulador. Não grava nada e não recalcula o painel: parte da base e do
+ * total de previstos que a 1.4 já produziu e aplica a adesão escolhida sobre a
+ * seleção feita no ranking.
+ *
+ *   ganho   = previstos selecionados × adesão esperada
+ *   aumento = ganho ÷ base
+ *
+ * Confere com o critério de aceite: base 180 e uma clínica de 38 previstos dão
+ * +12,7% a 60% de adesão e +21,1% a 100%.
+ */
+function Simulador({
+  linhas,
+  selecionadas,
+  base,
+  totalPrevistos,
+  adesaoHistorica,
+  adesao,
+  onAdesao,
+  ligada,
+  onLigada,
+  onAtalho,
+}: {
+  linhas: LinhaPrevista[];
+  selecionadas: Set<string>;
+  base: number;
+  totalPrevistos: number;
+  adesaoHistorica: number | null;
+  adesao: number;
+  onAdesao: (v: number) => void;
+  ligada: boolean;
+  onLigada: (v: boolean) => void;
+  onAtalho: (quantas: number | "limpar") => void;
+}) {
+  const previstosSel = linhas
+    .filter((l) => selecionadas.has(l.credenciado))
+    .reduce((a, l) => a + l.pedidos, 0);
+  const ganho = previstosSel * (adesao / 100);
+  const aumento = base ? (ganho / base) * 100 : null;
+  const cobAntes = totalPrevistos ? (base / totalPrevistos) * 100 : 0;
+  const cobDepois = totalPrevistos ? ((base + ganho) / totalPrevistos) * 100 : 0;
+  const forcaFora = totalPrevistos - base - ganho;
+  const p1 = (v: number) => v.toLocaleString("pt-BR", { maximumFractionDigits: 1, minimumFractionDigits: 1 });
+  const n0 = (v: number) => Math.round(v).toLocaleString("pt-BR");
+
+  return (
+    <div className="mt-4 rounded-[12px] border border-[#DFE0E2] bg-[#FAFBFC] px-[18px] py-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="mr-auto text-[14px] font-semibold text-[#193B4F]">Simular inclusão</div>
+        {([["Top 5", 5], ["Top 10", 10], ["Todas", linhas.length]] as [string, number][]).map(([r, q]) => (
+          <button key={r} type="button" onClick={() => onAtalho(q)}
+                  className="rounded-[8px] border border-[#DFE0E2] bg-white px-3 py-1.5 text-[12.5px] text-[#193B4F] hover:border-[#7EBFCC]">
+            {r}
+          </button>
+        ))}
+        <button type="button" onClick={() => onAtalho("limpar")}
+                className="rounded-[8px] border border-[#DFE0E2] bg-white px-3 py-1.5 text-[12.5px] text-[#767A7B] hover:border-[#7EBFCC]">
+          Limpar
+        </button>
+      </div>
+
+      <div className="mt-3.5 flex flex-wrap items-center gap-x-4 gap-y-2">
+        <label htmlFor="sim-adesao" className={CABECALHO_TABELA}>Adesão esperada</label>
+        <input
+          id="sim-adesao" type="range" min={0} max={100} step={1} value={Math.round(adesao)}
+          disabled={ligada} onChange={(e) => onAdesao(Number(e.target.value))}
+          className="h-1.5 min-w-[200px] flex-1 accent-[#00AFAA] disabled:opacity-50"
+        />
+        <div className="w-[56px] text-[15px] font-medium tabular-nums text-[#193B4F]">
+          {p1(adesao)}%
+        </div>
+        <label className="flex items-center gap-1.5 text-[12.5px] text-[#767A7B]">
+          <input type="checkbox" checked={ligada} disabled={adesaoHistorica === null}
+                 onChange={(e) => onLigada(e.target.checked)} className="accent-[#00AFAA]" />
+          igual à histórica
+        </label>
+      </div>
+
+      <div className="mt-4 grid grid-cols-2 gap-x-5 gap-y-3.5 lg:grid-cols-5">
+        {[
+          { r: "Aumento sobre a base", v: aumento === null ? "—" : `+${p1(aumento)}%`, destaque: true },
+          { r: "Base", v: n0(base) },
+          { r: "Base + ganho", v: n0(base + ganho) },
+          { r: "Cobertura prevista", v: `${p1(cobAntes)}% → ${p1(cobDepois)}%` },
+          { r: "Previstos que ficam fora", v: n0(Math.max(0, forcaFora)) },
+        ].map((x) => (
+          <div key={x.r} className="flex flex-col gap-1">
+            <div className={CABECALHO_TABELA}>{x.r}</div>
+            <div className={`tabular-nums leading-none ${x.destaque ? "text-[24px] font-medium text-[#00AFAA]" : "text-[17px] text-[#193B4F]"}`}>
+              {x.v}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-3.5 text-[12.5px] leading-[1.5] text-[#767A7B]">
+        {selecionadas.size === 0
+          ? "Marque clínicas na tabela abaixo para simular. Nada é gravado."
+          : `${selecionadas.size} clínica${selecionadas.size > 1 ? "s" : ""} marcada${selecionadas.size > 1 ? "s" : ""} · ${n0(previstosSel)} previstos × ${p1(adesao)}% = +${n0(ganho)} pedidos sobre a base de ${n0(base)}. Simulação: nada é gravado.`}
+      </div>
+    </div>
+  );
+}
+
+// As duas precisam ser literais: o Tailwind compila só as classes que encontra
+// no código-fonte. Montar a segunda com `.replace()` sobre a primeira gerava uma
+// classe em runtime que nunca foi compilada, e a linha inteira perdia o grid.
+const COLUNAS_SEM_PRONTUAI = "grid-cols-[28px_1.9fr_1.1fr_0.85fr_1.05fr_1.05fr_1fr]";
+const COLUNAS_SEM_PRONTUAI_LINHA = "grid-cols-[1.9fr_1.1fr_0.85fr_1.05fr_1.05fr_1fr]";
 
 /**
  * 2.2 — prioridade de inclusão. A ordem padrão é por impacto, que é o que a
  * lista existe para responder: qual clínica, se entrasse, mais moveria a base
  * da projeção.
  */
-function TabelaPrioridade({ linhas, janela }: { linhas: LinhaPrevista[]; janela: string }) {
+function TabelaPrioridade({
+  linhas,
+  janela,
+  simulador,
+}: {
+  linhas: LinhaPrevista[];
+  janela: string;
+  simulador: { base: number; totalPrevistos: number; adesaoHistorica: number | null } | null;
+}) {
   const { ordem, ordenarPor } = useOrdem({ col: "impacto", dir: "desc" });
   const [busca, setBusca] = useState("");
   const [uf, setUf] = useState("");
+  // Estado do simulador (2.3). Vive aqui e só aqui: nada é persistido, nem em
+  // storage nem no servidor — é uma conta de tela.
+  const [marcadas, setMarcadas] = useState<Set<string>>(new Set());
+  const [adesaoLigada, setAdesaoLigada] = useState(true);
+  const [adesaoManual, setAdesaoManual] = useState(60);
+  const historica = simulador?.adesaoHistorica ?? null;
+  const adesaoEfetiva = adesaoLigada && historica !== null ? historica : adesaoManual;
 
   const ufs = [...new Set(linhas.map((l) => l.uf).filter((x): x is string => !!x))].sort();
   const termo = semAcento(busca.trim());
@@ -292,6 +567,21 @@ function TabelaPrioridade({ linhas, janela }: { linhas: LinhaPrevista[]; janela:
     : l.proximaISO,
   );
   const previstosVisiveis = visiveis.reduce((a, l) => a + l.pedidos, 0);
+
+  // Os atalhos seguem a tabela como ela está na tela: com filtro de UF ligado,
+  // "Top 5" são as 5 maiores daquela UF, que é o que a pessoa está vendo.
+  const aplicarAtalho = (quantas: number | "limpar") =>
+    setMarcadas(
+      quantas === "limpar"
+        ? new Set()
+        : new Set(visiveis.slice(0, quantas).map((l) => l.credenciado)),
+    );
+  const alternar = (credenciado: string) =>
+    setMarcadas((atual) => {
+      const proximo = new Set(atual);
+      if (!proximo.delete(credenciado)) proximo.add(credenciado);
+      return proximo;
+    });
 
   return (
     <>
@@ -317,11 +607,27 @@ function TabelaPrioridade({ linhas, janela }: { linhas: LinhaPrevista[]; janela:
         )}
       </div>
 
+      {simulador && (
+        <Simulador
+          linhas={linhas}
+          selecionadas={marcadas}
+          base={simulador.base}
+          totalPrevistos={simulador.totalPrevistos}
+          adesaoHistorica={historica}
+          adesao={adesaoEfetiva}
+          onAdesao={(v) => setAdesaoManual(v)}
+          ligada={adesaoLigada && historica !== null}
+          onLigada={setAdesaoLigada}
+          onAtalho={aplicarAtalho}
+        />
+      )}
+
       <div className="mt-3 max-h-[460px] overflow-auto">
         <div className="min-w-[820px]">
           <div
             className={`sticky top-0 z-10 grid ${COLUNAS_SEM_PRONTUAI} gap-x-[18px] border-b border-[#DFE0E2] bg-white px-1 pb-2.5`}
           >
+            <span aria-hidden="true" />
             <Th label="Clínica" col="name" ordem={ordem} onOrdenar={ordenarPor} />
             <Th label="Cidade" col="local" ordem={ordem} onOrdenar={ordenarPor} />
             <Th label="Previstos" col="pedidos" ordem={ordem} onOrdenar={ordenarPor} numerica />
@@ -330,7 +636,12 @@ function TabelaPrioridade({ linhas, janela }: { linhas: LinhaPrevista[]; janela:
             <Th label="Impacto na base" col="impacto" ordem={ordem} onOrdenar={ordenarPor} numerica />
           </div>
           {visiveis.map((c) => (
-            <LinhaClinica key={`${c.credenciado}`} c={c} />
+            <LinhaClinica
+              key={c.credenciado}
+              c={c}
+              marcada={marcadas.has(c.credenciado)}
+              onMarcar={alternar}
+            />
           ))}
           {!visiveis.length && (
             <div className="px-1 py-6 text-[13px] text-[#767A7B]">Nenhuma clínica com esses filtros.</div>
@@ -352,15 +663,35 @@ function TabelaPrioridade({ linhas, janela }: { linhas: LinhaPrevista[]; janela:
  * painel que abre. A quebra por dia já esteve num balão de hover: com meia
  * dúzia de datas virava um parágrafo, ilegível. Aqui cada data é uma linha.
  */
-function LinhaClinica({ c }: { c: LinhaPrevista }) {
+function LinhaClinica({
+  c,
+  marcada,
+  onMarcar,
+}: {
+  c: LinhaPrevista;
+  marcada: boolean;
+  onMarcar: (credenciado: string) => void;
+}) {
   const [aberta, setAberta] = useState(false);
   return (
-    <div className="border-b border-[#F3F3F3]">
+    <div className={`border-b border-[#F3F3F3] ${marcada ? "bg-[#E6EDF4]" : ""}`}>
+      {/* A marcação do simulador fica fora do botão que abre as datas: aninhar
+          input em button é inválido, e o clique de um roubaria o do outro. */}
+      <div className={`grid ${COLUNAS_SEM_PRONTUAI} items-center gap-x-[18px] px-1`}>
+        <label className="flex cursor-pointer items-center justify-center py-3">
+          <input
+            type="checkbox"
+            checked={marcada}
+            onChange={() => onMarcar(c.credenciado)}
+            aria-label={`Incluir ${c.name} na simulação`}
+            className="size-4 cursor-pointer accent-[#00AFAA]"
+          />
+        </label>
       <button
         type="button"
         onClick={() => setAberta((v) => !v)}
         aria-expanded={aberta}
-        className={`grid w-full ${COLUNAS_SEM_PRONTUAI} items-center gap-x-[18px] rounded-[6px] px-1 py-3 text-left text-[13.5px] text-[#193B4F] transition-colors hover:bg-[#F7F9FA]`}
+        className={`col-span-6 grid ${COLUNAS_SEM_PRONTUAI_LINHA} items-center gap-x-[18px] rounded-[6px] py-3 text-left text-[13.5px] text-[#193B4F] transition-colors hover:bg-[#F7F9FA]`}
       >
         <div className="flex min-w-0 items-center gap-2">
           <svg
@@ -383,9 +714,10 @@ function LinhaClinica({ c }: { c: LinhaPrevista }) {
         </div>
         <div className="font-medium tabular-nums text-[#A05E1E]">{c.impactoLabel}</div>
       </button>
+      </div>
 
       {aberta && (
-        <div className="mb-3 ml-[26px] mr-1 rounded-[10px] border border-[#DFE0E2] bg-[#FAFBFC] px-4 py-3">
+        <div className="mb-3 ml-[54px] mr-1 rounded-[10px] border border-[#DFE0E2] bg-[#FAFBFC] px-4 py-3">
           <div className={CABECALHO_TABELA}>Datas das previsões</div>
           <div className="mt-2.5 flex flex-col">
             {c.datas.map((d) => (
@@ -740,7 +1072,8 @@ export function AbaUtilizacao({
 
       {/* Bloco de previsão, em ordem de dependência: o total (1.1) abre, a adesão
           por clínica (1.3) detalha o lado habilitado, a projeção (1.4) usa essa
-          adesão e a prioridade de inclusão (2.2) se mede contra a base dela. */}
+          adesão, a comparação (2.1) e a oportunidade (2.4) se apoiam na base
+          dela, e a prioridade de inclusão (2.2/2.3) fecha com o simulador. */}
       {visao.previstos && <CartaoPrevistos card={visao.previstos} />}
 
       {visao.adesao && visao.previstos && (
@@ -748,6 +1081,12 @@ export function AbaUtilizacao({
       )}
 
       {visao.projecao && <CartaoProjecao card={visao.projecao} />}
+
+      {visao.comparacao && <CartaoComparacao c={visao.comparacao} />}
+
+      {visao.oportunidades && visao.oportunidades.length > 0 && (
+        <TabelaOportunidades linhas={visao.oportunidades} periodo={visao.periodoLabel} />
+      )}
 
       <div className={`${CARTAO} px-[22px] pt-5 pb-2`}>
         <div className={TITULO}>Prioridade de inclusão no ProntuAI</div>
@@ -757,7 +1096,11 @@ export function AbaUtilizacao({
             : `${visao.semProntuai.length} credenciadas sem cadastro habilitado · ${visao.pedidosSemProntuai} pedidos previstos ${visao.previstos?.janela ?? ""}`}
         </div>
         {visao.semProntuai && visao.semProntuai.length > 0 && (
-          <TabelaPrioridade linhas={visao.semProntuai} janela={visao.previstos?.janela ?? ""} />
+          <TabelaPrioridade
+            linhas={visao.semProntuai}
+            janela={visao.previstos?.janela ?? ""}
+            simulador={visao.simulador}
+          />
         )}
       </div>
     </div>
