@@ -76,21 +76,44 @@ export interface PrevisaoDia {
   pedidos: number;
 }
 
-/** Credenciado com previsão de liberação a partir de hoje que não usa o ProntuAI. */
-export interface ClinicaSemProntuai {
+/**
+ * Credenciado com pedidos de previsão de liberação a partir de hoje. O mesmo
+ * formato serve aos dois lados do corte — `clinicas_com_prontuai` e
+ * `clinicas_sem_prontuai` —, que são complementares: todo pedido previsto está
+ * em exatamente um deles.
+ *
+ * São sempre pedidos **ainda não liberados**. Previsto e realizado nunca se
+ * somam: realizado vive em `expedicoes_prontuai_dia`, que é outra grandeza.
+ */
+export interface CredenciadoPrevisto {
   /** Rótulo do BRNET, "CIDADE - UF - NOME". */
   credenciado: string;
   nome: string;
   cidade: string | null;
   uf: string | null;
+  /**
+   * Nome do cadastro no ProntuAI que mais documentos ligou a este credenciado —
+   * a chave que casa com a tabela "Adoção por clínica". null quando o
+   * credenciado nunca enviou documento, que é a regra do lado sem ProntuAI.
+   */
+  clinica: string | null;
   /** Pedidos ainda não liberados com previsão a partir de hoje. */
   pedidos_previstos: number;
   /** Os mesmos pedidos, quebrados por data e em ordem crescente. */
   previsoes: PrevisaoDia[];
   /** Pendentes cuja previsão já passou — não têm data futura, só contagem. */
   vencidos: number;
-  /** Documentos ligados no ProntuAI em todo o histórico — abaixo de 3. */
+  /** Documentos processados pelo ProntuAI em todo o histórico. */
   documentos: number;
+  /**
+   * Realizados da clínica por dia de ATENDIMENTO — o denominador da adesão.
+   * Mesma datação de `expedicoes_dia`, para a adesão por clínica ser o recorte
+   * por clínica do KPI "Expedições via ProntuAI" e os dois números fecharem.
+   * Só existe no lado habilitado; quem não tem cadastro não tem adesão a medir.
+   */
+  realizados_dia?: Record<string, number>;
+  /** Dos mesmos realizados, os que tiveram documento liberado no ProntuAI. */
+  realizados_prontuai_dia?: Record<string, number>;
 }
 
 export interface DadosDashboard {
@@ -114,9 +137,11 @@ export interface DadosDashboard {
    */
   expedicoes_dia: Record<string, number>;
   /**
-   * Numerador: dos mesmos pedidos, os que têm documento liberado no ProntuAI,
-   * ligados pelo `pedido_exame_id`. Conta pedido, não documento — reenvio não
-   * infla a cobertura.
+   * Numerador: dos mesmos pedidos, os que tiveram documento **processado** pelo
+   * ProntuAI, ligados pelo `pedido_exame_id`. Processado, não liberado: um
+   * prontuário rejeitado ou pendente passou pela plataforma do mesmo jeito, e
+   * medir só o liberado confundiria adoção com desfecho da revisão. Conta
+   * pedido, não documento — reenvio não infla a cobertura.
    */
   expedicoes_prontuai_dia: Record<string, number>;
   /**
@@ -124,8 +149,19 @@ export interface DadosDashboard {
    * como medir cobertura, e o painel não mostra.
    */
   expedicoes_desde: string | null;
-  /** null quando o BRNET não pôde ser consultado. */
-  clinicas_sem_prontuai: ClinicaSemProntuai[] | null;
+  /**
+   * Credenciados **sem cadastro habilitado** — a tabela de prioridade de
+   * inclusão. null quando o BRNET não pôde ser consultado.
+   */
+  clinicas_sem_prontuai: CredenciadoPrevisto[] | null;
+  /**
+   * Clínicas com **cadastro habilitado** (`clinics.is_active`), agregadas pelo
+   * cadastro — dois credenciados do BRNET que apontam para a mesma clínica são
+   * uma linha só. Complementar da lista acima; null junto com ela. Entra aqui
+   * também o cadastro que nunca mandou documento: a adesão dele é baixa, não
+   * inexistente, e é justamente o que a tabela revela.
+   */
+  clinicas_com_prontuai: CredenciadoPrevisto[] | null;
   /** Quando a consulta rodou (ISO com fuso) — origem do "hoje" dos rótulos. */
   gerado_em?: string;
   /**

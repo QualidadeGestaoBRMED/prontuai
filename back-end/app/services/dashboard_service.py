@@ -24,8 +24,10 @@ import asyncio
 import json
 import logging
 import os
+import re
 import threading
 import time
+import unicodedata
 from datetime import date, datetime, timedelta
 from typing import Any, NamedTuple, Optional
 from zoneinfo import ZoneInfo
@@ -77,10 +79,9 @@ TIMEOUT_MS = int(os.getenv("DASHBOARD_STATEMENT_TIMEOUT_MS", "120000"))
 # Cada mês custa ~7 s e ~10 MB, por isso a busca é paralela e limitada.
 MESES_ANTES_DO_ATENDIMENTO = 2
 MESES_EM_ABERTO = 3
-# A partir de quantos documentos ligados um credenciado "usa o ProntuAI". Um
-# documento avulso (unidade vizinha, conta interna enviando por outra clínica)
-# não pode tirar o credenciado da lista.
-MIN_DOCUMENTOS_USA_PRONTUAI = 3
+# Piso para aceitar o documento como prova de que o credenciado é atendido por
+# um cadastro — não é critério de "usa o ProntuAI", que é ter cadastro ativo.
+MIN_DOCUMENTOS_CADASTRO = 3
 BUSCAS_SIMULTANEAS = int(os.getenv("DASHBOARD_EXPEDICOES_CONCORRENCIA", "4"))
 # Calcular o painel no startup. Os testes desligam: a app sobe a cada teste e
 # cada subida iria ao banco e ao BRNET de verdade.
@@ -105,18 +106,37 @@ class _Pedido(NamedTuple):
 _pedidos_mes: dict[tuple[int, int], dict[int, _Pedido]] = {}
 
 # Documentos por pedido do BRNET, das mesmas clínicas que o painel conta.
+# Conta documentos, sem olhar `validation_status`: um pedido "passou pelo
+# ProntuAI" quando foi PROCESSADO por ele. Prontuário que entrou, foi processado
+# e acabou rejeitado ou pendente passou pela plataforma do mesmo jeito — medir só
+# o liberado confundiria adoção com desfecho da revisão.
+# `clinica` é o nome da clínica que enviou o documento — é a ÚNICA ligação entre
+# o credenciado do BRNET e o cadastro do ProntuAI, porque a API de monitoramento
+# não manda id nem CNPJ do credenciado, só o rótulo "CIDADE - UF - NOME". É o que
+# permite levar o total de previstos para a tabela "Adoção por clínica".
+# `mode()` resolve o pedido que tem documento de mais de uma clínica (reenvio por
+# outra unidade): vence a que mais enviou.
 _SQL_DOCS_POR_PEDIDO = r"""
 WITH d AS (
-    SELECT d.validation_status, d.created_at,
+    SELECT d.created_at, c.name AS clinica,
            CASE WHEN d.result_payload LIKE '{%' AND pg_input_is_valid(d.result_payload, 'jsonb')
                 THEN d.result_payload::jsonb #>> '{brmed_result,pedido_exame_id}' END AS pedido
     FROM documents d
     JOIN clinics c ON c.id = d.clinic_id
     WHERE c.name NOT IN ('teste', 'testando', 'Clinica Default')
 )
-SELECT pedido::bigint, count(*), bool_or(validation_status = 'validated'), min(created_at)::date
+SELECT pedido::bigint, count(*), min(created_at)::date,
+       mode() WITHIN GROUP (ORDER BY clinica) AS clinica
 FROM d WHERE pedido ~ '^\d{1,18}$'
 GROUP BY pedido
+"""
+
+# Cadastros habilitados. É a definição de "clínica no ProntuAI": ter cadastro
+# ativo, e não ter volume. A API de monitoramento não manda id nem CNPJ do
+# credenciado, então a ponte é pelo nome — ver `_indexar_cadastros`.
+_SQL_CADASTROS_ATIVOS = """
+SELECT name FROM clinics
+WHERE is_active AND name NOT IN ('teste', 'testando', 'Clinica Default')
 """
 
 # Um documento por linha, para "Expedições por prazo". Datas convertidas de UTC
@@ -270,6 +290,45 @@ def _carregar_pedidos(doc_mais_antigo: Optional[str]) -> Optional[dict[int, _Ped
     return pedidos
 
 
+def _chave_nome(valor: Optional[str]) -> str:
+    """Normaliza um nome para casar rótulo do BRNET com cadastro do ProntuAI.
+
+    Sem acento, sem caixa e com espaços colapsados. O rótulo do BRNET e o nome do
+    cadastro são digitados por pessoas diferentes, em sistemas diferentes: no dev
+    convivem "Qualimetra" e "QUALIMETRA", e cidade com e sem acento.
+    """
+    texto = unicodedata.normalize("NFD", (valor or "").strip().lower())
+    sem_acento = "".join(c for c in texto if unicodedata.category(c) != "Mn")
+    # O BRNET anexa qualificadores entre parênteses ao rótulo ("(CONDIÇÃO
+    # ESPECIAL)") que o cadastro não tem. Sem tirá-los, CISVIVER e CLÍNICA SOMA
+    # deixam de casar com o próprio cadastro.
+    return " ".join(re.sub(r"\([^)]*\)", " ", sem_acento).split())
+
+
+def _indexar_cadastros(nomes: list[str]) -> dict[str, str]:
+    """{nome normalizado: nome original} dos cadastros habilitados.
+
+    Chave única possível, já que a API do BRNET não manda id nem CNPJ do
+    credenciado. Cadastro duplicado com a mesma chave fica com o primeiro em
+    ordem alfabética, para a saída não variar entre execuções.
+    """
+    indice: dict[str, str] = {}
+    for nome in sorted(nomes):
+        indice.setdefault(_chave_nome(nome), nome)
+    return indice
+
+
+def _cadastro_do_credenciado(p: _Pedido, cadastros: dict[str, str]) -> Optional[str]:
+    """Cadastro habilitado que corresponde a este credenciado, se houver.
+
+    Tenta o rótulo inteiro ("RECIFE - PE - QUALIMETRA") e depois só o nome
+    ("QUALIMETRA"): parte das clínicas é cadastrada com o rótulo completo e parte
+    só com o nome curto. Sem match, o credenciado não tem cadastro habilitado — é
+    o lado da prioridade de inclusão.
+    """
+    return cadastros.get(_chave_nome(p.credenciado)) or cadastros.get(_chave_nome(p.nome))
+
+
 def _primeiro_dia_ligado(primeiro_doc: Optional[date]) -> Optional[str]:
     """Primeiro dia com cobertura medível: o 1º do mês do primeiro documento
     com pedido. Começar no dia exato deixaria o primeiro ponto do gráfico mensal
@@ -282,74 +341,226 @@ def _primeiro_dia_ligado(primeiro_doc: Optional[date]) -> Optional[str]:
 
 def _cruzar_expedicoes(
     pedidos: Optional[dict[int, _Pedido]],
-    docs_por_pedido: dict[int, tuple[int, bool]],
+    docs_por_pedido: dict[int, int],
     hoje: date,
+    clinica_por_pedido: Optional[dict[int, str]] = None,
+    cadastros_ativos: Optional[dict[str, str]] = None,
 ) -> dict[str, Any]:
     """Liga pedidos do BRNET a documentos do ProntuAI pelo pedido_exame_id.
 
-    A lista de credenciados fora do ProntuAI sai com a previsão **quebrada por
-    data** (`previsoes`), não só a mais próxima: o prazo do credenciado é de 1 a
-    3 dias úteis após o atendimento, então quase toda clínica tem algo vencendo
-    hoje e uma única data não distinguia ninguém (medido: 54% das linhas
-    mostravam o dia corrente).
+    Devolve DUAS listas separadas por **ter ou não cadastro habilitado**:
+
+      * `clinicas_com_prontuai` — credenciados que casam com um cadastro ativo,
+        agregados por **cadastro**: dois credenciados do BRNET que apontam para a
+        mesma clínica são uma linha só. Traz previstos, realizados e realizados
+        via ProntuAI. Entra mesmo sem nunca ter mandado documento — cadastro
+        habilitado que não usa a plataforma é adesão baixa, não ausência.
+      * `clinicas_sem_prontuai` — agregada por **credenciado**, porque esses não
+        têm cadastro para agregar por. Só previstos.
+
+    "Habilitada" é ter cadastro ativo em `clinics`, não ter volume. A ponte é por
+    nome (`_cadastro_do_credenciado`), única chave possível.
+
+    São complementares: todo pedido previsto cai em exatamente uma.
+
+    `realizados_dia` e `realizados_prontuai_dia` saem quebrados por dia de
+    ATENDIMENTO, a mesma datação de `expedicoes_dia` — a adesão por clínica é o
+    recorte por clínica do KPI "Expedições via ProntuAI", e as duas contas
+    precisam reconciliar. Quebrados por dia porque o filtro de período é da tela:
+    trocar de período não pode custar uma ida ao banco.
+
+    Previsto e realizado nunca se somam nem se dividem um pelo outro. São
+    grandezas diferentes e viajam em campos diferentes: previsto é pedido ainda
+    NÃO liberado (`p.liberado` falso) com data futura; realizado é pedido já
+    atendido. A divisão que a adesão faz é realizado ÷ realizado.
+
+    A previsão sai **quebrada por data** (`previsoes`), não só a mais próxima: o
+    prazo do credenciado é de 1 a 3 dias úteis após o atendimento, então quase
+    toda clínica tem algo vencendo hoje e uma única data não distinguia ninguém
+    (medido: 54% das linhas mostravam o dia corrente). É essa quebra que deixa o
+    painel recortar os previstos por janela sem voltar ao banco.
 
     Pedido pendente com previsão já vencida não tem data futura para mostrar e
-    sai só como contagem (`vencidos`), para não mudar o escopo da lista, que é
-    de previsões futuras. Credenciado que só tem vencidos fica de fora.
+    sai só como contagem (`vencidos`), para não mudar o escopo da lista, que é de
+    previsões futuras.
+
+    Uma clínica habilitada entra em `clinicas_com_prontuai` mesmo sem nenhum
+    previsto, desde que tenha realizados: a adesão dela existe e é justamente o
+    que a tabela mede. Já um credenciado sem cadastro só entra se tiver previsto,
+    porque a lista dele é de prioridade de inclusão.
     """
     if pedidos is None:
-        return {"expedicoes_dia": {}, "expedicoes_prontuai_dia": {}, "clinicas_sem_prontuai": None}
+        return {
+            "expedicoes_dia": {},
+            "expedicoes_prontuai_dia": {},
+            "clinicas_sem_prontuai": None,
+            "clinicas_com_prontuai": None,
+        }
 
+    clinica_por_pedido = clinica_por_pedido or {}
+    cadastros_ativos = cadastros_ativos or {}
+
+    # ── documentos por credenciado, e o cadastro de cada um ───────────────────
+    docs_por_credenciado: dict[str, int] = {}
+    clinicas_do_credenciado: dict[str, dict[str, int]] = {}
+    for pid, p in pedidos.items():
+        qtd_docs = docs_por_pedido.get(pid, 0)
+        if not qtd_docs:
+            continue
+        docs_por_credenciado[p.credenciado] = docs_por_credenciado.get(p.credenciado, 0) + qtd_docs
+        clinica = clinica_por_pedido.get(pid)
+        if clinica:
+            por_clinica = clinicas_do_credenciado.setdefault(p.credenciado, {})
+            por_clinica[clinica] = por_clinica.get(clinica, 0) + qtd_docs
+
+    # Cadastro de cada credenciado, resolvido uma vez só (roda sobre dezenas de
+    # milhares de pedidos). São DUAS evidências, nesta ordem:
+    #
+    #   1. o nome casa com um cadastro ativo — única via para o credenciado que
+    #      nunca mandou documento, que é o caso que a regra por volume errava;
+    #   2. os documentos dele vieram de um cadastro ativo — isso é FATO, vem do
+    #      `clinic_id` do documento, e não depende de nome nenhum.
+    #
+    # A segunda é indispensável: medido no dev, o nome falha para 5 clínicas que
+    # comprovadamente usam a plataforma, incluindo a maior delas (511 documentos,
+    # cadastrada como "Mediar - Belo Horizonte" contra o rótulo "BELO HORIZONTE -
+    # MG - MEDIAR"). Ordem invertida, sufixo "- FILIAL" e afins não se resolvem
+    # por regra de texto sem inventar casamento errado.
+    #
+    # O piso de documentos vale só para a segunda: um documento avulso (unidade
+    # vizinha mandando pela conta de outra) não pode dar cadastro a quem não tem.
+    cadastro_de: dict[str, Optional[str]] = {}
+    for p in pedidos.values():
+        if p.credenciado in cadastro_de:
+            continue
+        casado = _cadastro_do_credenciado(p, cadastros_ativos)
+        if casado is None and docs_por_credenciado.get(p.credenciado, 0) >= MIN_DOCUMENTOS_CADASTRO:
+            por_clinica = clinicas_do_credenciado.get(p.credenciado) or {}
+            dominante = max(sorted(por_clinica), key=lambda n: por_clinica[n]) if por_clinica else None
+            if dominante and _chave_nome(dominante) in cadastros_ativos:
+                casado = cadastros_ativos[_chave_nome(dominante)]
+        cadastro_de[p.credenciado] = casado
+
+    def usa_prontuai(credenciado: str) -> bool:
+        return cadastro_de.get(credenciado) is not None
+
+    def cadastro(credenciado: str) -> str:
+        """Nome do cadastro habilitado deste credenciado.
+
+        Vem do casamento por nome. Se ele falhar mas os documentos apontarem uma
+        clínica, usa a que mais mandou — cobre o cadastro renomeado depois de já
+        ter volume. Último recurso é o próprio rótulo, para a lista nunca ficar
+        sem chave.
+        """
+        casado = cadastro_de.get(credenciado)
+        if casado:
+            return casado
+        por_clinica = clinicas_do_credenciado.get(credenciado)
+        if not por_clinica:
+            return credenciado
+        return max(sorted(por_clinica), key=lambda nome: por_clinica[nome])
+
+    # ── realizados: global (KPI de cobertura) e por clínica (adesão) ──────────
     atendidos: dict[str, int] = {}
     via_prontuai: dict[str, int] = {}
-    docs_por_credenciado: dict[str, int] = {}
+    realizados: dict[str, dict[str, int]] = {}
+    realizados_prontuai: dict[str, dict[str, int]] = {}
     for pid, p in pedidos.items():
-        qtd_docs, liberado_no_prontuai = docs_por_pedido.get(pid, (0, False))
-        if qtd_docs:
-            docs_por_credenciado[p.credenciado] = docs_por_credenciado.get(p.credenciado, 0) + qtd_docs
-        if p.atendimento:
-            atendidos[p.atendimento] = atendidos.get(p.atendimento, 0) + 1
-            if liberado_no_prontuai:
-                via_prontuai[p.atendimento] = via_prontuai.get(p.atendimento, 0) + 1
+        if not p.atendimento:
+            continue
+        # Passou pelo ProntuAI = teve documento PROCESSADO por ele, qualquer que
+        # tenha sido o desfecho da revisão.
+        processado_no_prontuai = docs_por_pedido.get(pid, 0) > 0
+        atendidos[p.atendimento] = atendidos.get(p.atendimento, 0) + 1
+        if processado_no_prontuai:
+            via_prontuai[p.atendimento] = via_prontuai.get(p.atendimento, 0) + 1
+        if not usa_prontuai(p.credenciado):
+            continue
+        nome = cadastro(p.credenciado)
+        dias = realizados.setdefault(nome, {})
+        dias[p.atendimento] = dias.get(p.atendimento, 0) + 1
+        if processado_no_prontuai:
+            dias_ok = realizados_prontuai.setdefault(nome, {})
+            dias_ok[p.atendimento] = dias_ok.get(p.atendimento, 0) + 1
 
+    # ── previstos: pedidos ainda não liberados, com data ─────────────────────
     hoje_iso = hoje.isoformat()
-    previstos: dict[str, dict[str, Any]] = {}
-    por_data: dict[str, dict[str, int]] = {}
-    for p in pedidos.values():
-        if p.liberado or not p.previsao:
-            continue
-        if docs_por_credenciado.get(p.credenciado, 0) >= MIN_DOCUMENTOS_USA_PRONTUAI:
-            continue
-        item = previstos.setdefault(p.credenciado, {
+    com: dict[str, dict[str, Any]] = {}
+    sem: dict[str, dict[str, Any]] = {}
+    datas_com: dict[str, dict[str, int]] = {}
+    datas_sem: dict[str, dict[str, int]] = {}
+
+    def novo(chave: str, nome: str, p: _Pedido, habilitada: bool) -> dict[str, Any]:
+        return {
             "credenciado": p.credenciado,
-            "nome": p.nome or p.credenciado,
+            # Só o lado habilitado tem cadastro no ProntuAI para apontar. Do
+            # outro lado a chave é o rótulo do BRNET, e dizer que isso é uma
+            # "clinica" faria a tela achar que existe cadastro.
+            "clinica": chave if habilitada else None,
+            "nome": nome,
             "cidade": p.cidade,
             "uf": p.uf,
             "pedidos_previstos": 0,
             "previsoes": [],
             "vencidos": 0,
-            "documentos": docs_por_credenciado.get(p.credenciado, 0),
-        })
+            "documentos": 0,
+        }
+
+    for p in pedidos.values():
+        if p.liberado or not p.previsao:
+            continue
+        habilitada = usa_prontuai(p.credenciado)
+        chave = cadastro(p.credenciado) if habilitada else p.credenciado
+        alvo, datas = (com, datas_com) if habilitada else (sem, datas_sem)
+        item = alvo.setdefault(
+            chave, novo(chave, chave if habilitada else (p.nome or p.credenciado), p, habilitada)
+        )
         if p.previsao < hoje_iso:
             item["vencidos"] += 1
         else:
             item["pedidos_previstos"] += 1
-            dias = por_data.setdefault(p.credenciado, {})
+            dias = datas.setdefault(chave, {})
             dias[p.previsao] = dias.get(p.previsao, 0) + 1
 
-    lista = []
-    for credenciado, item in previstos.items():
-        if not item["pedidos_previstos"]:
-            continue
-        dias = por_data[credenciado]
-        item["previsoes"] = [{"data": d, "pedidos": dias[d]} for d in sorted(dias)]
-        lista.append(item)
-    lista.sort(key=lambda c: (-c["pedidos_previstos"], c["credenciado"]))
+    # Cadastro habilitado sem previsto também entra: a adesão dele existe, e
+    # cadastro que não usa a plataforma é justamente o que a tabela revela.
+    for nome in realizados:
+        com.setdefault(nome, {
+            "credenciado": nome, "clinica": nome, "nome": nome,
+            "cidade": None, "uf": None,
+            "pedidos_previstos": 0, "previsoes": [], "vencidos": 0, "documentos": 0,
+        })
+
+    # Documentos e cidade da clínica vêm dos credenciados que a alimentam.
+    docs_por_cadastro: dict[str, int] = {}
+    for credenciado, qtd in docs_por_credenciado.items():
+        if usa_prontuai(credenciado):
+            chave = cadastro(credenciado)
+            docs_por_cadastro[chave] = docs_por_cadastro.get(chave, 0) + qtd
+    for nome, item in com.items():
+        item["documentos"] = docs_por_cadastro.get(nome, 0)
+        item["realizados_dia"] = realizados.get(nome, {})
+        item["realizados_prontuai_dia"] = realizados_prontuai.get(nome, {})
+    for credenciado, item in sem.items():
+        item["documentos"] = docs_por_credenciado.get(credenciado, 0)
+
+    def finalizar(itens: dict[str, dict[str, Any]], datas: dict[str, dict[str, int]], so_com_previsto: bool):
+        saida = []
+        for chave, item in itens.items():
+            dias = datas.get(chave, {})
+            if so_com_previsto and not dias:
+                continue
+            item["previsoes"] = [{"data": d, "pedidos": dias[d]} for d in sorted(dias)]
+            saida.append(item)
+        saida.sort(key=lambda c: (-c["pedidos_previstos"], c["nome"]))
+        return saida
 
     return {
         "expedicoes_dia": atendidos,
         "expedicoes_prontuai_dia": via_prontuai,
-        "clinicas_sem_prontuai": lista,
+        # Credenciado sem cadastro e sem previsto não tem por que aparecer.
+        "clinicas_sem_prontuai": finalizar(sem, datas_sem, True),
+        "clinicas_com_prontuai": finalizar(com, datas_com, False),
     }
 
 
@@ -409,12 +620,18 @@ def _consultar() -> dict[str, Any]:
                 {"ms": str(TIMEOUT_MS)},
             )
             linha = conn.execute(text(_carregar_sql())).scalar()
-            docs_por_pedido: dict[int, tuple[int, bool]] = {}
+            docs_por_pedido: dict[int, int] = {}
+            clinica_por_pedido: dict[int, str] = {}
             primeiro_doc_ligado: Optional[date] = None
-            for pedido, qtd, liberado, criado in conn.execute(text(_SQL_DOCS_POR_PEDIDO)):
-                docs_por_pedido[int(pedido)] = (int(qtd), bool(liberado))
+            for pedido, qtd, criado, clinica in conn.execute(text(_SQL_DOCS_POR_PEDIDO)):
+                docs_por_pedido[int(pedido)] = int(qtd)
+                if clinica:
+                    clinica_por_pedido[int(pedido)] = clinica
                 if primeiro_doc_ligado is None or criado < primeiro_doc_ligado:
                     primeiro_doc_ligado = criado
+            cadastros_ativos = _indexar_cadastros(
+                [nome for (nome,) in conn.execute(text(_SQL_CADASTROS_ATIVOS)) if nome]
+            )
             documentos = [
                 (int(pedido), enviado, liberado, prazo_brmed)
                 for pedido, enviado, liberado, prazo_brmed in conn.execute(text(_SQL_PRAZOS), {"fuso": FUSO.key})
@@ -427,7 +644,11 @@ def _consultar() -> dict[str, Any]:
     dados = {secao: bruto.get(secao) for secao in SECOES}
     momento = agora()
     pedidos = _carregar_pedidos((bruto.get("periodo") or {}).get("doc_mais_antigo"))
-    dados.update(_cruzar_expedicoes(pedidos, docs_por_pedido, momento.date()))
+    dados.update(
+        _cruzar_expedicoes(
+            pedidos, docs_por_pedido, momento.date(), clinica_por_pedido, cadastros_ativos
+        )
+    )
     dados.update(_cruzar_prazos(pedidos, documentos))
     dados["expedicoes_desde"] = _primeiro_dia_ligado(primeiro_doc_ligado)
     dados["ambiente"] = Settings.APP_ENV
@@ -439,6 +660,12 @@ def _consultar() -> dict[str, Any]:
         time.monotonic() - inicio,
         dados["ambiente"],
         len(dados.get("clinicas") or []),
+    )
+    logger.info(
+        "[DASHBOARD] cadastros habilitados=%s, credenciados casados=%s, sem cadastro=%s",
+        len(cadastros_ativos),
+        len(dados.get("clinicas_com_prontuai") or []),
+        len(dados.get("clinicas_sem_prontuai") or []),
     )
     return dados
 

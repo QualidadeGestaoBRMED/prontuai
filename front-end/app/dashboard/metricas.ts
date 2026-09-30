@@ -8,7 +8,9 @@
  */
 import type {
   ClinicaDados,
+  CredenciadoPrevisto,
   DadosDashboard,
+  PrevisaoDia,
   PontoAcuracia,
   PontoSerie,
   Prazos,
@@ -54,6 +56,24 @@ const PERIODOS: Record<
   Tudo: { label: "Tudo", periodo: { serie: "mensal", n: 0 }, grafico: { serie: "mensal", n: 0 } },
 };
 
+/**
+ * Janela do card "Pedidos previstos", em dias contados a partir de hoje.
+ *
+ * Os gráficos e KPIs olham para TRÁS; previsão de liberação olha para frente, e
+ * as duas janelas não podem ser a mesma. O card reaproveita o filtro já
+ * escolhido na tela — não há seletor nem período próprio — e a duração dele vira
+ * o alcance para frente, com teto de um mês: previsão do BRNET a mais de 30 dias
+ * é rara e instável (o prazo do credenciado é de 1 a 3 dias úteis após o
+ * atendimento), então "3 meses" e "Tudo" mostrariam uma cauda sem uso
+ * operacional. Por isso os dois caem no mesmo teto.
+ */
+const JANELA_PREVISTOS: Record<FiltroPeriodo, number> = {
+  Semanal: 7,
+  Mensal: 30,
+  Trimestral: 30,
+  Tudo: 30,
+};
+
 export const ORDEM_FILTROS: FiltroPeriodo[] = ["Semanal", "Mensal", "Trimestral", "Tudo"];
 
 export const ROTULO_FILTRO = (f: FiltroPeriodo) => PERIODOS[f].label;
@@ -68,7 +88,7 @@ const TIPS_KPI: Record<string, string> = {
   "Documentos enviados": "Prontuários recebidos pela plataforma no período.",
   "Documentos revisados": "Já com decisão humana: aprovados ou rejeitados por um revisor.",
   "Expedições via ProntuAI":
-    "Pedidos atendidos nas credenciadas que tiveram o prontuário liberado no ProntuAI, ligados pelo número do pedido no BRNET. Meta: 100%.",
+    "Pedidos atendidos nas credenciadas que tiveram o prontuário processado pelo ProntuAI, ligados pelo número do pedido no BRNET. Meta: 100%.",
 };
 
 const TIPS_ACC: Record<string, string> = {
@@ -271,23 +291,109 @@ export interface LinhaAdocao {
   tip: string;
 }
 
+/**
+ * Uma linha da tabela de adesão (1.3). Mede coisa diferente de `LinhaAdocao`:
+ * "Adoção por clínica" olha documentos DENTRO do ProntuAI; aqui o denominador é
+ * o realizado do BRNET, e a pergunta é quanto do que a clínica fez passou pela
+ * plataforma. Futuro (previstos) e histórico (realizados) convivem na mesma
+ * linha mas nunca se dividem um pelo outro.
+ */
+export interface LinhaAdesao {
+  clinica: string;
+  local: string;
+  uf: string | null;
+  /** Previstos na janela para frente. */
+  previstos: number;
+  /** Realizados no filtro de período da tela. */
+  realizados: number;
+  realizadosProntuai: number;
+  /** null quando não houve realizados no filtro — nunca 0. */
+  adesao: number | null;
+  adesaoLabel: string;
+  adesaoColor: string;
+  proxima: string;
+  /** ISO da próxima previsão, "" quando não há. Usado só para ordenar. */
+  proximaISO: string;
+  tip: string;
+}
+
+/**
+ * Projeção (1.4): quanto dos previstos das habilitadas deve passar pelo
+ * ProntuAI. `base` é a soma linha a linha de previstos × adesão da tabela 1.3.
+ */
+export interface CardProjecao {
+  janela: string;
+  somaPrevistos: number;
+  somaPrevistosLabel: string;
+  base: number;
+  baseLabel: string;
+  /** base ÷ previstos das linhas com adesão medível. null se não houver nenhuma. */
+  adesaoPonderada: number | null;
+  adesaoPonderadaLabel: string;
+  previstosSemAdesaoLabel: string;
+  /**
+   * Premissa em aberto no backlog: clínica com adesão nula fica FORA da base e
+   * do denominador da média. Estes são os previstos que ela carrega, mostrados
+   * à parte para a premissa ficar visível em vez de embutida no número.
+   */
+  previstosSemAdesao: number;
+  clinicasSemAdesao: number;
+}
+
+/** Uma das duas parcelas do card de previstos. */
+export interface ParcelaPrevistos {
+  rotulo: string;
+  valor: number;
+  label: string;
+  /** Largura da fatia na barra empilhada, em % do total. */
+  pct: number;
+  cor: string;
+  sub: string;
+  tip: string;
+}
+
+/**
+ * Card "Pedidos previstos": pedidos do BRNET ainda NÃO liberados com previsão
+ * dentro da janela, separados pelo mesmo corte das duas tabelas. null quando o
+ * BRNET não pôde ser consultado.
+ */
+export interface CardPrevistos {
+  /** "de hoje a 29/10 · 30 dias". */
+  janela: string;
+  total: number;
+  totalLabel: string;
+  partes: ParcelaPrevistos[];
+}
+
 /** Uma linha do painel "Datas das previsões". */
 export interface DataPrevista {
   label: string;
   pedidos: string;
 }
 
-export interface LinhaSemProntuai {
+export interface LinhaPrevista {
   /** Rótulo completo do BRNET, mostrado ao expandir. */
   credenciado: string;
   name: string;
   local: string;
+  uf: string | null;
   pedidos: number;
   /** Primeira data prevista; a quebra por dia fica no painel expansível. */
   proxima: string;
+  /** ISO da próxima previsão, para ordenar por data e não por texto. */
+  proximaISO: string;
   datas: DataPrevista[];
   /** Vencidos e documentos, no rodapé do painel. */
   resumo: string;
+  /** Fatia desta clínica nos previstos fora do ProntuAI, em %. */
+  participacao: number;
+  participacaoLabel: string;
+  /**
+   * Quanto a base da projeção cresceria se esta clínica entrasse:
+   * previstos × adesão esperada ÷ base. null quando não há base para comparar.
+   */
+  impacto: number | null;
+  impactoLabel: string;
 }
 
 export interface LinhaMatriz {
@@ -323,8 +429,14 @@ export interface VisaoDashboard {
   totalClinicas: number;
   adocao: LinhaAdocao[];
   /** null quando o BRNET não pôde ser consultado. */
-  semProntuai: LinhaSemProntuai[] | null;
+  semProntuai: LinhaPrevista[] | null;
   pedidosSemProntuai: number;
+  /** Os três dependem do BRNET e vêm null juntos. */
+  previstos: CardPrevistos | null;
+  adesao: LinhaAdesao[] | null;
+  projecao: CardProjecao | null;
+  /** Rótulo do filtro de período, para a tabela 1.3 dizer de onde vem cada coluna. */
+  periodoLabel: string;
 
   kpisAcuracia: Kpi[];
   acuraciaSeries: BarraPercentual[];
@@ -524,6 +636,24 @@ export function calcularVisao({ dados, filtro, comparar, verTodasClinicas }: Opc
     const d = new Date(Date.UTC(q.y, q.m - 1, q.d + 1));
     return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`;
   })();
+  // Janela para frente do card de previstos: de hoje até hoje + (dias - 1), com
+  // o dia de hoje incluído. Sem `gerado_em` não há "hoje" confiável — o relógio
+  // do browser não serve, porque o painel é calculado uma vez por dia no fuso do
+  // servidor —, então o recorte é desligado em vez de sair errado.
+  const diasJanela = JANELA_PREVISTOS[filtro] ?? JANELA_PREVISTOS.Mensal;
+  const fimJanelaISO = (() => {
+    if (!hojeISO) return "";
+    const q = partes(hojeISO);
+    const d = new Date(Date.UTC(q.y, q.m - 1, q.d + diasJanela - 1));
+    return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`;
+  })();
+  const temJanela = !!hojeISO;
+
+  const dataCurta = (iso: string) => {
+    const q = partes(iso);
+    return `${pad(q.d)}/${pad(q.m)}`;
+  };
+
   // No painel expandido o dia da semana importa: é o que responde "isso é pra
   // semana que vem?" sem a pessoa ter que consultar o calendário.
   const rotuloPrevisao = (iso: string) => {
@@ -547,6 +677,78 @@ export function calcularVisao({ dados, filtro, comparar, verTodasClinicas }: Opc
 
   const clinicas = verTodasClinicas ? todas : todas.slice(0, 6);
   const maxClin = Math.max(1, ...clinicas.map((c) => c.docs));
+
+  // ---- previstos, adesão e projeção ----------------------------------------
+  const comProntuai = dados.clinicas_com_prontuai ?? [];
+  const semProntuaiBruto = dados.clinicas_sem_prontuai ?? [];
+  const temBrnet = dados.clinicas_sem_prontuai !== null;
+
+  /** Previsões de um credenciado que caem na janela para frente. */
+  const diasNaJanela = (c: CredenciadoPrevisto) =>
+    c.previsoes.filter((x) => !temJanela || (x.data >= hojeISO && x.data <= fimJanelaISO));
+  const somaDias = (dias: PrevisaoDia[]) => dias.reduce((a, x) => a + x.pedidos, 0);
+
+  // Realizados entram pela MESMA janela retroativa dos KPIs, com o mesmo corte
+  // em `expedicoes_desde`: a adesão por clínica é o recorte por clínica do KPI
+  // "Expedições via ProntuAI", e janelas diferentes fariam os dois números da
+  // tela discordarem sem motivo.
+  const realizadosDe = (porDia: Record<string, number> | undefined) =>
+    faixaAtual && porDia ? expedicoesEntre(porDia, faixaAtual.ini, faixaAtual.fim, ultimoDoc) : 0;
+
+  // ---- 1.2 + 1.3: adesão por clínica com cadastro habilitado ---------------
+  const linhasAdesao: LinhaAdesao[] = comProntuai.map((c) => {
+    const clinica = c.clinica ?? c.nome;
+    const dias = diasNaJanela(c);
+    const previstos = somaDias(dias);
+    const realizados = realizadosDe(c.realizados_dia);
+    const realizadosProntuai = realizadosDe(c.realizados_prontuai_dia);
+    // Sem realizados no filtro a adesão é NULA, nunca zero: zero afirmaria que a
+    // clínica não usou a plataforma, e o que houve foi ausência de medida.
+    const adesao = realizados ? (realizadosProntuai / realizados) * 100 : null;
+    return {
+      clinica,
+      local: c.cidade && c.uf ? `${c.cidade}/${c.uf}` : "—",
+      uf: c.uf,
+      previstos,
+      realizados,
+      realizadosProntuai,
+      adesao,
+      adesaoLabel: adesao === null ? "—" : num(adesao),
+      adesaoColor: adesao === null ? MUTED : adesao >= 90 ? POS : adesao >= 75 ? CORES.alerta : NEG,
+      proxima: dias.length ? dataCurta(dias[0].data) : "—",
+      proximaISO: dias.length ? dias[0].data : "",
+      tip:
+        adesao === null
+          ? `${clinica} — sem realizados no período selecionado, adesão não medível`
+          : `${clinica} — ${fmt(realizadosProntuai)} de ${fmt(realizados)} realizados passaram pelo ProntuAI`,
+    };
+  });
+
+  // ---- 1.4: projeção sobre os previstos das habilitadas --------------------
+  // Premissa assumida (pendência aberta no backlog): adesão nula fica FORA da
+  // base e do denominador da média ponderada. Incluí-la como zero puxaria a
+  // média para baixo afirmando algo que não foi medido; deixá-la no denominador
+  // sem contribuir para a base faria o mesmo. Os previstos que ela carrega
+  // aparecem à parte, para a premissa ficar visível na tela.
+  const comAdesao = linhasAdesao.filter((l) => l.adesao !== null);
+  const somaPrevistos = linhasAdesao.reduce((a, l) => a + l.previstos, 0);
+  const base = comAdesao.reduce((a, l) => a + (l.previstos * (l.adesao as number)) / 100, 0);
+  const previstosComAdesao = comAdesao.reduce((a, l) => a + l.previstos, 0);
+  const adesaoPonderada = previstosComAdesao ? (base / previstosComAdesao) * 100 : null;
+
+  // ---- 2.2: prioridade de inclusão ----------------------------------------
+  const linhasSemProntuai = semProntuaiBruto
+    .map((c) => ({ c, dias: diasNaJanela(c) }))
+    // Credenciado sem previsão dentro da janela sai da tabela: a lista é de
+    // prioridade de inclusão, e quem não tem nada previsto não é prioridade.
+    .filter(({ dias }) => somaDias(dias) > 0);
+
+  const previstosHabilitados = somaPrevistos;
+  const previstosFora = linhasSemProntuai.reduce((a, { dias }) => a + somaDias(dias), 0);
+  // Premissa assumida (pendência aberta): a adesão esperada de quem ainda não
+  // usa é a média ponderada das que já usam. É o melhor estimador disponível
+  // sem uma meta definida pelo time — e fica num ponto só para ser trocado.
+  const adesaoEsperada = adesaoPonderada;
 
   // ---- acurácia: mesma janela de período e de gráfico da utilização --------
   const accP = dados.acuracia?.[cfg.periodo.serie] ?? [];
@@ -733,23 +935,98 @@ export function calcularVisao({ dados, filtro, comparar, verTodasClinicas }: Opc
       };
     }),
 
-    semProntuai:
-      dados.clinicas_sem_prontuai?.map((c) => {
-        const q = partes(c.previsoes[0].data);
-        const docs = c.documentos
-          ? `${c.documentos} documento${c.documentos > 1 ? "s" : ""} no ProntuAI`
-          : "nenhum documento no ProntuAI";
-        return {
-          credenciado: c.credenciado,
-          name: c.nome,
-          local: c.cidade && c.uf ? `${c.cidade}/${c.uf}` : "—",
-          pedidos: c.pedidos_previstos,
-          proxima: `${pad(q.d)}/${pad(q.m)}`,
-          datas: c.previsoes.map((p) => ({ label: rotuloPrevisao(p.data), pedidos: fmt(p.pedidos) })),
-          resumo: (c.vencidos ? `${fmt(c.vencidos)} com previsão vencida · ` : "") + docs,
-        };
-      }) ?? null,
-    pedidosSemProntuai: (dados.clinicas_sem_prontuai ?? []).reduce((a, c) => a + c.pedidos_previstos, 0),
+    semProntuai: temBrnet
+      ? linhasSemProntuai.map(({ c, dias }) => {
+          const pedidos = somaDias(dias);
+          const docs = c.documentos
+            ? `${c.documentos} documento${c.documentos > 1 ? "s" : ""} no ProntuAI`
+            : "nenhum documento no ProntuAI";
+          const foraDaJanela = c.pedidos_previstos - pedidos;
+          // Impacto: quanto a base da projeção (1.4) cresceria se esta clínica
+          // entrasse. Proporcional aos previstos, já que a adesão esperada é a
+          // mesma para todas — o ranking por impacto e por previstos coincide
+          // enquanto essa premissa valer, e deixa de coincidir no dia em que a
+          // adesão esperada virar por clínica.
+          const impacto =
+            adesaoEsperada !== null && base ? (pedidos * (adesaoEsperada / 100) * 100) / base : null;
+          return {
+            credenciado: c.credenciado,
+            name: c.nome,
+            local: c.cidade && c.uf ? `${c.cidade}/${c.uf}` : "—",
+            uf: c.uf,
+            pedidos,
+            proxima: dataCurta(dias[0].data),
+            proximaISO: dias[0].data,
+            datas: dias.map((p) => ({ label: rotuloPrevisao(p.data), pedidos: fmt(p.pedidos) })),
+            resumo:
+              (c.vencidos ? `${fmt(c.vencidos)} com previsão vencida · ` : "") +
+              (foraDaJanela ? `${fmt(foraDaJanela)} previstos depois da janela · ` : "") +
+              docs,
+            participacao: pct(pedidos, previstosFora),
+            participacaoLabel: num(pct(pedidos, previstosFora)),
+            impacto,
+            impactoLabel: impacto === null ? "—" : `+${num(impacto).replace("%", "")}%`,
+          };
+        })
+      : null,
+    pedidosSemProntuai: previstosFora,
+
+    adesao: temBrnet ? linhasAdesao : null,
+
+    projecao: temBrnet
+      ? {
+          janela: temJanela ? `de hoje a ${dataCurta(fimJanelaISO)} · ${diasJanela} dias` : "sem recorte por data",
+          somaPrevistos,
+          somaPrevistosLabel: fmt(somaPrevistos),
+          base,
+          // A base é uma contagem de pedidos: arredondar aqui evita "37,4 pedidos"
+          // na tela sem mexer no número que o critério de aceite confere.
+          baseLabel: adesaoPonderada === null ? "—" : fmt(Math.round(base)),
+          adesaoPonderada,
+          adesaoPonderadaLabel: adesaoPonderada === null ? "—" : num(adesaoPonderada),
+          previstosSemAdesao: somaPrevistos - previstosComAdesao,
+          previstosSemAdesaoLabel: fmt(somaPrevistos - previstosComAdesao),
+          clinicasSemAdesao: linhasAdesao.length - comAdesao.length,
+        }
+      : null,
+
+    periodoLabel: nomePeriodo(cfg.periodo.serie, atual),
+
+    previstos: temBrnet
+      ? (() => {
+          const total = previstosHabilitados + previstosFora;
+          const parte = (rotulo: string, valor: number, cor: string, sub: string, tip: string) => ({
+            rotulo,
+            valor,
+            label: fmt(valor),
+            pct: total ? (valor / total) * 100 : 0,
+            cor,
+            sub: total ? `${sub} · ${num(pct(valor, total))} do previsto` : sub,
+            tip,
+          });
+          return {
+            janela: temJanela ? `de hoje a ${dataCurta(fimJanelaISO)} · ${diasJanela} dias` : "sem recorte por data",
+            total,
+            totalLabel: fmt(total),
+            partes: [
+              parte(
+                "Clínicas com cadastro no ProntuAI",
+                previstosHabilitados,
+                CORES.petroleo,
+                "detalhe na tabela de adesão",
+                "Pedidos com previsão de liberação na janela, em clínicas com cadastro habilitado no ProntuAI.",
+              ),
+              parte(
+                "Clínicas fora do ProntuAI",
+                previstosFora,
+                CORES.alerta,
+                "detalhe em prioridade de inclusão",
+                "Pedidos com previsão de liberação na janela, em credenciados sem cadastro habilitado no ProntuAI. É o volume que ainda chega por fora.",
+              ),
+            ],
+          };
+        })()
+      : null,
 
     kpisAcuracia: [
       kpiAcc(

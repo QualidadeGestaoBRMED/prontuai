@@ -178,6 +178,11 @@ def pedido(atendimento=None, credenciado="RECIFE - PE - CLINICA A", previsao=Non
     return ds._Pedido(atendimento, credenciado, cidade, uf, nome, previsao, liberado)
 
 
+def cadastros(*nomes):
+    """Índice de cadastros habilitados, como `_consultar` monta."""
+    return ds._indexar_cadastros(list(nomes))
+
+
 def _api_falsa(monkeypatch, por_mes, hoje=HOJE):
     """Troca a busca de um mês por um dicionário; registra os meses pedidos."""
     pedidos = []
@@ -240,31 +245,79 @@ def test_virada_de_ano(monkeypatch):
 
 
 def test_cobertura_conta_pedido_e_nao_documento():
-    """Pedido com dois documentos liberados é uma expedição só."""
+    """Pedido com dois documentos é uma expedição só."""
     pedidos = {1: pedido("2026-09-01"), 2: pedido("2026-09-01"), 3: pedido("2026-09-02"), 4: pedido(None)}
-    docs = {1: (2, True), 3: (1, False)}
+    docs = {1: 2, 3: 1}
     r = ds._cruzar_expedicoes(pedidos, docs, date(2026, 9, 22))
     assert r["expedicoes_dia"] == {"2026-09-01": 2, "2026-09-02": 1}
-    assert r["expedicoes_prontuai_dia"] == {"2026-09-01": 1}
+    assert r["expedicoes_prontuai_dia"] == {"2026-09-01": 1, "2026-09-02": 1}
 
 
-def test_clinicas_sem_prontuai_usam_o_limite_de_documentos():
+def test_passou_pelo_prontuai_e_processado_nao_liberado():
+    """Documento rejeitado ou pendente passou pela plataforma do mesmo jeito.
+
+    Medir só o liberado confundiria adoção (usou o ProntuAI?) com desfecho da
+    revisão (o prontuário estava completo?), que são perguntas diferentes.
+    """
+    pedidos = {1: pedido("2026-09-01"), 2: pedido("2026-09-01")}
+    # nenhum dos dois foi liberado; os dois foram processados
+    r = ds._cruzar_expedicoes(pedidos, {1: 1, 2: 3}, date(2026, 9, 22))
+    assert r["expedicoes_prontuai_dia"] == {"2026-09-01": 2}
+
+
+def test_cadastro_habilitado_decide_o_lado_nao_o_volume():
+    """"Clínica no ProntuAI" é ter cadastro ativo, não ter mandado documento."""
     a, b, c = "RECIFE - PE - CLINICA A", "NATAL - RN - CLINICA B", "SALVADOR - BA - CLINICA C"
     pedidos = {
-        # A: 3 documentos no histórico -> usa o ProntuAI, fica fora da lista
-        1: pedido("2026-08-01", a), 2: pedido("2026-08-02", a), 3: pedido(None, a, "2026-09-25"),
-        # B: 2 documentos -> abaixo do limite, entra
-        4: pedido("2026-08-01", b), 5: pedido(None, b, "2026-09-30"), 6: pedido(None, b, "2026-09-23"),
-        # C: sem documento; previsão passada e pedido já liberado não contam
-        7: pedido(None, c, "2026-09-24"), 8: pedido(None, c, "2026-09-01"), 9: pedido(None, c, "2026-09-26", True),
+        # A: tem cadastro -> habilitada, sai da lista de prioridade
+        1: pedido("2026-08-01", a), 2: pedido(None, a, "2026-09-25"),
+        # B: 2 documentos mas SEM cadastro -> continua na lista
+        3: pedido("2026-08-01", b), 4: pedido(None, b, "2026-09-30"), 5: pedido(None, b, "2026-09-23"),
+        # C: sem cadastro e sem documento; previsão passada e pedido liberado não contam
+        6: pedido(None, c, "2026-09-24"), 7: pedido(None, c, "2026-09-01"), 8: pedido(None, c, "2026-09-26", True),
     }
-    docs = {1: (2, True), 2: (1, True), 4: (2, True)}
-    lista = ds._cruzar_expedicoes(pedidos, docs, date(2026, 9, 22))["clinicas_sem_prontuai"]
+    r = ds._cruzar_expedicoes(pedidos, {1: 2, 3: 2}, date(2026, 9, 22), {}, cadastros("CLINICA A"))
+    lista = r["clinicas_sem_prontuai"]
     assert [(x["credenciado"], x["pedidos_previstos"], x["documentos"]) for x in lista] == [
         (b, 2, 2),
         (c, 1, 0),
     ]
     assert lista[0]["nome"] == "CLINICA B" and lista[0]["uf"] == "RN"
+    assert [x["clinica"] for x in r["clinicas_com_prontuai"]] == ["CLINICA A"]
+
+
+def test_cadastro_sem_nenhum_documento_e_habilitado():
+    """Cadastro que nunca usou a plataforma é adesão baixa, não prioridade de inclusão.
+
+    Era o furo da regra por volume: a maior linha da lista de inclusão podia ser
+    uma clínica que já estava cadastrada.
+    """
+    cred = "RECIFE - PE - QUALIMETRA"
+    pedidos = {1: pedido("2026-09-01", cred), 2: pedido(None, cred, "2026-09-25")}
+    r = ds._cruzar_expedicoes(pedidos, {}, date(2026, 9, 22), {}, cadastros("Qualimetra"))
+    assert r["clinicas_sem_prontuai"] == []
+    (linha,) = r["clinicas_com_prontuai"]
+    assert linha["clinica"] == "Qualimetra" and linha["documentos"] == 0
+    # realizou 1 e nenhum passou pelo ProntuAI: adesão 0%, que é diferente de nula
+    assert sum(linha["realizados_dia"].values()) == 1
+    assert linha["realizados_prontuai_dia"] == {}
+
+
+@pytest.mark.parametrize(
+    "cadastro_no_prontuai",
+    ["RECIFE - PE - QUALIMETRA", "Qualimetra", "QUALIMETRA", "qualimetra"],
+)
+def test_ponte_por_nome_casa_rotulo_inteiro_e_nome_curto(cadastro_no_prontuai):
+    """O rótulo do BRNET e o cadastro são digitados em sistemas diferentes."""
+    pedidos = {1: pedido(None, "RECIFE - PE - QUALIMETRA", "2026-09-25")}
+    r = ds._cruzar_expedicoes(pedidos, {}, date(2026, 9, 22), {}, cadastros(cadastro_no_prontuai))
+    assert len(r["clinicas_com_prontuai"]) == 1 and r["clinicas_sem_prontuai"] == []
+
+
+def test_ponte_por_nome_ignora_acento():
+    pedidos = {1: pedido(None, "BRASÍLIA - DF - CLÍNICA SAÚDE", "2026-09-25")}
+    r = ds._cruzar_expedicoes(pedidos, {}, date(2026, 9, 22), {}, cadastros("BRASILIA - DF - CLINICA SAUDE"))
+    assert len(r["clinicas_com_prontuai"]) == 1
 
 
 def test_previsoes_saem_quebradas_por_data_e_ordenadas():
@@ -296,8 +349,77 @@ def test_previsao_de_hoje_ainda_e_futura():
 
 
 def test_brnet_indisponivel_esvazia_tudo_sem_inventar():
-    r = ds._cruzar_expedicoes(None, {1: (1, True)}, date(2026, 9, 22))
-    assert r == {"expedicoes_dia": {}, "expedicoes_prontuai_dia": {}, "clinicas_sem_prontuai": None}
+    r = ds._cruzar_expedicoes(None, {1: 1}, date(2026, 9, 22))
+    assert r == {
+        "expedicoes_dia": {},
+        "expedicoes_prontuai_dia": {},
+        "clinicas_sem_prontuai": None,
+        "clinicas_com_prontuai": None,
+    }
+
+
+# ── previstos: os dois lados do mesmo corte ────────────────────────────────
+
+
+def test_os_dois_grupos_sao_complementares():
+    """Todo pedido previsto cai em exatamente uma das listas.
+
+    É o que sustenta o card de previstos: somar as duas dá o total, e nenhum
+    credenciado aparece nas duas nem some no meio.
+    """
+    usa, nao_usa = "RECIFE - PE - CLINICA A", "NATAL - RN - CLINICA B"
+    pedidos = {
+        1: pedido("2026-08-01", usa), 2: pedido("2026-08-02", usa),
+        3: pedido(None, usa, "2026-09-25"), 4: pedido(None, usa, "2026-09-26"),
+        5: pedido("2026-08-01", nao_usa), 6: pedido(None, nao_usa, "2026-09-30"),
+    }
+    docs = {1: 2, 2: 1, 5: 2}
+    r = ds._cruzar_expedicoes(pedidos, docs, date(2026, 9, 22), {}, cadastros("CLINICA A"))
+
+    com = {c["clinica"]: c["pedidos_previstos"] for c in r["clinicas_com_prontuai"]}
+    sem = {c["credenciado"]: c["pedidos_previstos"] for c in r["clinicas_sem_prontuai"]}
+    assert com == {"CLINICA A": 2}  # tem cadastro habilitado
+    assert sem == {nao_usa: 1}      # 2 documentos, mas sem cadastro
+    assert set(com) & set(sem) == set()
+    assert sum(com.values()) + sum(sem.values()) == 3
+
+
+def test_previsto_nao_soma_com_realizado():
+    """Pedido já liberado é expedição realizada e não pode virar previsto."""
+    cred = "RECIFE - PE - CLINICA A"
+    pedidos = {
+        1: pedido("2026-09-20", cred, "2026-09-25", liberado=True),
+        2: pedido("2026-09-20", cred, "2026-09-25"),
+    }
+    r = ds._cruzar_expedicoes(pedidos, {1: 1, 2: 1}, date(2026, 9, 22))
+    previstos = r["clinicas_sem_prontuai"] + r["clinicas_com_prontuai"]
+    assert sum(c["pedidos_previstos"] for c in previstos) == 1
+    # os dois foram atendidos e processados: continuam contados como realizado
+    assert r["expedicoes_prontuai_dia"] == {"2026-09-20": 2}
+
+
+def test_cadastro_renomeado_cai_na_clinica_que_mais_enviou():
+    """Quando a ponte por nome falha, o documento enviado ainda diz o cadastro.
+
+    Cobre o cadastro renomeado depois de já ter volume: o rótulo do BRNET não
+    casa com nenhum nome atual, mas os documentos apontam a clínica.
+    """
+    cred = "RECIFE - PE - CLINICA A"
+    pedidos = {n: pedido("2026-08-01", cred) for n in (1, 2, 3)}
+    pedidos[4] = pedido(None, cred, "2026-09-25")
+    docs = {1: 2, 2: 1, 3: 1}
+    clinicas = {1: "Clinica A Matriz", 2: "Clinica A Filial", 3: "Clinica A Matriz"}
+    r = ds._cruzar_expedicoes(pedidos, docs, date(2026, 9, 22), clinicas, cadastros("CLINICA A"))
+    assert r["clinicas_com_prontuai"][0]["clinica"] == "CLINICA A"
+
+    # sem cadastro nenhum, o credenciado vai para a lista de inclusão
+    r2 = ds._cruzar_expedicoes(pedidos, docs, date(2026, 9, 22), clinicas, cadastros())
+    assert r2["clinicas_com_prontuai"] == [] and len(r2["clinicas_sem_prontuai"]) == 1
+
+
+def test_credenciado_sem_documento_nao_tem_clinica():
+    pedidos = {1: pedido(None, "NATAL - RN - CLINICA B", "2026-09-25")}
+    assert ds._cruzar_expedicoes(pedidos, {}, date(2026, 9, 22))["clinicas_sem_prontuai"][0]["clinica"] is None
 
 
 @pytest.mark.parametrize(
@@ -364,3 +486,136 @@ def test_sem_brnet_o_tecnico_continua():
     """O prazo da BR MED vem gravado no documento; só a clínica depende da API."""
     r = ds._cruzar_prazos(None, [(1, date(2026, 9, 8), date(2026, 9, 9), date(2026, 9, 9))])
     assert r == {"prazo_clinica_dia": {}, "prazo_tecnico_dia": {"2026-09-09": [0, 1, 0]}}
+
+
+# ── 1.2: adesão por clínica (realizados via ProntuAI ÷ realizados) ─────────
+
+
+def por_clinica(resultado, nome):
+    return next(c for c in resultado["clinicas_com_prontuai"] if c["clinica"] == nome)
+
+
+def test_realizados_por_clinica_saem_quebrados_por_dia_de_atendimento():
+    """A adesão é o recorte por clínica do KPI de cobertura: mesma datação."""
+    cred = "RECIFE - PE - CRED A"
+    pedidos = {
+        1: pedido("2026-09-01", cred), 2: pedido("2026-09-01", cred),
+        3: pedido("2026-09-02", cred), 4: pedido(None, cred),  # não atendido
+    }
+    docs = {1: 1, 2: 1, 3: 1, 4: 1}
+    clinicas = {n: "Clinica A" for n in (1, 2, 3, 4)}
+    r = ds._cruzar_expedicoes(pedidos, docs, date(2026, 9, 22), clinicas, cadastros("CRED A"))
+    c = por_clinica(r, "CRED A")
+    assert c["realizados_dia"] == {"2026-09-01": 2, "2026-09-02": 1}
+    assert c["realizados_prontuai_dia"] == {"2026-09-01": 2, "2026-09-02": 1}
+    # o total por clínica fecha com o global, que alimenta o KPI de cobertura
+    assert r["expedicoes_dia"] == c["realizados_dia"]
+    assert r["expedicoes_prontuai_dia"] == c["realizados_prontuai_dia"]
+
+
+def test_dois_credenciados_do_mesmo_cadastro_viram_uma_clinica():
+    """Duas unidades do BRNET que mandam sob o mesmo cadastro somam juntas."""
+    # As duas unidades do BRNET carregam o mesmo nome curto e casam com o mesmo
+    # cadastro — é assim que uma rede com duas praças vira uma linha só.
+    a, b = "RECIFE - PE - REDE X", "OLINDA - PE - REDE X"
+    pedidos = {
+        1: pedido("2026-09-01", a), 2: pedido("2026-09-01", a), 3: pedido("2026-09-02", a),
+        4: pedido("2026-09-01", b), 5: pedido("2026-09-02", b), 6: pedido("2026-09-03", b),
+        7: pedido(None, a, "2026-09-25"), 8: pedido(None, b, "2026-09-26"),
+    }
+    docs = {n: 1 for n in range(1, 7)}
+    r = ds._cruzar_expedicoes(pedidos, docs, date(2026, 9, 22), {}, cadastros("Rede X"))
+    assert len(r["clinicas_com_prontuai"]) == 1
+    c = por_clinica(r, "Rede X")
+    assert sum(c["realizados_dia"].values()) == 6
+    assert sum(c["realizados_prontuai_dia"].values()) == 6   # todos processados
+    assert c["pedidos_previstos"] == 2                       # os dois previstos somam
+    assert c["documentos"] == 6
+
+
+def test_clinica_habilitada_sem_previsto_ainda_aparece():
+    """A adesão dela existe — é o que a tabela 1.3 mede. Zero previstos não a some."""
+    cred = "RECIFE - PE - CRED A"
+    pedidos = {n: pedido("2026-09-01", cred) for n in (1, 2, 3)}
+    docs = {n: 1 for n in (1, 2, 3)}
+    r = ds._cruzar_expedicoes(pedidos, docs, date(2026, 9, 22), {}, cadastros("CRED A"))
+    c = por_clinica(r, "CRED A")
+    assert c["pedidos_previstos"] == 0 and c["previsoes"] == []
+    assert sum(c["realizados_dia"].values()) == 3
+
+
+def test_credenciado_sem_cadastro_nao_gera_realizados_por_clinica():
+    """Sem cadastro habilitado não há adesão a medir — nem entra na lista."""
+    cred = "NATAL - RN - CRED B"
+    pedidos = {1: pedido("2026-09-01", cred), 2: pedido(None, cred, "2026-09-25")}
+    r = ds._cruzar_expedicoes(pedidos, {1: 2}, date(2026, 9, 22), {1: "Clinica B"})
+    assert r["clinicas_com_prontuai"] == []
+    assert r["clinicas_sem_prontuai"][0]["clinica"] is None
+    # o realizado dele continua no global: a cobertura da empresa não muda
+    assert r["expedicoes_dia"] == {"2026-09-01": 1}
+
+
+def test_realizado_e_previsto_nunca_se_cruzam():
+    """Pedido previsto (não liberado, com data futura) não vira realizado."""
+    cred = "RECIFE - PE - CRED A"
+    pedidos = {
+        1: pedido("2026-09-01", cred), 2: pedido("2026-09-01", cred), 3: pedido("2026-09-01", cred),
+        4: pedido(None, cred, "2026-09-25"),
+    }
+    docs = {n: 1 for n in (1, 2, 3)}
+    c = por_clinica(
+        ds._cruzar_expedicoes(pedidos, docs, date(2026, 9, 22), {}, cadastros("CRED A")),
+        "CRED A",
+    )
+    assert sum(c["realizados_dia"].values()) == 3
+    assert c["pedidos_previstos"] == 1
+    assert "2026-09-25" not in c["realizados_dia"]
+
+
+def test_parentese_do_rotulo_nao_impede_o_casamento():
+    """O BRNET anexa "(CONDIÇÃO ESPECIAL)" ao rótulo; o cadastro não tem isso."""
+    pedidos = {1: pedido(None, "SALVADOR - BA - CISVIVER (CONDIÇÃO ESPECIAL)", "2026-09-25")}
+    r = ds._cruzar_expedicoes(pedidos, {}, date(2026, 9, 22), {}, cadastros("Cisviver"))
+    assert [c["clinica"] for c in r["clinicas_com_prontuai"]] == ["Cisviver"]
+
+
+def test_documento_prova_o_cadastro_quando_o_nome_nao_casa():
+    """Nome em ordem invertida não pode tirar do ProntuAI quem manda 500 documentos.
+
+    O `clinic_id` do documento é fato: diz de qual cadastro o prontuário saiu,
+    sem depender de como o BRNET escreve o rótulo.
+    """
+    cred = "BELO HORIZONTE - MG - MEDIAR"
+    pedidos = {n: pedido("2026-08-01", cred) for n in (1, 2, 3)}
+    pedidos[4] = pedido(None, cred, "2026-09-25")
+    docs = {1: 1, 2: 1, 3: 1}
+    clinicas = {n: "Mediar - Belo Horizonte" for n in (1, 2, 3)}
+    r = ds._cruzar_expedicoes(
+        pedidos, docs, date(2026, 9, 22), clinicas, cadastros("Mediar - Belo Horizonte")
+    )
+    assert [c["clinica"] for c in r["clinicas_com_prontuai"]] == ["Mediar - Belo Horizonte"]
+    assert r["clinicas_sem_prontuai"] == []
+
+
+def test_documento_avulso_nao_da_cadastro_a_quem_nao_tem():
+    """Unidade vizinha mandando pela conta de outra não cadastra o credenciado."""
+    cred = "COTIA - SP - CAMARGO DANTAS"
+    pedidos = {1: pedido("2026-08-01", cred), 2: pedido(None, cred, "2026-09-25")}
+    r = ds._cruzar_expedicoes(
+        pedidos, {1: 1}, date(2026, 9, 22), {1: "Mediar - Belo Horizonte"},
+        cadastros("Mediar - Belo Horizonte"),
+    )
+    assert r["clinicas_com_prontuai"] == []
+    assert [c["credenciado"] for c in r["clinicas_sem_prontuai"]] == [cred]
+
+
+def test_documento_de_cadastro_inativo_nao_habilita():
+    """A prova é o cadastro estar ATIVO, não o documento existir."""
+    cred = "BELO HORIZONTE - MG - MEDIAR"
+    pedidos = {n: pedido("2026-08-01", cred) for n in (1, 2, 3)}
+    pedidos[4] = pedido(None, cred, "2026-09-25")
+    r = ds._cruzar_expedicoes(
+        pedidos, {1: 1, 2: 1, 3: 1}, date(2026, 9, 22),
+        {n: "Mediar - Belo Horizonte" for n in (1, 2, 3)}, cadastros(),  # nenhum ativo
+    )
+    assert r["clinicas_com_prontuai"] == [] and len(r["clinicas_sem_prontuai"]) == 1
