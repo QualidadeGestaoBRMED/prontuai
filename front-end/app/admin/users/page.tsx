@@ -215,8 +215,17 @@ export default function UsersAdminPage() {
       });
 
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.detail || "Erro ao criar usuário");
+        // O back-end devolve JSON nos erros de negócio, mas um 500 vem como
+        // texto puro ("Internal Server Error"). Fazer .json() direto estourava
+        // no parse e o toast mostrava o erro do parse em vez da causa.
+        const corpo = await response.text();
+        let detalhe = corpo;
+        try {
+          detalhe = JSON.parse(corpo).detail ?? corpo;
+        } catch {
+          // corpo não é JSON: fica o texto como veio
+        }
+        throw new Error(detalhe || "Erro ao criar usuário");
       }
 
       toast.success("Usuário criado com sucesso!");
