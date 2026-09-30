@@ -681,11 +681,19 @@ export function calcularVisao({ dados, filtro, comparar, verTodasClinicas }: Opc
   // ---- previstos, adesão e projeção ----------------------------------------
   const comProntuai = dados.clinicas_com_prontuai ?? [];
   const semProntuaiBruto = dados.clinicas_sem_prontuai ?? [];
-  const temBrnet = dados.clinicas_sem_prontuai !== null;
+  // Os dois vêm null juntos do back-end. Checar os dois mesmo assim: um back-end
+  // anterior a `clinicas_com_prontuai` devolveria só a lista antiga, e aí a
+  // tabela de adesão sairia vazia com a projeção dizendo base zero — pior que
+  // não mostrar nada.
+  const temBrnet = dados.clinicas_sem_prontuai !== null && dados.clinicas_com_prontuai !== null;
 
   /** Previsões de um credenciado que caem na janela para frente. */
+  // Sem `gerado_em` não há "hoje" confiável, e sem ele o teto de um mês que a
+  // issue exige não pode ser aplicado. Antes esta função deixava passar TODA
+  // previsão nesse caso — o oposto do critério. Agora não passa nenhuma: não
+  // mostrar previsto é seguro, mostrar previsto sem recorte não é.
   const diasNaJanela = (c: CredenciadoPrevisto) =>
-    c.previsoes.filter((x) => !temJanela || (x.data >= hojeISO && x.data <= fimJanelaISO));
+    temJanela ? c.previsoes.filter((x) => x.data >= hojeISO && x.data <= fimJanelaISO) : [];
   const somaDias = (dias: PrevisaoDia[]) => dias.reduce((a, x) => a + x.pedidos, 0);
 
   // Realizados entram pela MESMA janela retroativa dos KPIs, com o mesmo corte
@@ -975,7 +983,9 @@ export function calcularVisao({ dados, filtro, comparar, verTodasClinicas }: Opc
 
     projecao: temBrnet
       ? {
-          janela: temJanela ? `de hoje a ${dataCurta(fimJanelaISO)} · ${diasJanela} dias` : "sem recorte por data",
+          janela: temJanela
+            ? `de hoje a ${dataCurta(fimJanelaISO)} · ${diasJanela} dias`
+            : "sem data de referência do back-end — previstos indisponíveis",
           somaPrevistos,
           somaPrevistosLabel: fmt(somaPrevistos),
           base,
@@ -1005,7 +1015,9 @@ export function calcularVisao({ dados, filtro, comparar, verTodasClinicas }: Opc
             tip,
           });
           return {
-            janela: temJanela ? `de hoje a ${dataCurta(fimJanelaISO)} · ${diasJanela} dias` : "sem recorte por data",
+            janela: temJanela
+              ? `de hoje a ${dataCurta(fimJanelaISO)} · ${diasJanela} dias`
+              : "sem data de referência do back-end — previstos indisponíveis",
             total,
             totalLabel: fmt(total),
             partes: [

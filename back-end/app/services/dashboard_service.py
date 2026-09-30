@@ -441,6 +441,29 @@ def _cruzar_expedicoes(
                 casado = cadastros_ativos[_chave_nome(dominante)]
         cadastro_de[p.credenciado] = casado
 
+    # A ponte por nome é a parte frágil da regra, e falha em silêncio: o
+    # credenciado simplesmente aparece do lado errado. Quem tem documento e não
+    # casou é o caso a vigiar — ou foi resgatado pelo piso de documentos, ou caiu
+    # na lista de inclusão sendo cadastrado. Sai no log para dar um relatório sem
+    # precisar de consulta manual. São nomes de clínica, não há PII aqui.
+    nao_casaram = sorted(
+        (
+            (docs_por_credenciado.get(cred, 0), cred)
+            for cred, casado in cadastro_de.items()
+            if casado is None and docs_por_credenciado.get(cred, 0) > 0
+        ),
+        reverse=True,
+    )
+    if nao_casaram:
+        logger.warning(
+            "[DASHBOARD] %s credenciados com documento não casaram por nome "
+            "(resgatados pelo piso de %s documentos: %s). Maiores: %s",
+            len(nao_casaram),
+            MIN_DOCUMENTOS_CADASTRO,
+            sum(1 for qtd, _ in nao_casaram if qtd >= MIN_DOCUMENTOS_CADASTRO),
+            ", ".join(f"{cred} ({qtd} docs)" for qtd, cred in nao_casaram[:10]),
+        )
+
     def usa_prontuai(credenciado: str) -> bool:
         return cadastro_de.get(credenciado) is not None
 
@@ -662,7 +685,7 @@ def _consultar() -> dict[str, Any]:
         len(dados.get("clinicas") or []),
     )
     logger.info(
-        "[DASHBOARD] cadastros habilitados=%s, credenciados casados=%s, sem cadastro=%s",
+        "[DASHBOARD] cadastros habilitados=%s, linhas de adesão=%s, credenciados sem cadastro=%s",
         len(cadastros_ativos),
         len(dados.get("clinicas_com_prontuai") or []),
         len(dados.get("clinicas_sem_prontuai") or []),

@@ -619,3 +619,28 @@ def test_documento_de_cadastro_inativo_nao_habilita():
         {n: "Mediar - Belo Horizonte" for n in (1, 2, 3)}, cadastros(),  # nenhum ativo
     )
     assert r["clinicas_com_prontuai"] == [] and len(r["clinicas_sem_prontuai"]) == 1
+
+
+def test_credenciado_habilitado_com_poucos_documentos_e_nome_divergente():
+    """Lacuna conhecida da ponte por nome, travada aqui para não passar batida.
+
+    Nome que não casa + menos de `MIN_DOCUMENTOS_CADASTRO` documentos = o
+    credenciado cai na lista de inclusão mesmo tendo cadastro ativo. Só sai dessa
+    se o BRNET passar a mandar id ou CNPJ, ou se o cadastro for renomeado para
+    casar. O log de `_cruzar_expedicoes` é quem denuncia o caso.
+    """
+    cred = "BELO HORIZONTE - MG - MEDIAR"
+    pedidos = {1: pedido("2026-08-01", cred), 2: pedido(None, cred, "2026-09-25")}
+    r = ds._cruzar_expedicoes(
+        pedidos, {1: 2}, date(2026, 9, 22), {1: "Mediar - Belo Horizonte"},
+        cadastros("Mediar - Belo Horizonte"),
+    )
+    assert r["clinicas_com_prontuai"] == []
+    assert [c["credenciado"] for c in r["clinicas_sem_prontuai"]] == [cred]
+
+
+def test_cadastros_com_o_mesmo_nome_normalizado_se_fundem():
+    """Também conhecido: o índice guarda um por chave, o primeiro em ordem."""
+    assert ds._indexar_cadastros(["QUALIMETRA", "Qualimetra"]) == {"qualimetra": "QUALIMETRA"}
+    # parêntese descartado pode colidir com um cadastro de nome igual sem ele
+    assert ds._chave_nome("CISVIVER (CONDIÇÃO ESPECIAL)") == ds._chave_nome("Cisviver")
