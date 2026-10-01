@@ -88,7 +88,15 @@ export const documentToProcessResult = (doc: DocumentApi): ProcessResult => {
     uploadedAt: toDate(doc.uploaded_at),
     processedAt: toDate(doc.updated_at || doc.uploaded_at),
     status: mapStatus(doc.validation_status),
-    rejectionReason: payload.rejectionReason || doc.rejection_reason || payload.erro || validation.analysis || payload.decisao_final,
+    // Só razões de REJEIÇÃO entram aqui, e nesta ordem: o que o revisor escreveu,
+    // o que ficou gravado na coluna, e o erro de processamento quando a própria
+    // IA rejeitou. `validation.analysis` e `decisao_final` saíram da cadeia: são
+    // texto da IA, não motivo do revisor, e a análise já tem seção própria na
+    // tela ("Análise de Validação"). Com o campo "Motivo da rejeição" removido
+    // do modal, a cadeia antiga faria TODA rejeição nova exibir a análise da IA
+    // sob o título "Motivo da Rejeição" — medido: 620 de 620 rejeitados no dev
+    // têm `analysis` preenchido, ou seja, aconteceria sempre.
+    rejectionReason: payload.rejectionReason || doc.rejection_reason || payload.erro,
     approvalReason: payload.approvalReason || doc.approval_reason,
     examesFaltantes,
     examesExtras,
