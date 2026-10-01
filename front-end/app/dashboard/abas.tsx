@@ -156,9 +156,15 @@ function TabelaAdesao({ linhas, janela, periodo }: { linhas: LinhaAdesao[]; jane
         <CampoBusca valor={busca} onChange={setBusca} placeholder="Buscar clínica ou cidade" />
       </div>
 
-      <div className="mt-4 overflow-x-auto">
+      {/* Rola em vez de esticar: são dezenas de clínicas habilitadas e a tabela
+          empurrava os blocos seguintes para fora da tela. Mesma altura e mesmo
+          cabeçalho fixo da tabela de prioridade de inclusão, para as duas
+          listas longas do painel se comportarem igual. */}
+      <div className="mt-4 max-h-[460px] overflow-auto">
         <div className="min-w-[860px]">
-          <div className={`grid ${COLUNAS_ADESAO} gap-x-[18px] border-b border-[#DFE0E2] px-1 pb-2.5`}>
+          <div
+            className={`sticky top-0 z-10 grid ${COLUNAS_ADESAO} gap-x-[18px] border-b border-[#DFE0E2] bg-white px-1 pb-2.5`}
+          >
             <Th label="Clínica" col="clinica" ordem={ordem} onOrdenar={ordenarPor} />
             <Th label="Cidade" col="local" ordem={ordem} onOrdenar={ordenarPor} />
             <Th label="Previstos" col="previstos" ordem={ordem} onOrdenar={ordenarPor} numerica />
