@@ -590,8 +590,17 @@ export function FeedbackChecagemDialog({ alvo, onClose, onConfirmarDecisao }: Pr
         {precisaDetalhes && (
           <div className="grid max-h-[46vh] gap-4 overflow-y-auto pr-1">
             <div>
+              {/* "Em quais exames?" ficava aqui e descrevia o passo ERRADO: logo
+                  abaixo vêm os motivos, não os exames — estes só aparecem depois,
+                  dentro do motivo escolhido. O nome do bloco é o que a ajuda de
+                  "Problemas do documento" já usava para se referir a ele ("erros
+                  que não são de exame"), e a pergunta do rótulo antigo virou a
+                  linha de apoio, que é onde ela descreve o fluxo de verdade. */}
               <p className={ESTILO.rotulo}>
-                Em quais exames?
+                Erros nos exames
+              </p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                Marque o erro e, em seguida, em quais exames ele aconteceu.
               </p>
               <div className="mt-2 flex flex-wrap gap-2">
                 {CATEGORIAS_EXAME.map(({ valor, rotulo, ajuda }) => (
