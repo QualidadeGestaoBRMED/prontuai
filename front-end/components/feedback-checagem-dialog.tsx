@@ -43,6 +43,21 @@ export type FeedbackAlvo = {
   /** No modo "decisao", qual decisão está sendo confirmada. */
   decisao?: "aprovado" | "rejeitado";
   /**
+   * A IA chegou a um veredito de aprovação neste documento: comparou de verdade
+   * e não apontou nenhum exame faltante.
+   *
+   * Não basta a lista de faltantes estar vazia. Quando a IA falha antes de
+   * comparar — não leu o CPF, o CNPJ veio errado, o paciente não estava no BRNET
+   * — ela também fica vazia, e ali a IA não aprovou nada: não houve julgamento.
+   * Medido no banco de dev entre os rejeitados sem faltantes: dos 522, 153 são
+   * falha técnica e 80 são regra de negócio (expedição em aberto), todos com
+   * `erro` preenchido e sem exames obrigatórios. Tratar esses como "a IA
+   * aprovou" marcaria "A IA errou" em 45% dos casos sem que a IA tivesse
+   * errado — e contaminaria a própria medição de acurácia que este parecer
+   * alimenta.
+   */
+  iaAprovou?: boolean;
+  /**
    * Exames que o BRNET exigia e a IA não encontrou, com o nome canônico que a
    * API devolveu (`validation_result.exames_faltantes`).
    *
@@ -56,8 +71,6 @@ export type FeedbackAlvo = {
 
 /** O que sai do diálogo quando ele confirma uma decisão. */
 export type DecisaoConfirmada = {
-  /** Motivo da rejeição. Vazio numa aprovação: aprovar não pede justificativa. */
-  justificativa: string;
   /** Parecer sobre a IA, ou null quando o revisor optou por não avaliar. */
   parecer: DocumentFeedbackInput | null;
 };
@@ -154,11 +167,22 @@ export function FeedbackChecagemDialog({ alvo, onClose, onConfirmarDecisao }: Pr
   const [rascunhos, setRascunhos] = useState<Record<string, string>>({});
   const [problemasDoc, setProblemasDoc] = useState<string[]>([]);
   const [notas, setNotas] = useState("");
-  const [justificativa, setJustificativa] = useState("");
   const [carregando, setCarregando] = useState(false);
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [existente, setExistente] = useState<DocumentFeedback | null>(null);
+  /**
+   * O status na tela veio da sugestão automática e o revisor ainda não encostou
+   * em nada do parecer.
+   *
+   * Enquanto isso for verdade o parecer é tratado como NÃO PREENCHIDO: não trava
+   * o botão e não é enviado. Sem esta distinção a sugestão viraria obrigação —
+   * "A IA errou" exige detalhamento, então pré-marcá-la bastava para o botão de
+   * rejeitar nascer desabilitado, e a issue pede o contrário ("pré-selecionar,
+   * sem bloquear a escolha"). Qualquer toque do revisor no parecer encerra o
+   * estado de sugestão e as regras normais voltam a valer.
+   */
+  const [sugestaoIntocada, setSugestaoIntocada] = useState(false);
 
   // Depende de `alvo`, não de `alvo.documentId`: o componente fica montado entre
   // uma abertura e outra, e cada abertura cria um objeto novo. Com o id na lista
@@ -173,9 +197,17 @@ export function FeedbackChecagemDialog({ alvo, onClose, onConfirmarDecisao }: Pr
     setRascunhos({});
     setProblemasDoc([]);
     setNotas("");
-    setJustificativa("");
     setErro(null);
     setExistente(null);
+    setSugestaoIntocada(false);
+    // Rejeitar algo que a IA tinha aprovado já é, em si, a afirmação de que a
+    // IA errou — o revisor não deveria ter de dizer de novo. A sugestão é só
+    // isto: fica marcada e o revisor troca à vontade, inclusive para "acertou
+    // com ressalvas", que é o caso em que a rejeição veio de outro motivo.
+    if (alvo.modo === "decisao" && alvo.decisao === "rejeitado" && alvo.iaAprovou) {
+      setStatus("IA_INCORRETA");
+      setSugestaoIntocada(true);
+    }
     // No modo "decisao" o documento ainda nem foi decidido: não existe parecer
     // anterior para buscar, e o GET só atrasaria a abertura.
     if (alvo.modo === "decisao") return;
@@ -235,12 +267,20 @@ export function FeedbackChecagemDialog({ alvo, onClose, onConfirmarDecisao }: Pr
   // lado, e um clique errado em "A IA acertou" levava motivos, exames e texto
   // embora sem volta. Os detalhes só ficam escondidos — e não são enviados,
   // porque `montarParecer` só os inclui quando o status pede detalhamento.
+  //
+  // Clicar no cartão já marcado DESMARCA. Sem isso não há saída: escolher um
+  // status que pede detalhamento trava o botão de enviar até detalhar, e o
+  // parecer é opcional. Passou a importar quando a rejeição de algo aprovado
+  // pela IA começou a vir com "A IA errou" já marcado — o revisor que só quer
+  // rejeitar precisa conseguir limpar a sugestão.
   function selecionarStatus(valor: FeedbackStatus) {
-    setStatus(valor);
+    setSugestaoIntocada(false);
+    setStatus((atual) => (atual === valor ? "" : valor));
     setErro(null);
   }
 
   function alternarCategoria(valor: string) {
+    setSugestaoIntocada(false);
     setErro(null);
     setCategorias((atuais) => {
       if (!atuais.includes(valor)) return [...atuais, valor];
@@ -261,6 +301,7 @@ export function FeedbackChecagemDialog({ alvo, onClose, onConfirmarDecisao }: Pr
   }
 
   function alternarProblemaDoc(valor: string) {
+    setSugestaoIntocada(false);
     setErro(null);
     setProblemasDoc((atuais) =>
       atuais.includes(valor) ? atuais.filter((x) => x !== valor) : [...atuais, valor],
@@ -268,6 +309,7 @@ export function FeedbackChecagemDialog({ alvo, onClose, onConfirmarDecisao }: Pr
   }
 
   function alternarExame(categoria: string, exame: string) {
+    setSugestaoIntocada(false);
     setErro(null);
     setSelecao((atual) => {
       const item = atual[categoria] ?? VAZIO;
@@ -279,6 +321,7 @@ export function FeedbackChecagemDialog({ alvo, onClose, onConfirmarDecisao }: Pr
   }
 
   function adicionarDigitado(categoria: string) {
+    setSugestaoIntocada(false);
     const nome = (rascunhos[categoria] ?? "").trim();
     if (!nome) return;
     setErro(null);
@@ -373,15 +416,19 @@ export function FeedbackChecagemDialog({ alvo, onClose, onConfirmarDecisao }: Pr
 
   const modoDecisao = vis?.modo === "decisao";
   const rejeitando = vis?.decisao === "rejeitado";
-  // Só a rejeição pede texto, e ele é obrigatório: é o que o remetente lê na
-  // notificação para saber o que corrigir. Aprovar não pede nada — quando há o
-  // que dizer sobre o acerto da IA, o lugar disso é o parecer abaixo.
-  const decisaoValida = !modoDecisao || !rejeitando || justificativa.trim().length > 0;
+  // Rejeitar não pede mais texto livre: o campo "Motivo da rejeição" saiu, e o
+  // que há para dizer sobre o acerto da IA vai no parecer estruturado abaixo.
   // No modo decisão o parecer é opcional: sem status escolhido, aprova/rejeita
   // e pronto. Mas começar a preencher e parar no meio não passa — seria enviar
   // motivo sem exame, que é o que o formato existe para impedir.
-  const parecerPendente = modoDecisao ? Boolean(status) && !parecerValido : !parecerValido;
-  const podeEnviar = modoDecisao ? decisaoValida && !parecerPendente : parecerValido;
+  //
+  // `sugestaoIntocada` é a exceção: ali o status apareceu sozinho, o revisor não
+  // pediu nada, e cobrar detalhamento dele seria transformar uma sugestão em
+  // obrigação. Nesse estado o parecer não conta como começado.
+  const parecerPendente = modoDecisao
+    ? Boolean(status) && !sugestaoIntocada && !parecerValido
+    : !parecerValido;
+  const podeEnviar = modoDecisao ? !parecerPendente : parecerValido;
   const formularioValido = podeEnviar;
 
   /**
@@ -394,8 +441,10 @@ export function FeedbackChecagemDialog({ alvo, onClose, onConfirmarDecisao }: Pr
    * clique.
    */
   const pendencia = (() => {
-    if (modoDecisao && !decisaoValida) return "Informe o motivo da rejeição.";
     if (!precisaDetalhes || parecerValido) return null;
+    // Sugestão intocada não é pendência: nada está travado e não há o que
+    // cobrar de quem não pediu para preencher nada.
+    if (sugestaoIntocada) return null;
     // O motivo aceso e vazio vem ANTES do "marque o que a IA errou": com um chip
     // aceso, o revisor já marcou — pedir que marque de novo mandaria ele olhar
     // para o lugar errado da tela.
@@ -412,7 +461,10 @@ export function FeedbackChecagemDialog({ alvo, onClose, onConfirmarDecisao }: Pr
   })();
 
   function montarParecer(): DocumentFeedbackInput | null {
-    if (!status) return null;
+    // Sugestão que o revisor não confirmou não vira parecer. Além de não ser
+    // dele, "A IA errou" sem detalhamento é recusado pelo back-end
+    // (`STATUS_COM_DETALHES`) — enviar assim derrubaria a rejeição inteira.
+    if (!status || sugestaoIntocada) return null;
     return {
       status,
       issue_items: precisaDetalhes ? itens : [],
@@ -431,7 +483,6 @@ export function FeedbackChecagemDialog({ alvo, onClose, onConfirmarDecisao }: Pr
       // caminho de cancelamento, que religa o cronômetro de revisão e deixaria
       // um acumulador órfão tiquetaqueando num documento já decidido.
       await onConfirmarDecisao({
-        justificativa: justificativa.trim(),
         parecer: montarParecer(),
       });
     } catch (e) {
@@ -496,7 +547,7 @@ export function FeedbackChecagemDialog({ alvo, onClose, onConfirmarDecisao }: Pr
             {modoDecisao
               ? rejeitando
                 ? "Rejeitar documento"
-                : "Confirmar aprovação"
+                : "Aprovar documento"
               : "Como foi o resultado da IA?"}
           </DialogTitle>
           <DialogDescription>
@@ -526,25 +577,6 @@ export function FeedbackChecagemDialog({ alvo, onClose, onConfirmarDecisao }: Pr
             )}
           </DialogDescription>
         </DialogHeader>
-
-        {modoDecisao && rejeitando && (
-          <label className="block">
-            <span className={ESTILO.rotulo}>
-              Motivo da rejeição <span className={ESTILO.obrigatorio}>*</span>
-            </span>
-            <Textarea
-              value={justificativa}
-              onChange={(e) => {
-                setJustificativa(e.target.value);
-                setErro(null);
-              }}
-              rows={2}
-              maxLength={2000}
-              placeholder="Ex.: documento ilegível, exames faltantes."
-              className="mt-2"
-            />
-          </label>
-        )}
 
         {modoDecisao && (
           <div className="border-t pt-3">
@@ -589,8 +621,17 @@ export function FeedbackChecagemDialog({ alvo, onClose, onConfirmarDecisao }: Pr
         {precisaDetalhes && (
           <div className="grid max-h-[46vh] gap-4 overflow-y-auto pr-1">
             <div>
+              {/* "Em quais exames?" ficava aqui e descrevia o passo ERRADO: logo
+                  abaixo vêm os motivos, não os exames — estes só aparecem depois,
+                  dentro do motivo escolhido. O nome do bloco é o que a ajuda de
+                  "Problemas do documento" já usava para se referir a ele ("erros
+                  que não são de exame"), e a pergunta do rótulo antigo virou a
+                  linha de apoio, que é onde ela descreve o fluxo de verdade. */}
               <p className={ESTILO.rotulo}>
-                Em quais exames?
+                Erros nos exames
+              </p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                Marque o erro e, em seguida, em quais exames ele aconteceu.
               </p>
               <div className="mt-2 flex flex-wrap gap-2">
                 {CATEGORIAS_EXAME.map(({ valor, rotulo, ajuda }) => (
@@ -765,6 +806,7 @@ export function FeedbackChecagemDialog({ alvo, onClose, onConfirmarDecisao }: Pr
               <Textarea
                 value={notas}
                 onChange={(e) => {
+                  setSugestaoIntocada(false);
                   setNotas(e.target.value);
                   setErro(null);
                 }}

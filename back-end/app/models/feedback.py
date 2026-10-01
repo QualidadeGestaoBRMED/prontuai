@@ -49,11 +49,29 @@ CATEGORIAS_EXAME: frozenset[str] = frozenset({
 })
 
 # Problemas do documento inteiro: não há exame a que amarrar.
+# Problemas do documento inteiro. Os quatro primeiros são de LEITURA (a IA não
+# conseguiu ler o que estava lá); os demais são de CONTEÚDO (o que a clínica
+# enviou está incompleto ou errado) e foram levantados a partir do que os
+# revisores de fato escreveram no antigo campo "Motivo da rejeição".
+#
+# Medido no banco de dev sobre 387 rejeições escritas à mão: o ASO sozinho
+# responde por 106 delas (27%) — cortado ou em duas páginas, sem marcação de
+# aptidão, ou com dado errado. Peça faltando no prontuário são 34, exames
+# espalhados em vários anexos são 25 e envio duplicado 9. As quatro categorias
+# de leitura que existiam cobriam 7 das 387: quase tudo caía em "Outro" ou no
+# texto livre, que agora saiu do modal.
 CATEGORIAS_DOCUMENTO: frozenset[str] = frozenset({
-    "OCR_NOME",       # nome do paciente lido errado ou corrompido
-    "OCR_CPF",        # CPF lido errado
-    "OCR_DATA",       # data do exame/ASO lida errada
-    "DOC_ILEGIVEL",   # o documento não foi lido de forma aproveitável
+    "OCR_NOME",             # nome do paciente lido errado ou corrompido
+    "OCR_CPF",              # CPF lido errado
+    "OCR_DATA",             # data do exame/ASO lida errada
+    "DOC_ILEGIVEL",         # o documento não foi lido de forma aproveitável
+    "ASO_INCOMPLETO",       # ASO cortado, ou só uma das duas páginas
+    "ASO_SEM_APTIDAO",      # ASO sem a marcação de apto/inapto
+    "ASO_DADO_ERRADO",      # ASO com tipagem, data ou carimbo errados
+    "PRONTUARIO_INCOMPLETO",# faltou peça do prontuário (ficha, laudo, o próprio ASO)
+    "ANEXOS_SEPARADOS",     # exames do mesmo paciente vieram em anexos diferentes
+    "ENVIO_DUPLICADO",      # o mesmo documento foi enviado mais de uma vez
+    "PACIENTE_TROCADO",     # o documento é de outro paciente
 })
 
 # União das duas, para quem só precisa saber se um código é válido.

@@ -34,7 +34,7 @@ export const OPCOES_FEEDBACK: Array<{
   },
   {
     valor: "IA_CORRETA_COM_AJUSTES",
-    titulo: "Acertou com ressalvas",
+    titulo: "A IA acertou com ressalvas",
     descricao: "Aproveitável, mas algo precisou de correção.",
   },
   {
@@ -75,7 +75,7 @@ export const CATEGORIAS_EXAME: Array<{
   },
   {
     valor: "EXTRA_INCORRETO",
-    rotulo: "Extra indevido",
+    rotulo: "Extra que era legítimo",
     ajuda: "A IA marcou como extra um exame que era legítimo.",
     frase: (x, p) =>
       p
@@ -85,7 +85,7 @@ export const CATEGORIAS_EXAME: Array<{
   {
     valor: "SINONIMO_NAO_RECONHECIDO",
     rotulo: "Sinônimo não reconhecido",
-    ajuda: "O exame estava lá com outro nome e a IA não ligou os dois.",
+    ajuda: "O exame estava no documento com outro nome e a IA não ligou os dois.",
     frase: (x, p) =>
       p
         ? `${x} estavam no documento com outros nomes, e a IA não reconheceu.`
@@ -102,7 +102,7 @@ export const CATEGORIAS_EXAME: Array<{
   },
   {
     valor: "VALIDADE_PERIODICIDADE",
-    rotulo: "Validade / periodicidade",
+    rotulo: "Validade ou periodicidade",
     ajuda: "O exame existe, mas a validade ou a periodicidade saiu errada.",
     frase: (x, p) =>
       p
@@ -111,7 +111,7 @@ export const CATEGORIAS_EXAME: Array<{
   },
   {
     valor: "DADO_BRNET",
-    rotulo: "Dado do BRNET",
+    rotulo: "Exigência do BRNET",
     ajuda: "A exigência veio errada ou desatualizada do BRNET.",
     frase: (x, p) =>
       p
@@ -128,6 +128,17 @@ export const CATEGORIAS_EXAME: Array<{
 /**
  * Problemas do documento inteiro — não apontam exame. Ficam num bloco à parte
  * no modal e viajam em `document_issues`, não em `issue_items`.
+ *
+ * Duas famílias, nesta ordem na tela: o que a clínica enviou errado (ASO e
+ * envio) vem primeiro, porque é o que mais aparece, e os erros de leitura da
+ * IA vêm depois.
+ *
+ * A lista de conteúdo saiu do que os revisores escreveram no antigo campo
+ * "Motivo da rejeição", removido do modal. Medido em 387 rejeições escritas à
+ * mão no banco de dev: o ASO responde por 106 (27%), peça faltando no
+ * prontuário por 34, exames em vários anexos por 25 e envio duplicado por 9.
+ * As quatro categorias de leitura que existiam cobriam 7 das 387 — o resto não
+ * tinha onde ser marcado.
  */
 export const CATEGORIAS_DOCUMENTO: Array<{
   valor: string;
@@ -136,6 +147,48 @@ export const CATEGORIAS_DOCUMENTO: Array<{
   /** Frase fixa: o problema é do documento, não há exame para citar. */
   frase: string;
 }> = [
+  {
+    valor: "ASO_INCOMPLETO",
+    rotulo: "ASO cortado ou em duas páginas",
+    ajuda: "Veio só parte do ASO, ou faltou a segunda página.",
+    frase: "O ASO veio cortado ou com uma das páginas faltando.",
+  },
+  {
+    valor: "ASO_SEM_APTIDAO",
+    rotulo: "ASO sem marcação de aptidão",
+    ajuda: "O ASO não tem a marcação de apto ou inapto.",
+    frase: "O ASO veio sem a marcação de aptidão.",
+  },
+  {
+    valor: "ASO_DADO_ERRADO",
+    rotulo: "ASO com dado errado",
+    ajuda: "Tipagem, data ou carimbo errados no ASO.",
+    frase: "O ASO veio com dado errado.",
+  },
+  {
+    valor: "PRONTUARIO_INCOMPLETO",
+    rotulo: "Faltou peça do prontuário",
+    ajuda: "Veio só o ASO, só os laboratoriais, ou faltou a ficha médica.",
+    frase: "O prontuário veio incompleto: faltou uma das peças.",
+  },
+  {
+    valor: "ANEXOS_SEPARADOS",
+    rotulo: "Exames em vários anexos",
+    ajuda: "Os exames do mesmo paciente vieram em envios separados.",
+    frase: "Os exames do paciente vieram repartidos em mais de um anexo.",
+  },
+  {
+    valor: "ENVIO_DUPLICADO",
+    rotulo: "Documento duplicado",
+    ajuda: "O mesmo documento foi enviado mais de uma vez.",
+    frase: "O mesmo documento foi enviado mais de uma vez.",
+  },
+  {
+    valor: "PACIENTE_TROCADO",
+    rotulo: "Documento de outro paciente",
+    ajuda: "O documento, ou parte dele, é de outro paciente.",
+    frase: "O documento, ou parte dele, é de outro paciente.",
+  },
   {
     valor: "OCR_NOME",
     rotulo: "Nome do paciente",

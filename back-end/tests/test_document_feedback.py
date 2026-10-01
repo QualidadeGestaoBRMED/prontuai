@@ -464,3 +464,33 @@ def test_categorias_do_back_batem_com_as_do_front():
     achar = lambda bloco: set(re.findall(r'valor:\s*"([A-Z_]+)"', bloco))
     assert achar(de_exame) == set(CATEGORIAS_EXAME)
     assert achar(de_documento) == set(CATEGORIAS_DOCUMENTO)
+
+
+def test_problemas_de_documento_cobrem_o_que_os_revisores_escreviam():
+    """As categorias de conteúdo saíram do antigo campo "Motivo da rejeição".
+
+    Medido em 387 rejeições escritas à mão no banco de dev: ASO 106 (27%), peça
+    faltando no prontuário 34, exames em vários anexos 25, envio duplicado 9. As
+    quatro categorias de leitura que existiam cobriam 7 das 387 — com o campo de
+    texto livre removido do modal, sem estas opções o revisor não teria onde
+    registrar o que mais aparece.
+    """
+    from app.models.feedback import CATEGORIAS_DOCUMENTO
+
+    conteudo = {
+        "ASO_INCOMPLETO",
+        "ASO_SEM_APTIDAO",
+        "ASO_DADO_ERRADO",
+        "PRONTUARIO_INCOMPLETO",
+        "ANEXOS_SEPARADOS",
+        "ENVIO_DUPLICADO",
+        "PACIENTE_TROCADO",
+    }
+    leitura = {"OCR_NOME", "OCR_CPF", "OCR_DATA", "DOC_ILEGIVEL"}
+    assert conteudo <= CATEGORIAS_DOCUMENTO
+    assert leitura <= CATEGORIAS_DOCUMENTO, "as categorias de leitura não podem sumir"
+    # Nenhuma delas pode escorregar para a família de exame: o modal mostra as
+    # duas em blocos diferentes e só as de exame exigem apontar um exame.
+    from app.models.feedback import CATEGORIAS_EXAME
+
+    assert not (conteudo & CATEGORIAS_EXAME)
