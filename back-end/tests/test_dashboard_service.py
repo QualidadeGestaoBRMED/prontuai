@@ -173,9 +173,27 @@ def test_forcar_sequencial_continua_recalculando(monkeypatch):
 HOJE = datetime(2026, 9, 22, 10, 0, tzinfo=ds.FUSO)
 
 
-def pedido(atendimento=None, credenciado="RECIFE - PE - CLINICA A", previsao=None, liberado=False):
+def pedido(
+    atendimento=None,
+    credenciado="RECIFE - PE - CLINICA A",
+    previsao=None,
+    liberado=False,
+    liberacao=...,
+):
+    """Pedido do BRNET para os testes.
+
+    `liberacao` cai em `atendimento` por padrão. Estes fixtures nasceram quando
+    realizado era "atendido", e passar só a data de atendimento era a forma de
+    dizer "este pedido está concluído". Realizado passou a ser "liberado" (1.2),
+    e o padrão mantém a intenção de cada caso sem reescrever os 55 usos.
+
+    Para exercitar a diferença — atendido e ainda NÃO liberado —, passe
+    `liberacao=None` explicitamente.
+    """
     cidade, uf, nome = credenciado.split(" - ", 2)
-    return ds._Pedido(atendimento, credenciado, cidade, uf, nome, previsao, liberado)
+    if liberacao is ...:
+        liberacao = atendimento
+    return ds._Pedido(atendimento, credenciado, cidade, uf, nome, previsao, liberado, liberacao)
 
 
 def cadastros(*nomes):
@@ -622,6 +640,43 @@ def test_documento_de_cadastro_inativo_nao_habilita():
     assert r["clinicas_com_prontuai"] == [] and len(r["clinicas_sem_prontuai"]) == 1
 
 
+def test_atendido_sem_liberacao_nao_e_realizado(monkeypatch):
+    """Realizado é pedido EXPEDIDO, não atendido (1.2).
+
+    O pedido 1 foi atendido e liberado; o 2 foi atendido e ainda não. Só o
+    primeiro pode entrar no denominador da adesão e no KPI de expedições — o
+    segundo é trabalho em curso.
+
+    Antes de set/2026 os dois contavam. Medido em setembro, isso punha 131
+    pedidos a mais no denominador e deixava a adesão 3,1 pp abaixo da real.
+    """
+    cred = "RECIFE - PE - CLINICA A"
+    pedidos = {
+        1: pedido("2026-09-01", cred, liberacao="2026-09-03"),
+        2: pedido("2026-09-02", cred, liberacao=None),
+    }
+    saida = ds._cruzar_expedicoes(pedidos, {1: 1, 2: 1}, HOJE.date(), {}, cadastros(cred))
+
+    # Denominador: só o liberado, e datado pelo dia da LIBERAÇÃO.
+    assert saida["expedicoes_dia"] == {"2026-09-03": 1}
+    assert saida["expedicoes_prontuai_dia"] == {"2026-09-03": 1}
+
+    (linha,) = [c for c in saida["clinicas_com_prontuai"] if c["credenciado"] == cred]
+    assert linha["realizados_dia"] == {"2026-09-03": 1}
+    assert linha["realizados_prontuai_dia"] == {"2026-09-03": 1}
+
+
+def test_liberado_conta_no_dia_da_liberacao_nao_do_atendimento(monkeypatch):
+    """A virada de mês é o caso que importa: atendido em agosto e liberado em
+    setembro é realizado de SETEMBRO. Com a datação antiga caía em agosto."""
+    cred = "RECIFE - PE - CLINICA A"
+    pedidos = {1: pedido("2026-08-28", cred, liberacao="2026-09-02")}
+    saida = ds._cruzar_expedicoes(pedidos, {1: 1}, HOJE.date(), {}, cadastros(cred))
+
+    assert saida["expedicoes_dia"] == {"2026-09-02": 1}
+    assert "2026-08-28" not in saida["expedicoes_dia"]
+
+
 def test_credenciado_habilitado_com_poucos_documentos_e_nome_divergente():
     """Lacuna conhecida da ponte por nome, travada aqui para não passar batida.
 
@@ -686,6 +741,6 @@ def test_uf_por_dia_fecha_com_os_previstos_das_listas():
 
 
 def test_credenciado_sem_uf_cai_num_balde_proprio():
-    pedidos = {1: ds._Pedido(None, "ROTULO SOLTO", None, None, None, "2026-09-25", False)}
+    pedidos = {1: ds._Pedido(None, "ROTULO SOLTO", None, None, None, "2026-09-25", False, None)}
     r = ds._cruzar_expedicoes(pedidos, {}, date(2026, 9, 22), {}, cadastros())
     assert r["previstos_uf_dia"]["fora"] == {"—": {"2026-09-25": 1}}

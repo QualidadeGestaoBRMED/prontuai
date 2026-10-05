@@ -625,7 +625,8 @@ export function calcularVisao({ dados, filtro, comparar, verTodasClinicas }: Opc
   };
 
   // ---- cobertura: pedidos do BRNET com documento liberado no ProntuAI --------
-  // Numerador e denominador contam pedidos, pelo dia de atendimento.
+  // Numerador e denominador contam pedidos, pelo dia de LIBERAÇÃO — realizado
+  // é pedido expedido, não atendido (definição da 1.2).
   const porDia = dados.expedicoes_dia || {};
   const viaPorDia = dados.expedicoes_prontuai_dia || {};
   const dataDe = (iso?: string) => {

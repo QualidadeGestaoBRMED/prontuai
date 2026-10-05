@@ -69,9 +69,12 @@ TIMEOUT_MS = int(os.getenv("DASHBOARD_STATEMENT_TIMEOUT_MS", "120000"))
 #     o KPI em 4–5 pp em ago–set/26);
 #   * a lista de credenciados com previsão futura que não usam o ProntuAI.
 #
-# A API filtra pelo mês de SOLICITAÇÃO e o painel conta pelo dia de ATENDIMENTO.
-# Medido em mar–ago/26: 86% dos atendimentos caem no mês da solicitação, 13% no
-# seguinte e 0,2% dois meses depois. Daí as duas constantes:
+# A API filtra pelo mês de SOLICITAÇÃO e o painel conta pelo dia de LIBERAÇÃO,
+# que é o que a 1.2 define como realizado. A liberação é posterior ao
+# atendimento, então a defasagem entre o mês de solicitação e o mês contado é ao
+# menos a medida para o atendimento: em mar–ago/26, 86% dos atendimentos caem no
+# mês da solicitação, 13% no seguinte e 0,2% dois meses depois. Daí as duas
+# constantes (dimensionadas pelo atendimento, teto inferior para a liberação):
 #   * busca-se desde dois meses antes do primeiro documento, para o primeiro mês
 #     do painel sair completo;
 #   * os três meses de solicitação mais recentes ainda ganham atendimentos e são
@@ -100,6 +103,9 @@ class _Pedido(NamedTuple):
     nome: Optional[str]
     previsao: Optional[str]     # ISO da previsão de liberação
     liberado: bool
+    # ISO da liberação, None enquanto não expedido. É a datação de realizado:
+    # a 1.2 define realizado como documento EFETIVAMENTE EXPEDIDO, não atendido.
+    liberacao: Optional[str]
 
 
 # (ano, mês) de solicitação -> pedido_exame_id -> resumo.
@@ -234,6 +240,7 @@ async def _buscar_pedidos_mes(ano: int, mes: int, sem: asyncio.Semaphore) -> dic
             nome=r.credenciado.nome,
             previsao=r.data_previsao.isoformat() if r.data_previsao else None,
             liberado=r.data_liberacao is not None,
+            liberacao=r.data_liberacao.isoformat() if r.data_liberacao else None,
         )
         for r in registros
     }
@@ -364,9 +371,10 @@ def _cruzar_expedicoes(
     São complementares: todo pedido previsto cai em exatamente uma.
 
     `realizados_dia` e `realizados_prontuai_dia` saem quebrados por dia de
-    ATENDIMENTO, a mesma datação de `expedicoes_dia` — a adesão por clínica é o
+    LIBERAÇÃO, a mesma datação de `expedicoes_dia` — a adesão por clínica é o
     recorte por clínica do KPI "Expedições via ProntuAI", e as duas contas
-    precisam reconciliar. Quebrados por dia porque o filtro de período é da tela:
+    precisam reconciliar. Pedido atendido e ainda não liberado não entra em
+    nenhuma das duas: não é realizado, é previsto. Quebrados por dia porque o filtro de período é da tela:
     trocar de período não pode custar uma ida ao banco.
 
     Previsto e realizado nunca se somam nem se dividem um pelo outro. São
@@ -490,22 +498,32 @@ def _cruzar_expedicoes(
     realizados: dict[str, dict[str, int]] = {}
     realizados_prontuai: dict[str, dict[str, int]] = {}
     for pid, p in pedidos.items():
-        if not p.atendimento:
+        # Realizado é pedido EXPEDIDO, datado pelo dia da liberação — é o que a
+        # 1.2 define ("realizados são documentos efetivamente expedidos"). Até
+        # set/2026 o painel usava `atendimento`, o que punha no denominador
+        # pedido atendido e ainda não liberado: medido em setembro, inflava o
+        # denominador em 131 pedidos e deixava a adesão 3,1 pp abaixo da real
+        # (52,9% contra 56,0%). Atendido sem liberação não é realizado; é
+        # trabalho em curso, e aparece do lado dos previstos.
+        if not p.liberacao:
             continue
         # Passou pelo ProntuAI = teve documento PROCESSADO por ele, qualquer que
-        # tenha sido o desfecho da revisão.
+        # tenha sido o desfecho da revisão. Rejeitado continua contando: a adesão
+        # mede se a clínica usou a plataforma, e ela usou. Qualidade do envio é
+        # outra medida — excluir rejeitado derrubaria a adesão 1,4 pp (54,6%) e
+        # misturaria duas perguntas num número só.
         processado_no_prontuai = docs_por_pedido.get(pid, 0) > 0
-        atendidos[p.atendimento] = atendidos.get(p.atendimento, 0) + 1
+        atendidos[p.liberacao] = atendidos.get(p.liberacao, 0) + 1
         if processado_no_prontuai:
-            via_prontuai[p.atendimento] = via_prontuai.get(p.atendimento, 0) + 1
+            via_prontuai[p.liberacao] = via_prontuai.get(p.liberacao, 0) + 1
         if not usa_prontuai(p.credenciado):
             continue
         nome = cadastro(p.credenciado)
         dias = realizados.setdefault(nome, {})
-        dias[p.atendimento] = dias.get(p.atendimento, 0) + 1
+        dias[p.liberacao] = dias.get(p.liberacao, 0) + 1
         if processado_no_prontuai:
             dias_ok = realizados_prontuai.setdefault(nome, {})
-            dias_ok[p.atendimento] = dias_ok.get(p.atendimento, 0) + 1
+            dias_ok[p.liberacao] = dias_ok.get(p.liberacao, 0) + 1
 
     # ── previstos: pedidos ainda não liberados, com data ─────────────────────
     hoje_iso = hoje.isoformat()

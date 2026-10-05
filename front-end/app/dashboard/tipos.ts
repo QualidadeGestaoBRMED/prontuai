@@ -106,7 +106,9 @@ export interface CredenciadoPrevisto {
   /** Documentos processados pelo ProntuAI em todo o histórico. */
   documentos: number;
   /**
-   * Realizados da clínica por dia de ATENDIMENTO — o denominador da adesão.
+   * Realizados da clínica por dia de LIBERAÇÃO — o denominador da adesão.
+   * Realizado é pedido efetivamente expedido; atendido e ainda não liberado
+   * conta como previsto, não como realizado.
    * Mesma datação de `expedicoes_dia`, para a adesão por clínica ser o recorte
    * por clínica do KPI "Expedições via ProntuAI" e os dois números fecharem.
    * Só existe no lado habilitado; quem não tem cadastro não tem adesão a medir.
@@ -129,7 +131,7 @@ export interface DadosDashboard {
   acuracia: Record<SerieKey, PontoAcuracia[]>;
   clinicas: ClinicaDados[];
   /**
-   * Pedidos atendidos em clínicas credenciadas, por dia de atendimento —
+   * Pedidos liberados em clínicas credenciadas, por dia de liberação —
    * denominador de "Expedições via ProntuAI". Vem da API de monitoramento de
    * credenciados do BRNET (ver `dashboard_service._cruzar_expedicoes`). Vazio
    * quando algum mês não pôde ser buscado — aí o KPI mostra o total absoluto em
