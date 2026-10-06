@@ -10,7 +10,7 @@ DE ONDE VÊM OS CONFLITOS
     (`colpocitologia` × `colpocitologico`, `t 4 livre` × `t4 livre`). Atribuir
     o conflito trataria o sintoma e deixaria a duplicata.
 
-AS TRÊS DECISÕES DO CSV (colunas: acao, termo, pai, observacao)
+AS DECISÕES DO CSV (colunas: acao, termo, pai, observacao)
     juntar     `termo` é um exame pai duplicado de `pai`. As variações dele
                passam para `pai`, e o próprio nome vira variação de `pai`
                (continua sendo vocabulário do portão de extração). O pai
@@ -18,6 +18,10 @@ AS TRÊS DECISÕES DO CSV (colunas: acao, termo, pai, observacao)
     atribuir   `termo` é um conflito pendente; vira variação de `pai`.
     descartar  `termo` é um conflito pendente sem exame (ex.: "ap/perfil", que
                é incidência de raio-X); o conflito só é encerrado.
+    mover      `termo` já é variação, mas do exame errado; passa para `pai`. Se
+               houver conflito pendente do mesmo termo, ele é encerrado como
+               atribuído a `pai`. Termo que já está sob `pai` conta como feito,
+               então a linha pode ficar no CSV depois de aplicada.
 
     Os nomes são comparados normalizados (`normalizar_termo`), então caixa,
     acento e pontuação não importam.
@@ -71,7 +75,7 @@ from app.models.audit_log import AuditLogCreate  # noqa: E402
 from app.services import exam_catalog_source  # noqa: E402
 from app.services.exam_vector_service import derivar_vector_id  # noqa: E402
 
-ACOES = {"juntar", "atribuir", "descartar"}
+ACOES = {"juntar", "atribuir", "descartar", "mover"}
 
 
 class Catalogo:
@@ -244,6 +248,35 @@ class Catalogo:
         self.s.flush()
         return {"pai": pai.name, "variacao_criada": atual is None}
 
+    def mover(self, termo: str, pai_nome: str) -> Dict[str, Any]:
+        destino = self.pai(pai_nome)
+        if not destino:
+            raise ValueError(f"pai '{pai_nome}' não encontrado (ou inativo)")
+        normalizado = normalizar_termo(termo)
+        variacao = (
+            self.s.query(ExamVariationModel)
+            .filter(ExamVariationModel.name_normalized == normalizado)
+            .first()
+        )
+        if not variacao:
+            raise ValueError(f"'{termo}' não é variação no catálogo")
+        origem = self.s.query(ExamParentModel).filter(ExamParentModel.id == variacao.parent_id).first()
+        movida = variacao.parent_id != destino.id
+        if movida:
+            variacao.parent_id = destino.id
+            variacao.updated_at = self.agora
+            variacao.updated_by = self.ator
+        conflito = self.conflito_pendente(termo)
+        if conflito:
+            self.encerrar(conflito, "atribuida", destino.id)
+        self.s.flush()
+        return {
+            "de": origem.name if origem else None,
+            "para": destino.name,
+            "movida": movida,
+            "conflito_encerrado": bool(conflito),
+        }
+
     def descartar(self, termo: str) -> Dict[str, Any]:
         conflito = self.conflito_pendente(termo)
         if not conflito:
@@ -322,6 +355,8 @@ def main() -> int:
             try:
                 if acao == "juntar":
                     detalhe = catalogo.juntar(termo, pai)
+                elif acao == "mover":
+                    detalhe = catalogo.mover(termo, pai)
                 elif acao == "atribuir":
                     detalhe = catalogo.atribuir(termo, pai)
                 else:
@@ -343,6 +378,9 @@ def main() -> int:
                 print(f"      aviso: {aviso}")
             if detalhe.get("variacoes_movidas"):
                 print(f"      {len(detalhe['variacoes_movidas'])} variação(ões) movida(s)")
+            if acao == "mover" and situacao == "ok":
+                print(f"      {'saiu de ' + repr(detalhe['de']) if detalhe['movida'] else 'já estava no lugar'}"
+                      f"{'; conflito encerrado' if detalhe['conflito_encerrado'] else ''}")
 
         relatorio["reavaliacao"] = catalogo.reavaliar_pendentes()
         print("\nconflitos restantes, reavaliados:")
