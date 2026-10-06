@@ -1,0 +1,9 @@
+acao,termo,pai,observacao
+juntar,colpocitologico,colpocitologia,mesmo exame cadastrado duas vezes
+juntar,t 4 livre,t4 livre,mesmo exame; T4 LIVRE é o nome do BRNET
+juntar,espirometria (nao usar),espirometria,pai marcado como não usar; ESPIROMETRIA é o nome do BRNET
+juntar,campimetria visual,campimetria,mesmo exame; CAMPIMETRIA é o nome do BRNET
+juntar,avaliacao psicologia,avaliacao psicologica,mesmo exame; AVALIAÇÃO PSICOLÓGICA é o nome do BRNET
+atribuir,atl (audiometria tonal limiar),audiometria tonal,ATL é audiometria tonal limiar
+descartar,ap/perfil,,"incidência de raio-X, não é exame"
+descartar,pa/obliqua,,"incidência de raio-X, não é exame"
