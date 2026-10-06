@@ -7,3 +7,8 @@ juntar,avaliacao psicologia,avaliacao psicologica,mesmo exame; AVALIAÇÃO PSICO
 atribuir,atl (audiometria tonal limiar),audiometria tonal,ATL é audiometria tonal limiar
 descartar,ap/perfil,,"incidência de raio-X, não é exame"
 descartar,pa/obliqua,,"incidência de raio-X, não é exame"
+mover,glicose de jejum,glicemia de jejum,glicose em jejum é o exame que o BRNET chama de glicemia de jejum
+mover,glicose jejum,glicemia de jejum,glicose em jejum é o exame que o BRNET chama de glicemia de jejum
+mover,glicose em jejum,glicemia de jejum,glicose em jejum é o exame que o BRNET chama de glicemia de jejum
+mover,glicose jejum dosagem,glicemia de jejum,glicose em jejum é o exame que o BRNET chama de glicemia de jejum
+mover,triagem toxicologica,TRIAGEM TOXICOLÓGICO,estava sob avaliacao laboratorial por herança do CSV antigo
