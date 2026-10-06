@@ -2401,7 +2401,7 @@ class PostgresUserDatabase:
         try:
             bruto = session.execute(
                 text(
-                    "SELECT btrim(e), count(*), count(DISTINCT d.id) "
+                    "SELECT btrim(e), count(*), count(DISTINCT d.id), max(d.created_at) "
                     "FROM documents d, unnest(d.exams_brnet) e "
                     "WHERE d.exams_brnet IS NOT NULL AND btrim(e) <> '' "
                     "GROUP BY 1"
@@ -2409,16 +2409,18 @@ class PostgresUserDatabase:
             ).all()
 
             agregado: dict[str, dict] = {}
-            for nome, pedidos, docs in bruto:
+            for nome, pedidos, docs, ultimo in bruto:
                 chave = normalizar_termo(nome)
                 if not chave:
                     continue
                 # Nomes distintos podem colapsar na mesma chave (acento, sigla).
                 item = agregado.setdefault(
-                    chave, {"name": nome, "requests": 0, "documents": 0}
+                    chave, {"name": nome, "requests": 0, "documents": 0, "last": None}
                 )
                 item["requests"] += int(pedidos or 0)
                 item["documents"] += int(docs or 0)
+                if ultimo and (item["last"] is None or ultimo > item["last"]):
+                    item["last"] = ultimo
 
             ja_encontrados = set()
             for (nome,) in session.execute(text(self._SQL_EXAMES_JA_ENCONTRADOS)):
@@ -2432,6 +2434,18 @@ class PostgresUserDatabase:
                     ExamParentModel.id, ExamParentModel.name_normalized
                 ).filter(ExamParentModel.is_active.is_(True))
             }
+            # Nome do BRNET coberto por variação já está no catálogo: o motor o
+            # reconhece pelo grupo do pai. Sem isto, vincular uma pendência como
+            # variação não a tirava da lista, e "Cadastrar" falhava por colisão.
+            for pid, chave in (
+                session.query(ExamVariationModel.parent_id, ExamVariationModel.name_normalized)
+                .join(ExamParentModel, ExamParentModel.id == ExamVariationModel.parent_id)
+                .filter(
+                    ExamVariationModel.is_active.is_(True),
+                    ExamParentModel.is_active.is_(True),
+                )
+            ):
+                pai_por_chave.setdefault(chave, pid)
 
             pendencias = []
             for chave, item in agregado.items():
@@ -2447,6 +2461,7 @@ class PostgresUserDatabase:
                         requests=item["requests"],
                         never_found=nunca,
                         parent_id=parent_id,
+                        last_requested_at=item["last"],
                     )
                 )
             pendencias.sort(

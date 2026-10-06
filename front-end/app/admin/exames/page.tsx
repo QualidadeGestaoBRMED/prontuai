@@ -88,6 +88,8 @@ interface ExamPendency {
   never_found: boolean;
   /** Pai ativo com o mesmo nome normalizado; null = sem pai no catálogo. */
   parent_id: string | null;
+  /** Documento mais recente em que o BRNET pediu o exame. */
+  last_requested_at: string | null;
 }
 
 interface CatalogStats {
@@ -113,6 +115,56 @@ function classeAlternancia(ligado: boolean): string {
   return ligado
     ? "bg-white text-[#193B4F] border border-white font-semibold shadow hover:bg-white/90"
     : "bg-transparent text-white border border-white/40 hover:bg-white/10 hover:text-white";
+}
+
+/**
+ * Palavras que não distinguem um exame de outro. Sem tirá-las, "AVALIAÇÃO
+ * PSICOSSOCIAL" sugeriria todas as outras avaliações e "CICLOHEXANOL URINÁRIO"
+ * todos os metais urinários.
+ */
+const PALAVRAS_GENERICAS = new Set([
+  "DE", "DA", "DO", "DAS", "DOS", "COM", "SEM", "PARA", "POR", "NO", "NA", "E",
+  "EXAME", "TESTE", "DOSAGEM", "PESQUISA", "AVALIACAO", "RADIOGRAFIA", "RX",
+  "URINA", "URINARIO", "URINARIA", "SANGUE", "SANGUINEO", "SERICO", "SERICA",
+  "PLASMATICO", "TOTAL", "AP", "PA", "PERFIL", "BILATERAL", "DIREITO", "ESQUERDO",
+  // Comuns a famílias inteiras: "ÁCIDO" ligava todos os ácidos entre si,
+  // "IGG"/"IGM" todas as sorologias, "METIL" cetona a ácido metil-hipúrico.
+  "ACIDO", "IGG", "IGM", "ANTI", "LIVRE", "METIL",
+]);
+
+function palavrasDistintivas(nome: string): string[] {
+  return nome
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, " ")
+    .split(" ")
+    .filter((p) => p.length >= 3 && !PALAVRAS_GENERICAS.has(p));
+}
+
+/** Mesma palavra, ou mesmo radical de 6 letras (CARDIOLOGIA × CARDIOLÓGICA). */
+function mesmaPalavra(a: string, b: string): boolean {
+  return a === b || (a.length >= 6 && b.length >= 6 && a.slice(0, 6) === b.slice(0, 6));
+}
+
+/**
+ * Exames pai que parecem ser o mesmo exame da pendência, pelas palavras que
+ * distinguem um exame de outro. É só sugestão para o curador: a escolha final
+ * continua no seletor, com todos os exames abaixo dos sugeridos.
+ */
+function sugerirPais(nome: string, pais: ExamParent[], limite = 3): ExamParent[] {
+  const alvo = palavrasDistintivas(nome);
+  if (alvo.length === 0) return [];
+  return pais
+    .map((pai) => {
+      const doPai = palavrasDistintivas(pai.name);
+      const comuns = alvo.filter((p) => doPai.some((q) => mesmaPalavra(p, q))).length;
+      return { pai, comuns, cobertura: comuns / Math.max(alvo.length, doPai.length) };
+    })
+    .filter((s) => s.comuns > 0)
+    .sort((a, b) => b.comuns - a.comuns || b.cobertura - a.cobertura)
+    .slice(0, limite)
+    .map((s) => s.pai);
 }
 
 /** Limites do nome, espelhados de `ExamParentCreate`/`ExamVariationCreate` no back-end. */
@@ -311,6 +363,8 @@ export default function ExamesAdminPage() {
   const [conflitos, setConflitos] = useState<ExamConflict[]>([]);
   const [todosPais, setTodosPais] = useState<ExamParent[]>([]);
   const [escolhaConflito, setEscolhaConflito] = useState<Record<string, string>>({});
+  const [escolhaPendencia, setEscolhaPendencia] = useState<Record<string, string>>({});
+  const [vinculando, setVinculando] = useState<string | null>(null);
 
   const carregarStats = useCallback(async () => {
     try {
@@ -363,9 +417,17 @@ export default function ExamesAdminPage() {
     }
     setCarregandoPendencias(true);
     try {
-      const response = await authFetch(`${API_ENDPOINTS.EXAM_PENDENCIES}?limit=300`);
+      // Os pais alimentam as sugestões e o seletor de "Vincular como variação".
+      const [response, respPais] = await Promise.all([
+        authFetch(`${API_ENDPOINTS.EXAM_PENDENCIES}?limit=300`),
+        authFetch(`${API_ENDPOINTS.EXAMS}?limit=500`),
+      ]);
       if (!response.ok) throw new Error("Erro ao carregar pendências");
       setPendencias(await response.json());
+      if (respPais.ok) {
+        const data = await respPais.json();
+        setTodosPais(data.items || []);
+      }
     } catch (error) {
       console.error("Erro:", error);
       toast.error("Erro ao carregar pendências do catálogo");
@@ -497,10 +559,13 @@ export default function ExamesAdminPage() {
       const ignoradas = variacoes.length - (criado.variations?.length ?? 0);
       if (ignoradas > 0) {
         toast.warning(
-          `Exame criado, mas ${ignoradas} variaç${ignoradas === 1 ? "ão foi ignorada" : "ões foram ignoradas"}: repetida${ignoradas === 1 ? "" : "s"} ou igual${ignoradas === 1 ? "" : "is"} ao nome do exame`
+          `Exame criado, mas ${ignoradas} variaç${ignoradas === 1 ? "ão foi ignorada" : "ões foram ignoradas"}: repetida${ignoradas === 1 ? "" : "s"} ou igual${ignoradas === 1 ? "" : "is"} ao nome do exame`,
+          { action: { label: "Ver na base", onClick: () => verNaBase(criado.name) } }
         );
       } else {
-        toast.success("Exame criado");
+        toast.success("Exame criado", {
+          action: { label: "Ver na base", onClick: () => verNaBase(criado.name) },
+        });
       }
       setModalCriar(false);
       limparFormulario();
@@ -790,6 +855,45 @@ export default function ExamesAdminPage() {
     }
   };
 
+  /** Leva da aba de novos para o exame na base, já filtrado pela busca. */
+  const verNaBase = (nome: string) => {
+    setBusca(nome);
+    setBuscaAplicada(nome);
+    setAba("catalogo");
+  };
+
+  /** O nome pedido pelo BRNET vira variação de um exame que já existe. */
+  const vincularPendencia = async (pendencia: ExamPendency) => {
+    const parentId = escolhaPendencia[pendencia.name_normalized];
+    if (!parentId) {
+      toast.error("Escolha o exame pai antes de vincular");
+      return;
+    }
+    setVinculando(pendencia.name_normalized);
+    try {
+      const response = await authFetch(API_ENDPOINTS.EXAM_VARIATIONS(parentId), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: pendencia.name }),
+      });
+      if (!response.ok) {
+        toast.error(await mensagemDeErro(response, "Erro ao vincular"));
+        return;
+      }
+      const pai = todosPais.find((p) => p.id === parentId);
+      toast.success(`${pendencia.name} vinculado a ${pai?.name ?? "exame da base"}`, {
+        action: { label: "Ver na base", onClick: () => verNaBase(pendencia.name) },
+      });
+      carregarPendencias();
+      carregarStats();
+    } catch (error) {
+      console.error("Erro:", error);
+      toast.error("Erro ao vincular");
+    } finally {
+      setVinculando(null);
+    }
+  };
+
   const paisOrdenados = useMemo(
     () => [...todosPais].sort((a, b) => a.name.localeCompare(b.name, "pt-BR")),
     [todosPais]
@@ -815,6 +919,21 @@ export default function ExamesAdminPage() {
                 <p className="text-sm text-white/80 mt-1">
                   Gerencie o catálogo de exames e suas variações de nome.
                 </p>
+                {stats && (
+                  <p className="text-sm text-white mt-2">
+                    <span className="font-semibold">{stats.parents_total.toLocaleString("pt-BR")}</span>{" "}
+                    exames e{" "}
+                    <span className="font-semibold">{stats.variations_total.toLocaleString("pt-BR")}</span>{" "}
+                    variações na base
+                    {stats.pendencies_total ? (
+                      <>
+                        {" · "}
+                        <span className="font-semibold">{stats.pendencies_total.toLocaleString("pt-BR")}</span>{" "}
+                        novos do BRNET aguardando
+                      </>
+                    ) : null}
+                  </p>
+                )}
               </div>
               <Button
                 onClick={() => {
@@ -834,7 +953,7 @@ export default function ExamesAdminPage() {
                 className={classeAlternancia(aba === "pendencias")}
                 onClick={() => setAba("pendencias")}
               >
-                Pendências
+                Novos do BRNET
                 {stats?.pendencies_total ? ` (${stats.pendencies_total})` : ""}
               </Button>
               <Button
@@ -842,7 +961,8 @@ export default function ExamesAdminPage() {
                 className={classeAlternancia(aba === "catalogo")}
                 onClick={() => setAba("catalogo")}
               >
-                Catálogo
+                Base de exames
+                {stats?.parents_total ? ` (${stats.parents_total})` : ""}
               </Button>
               <Button
                 size="sm"
@@ -856,85 +976,161 @@ export default function ExamesAdminPage() {
 
             {aba === "pendencias" ? (
               /* Pendências: sem pai no catálogo, ou nunca encontrado em documento algum */
-              <div className="bg-white rounded-lg shadow overflow-hidden">
-                <table className="w-full">
-                  <thead className="bg-gray-50 border-b">
-                    <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                        Exame pedido pelo BRNET
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                        Documentos
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                        Ações
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-200">
-                    {carregandoPendencias ? (
-                      Array.from({ length: 5 }).map((_, i) => (
-                        <tr key={i} className="animate-pulse">
-                          <td className="px-6 py-4">
-                            <div className="h-4 bg-gray-200 rounded w-64" />
-                          </td>
-                          <td className="px-6 py-4">
-                            <div className="h-4 bg-gray-200 rounded w-12" />
-                          </td>
-                          <td className="px-6 py-4">
-                            <div className="h-8 bg-gray-200 rounded w-24" />
-                          </td>
-                        </tr>
-                      ))
-                    ) : pendencias.length === 0 ? (
-                      <tr>
-                        <td colSpan={3} className="px-6 py-12 text-center text-gray-500">
-                          Nenhuma pendência: todo exame que o BRNET pede tem pai no catálogo e
-                          já foi encontrado em algum documento.
-                        </td>
-                      </tr>
-                    ) : (
-                      pendencias.map((pendencia) => (
-                          <tr
-                            key={pendencia.name_normalized}
-                            // Só a cor sinaliza o nunca encontrado; sem pai se lê pelo
-                            // botão (Cadastrar × Ver variações).
-                            className={pendencia.never_found ? "bg-red-50 hover:bg-red-100" : "hover:bg-gray-50"}
-                            title={
-                              pendencia.never_found
-                                ? "A comparação nunca encontrou este exame em documento algum"
-                                : undefined
-                            }
-                          >
-                            <td className="px-6 py-4 text-sm font-medium">
-                              {pendencia.name}
-                              <div className="text-xs text-gray-400 font-normal mt-0.5">
-                                {pendencia.name_normalized}
-                              </div>
-                            </td>
-                            <td className="px-6 py-4 text-sm text-gray-600">
-                              {pendencia.documents.toLocaleString("pt-BR")}
-                            </td>
-                            <td className="px-6 py-4 text-sm">
-                              {pendencia.parent_id ? (
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => abrirPaiDaPendencia(pendencia)}
-                                >
-                                  Ver variações
-                                </Button>
-                              ) : (
-                                <Button size="sm" onClick={() => cadastrarPendencia(pendencia)}>
-                                  Cadastrar
-                                </Button>
+              <div className="bg-white rounded-lg shadow p-6">
+                <div className="mb-5 rounded-lg border border-blue-100 bg-blue-50 p-4 text-sm text-gray-700">
+                  <p className="font-medium text-gray-900 mb-1">Como funciona</p>
+                  <ol className="list-decimal pl-5 space-y-0.5">
+                    <li>O BRNET pede um exame num documento processado pelo ProntuAI.</li>
+                    <li>
+                      Se esse nome não está na{" "}
+                      <button
+                        type="button"
+                        className="underline font-medium"
+                        onClick={() => setAba("catalogo")}
+                      >
+                        Base de exames
+                      </button>
+                      , ele aparece aqui.
+                    </li>
+                    <li>
+                      Para cada exame da lista:
+                      <ul className="list-disc pl-5 mt-0.5 space-y-0.5">
+                        <li>
+                          Já existe na base com outro nome? Escolha o exame e clique em{" "}
+                          <span className="font-medium">Vincular como variação</span>.{" "}
+                          <span className="text-gray-500">
+                            Ex.: &quot;PSICOSSOCIAL&quot; é o mesmo que &quot;AVALIAÇÃO PSICOSSOCIAL&quot;.
+                          </span>
+                        </li>
+                        <li>
+                          Não existe na base? Clique em{" "}
+                          <span className="font-medium">Criar exame</span>.
+                        </li>
+                      </ul>
+                    </li>
+                  </ol>
+                  <p className="mt-1">
+                    Depois disso o ProntuAI passa a reconhecer o exame nos documentos.
+                  </p>
+                </div>
+
+                {carregandoPendencias ? (
+                  <ul className="space-y-4">
+                    {Array.from({ length: 4 }).map((_, i) => (
+                      <li key={i} className="border rounded-lg p-4 space-y-3 animate-pulse">
+                        <div className="h-4 bg-gray-200 rounded w-64" />
+                        <div className="h-8 bg-gray-200 rounded w-96" />
+                      </li>
+                    ))}
+                  </ul>
+                ) : pendencias.length === 0 ? (
+                  <p className="text-sm text-gray-500">
+                    Nenhuma pendência: todo exame que o BRNET pede tem pai no catálogo e
+                    já foi encontrado em algum documento.
+                  </p>
+                ) : (
+                  <ul className="space-y-4">
+                    {pendencias.map((pendencia) => {
+                      const chave = pendencia.name_normalized;
+                      const sugeridos = sugerirPais(pendencia.name, paisOrdenados);
+                      const idsSugeridos = new Set(sugeridos.map((pai) => pai.id));
+                      const demais = paisOrdenados.filter((pai) => !idsSugeridos.has(pai.id));
+                      return (
+                        <li
+                          key={chave}
+                          className={`border rounded-lg p-4 space-y-3 ${
+                            pendencia.never_found ? "bg-red-50 border-red-200" : ""
+                          }`}
+                        >
+                          <div>
+                            <div className="flex flex-wrap items-baseline gap-x-3">
+                              <span className="font-medium text-sm">{pendencia.name}</span>
+                              <span className="text-xs text-gray-500">
+                                pedido pelo BRNET em {pendencia.documents.toLocaleString("pt-BR")}{" "}
+                                documento{pendencia.documents === 1 ? "" : "s"}
+                                {pendencia.last_requested_at &&
+                                  ` · último em ${new Date(pendencia.last_requested_at).toLocaleDateString("pt-BR")}`}
+                              </span>
+                              {pendencia.never_found && (
+                                <span className="text-xs text-red-700">
+                                  nunca encontrado em documento
+                                </span>
                               )}
-                            </td>
-                          </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
+                            </div>
+                            {!pendencia.parent_id && sugeridos.length > 0 && (
+                              <div className="mt-1 flex flex-wrap gap-1">
+                                <span className="text-xs text-gray-500 mr-1">sugestões:</span>
+                                {sugeridos.map((pai) => (
+                                  <Badge key={pai.id} variant="outline" className="text-xs">
+                                    {pai.name}
+                                  </Badge>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+
+                          {pendencia.parent_id ? (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => abrirPaiDaPendencia(pendencia)}
+                            >
+                              Ver variações
+                            </Button>
+                          ) : (
+                            <div className="flex flex-wrap items-center gap-2">
+                              <Select
+                                value={escolhaPendencia[chave] || ""}
+                                onValueChange={(valor) =>
+                                  setEscolhaPendencia((atual) => ({ ...atual, [chave]: valor }))
+                                }
+                              >
+                                <SelectTrigger className="w-[340px]">
+                                  <SelectValue placeholder="Escolha o exame da base..." />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {sugeridos.length > 0 && (
+                                    <SelectGroup>
+                                      <SelectLabel>Sugeridos</SelectLabel>
+                                      {sugeridos.map((pai) => (
+                                        <SelectItem key={pai.id} value={pai.id}>
+                                          {pai.name}
+                                        </SelectItem>
+                                      ))}
+                                    </SelectGroup>
+                                  )}
+                                  {sugeridos.length > 0 && demais.length > 0 && <SelectSeparator />}
+                                  <SelectGroup>
+                                    <SelectLabel>Todos os exames</SelectLabel>
+                                    {demais.map((pai) => (
+                                      <SelectItem key={pai.id} value={pai.id}>
+                                        {pai.name}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectGroup>
+                                </SelectContent>
+                              </Select>
+                              <Button
+                                size="sm"
+                                onClick={() => vincularPendencia(pendencia)}
+                                disabled={vinculando === chave}
+                              >
+                                {vinculando === chave ? "Vinculando..." : "Vincular como variação"}
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => cadastrarPendencia(pendencia)}
+                              >
+                                Criar exame
+                              </Button>
+                            </div>
+                          )}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
               </div>
             ) : aba === "catalogo" ? (
               <>
@@ -1009,9 +1205,6 @@ export default function ExamesAdminPage() {
                           Exame pai
                         </th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                          Status
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                           Variações
                         </th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
@@ -1030,9 +1223,6 @@ export default function ExamesAdminPage() {
                               <div className="h-4 bg-gray-200 rounded w-48" />
                             </td>
                             <td className="px-6 py-4">
-                              <div className="h-6 bg-gray-200 rounded-full w-28" />
-                            </td>
-                            <td className="px-6 py-4">
                               <div className="h-4 bg-gray-200 rounded w-8" />
                             </td>
                             <td className="px-6 py-4">
@@ -1046,7 +1236,7 @@ export default function ExamesAdminPage() {
                       ) : parents.length === 0 ? (
                         <tr>
                           <td
-                            colSpan={5}
+                            colSpan={4}
                             className="px-6 py-12 text-center text-gray-500"
                           >
                             {/* Lista vazia quase sempre é filtro, não catálogo
@@ -1084,24 +1274,6 @@ export default function ExamesAdminPage() {
                                     externo
                                   </Badge>
                                 )}
-                              </td>
-                              <td className="px-6 py-4">
-                                <span
-                                  className={`px-2 py-1 text-xs rounded-full ${
-                                    parent.status === "ativo"
-                                      ? "bg-green-100 text-green-800"
-                                      : "bg-amber-100 text-amber-800"
-                                  }`}
-                                  title={
-                                    parent.status === "ativo"
-                                      ? "Nome confirmado no BRNET: vale como canônico"
-                                      : "Herdado do CSV sem correspondência no BRNET: serve só como vocabulário"
-                                  }
-                                >
-                                  {parent.status === "ativo"
-                                    ? "Confirmado no BRNET"
-                                    : "Não encontrado"}
-                                </span>
                               </td>
                               <td className="px-6 py-4 text-sm text-gray-600">
                                 {parent.variation_count}
@@ -1144,7 +1316,7 @@ export default function ExamesAdminPage() {
 
                             {expandido === parent.id && (
                               <tr className="bg-gray-50">
-                                <td colSpan={5} className="px-6 py-4">
+                                <td colSpan={4} className="px-6 py-4">
                                   {!detalhe ? (
                                     <p className="text-sm text-gray-500">
                                       Carregando variações...
@@ -1381,25 +1553,6 @@ export default function ExamesAdminPage() {
                 {formNome.trim() && problemaNoNome(formNome) && (
                   <p className="mt-1 text-xs text-red-600">{problemaNoNome(formNome)}</p>
                 )}
-              </div>
-
-              <div>
-                <Label htmlFor="status">Status</Label>
-                <Select
-                  value={formStatus}
-                  onValueChange={(v) => setFormStatus(v as typeof formStatus)}
-                >
-                  <SelectTrigger id="status">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="ativo">Confirmado no BRNET</SelectItem>
-                    <SelectItem value="quarentena">Não encontrado</SelectItem>
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-gray-500 mt-1">
-                  Só exame confirmado no BRNET vale como canônico na comparação.
-                </p>
               </div>
 
               <div className="flex items-center gap-2">
