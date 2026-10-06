@@ -12,7 +12,7 @@ import json
 import logging
 from typing import List, Optional
 from datetime import datetime, timezone
-from sqlalchemy import create_engine, text, func, or_, and_, case
+from sqlalchemy import String, cast, create_engine, text, func, or_, and_, case
 from sqlalchemy.orm import sessionmaker, Session, defer
 from app.models.user import User, UserCreate, UserUpdate, UserRole, GLOBAL_READ_ROLES
 from app.models.clinic import Clinic, ClinicCreate, ClinicUpdate
@@ -768,8 +768,11 @@ class PostgresUserDatabase:
             role=model.role,
             is_active=model.is_active,
             clinic_id=model.clinic_id,
-            created_at=model.created_at.isoformat(),
-            updated_at=model.updated_at.isoformat()
+            # `User` aceita os dois como None. Chamar .isoformat() sem checar
+            # transformava uma linha com timestamp nulo em 500 — e, na listagem,
+            # derrubava a tela de administração inteira por causa dela.
+            created_at=model.created_at.isoformat() if model.created_at else None,
+            updated_at=model.updated_at.isoformat() if model.updated_at else None,
         )
 
     def get_user_by_email(self, email: str) -> Optional[User]:
@@ -811,14 +814,73 @@ class PostgresUserDatabase:
             session.close()
 
     def list_users(self, include_inactive: bool = False) -> List[User]:
-        """Lista usuários com filtragem opcional."""
+        """Lista usuários com filtragem opcional.
+
+        Uma linha inconsistente **não** derruba a lista. Antes derrubava: a tela
+        de administração inteira respondia 500 por causa de um registro, sem dizer
+        qual, e como a listagem é o que confirma a criação de usuário, parecia que
+        criar usuário estava quebrado (o POST respondia 201 normalmente).
+
+        Por isso a consulta traz `role` como TEXTO, e não pelo enum do ORM: o
+        enum do Postgres foi criado pelo `create_all` e nunca foi migrado, então
+        pode conter valor que o `UserRole` de hoje não tem. Nesse caso o próprio
+        `query.all()` estourava, antes de qualquer conversão — proteger só a
+        conversão não bastaria.
+
+        Linha que não converte sai do resultado e vai para o log com o id, que é
+        o que permite achar e corrigir o registro.
+        """
         session = self._get_session()
         try:
-            query = session.query(UserModel)
+            query = session.query(
+                UserModel.id,
+                UserModel.email,
+                UserModel.name,
+                cast(UserModel.role, String).label("role"),
+                UserModel.is_active,
+                UserModel.clinic_id,
+                UserModel.created_at,
+                UserModel.updated_at,
+            )
             if not include_inactive:
                 query = query.filter(UserModel.is_active == True)
-            models = query.all()
-            return [self._model_to_user(m) for m in models]
+
+            usuarios: List[User] = []
+            invalidas: List[str] = []
+            for linha in query.all():
+                try:
+                    usuarios.append(User(
+                        id=linha.id,
+                        email=linha.email,
+                        name=linha.name,
+                        role=linha.role,
+                        is_active=linha.is_active,
+                        clinic_id=linha.clinic_id,
+                        created_at=linha.created_at.isoformat() if linha.created_at else None,
+                        updated_at=linha.updated_at.isoformat() if linha.updated_at else None,
+                    ))
+                except Exception as exc:  # noqa: BLE001 - uma linha não pode matar a lista
+                    # Só o tipo do erro e o CAMPO que falhou. A mensagem do
+                    # Pydantic embute o valor rejeitado, e email e nome são PII
+                    # (ver app/core/pii.py). O id basta para achar o registro.
+                    motivo = type(exc).__name__
+                    erros = getattr(exc, "errors", None)
+                    if callable(erros):
+                        try:
+                            campos = sorted({str(e.get("loc", ("?",))[0]) for e in erros()})
+                            motivo = f"{motivo} em {', '.join(campos)}"
+                        except Exception:  # noqa: BLE001 - log não pode falhar
+                            pass
+                    invalidas.append(f"{linha.id} ({motivo})")
+
+            if invalidas:
+                # Sem PII: só id e o motivo. Email e nome ficam de fora de propósito.
+                logger.error(
+                    "[USERS] %s de %s registros não puderam ser lidos e ficaram fora da "
+                    "listagem: %s",
+                    len(invalidas), len(invalidas) + len(usuarios), "; ".join(invalidas[:10]),
+                )
+            return usuarios
         finally:
             session.close()
 
@@ -924,8 +986,11 @@ class PostgresUserDatabase:
             city=model.city,
             state=model.state,
             is_active=model.is_active,
-            created_at=model.created_at.isoformat(),
-            updated_at=model.updated_at.isoformat()
+            # `User` aceita os dois como None. Chamar .isoformat() sem checar
+            # transformava uma linha com timestamp nulo em 500 — e, na listagem,
+            # derrubava a tela de administração inteira por causa dela.
+            created_at=model.created_at.isoformat() if model.created_at else None,
+            updated_at=model.updated_at.isoformat() if model.updated_at else None,
         )
 
     def get_clinic_by_id(self, clinic_id: str) -> Optional[Clinic]:
@@ -2336,7 +2401,7 @@ class PostgresUserDatabase:
         try:
             bruto = session.execute(
                 text(
-                    "SELECT btrim(e), count(*), count(DISTINCT d.id) "
+                    "SELECT btrim(e), count(*), count(DISTINCT d.id), max(d.created_at) "
                     "FROM documents d, unnest(d.exams_brnet) e "
                     "WHERE d.exams_brnet IS NOT NULL AND btrim(e) <> '' "
                     "GROUP BY 1"
@@ -2344,16 +2409,18 @@ class PostgresUserDatabase:
             ).all()
 
             agregado: dict[str, dict] = {}
-            for nome, pedidos, docs in bruto:
+            for nome, pedidos, docs, ultimo in bruto:
                 chave = normalizar_termo(nome)
                 if not chave:
                     continue
                 # Nomes distintos podem colapsar na mesma chave (acento, sigla).
                 item = agregado.setdefault(
-                    chave, {"name": nome, "requests": 0, "documents": 0}
+                    chave, {"name": nome, "requests": 0, "documents": 0, "last": None}
                 )
                 item["requests"] += int(pedidos or 0)
                 item["documents"] += int(docs or 0)
+                if ultimo and (item["last"] is None or ultimo > item["last"]):
+                    item["last"] = ultimo
 
             ja_encontrados = set()
             for (nome,) in session.execute(text(self._SQL_EXAMES_JA_ENCONTRADOS)):
@@ -2367,6 +2434,18 @@ class PostgresUserDatabase:
                     ExamParentModel.id, ExamParentModel.name_normalized
                 ).filter(ExamParentModel.is_active.is_(True))
             }
+            # Nome do BRNET coberto por variação já está no catálogo: o motor o
+            # reconhece pelo grupo do pai. Sem isto, vincular uma pendência como
+            # variação não a tirava da lista, e "Cadastrar" falhava por colisão.
+            for pid, chave in (
+                session.query(ExamVariationModel.parent_id, ExamVariationModel.name_normalized)
+                .join(ExamParentModel, ExamParentModel.id == ExamVariationModel.parent_id)
+                .filter(
+                    ExamVariationModel.is_active.is_(True),
+                    ExamParentModel.is_active.is_(True),
+                )
+            ):
+                pai_por_chave.setdefault(chave, pid)
 
             pendencias = []
             for chave, item in agregado.items():
@@ -2382,6 +2461,7 @@ class PostgresUserDatabase:
                         requests=item["requests"],
                         never_found=nunca,
                         parent_id=parent_id,
+                        last_requested_at=item["last"],
                     )
                 )
             pendencias.sort(

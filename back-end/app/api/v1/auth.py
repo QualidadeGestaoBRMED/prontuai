@@ -2,7 +2,7 @@
 Endpoints de autenticação e autorização.
 """
 from fastapi import APIRouter, HTTPException, Request, status, Depends
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 from google.auth.transport import requests as google_requests
 from google.oauth2 import id_token as google_id_token
 from app.core.auth import (
@@ -107,6 +107,48 @@ class RefreshResponse(BaseModel):
     access_token: str
     refresh_token: str
     token_type: str = "bearer"
+
+
+class SessionLostRequest(BaseModel):
+    """Aviso do front de que uma sessão morreu antes de chegar até aqui.
+
+    Chega sem autenticação — por definição a sessão que ele relata já não
+    existe —, então nada neste corpo é confiável. Ver `session_lost`.
+    """
+    motivo: Optional[str] = None
+    email: Optional[str] = Field(default=None, max_length=320)
+    sessao_iniciada_em: Optional[int] = None
+    url: Optional[str] = Field(default=None, max_length=200)
+
+
+# Motivos aceitos em /session-lost. Qualquer outro vira `desconhecido`: a rota
+# é anônima e o campo não pode virar texto livre dentro da trilha.
+_MOTIVOS_DE_SESSAO_PERDIDA = frozenset({
+    "cookie_ausente",
+    "cookie_sem_refresh",
+    "refresh_failed",
+    "refresh_error",
+    "retry_ainda_401",
+})
+
+# Teto para a duração relatada: descarta relógio de cliente adiantado ou
+# atrasado em vez de gravar uma sessão de meses na trilha.
+_DURACAO_MAXIMA_DE_SESSAO_S = 60 * 60 * 24 * 90
+
+
+def _email_plausivel(valor: Optional[str]) -> Optional[str]:
+    """Descarta o que não tem forma de e-mail antes de entrar na trilha.
+
+    O valor vem de um cliente anônimo e vai parar em `user_email`: melhor
+    perder o dado do que indexar lixo junto com os e-mails verificados.
+    """
+    if not valor:
+        return None
+    candidato = valor.strip()
+    local, arroba, dominio = candidato.partition("@")
+    if not arroba or not local or "." not in dominio or any(c.isspace() for c in candidato):
+        return None
+    return candidato
 
 
 @router.post("/google", response_model=TokenResponse)
@@ -450,6 +492,41 @@ async def logout(body: RefreshRequest, request: Request):
         sessoes_revogadas=revoked,
     )
     return {"success": True}
+
+
+@router.post("/session-lost", status_code=status.HTTP_204_NO_CONTENT)
+async def session_lost(body: SessionLostRequest, request: Request):
+    """Registra uma sessão que morreu no cliente, sem passar por `/refresh`.
+
+    Quando o cookie do NextAuth vence, o navegador para de enviá-lo e a rota
+    `/api/auth/refresh-token` do front responde 401 sem nos chamar: o usuário lê
+    "Sessão expirada" e não sobra linha nenhuma aqui. Era o único desfecho de
+    autenticação invisível — todos os outros já saem por `_trilha`.
+
+    Nada é verificado. A rota é anônima (a sessão que ela relata acabou), então
+    o e-mail entra marcado como não verificado e o motivo é restrito a uma lista
+    fechada. Serve para investigar, nunca para decidir. O rate limit do escopo
+    `auth` já cobre a rota por ela ser `/v1/auth/*`.
+    """
+    motivo = body.motivo if body.motivo in _MOTIVOS_DE_SESSAO_PERDIDA else "desconhecido"
+
+    # A duração é calculada aqui, não aceita pronta do cliente.
+    duracao = None
+    if body.sessao_iniciada_em:
+        decorrido = datetime.utcnow().timestamp() - body.sessao_iniciada_em
+        if 0 <= decorrido <= _DURACAO_MAXIMA_DE_SESSAO_S:
+            duracao = round(decorrido)
+
+    _trilha(
+        request,
+        "auth.session.lost",
+        motivo=motivo,
+        email=_email_plausivel(body.email),
+        email_verificado=False,
+        url=body.url,
+        duracao_da_sessao_s=duracao,
+    )
+    return None
 
 
 @router.get("/me", response_model=User)

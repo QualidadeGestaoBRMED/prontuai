@@ -35,7 +35,12 @@ function HistoricoContent() {
     loading: clinicOptionsLoading,
     enabled: canFilterByClinic,
   } = useClinicOptions()
-  const dbResults = documents.map(documentToProcessResult)
+  // Precisa ser memoizado: sem isso o array nasce novo a cada render, o `useMemo`
+  // abaixo recalcula sempre, e o efeito do `viewId` — que depende dele — dispara
+  // em todo render. Como `setSelectedResult` recebia um objeto novo toda vez, o
+  // React não conseguia descartar a atualização e a página entrava em loop
+  // infinito (React #185). É o mesmo cuidado que `pendentes/page.tsx` já tinha.
+  const dbResults = useMemo(() => documents.map(documentToProcessResult), [documents])
   const sortedResults = useMemo(() => {
     const baseResults = hasLoaded ? dbResults : (loading ? [] : processResults)
     const list = [...baseResults]
@@ -53,13 +58,13 @@ function HistoricoContent() {
   // Auto-abre modal se viewId for fornecido na URL
   useEffect(() => {
     const viewId = searchParams.get('viewId')
-    if (viewId && sortedResults.length > 0) {
-      const result = sortedResults.find(r => r.id === viewId)
-      if (result) {
-        setSelectedResult(result)
-        setDetailsModalOpen(true)
-      }
-    }
+    if (!viewId || sortedResults.length === 0) return
+    const result = sortedResults.find(r => r.id === viewId)
+    if (!result) return
+    // Segunda trava, independente da memoização acima: reatribuir o mesmo
+    // documento vira no-op e o React interrompe a cadeia de re-render sozinho.
+    setSelectedResult(prev => (prev?.id === result.id ? prev : result))
+    setDetailsModalOpen(true)
   }, [searchParams, sortedResults])
 
   const handleDownloadPDF = useCallback(async (result: ProcessResult) => {

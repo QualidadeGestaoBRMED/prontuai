@@ -149,6 +149,9 @@ class ExamPendency(BaseModel):
     never_found: bool = False
     # Pai ativo com o mesmo nome normalizado; None = sem pai no catálogo.
     parent_id: Optional[str] = None
+    # Documento mais recente em que o BRNET pediu o exame: mostra ao curador de
+    # onde a pendência vem e se ela ainda é atual.
+    last_requested_at: Optional[datetime] = None
 
 
 class ExamCatalogStats(BaseModel):
