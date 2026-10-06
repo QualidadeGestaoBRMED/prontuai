@@ -51,6 +51,8 @@ export const API_ENDPOINTS = {
   DOCUMENTS: `${API_PROXY_BASE}/v1/documents`,
   DOCUMENTS_PAGED: `${API_PROXY_BASE}/v1/documents/paged`,
   DOCUMENT_VIEW: (id: string) => `${API_PROXY_BASE}/v1/documents/${id}/view`,
+  // Parecer do revisor sobre o acerto da IA (GET devolve null se nunca avaliado).
+  DOCUMENT_FEEDBACK: (id: string) => `${API_PROXY_BASE}/v1/documents/${id}/feedback`,
 
   // Notifications
   NOTIFICATIONS: `${API_PROXY_BASE}/v1/notifications`,

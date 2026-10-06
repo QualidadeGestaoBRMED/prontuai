@@ -111,7 +111,6 @@ export function CentroAjudaDialog() {
           </p>
           <ul className="list-none space-y-1 mt-2 text-sm">
             <li><strong>Email:</strong> suporte@grupobrmed.com.br</li>
-            <li><strong>Telefone:</strong> (85) 3000-0000</li>
             <li><strong>Horário:</strong> Segunda a Sexta, 8h às 18h</li>
           </ul>
         </>

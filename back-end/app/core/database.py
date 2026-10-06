@@ -14,6 +14,7 @@ from typing import List, Optional, Protocol
 from app.models.audit_log import AuditLog, AuditLogCreate
 from app.models.clinic import Clinic, ClinicCreate, ClinicUpdate
 from app.models.document import Document
+from app.models.feedback import DocumentFeedback
 from app.models.notification import Notification, NotificationCreate
 from app.models.user import User, UserRole, UserUpdate
 
@@ -56,6 +57,18 @@ class UserDatabaseProtocol(Protocol):
     def clear_notifications(
         self, clinic_id: Optional[str] = None, user_id: Optional[str] = None
     ) -> int: ...
+    def get_document_feedback(self, document_id: str) -> Optional[DocumentFeedback]: ...
+    def upsert_document_feedback(
+        self,
+        document_id: str,
+        status: str,
+        issue_categories: List[str],
+        issue_items: List[dict],
+        document_issues: List[str],
+        notes: Optional[str],
+        reviewed_by_id: Optional[str] = None,
+        reviewed_by_email: Optional[str] = None,
+    ) -> DocumentFeedback: ...
     def create_audit_log(self, data: AuditLogCreate) -> AuditLog: ...
     def list_audit_logs(
         self,

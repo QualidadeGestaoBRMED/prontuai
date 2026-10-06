@@ -9,9 +9,14 @@ import { useState } from "react";
 
 import type {
   BarraPercentual,
+  CardPrevistos,
+  CardProjecao,
+  ComparacaoPrevistos,
   GraficoPrazo,
   Kpi,
-  LinhaSemProntuai,
+  LinhaAdesao,
+  LinhaOportunidade,
+  LinhaPrevista,
   VisaoDashboard,
 } from "./metricas";
 import styles from "./dashboard.module.css";
@@ -21,22 +26,678 @@ const TITULO = "text-[16.5px] font-semibold text-[#193B4F]";
 const SUB = "mt-[5px] text-[13px] text-[#767A7B]";
 const CABECALHO_TABELA =
   "text-[11.5px] font-medium uppercase tracking-[0.06em] text-[#767A7B]";
-const COLUNAS_SEM_PRONTUAI = "grid-cols-[2fr_1.3fr_0.9fr_1.3fr]";
+
+/**
+ * Ordenação e busca das tabelas de previsão. As duas (adesão e prioridade de
+ * inclusão) ordenam por qualquer coluna, então a mecânica mora aqui uma vez só.
+ *
+ * `null` desce sempre para o fim, nas duas direções: adesão não medida não é
+ * "pior que 0%" nem "melhor que 100%", é ausência de dado, e deixá-la flutuar
+ * com o sinal da ordenação faria a primeira linha da tabela mentir.
+ */
+type Dir = "asc" | "desc";
+interface Ordem {
+  col: string;
+  dir: Dir;
+}
+
+const semAcento = (v: string) =>
+  v.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+
+function ordenar<T>(linhas: T[], ordem: Ordem, valor: (l: T, col: string) => number | string | null) {
+  const sinal = ordem.dir === "asc" ? 1 : -1;
+  return [...linhas].sort((a, b) => {
+    const x = valor(a, ordem.col);
+    const y = valor(b, ordem.col);
+    if (x === null || x === "") return y === null || y === "" ? 0 : 1;
+    if (y === null || y === "") return -1;
+    if (typeof x === "string" || typeof y === "string") {
+      return sinal * String(x).localeCompare(String(y), "pt-BR");
+    }
+    return sinal * (x - y);
+  });
+}
+
+/** Cabeçalho clicável. O padrão de cada coluna é o que menos surpreende: texto sobe, número desce. */
+function Th({
+  label,
+  col,
+  ordem,
+  onOrdenar,
+  numerica,
+}: {
+  label: string;
+  col: string;
+  ordem: Ordem;
+  onOrdenar: (col: string, padrao: Dir) => void;
+  numerica?: boolean;
+}) {
+  const ativa = ordem.col === col;
+  return (
+    <button
+      type="button"
+      onClick={() => onOrdenar(col, numerica ? "desc" : "asc")}
+      aria-label={`Ordenar por ${label}`}
+      className={`${CABECALHO_TABELA} flex items-center gap-1 text-left transition-colors hover:text-[#193B4F] ${
+        ativa ? "text-[#193B4F]" : ""
+      }`}
+    >
+      {label}
+      <span aria-hidden="true" className={`text-[8px] leading-none ${ativa ? "opacity-70" : "opacity-0"}`}>
+        {ativa && ordem.dir === "asc" ? "▲" : "▼"}
+      </span>
+    </button>
+  );
+}
+
+function CampoBusca({
+  valor,
+  onChange,
+  placeholder,
+}: {
+  valor: string;
+  onChange: (v: string) => void;
+  placeholder: string;
+}) {
+  return (
+    <input
+      type="search"
+      value={valor}
+      onChange={(e) => onChange(e.target.value)}
+      placeholder={placeholder}
+      className="h-[34px] w-[210px] rounded-[9px] border border-[#DFE0E2] bg-white px-3 text-[13px] text-[#193B4F] outline-none placeholder:text-[#9AA3A8] focus:border-[#7EBFCC]"
+    />
+  );
+}
+
+/** Estado de ordenação com o toque de inverter ao reclicar a mesma coluna. */
+function useOrdem(inicial: Ordem) {
+  const [ordem, setOrdem] = useState<Ordem>(inicial);
+  const ordenarPor = (col: string, padrao: Dir) =>
+    setOrdem((o) => (o.col === col ? { col, dir: o.dir === "asc" ? "desc" : "asc" } : { col, dir: padrao }));
+  return { ordem, ordenarPor };
+}
+
+const COLUNAS_ADESAO = "grid-cols-[1.9fr_1.1fr_0.85fr_0.95fr_1.15fr_1fr_1.05fr]";
+
+/**
+ * 1.3 — futuro e histórico lado a lado, sem se misturarem. Previstos vêm da
+ * janela para frente; realizados e adesão, do filtro de período da tela. As
+ * duas colunas convivem na linha mas nunca se dividem uma pela outra: a adesão
+ * é realizado ÷ realizado.
+ */
+function TabelaAdesao({ linhas, janela, periodo }: { linhas: LinhaAdesao[]; janela: string; periodo: string }) {
+  const { ordem, ordenarPor } = useOrdem({ col: "previstos", dir: "desc" });
+  const [busca, setBusca] = useState("");
+
+  const termo = semAcento(busca.trim());
+  const filtradas = termo
+    ? linhas.filter((l) => semAcento(l.clinica).includes(termo) || semAcento(l.local).includes(termo))
+    : linhas;
+  const visiveis = ordenar(filtradas, ordem, (l, col) =>
+    col === "clinica" ? l.clinica
+    : col === "local" ? l.local
+    : col === "previstos" ? l.previstos
+    : col === "realizados" ? l.realizados
+    : col === "realizadosProntuai" ? l.realizadosProntuai
+    : col === "adesao" ? l.adesao
+    : l.proximaISO,
+  );
+
+  return (
+    <div className={`${CARTAO} px-[22px] pt-5 pb-2`}>
+      <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
+        <div>
+          <div className={TITULO}>Adesão por clínica habilitada</div>
+          <div className={SUB}>
+            Previstos: {janela} · realizados e adesão: {periodo} · adesão = realizados via ProntuAI ÷ realizados
+          </div>
+        </div>
+        <CampoBusca valor={busca} onChange={setBusca} placeholder="Buscar clínica ou cidade" />
+      </div>
+
+      {/* Rola em vez de esticar: são dezenas de clínicas habilitadas e a tabela
+          empurrava os blocos seguintes para fora da tela. Mesma altura e mesmo
+          cabeçalho fixo da tabela de prioridade de inclusão, para as duas
+          listas longas do painel se comportarem igual. */}
+      <div className="mt-4 max-h-[460px] overflow-auto">
+        <div className="min-w-[860px]">
+          <div
+            className={`sticky top-0 z-10 grid ${COLUNAS_ADESAO} gap-x-[18px] border-b border-[#DFE0E2] bg-white px-1 pb-2.5`}
+          >
+            <Th label="Clínica" col="clinica" ordem={ordem} onOrdenar={ordenarPor} />
+            <Th label="Cidade" col="local" ordem={ordem} onOrdenar={ordenarPor} />
+            <Th label="Previstos" col="previstos" ordem={ordem} onOrdenar={ordenarPor} numerica />
+            <Th label="Realizados" col="realizados" ordem={ordem} onOrdenar={ordenarPor} numerica />
+            <Th label="Via ProntuAI" col="realizadosProntuai" ordem={ordem} onOrdenar={ordenarPor} numerica />
+            <Th label="Adesão" col="adesao" ordem={ordem} onOrdenar={ordenarPor} numerica />
+            <Th label="Próxima previsão" col="proximaISO" ordem={ordem} onOrdenar={ordenarPor} numerica />
+          </div>
+
+          {visiveis.map((l) => (
+            <div
+              key={l.clinica}
+              className={`${styles.linhaTip} grid ${COLUNAS_ADESAO} items-center gap-x-[18px] border-b border-[#F3F3F3] px-1 py-3 text-[13.5px] text-[#193B4F]`}
+            >
+              <span className={`${styles.tip} ${styles.tipNome} min-w-0`} data-tip={l.tip}>
+                <span className="block truncate">{l.clinica}</span>
+              </span>
+              <div className="min-w-0 truncate text-[#767A7B]">{l.local}</div>
+              {/* Previsto é futuro: fica cinza para não se confundir com realizado.
+                  Zero é zero em todas estas colunas — medimos e deu zero. O traço
+                  é exclusivo da adesão, onde significa "não houve o que medir". */}
+              <div className={l.previstos ? "tabular-nums text-[#5F6B72]" : "tabular-nums text-[#BFC3C6]"}>
+                {l.previstos}
+              </div>
+              <div className="tabular-nums">{l.realizados}</div>
+              <div className={l.realizadosProntuai ? "tabular-nums" : "tabular-nums text-[#BFC3C6]"}>
+                {l.realizadosProntuai}
+              </div>
+              <div className="font-medium tabular-nums" style={{ color: l.adesaoColor }}>
+                {l.adesaoLabel}
+              </div>
+              <div className="tabular-nums text-[#767A7B]">{l.proxima}</div>
+            </div>
+          ))}
+
+          {!visiveis.length && (
+            <div className="px-1 py-6 text-[13px] text-[#767A7B]">Nenhuma clínica para “{busca}”.</div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * 1.4 — projeção. `base` é a soma linha a linha de previstos × adesão da tabela
+ * acima; a média ponderada é base ÷ previstos dessas mesmas linhas. Previsto e
+ * realizado não se somam em lugar nenhum: o que atravessa é a adesão, que é
+ * uma razão entre realizados.
+ */
+function CartaoProjecao({ card }: { card: CardProjecao }) {
+  return (
+    <div className={`${CARTAO} px-[22px] pt-5 pb-[22px]`}>
+      <div className={TITULO}>Projeção dos previstos via ProntuAI</div>
+      <div className={SUB}>
+        {card.janela} · clínicas habilitadas · adesão medida sobre os realizados do período
+      </div>
+
+      <div className="mt-[18px] grid grid-cols-1 gap-4 sm:grid-cols-3">
+        {[
+          {
+            rotulo: "Previstos",
+            valor: card.somaPrevistosLabel,
+            sub: "soma das habilitadas",
+            tip: "Pedidos com previsão de liberação na janela, nas clínicas com cadastro habilitado.",
+          },
+          {
+            rotulo: "Base estimada",
+            valor: card.baseLabel,
+            sub: "Σ previstos × adesão, por clínica",
+            tip: "Soma linha a linha da tabela de adesão: previstos da clínica multiplicados pela adesão dela.",
+          },
+          {
+            rotulo: "Adesão média ponderada",
+            valor: card.adesaoPonderadaLabel,
+            sub: "base ÷ previstos com adesão medida",
+            tip: "Média das adesões pesada pelos previstos de cada clínica. Clínicas sem adesão medida ficam fora dos dois lados da conta.",
+          },
+        ].map((x) => (
+          <div key={x.rotulo} className={`${styles.tip} ${styles.tipBaixo} flex flex-col gap-1.5`} data-tip={x.tip}>
+            <div className="text-[13px] text-[#767A7B]">{x.rotulo}</div>
+            <div className="text-[26px] font-medium leading-none tracking-[-0.025em] text-[#193B4F] tabular-nums">
+              {x.valor}
+            </div>
+            <div className="text-[12.5px] text-[#767A7B]">{x.sub}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* A premissa aparece na tela, não só no código: é pendência declarada no
+          backlog e quem lê o número precisa saber o que ficou de fora dele. */}
+      <div className="mt-[18px] rounded-[10px] bg-[#F3F3F3] px-3.5 py-3 text-[12.5px] leading-[1.5] text-[#767A7B]">
+        {card.clinicasSemAdesao ? (
+          <>
+            <span className="font-medium text-[#A05E1E]">Premissa a confirmar:</span>{" "}
+            {card.clinicasSemAdesao} clínica{card.clinicasSemAdesao > 1 ? "s" : ""} sem realizados no período,
+            somando {card.previstosSemAdesaoLabel} previstos, ficam fora da base e da média — a adesão delas é
+            nula, não zero. Incluí-las como zero afirmaria algo que não foi medido.
+          </>
+        ) : (
+          "Todas as clínicas habilitadas têm realizados no período; nenhuma ficou fora da base."
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * 2.1 — dentro × fora, só em previstos. A cobertura prevista é a única ponte
+ * com o realizado, e vem pronta da base da 1.4: previsto × adesão, nunca uma
+ * soma ou divisão entre as duas grandezas.
+ */
+function CartaoComparacao({ c }: { c: ComparacaoPrevistos }) {
+  const [abrirUf, setAbrirUf] = useState(false);
+  return (
+    <div className={`${CARTAO} px-[22px] pt-5 pb-[18px]`}>
+      <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
+        <div>
+          <div className={TITULO}>Previsto dentro × fora do ProntuAI</div>
+          <div className={SUB}>{c.janela} · só pedidos previstos · {c.totalLabel} no total</div>
+        </div>
+        <div className="text-right">
+          <div className={`${styles.tip} ${styles.tipBaixo} text-[26px] font-medium leading-none tracking-[-0.025em] text-[#00AFAA] tabular-nums`}
+               data-tip="Base da projeção (1.4) dividida por TODOS os previstos, dentro e fora. Estima quanto do futuro deve passar pela plataforma.">
+            {c.coberturaLabel}
+          </div>
+          <div className="mt-1.5 text-[12.5px] text-[#767A7B]">cobertura prevista</div>
+        </div>
+      </div>
+
+      <div className="mt-[18px] flex h-[10px] w-full overflow-hidden rounded-[5px] bg-[#F3F3F3]">
+        <div style={{ width: `${c.pctDentro}%`, background: "#007891" }} />
+        <div style={{ width: `${c.pctFora}%`, background: "#CC851E" }} />
+      </div>
+
+      <div className="mt-[18px] grid grid-cols-1 gap-4 sm:grid-cols-2">
+        {[
+          { rotulo: "Dentro — cadastro habilitado", v: c.dentroLabel, p: c.pctDentro, cor: "#007891" },
+          { rotulo: "Fora do ProntuAI", v: c.foraLabel, p: c.pctFora, cor: "#CC851E" },
+        ].map((x) => (
+          <div key={x.rotulo} className="flex flex-col gap-1.5">
+            <div className="flex items-center gap-2">
+              <div className="size-2.5 flex-none rounded-[2px]" style={{ background: x.cor }} />
+              <div className="text-[13px] text-[#767A7B]">{x.rotulo}</div>
+            </div>
+            <div className="text-[22px] font-medium leading-none text-[#193B4F] tabular-nums">{x.v}</div>
+            <div className="text-[12.5px] text-[#767A7B]">
+              {x.p.toFixed(1).replace(".", ",")}% do total previsto
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {c.porUf.length > 0 && (
+        <>
+          <button
+            type="button"
+            onClick={() => setAbrirUf((v) => !v)}
+            aria-expanded={abrirUf}
+            className="mt-[18px] text-[12.5px] text-[#007891]"
+          >
+            {abrirUf ? "← Fechar abertura por UF" : `Abrir por UF (${c.porUf.length}) →`}
+          </button>
+          {abrirUf && (
+            <div className="mt-3 overflow-x-auto">
+              <div className="min-w-[620px]">
+                <div className={`${CABECALHO_TABELA} grid grid-cols-[0.6fr_1fr_1fr_1fr_1.4fr] gap-x-[18px] border-b border-[#DFE0E2] px-1 pb-2.5`}>
+                  <div>UF</div><div>Dentro</div><div>Fora</div><div>Total</div><div>% dentro</div>
+                </div>
+                {c.porUf.map((l) => (
+                  <div key={l.uf}
+                       className={`${styles.tip} grid grid-cols-[0.6fr_1fr_1fr_1fr_1.4fr] items-center gap-x-[18px] border-b border-[#F3F3F3] px-1 py-2.5 text-[13.5px] text-[#193B4F]`}
+                       data-tip={l.tip}>
+                    <div className="font-medium">{l.uf}</div>
+                    <div className="tabular-nums">{l.dentro}</div>
+                    <div className="tabular-nums">{l.fora}</div>
+                    <div className="tabular-nums text-[#767A7B]">{l.total}</div>
+                    <div className="flex items-center gap-2.5">
+                      <div className="h-1.5 flex-1 overflow-hidden rounded-[3px] bg-[#F3F3F3]">
+                        <div className="h-full rounded-[3px]" style={{ width: `${l.pctDentro}%`, background: "#007891" }} />
+                      </div>
+                      <div className="w-[46px] text-right tabular-nums">
+                        {l.pctDentro.toFixed(1).replace(".", ",")}%
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+/**
+ * 2.4 — oportunidade de elevar a adesão de quem já está dentro, para comparar
+ * com o esforço de incluir clínica nova. `previstos × (1 − adesão)`.
+ *
+ * Clínica sem realizados no período entra com os previstos inteiros e fica
+ * marcada: é a única forma de a soma fechar com `previstos habilitadas − base`,
+ * porque a base (1.4) também a deixa de fora. Ali o número é teto, não medida.
+ */
+function TabelaOportunidades({ linhas, periodo }: { linhas: LinhaOportunidade[]; periodo: string }) {
+  const [verTodas, setVerTodas] = useState(false);
+  const visiveis = verTodas ? linhas : linhas.slice(0, 8);
+  // Soma os valores EXATOS e arredonda uma vez só, no fim: é o que mantém a
+  // igualdade com "previstos das habilitadas − base" do critério de aceite.
+  const total = Math.round(linhas.reduce((a, l) => a + l.oportunidade, 0));
+  const semMedida = linhas.filter((l) => l.semMedida).length;
+  return (
+    <div className={`${CARTAO} px-[22px] pt-5 pb-[18px]`}>
+      <div className={TITULO}>Oportunidade nas clínicas já habilitadas</div>
+      <div className={SUB}>
+        Previstos × (1 − adesão) · adesão medida em {periodo} · {total.toLocaleString("pt-BR")} pedidos
+        previstos que hoje não devem passar pela plataforma
+      </div>
+      <div className="mt-[18px] flex flex-col gap-[13px]">
+        {visiveis.map((l) => (
+          <div key={l.clinica} className={`${styles.tip} flex flex-col gap-1.5`} data-tip={l.tip}>
+            <div className="flex items-baseline justify-between gap-2.5">
+              <div className="min-w-0 truncate text-[13.5px] text-[#193B4F]">
+                {l.clinica}
+                <span className="ml-2 text-[12px] text-[#9AA3A8]">{l.local}</span>
+              </div>
+              <div className="flex shrink-0 items-baseline gap-[9px]">
+                <div className="text-[13.5px] font-medium tabular-nums text-[#193B4F]">{l.oportunidadeLabel}</div>
+                <div className="w-[52px] text-right text-xs tabular-nums text-[#767A7B]">
+                  {l.semMedida ? "teto" : l.adesaoLabel}
+                </div>
+              </div>
+            </div>
+            <div className="h-[7px] overflow-hidden rounded-[4px] bg-[#F3F3F3]">
+              <div className="h-full rounded-[4px]"
+                   style={{ width: `${l.pct}%`, background: l.semMedida ? "#BFC3C6" : "#CC851E" }} />
+            </div>
+          </div>
+        ))}
+      </div>
+      {linhas.length > 8 && (
+        <button type="button" onClick={() => setVerTodas((v) => !v)} className="mt-4 text-left text-[12.5px] text-[#007891]">
+          {verTodas ? "← Ver só as 8 maiores" : `Ver todas as ${linhas.length} clínicas →`}
+        </button>
+      )}
+      {semMedida > 0 && (
+        <div className="mt-[18px] rounded-[10px] bg-[#F3F3F3] px-3.5 py-3 text-[12.5px] leading-[1.5] text-[#767A7B]">
+          <span className="font-medium text-[#A05E1E]">Premissa a confirmar:</span> {semMedida} clínica
+          {semMedida > 1 ? "s" : ""} sem realizados no período entra{semMedida > 1 ? "m" : ""} com os previstos
+          inteiros, por não haver adesão medida. É o que faz a soma fechar com “previstos das habilitadas menos a
+          base”, mas ali o número é um teto.
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * 2.3 — simulador. Não grava nada e não recalcula o painel: parte da base e do
+ * total de previstos que a 1.4 já produziu e aplica a adesão escolhida sobre a
+ * seleção feita no ranking.
+ *
+ *   ganho   = previstos selecionados × adesão esperada
+ *   aumento = ganho ÷ base
+ *
+ * Confere com o critério de aceite: base 180 e uma clínica de 38 previstos dão
+ * +12,7% a 60% de adesão e +21,1% a 100%.
+ */
+function Simulador({
+  linhas,
+  selecionadas,
+  base,
+  totalPrevistos,
+  adesaoHistorica,
+  adesao,
+  onAdesao,
+  ligada,
+  onLigada,
+  onAtalho,
+}: {
+  linhas: LinhaPrevista[];
+  selecionadas: Set<string>;
+  base: number;
+  totalPrevistos: number;
+  adesaoHistorica: number | null;
+  adesao: number;
+  onAdesao: (v: number) => void;
+  ligada: boolean;
+  onLigada: (v: boolean) => void;
+  onAtalho: (quantas: number | "limpar") => void;
+}) {
+  const previstosSel = linhas
+    .filter((l) => selecionadas.has(l.credenciado))
+    .reduce((a, l) => a + l.pedidos, 0);
+  const ganho = previstosSel * (adesao / 100);
+  const aumento = base ? (ganho / base) * 100 : null;
+  const cobAntes = totalPrevistos ? (base / totalPrevistos) * 100 : 0;
+  const cobDepois = totalPrevistos ? ((base + ganho) / totalPrevistos) * 100 : 0;
+  const forcaFora = totalPrevistos - base - ganho;
+  const p1 = (v: number) => v.toLocaleString("pt-BR", { maximumFractionDigits: 1, minimumFractionDigits: 1 });
+  const n0 = (v: number) => Math.round(v).toLocaleString("pt-BR");
+
+  return (
+    <div className="mt-4 rounded-[12px] border border-[#DFE0E2] bg-[#FAFBFC] px-[18px] py-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="mr-auto text-[14px] font-semibold text-[#193B4F]">Simular inclusão</div>
+        {([["Top 5", 5], ["Top 10", 10], ["Todas", linhas.length]] as [string, number][]).map(([r, q]) => (
+          <button key={r} type="button" onClick={() => onAtalho(q)}
+                  className="rounded-[8px] border border-[#DFE0E2] bg-white px-3 py-1.5 text-[12.5px] text-[#193B4F] hover:border-[#7EBFCC]">
+            {r}
+          </button>
+        ))}
+        <button type="button" onClick={() => onAtalho("limpar")}
+                className="rounded-[8px] border border-[#DFE0E2] bg-white px-3 py-1.5 text-[12.5px] text-[#767A7B] hover:border-[#7EBFCC]">
+          Limpar
+        </button>
+      </div>
+
+      <div className="mt-3.5 flex flex-wrap items-center gap-x-4 gap-y-2">
+        <label htmlFor="sim-adesao" className={CABECALHO_TABELA}>Adesão esperada</label>
+        <input
+          id="sim-adesao" type="range" min={0} max={100} step={1} value={Math.round(adesao)}
+          disabled={ligada} onChange={(e) => onAdesao(Number(e.target.value))}
+          className="h-1.5 min-w-[200px] flex-1 accent-[#00AFAA] disabled:opacity-50"
+        />
+        <div className="w-[56px] text-[15px] font-medium tabular-nums text-[#193B4F]">
+          {p1(adesao)}%
+        </div>
+        <label className="flex items-center gap-1.5 text-[12.5px] text-[#767A7B]">
+          <input type="checkbox" checked={ligada} disabled={adesaoHistorica === null}
+                 onChange={(e) => onLigada(e.target.checked)} className="accent-[#00AFAA]" />
+          igual à histórica
+        </label>
+      </div>
+
+      <div className="mt-4 grid grid-cols-2 gap-x-5 gap-y-3.5 lg:grid-cols-5">
+        {[
+          { r: "Aumento sobre a base", v: aumento === null ? "—" : `+${p1(aumento)}%`, destaque: true },
+          { r: "Base", v: n0(base) },
+          { r: "Base + ganho", v: n0(base + ganho) },
+          { r: "Cobertura prevista", v: `${p1(cobAntes)}% → ${p1(cobDepois)}%` },
+          { r: "Previstos que ficam fora", v: n0(Math.max(0, forcaFora)) },
+        ].map((x) => (
+          <div key={x.r} className="flex flex-col gap-1">
+            <div className={CABECALHO_TABELA}>{x.r}</div>
+            <div className={`tabular-nums leading-none ${x.destaque ? "text-[24px] font-medium text-[#00AFAA]" : "text-[17px] text-[#193B4F]"}`}>
+              {x.v}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-3.5 text-[12.5px] leading-[1.5] text-[#767A7B]">
+        {selecionadas.size === 0
+          ? "Marque clínicas na tabela abaixo para simular. Nada é gravado."
+          : `${selecionadas.size} clínica${selecionadas.size > 1 ? "s" : ""} marcada${selecionadas.size > 1 ? "s" : ""} · ${n0(previstosSel)} previstos × ${p1(adesao)}% = +${n0(ganho)} pedidos sobre a base de ${n0(base)}. Simulação: nada é gravado.`}
+      </div>
+    </div>
+  );
+}
+
+// As duas precisam ser literais: o Tailwind compila só as classes que encontra
+// no código-fonte. Montar a segunda com `.replace()` sobre a primeira gerava uma
+// classe em runtime que nunca foi compilada, e a linha inteira perdia o grid.
+const COLUNAS_SEM_PRONTUAI = "grid-cols-[28px_1.9fr_1.1fr_0.85fr_1.05fr_1.05fr_1fr]";
+const COLUNAS_SEM_PRONTUAI_LINHA = "grid-cols-[1.9fr_1.1fr_0.85fr_1.05fr_1.05fr_1fr]";
+
+/**
+ * 2.2 — prioridade de inclusão. A ordem padrão é por impacto, que é o que a
+ * lista existe para responder: qual clínica, se entrasse, mais moveria a base
+ * da projeção.
+ */
+function TabelaPrioridade({
+  linhas,
+  janela,
+  simulador,
+}: {
+  linhas: LinhaPrevista[];
+  janela: string;
+  simulador: { base: number; totalPrevistos: number; adesaoHistorica: number | null } | null;
+}) {
+  const { ordem, ordenarPor } = useOrdem({ col: "impacto", dir: "desc" });
+  const [busca, setBusca] = useState("");
+  const [uf, setUf] = useState("");
+  // Estado do simulador (2.3). Vive aqui e só aqui: nada é persistido, nem em
+  // storage nem no servidor — é uma conta de tela.
+  const [marcadas, setMarcadas] = useState<Set<string>>(new Set());
+  const [adesaoLigada, setAdesaoLigada] = useState(true);
+  const [adesaoManual, setAdesaoManual] = useState(60);
+  const historica = simulador?.adesaoHistorica ?? null;
+  const adesaoEfetiva = adesaoLigada && historica !== null ? historica : adesaoManual;
+
+  const ufs = [...new Set(linhas.map((l) => l.uf).filter((x): x is string => !!x))].sort();
+  const termo = semAcento(busca.trim());
+  const filtradas = linhas.filter(
+    (l) =>
+      (!uf || l.uf === uf) &&
+      (!termo || semAcento(l.name).includes(termo) || semAcento(l.local).includes(termo)),
+  );
+  const visiveis = ordenar(filtradas, ordem, (l, col) =>
+    col === "name" ? l.name
+    : col === "local" ? l.local
+    : col === "pedidos" ? l.pedidos
+    : col === "participacao" ? l.participacao
+    : col === "impacto" ? l.impacto
+    : l.proximaISO,
+  );
+  const previstosVisiveis = visiveis.reduce((a, l) => a + l.pedidos, 0);
+
+  // Os atalhos seguem a tabela como ela está na tela: com filtro de UF ligado,
+  // "Top 5" são as 5 maiores daquela UF, que é o que a pessoa está vendo.
+  const aplicarAtalho = (quantas: number | "limpar") =>
+    setMarcadas(
+      quantas === "limpar"
+        ? new Set()
+        : new Set(visiveis.slice(0, quantas).map((l) => l.credenciado)),
+    );
+  const alternar = (credenciado: string) =>
+    setMarcadas((atual) => {
+      const proximo = new Set(atual);
+      if (!proximo.delete(credenciado)) proximo.add(credenciado);
+      return proximo;
+    });
+
+  return (
+    <>
+      <div className="mt-4 flex flex-wrap items-center gap-2.5">
+        <CampoBusca valor={busca} onChange={setBusca} placeholder="Buscar clínica ou cidade" />
+        <select
+          value={uf}
+          onChange={(e) => setUf(e.target.value)}
+          aria-label="Filtrar por UF"
+          className="h-[34px] rounded-[9px] border border-[#DFE0E2] bg-white px-2.5 text-[13px] text-[#193B4F] outline-none focus:border-[#7EBFCC]"
+        >
+          <option value="">Todas as UFs</option>
+          {ufs.map((x) => (
+            <option key={x} value={x}>
+              {x}
+            </option>
+          ))}
+        </select>
+        {(uf || termo) && (
+          <div className="text-[12.5px] text-[#767A7B]">
+            {visiveis.length} de {linhas.length} · {previstosVisiveis} previstos
+          </div>
+        )}
+      </div>
+
+      {simulador && (
+        <Simulador
+          linhas={linhas}
+          selecionadas={marcadas}
+          base={simulador.base}
+          totalPrevistos={simulador.totalPrevistos}
+          adesaoHistorica={historica}
+          adesao={adesaoEfetiva}
+          onAdesao={(v) => setAdesaoManual(v)}
+          ligada={adesaoLigada && historica !== null}
+          onLigada={setAdesaoLigada}
+          onAtalho={aplicarAtalho}
+        />
+      )}
+
+      <div className="mt-3 max-h-[460px] overflow-auto">
+        <div className="min-w-[820px]">
+          <div
+            className={`sticky top-0 z-10 grid ${COLUNAS_SEM_PRONTUAI} gap-x-[18px] border-b border-[#DFE0E2] bg-white px-1 pb-2.5`}
+          >
+            <span aria-hidden="true" />
+            <Th label="Clínica" col="name" ordem={ordem} onOrdenar={ordenarPor} />
+            <Th label="Cidade" col="local" ordem={ordem} onOrdenar={ordenarPor} />
+            <Th label="Previstos" col="pedidos" ordem={ordem} onOrdenar={ordenarPor} numerica />
+            <Th label="Próxima previsão" col="proximaISO" ordem={ordem} onOrdenar={ordenarPor} numerica />
+            <Th label="Participação" col="participacao" ordem={ordem} onOrdenar={ordenarPor} numerica />
+            <Th label="Impacto na base" col="impacto" ordem={ordem} onOrdenar={ordenarPor} numerica />
+          </div>
+          {visiveis.map((c) => (
+            <LinhaClinica
+              key={c.credenciado}
+              c={c}
+              marcada={marcadas.has(c.credenciado)}
+              onMarcar={alternar}
+            />
+          ))}
+          {!visiveis.length && (
+            <div className="px-1 py-6 text-[13px] text-[#767A7B]">Nenhuma clínica com esses filtros.</div>
+          )}
+        </div>
+      </div>
+      <div className="px-1 pb-3 pt-3 text-[12.5px] leading-[1.5] text-[#767A7B]">
+        Impacto = previstos da clínica × adesão esperada ÷ base da projeção.{" "}
+        <span className="text-[#A05E1E]">Premissa a confirmar:</span> a adesão esperada de quem ainda não usa é a
+        média ponderada das clínicas habilitadas. Enquanto ela for a mesma para todas, a ordem por impacto e por
+        previstos coincide. Janela: {janela}.
+      </div>
+    </>
+  );
+}
 
 /**
  * Linha da lista de credenciados fora do ProntuAI, com as datas previstas num
  * painel que abre. A quebra por dia já esteve num balão de hover: com meia
  * dúzia de datas virava um parágrafo, ilegível. Aqui cada data é uma linha.
  */
-function LinhaClinica({ c }: { c: LinhaSemProntuai }) {
+function LinhaClinica({
+  c,
+  marcada,
+  onMarcar,
+}: {
+  c: LinhaPrevista;
+  marcada: boolean;
+  onMarcar: (credenciado: string) => void;
+}) {
   const [aberta, setAberta] = useState(false);
   return (
-    <div className="border-b border-[#F3F3F3]">
+    <div className={`border-b border-[#F3F3F3] ${marcada ? "bg-[#E6EDF4]" : ""}`}>
+      {/* A marcação do simulador fica fora do botão que abre as datas: aninhar
+          input em button é inválido, e o clique de um roubaria o do outro. */}
+      <div className={`grid ${COLUNAS_SEM_PRONTUAI} items-center gap-x-[18px] px-1`}>
+        <label className="flex cursor-pointer items-center justify-center py-3">
+          <input
+            type="checkbox"
+            checked={marcada}
+            onChange={() => onMarcar(c.credenciado)}
+            aria-label={`Incluir ${c.name} na simulação`}
+            className="size-4 cursor-pointer accent-[#00AFAA]"
+          />
+        </label>
       <button
         type="button"
         onClick={() => setAberta((v) => !v)}
         aria-expanded={aberta}
-        className={`grid w-full ${COLUNAS_SEM_PRONTUAI} items-center gap-x-[18px] rounded-[6px] px-1 py-3 text-left text-[13.5px] text-[#193B4F] transition-colors hover:bg-[#F7F9FA]`}
+        className={`col-span-6 grid ${COLUNAS_SEM_PRONTUAI_LINHA} items-center gap-x-[18px] rounded-[6px] py-3 text-left text-[13.5px] text-[#193B4F] transition-colors hover:bg-[#F7F9FA]`}
       >
         <div className="flex min-w-0 items-center gap-2">
           <svg
@@ -50,11 +711,19 @@ function LinhaClinica({ c }: { c: LinhaSemProntuai }) {
         </div>
         <div className="min-w-0 truncate text-[#767A7B]">{c.local}</div>
         <div className="font-medium tabular-nums">{c.pedidos}</div>
-        <div className="tabular-nums">{c.proxima}</div>
+        <div className="tabular-nums text-[#767A7B]">{c.proxima}</div>
+        <div className="flex items-center gap-2.5">
+          <div className="h-1.5 flex-1 overflow-hidden rounded-[3px] bg-[#F3F3F3]">
+            <div className="h-full rounded-[3px] bg-[#CC851E]" style={{ width: `${c.participacao}%` }} />
+          </div>
+          <div className="w-[46px] text-right tabular-nums">{c.participacaoLabel}</div>
+        </div>
+        <div className="font-medium tabular-nums text-[#A05E1E]">{c.impactoLabel}</div>
       </button>
+      </div>
 
       {aberta && (
-        <div className="mb-3 ml-[26px] mr-1 rounded-[10px] border border-[#DFE0E2] bg-[#FAFBFC] px-4 py-3">
+        <div className="mb-3 ml-[54px] mr-1 rounded-[10px] border border-[#DFE0E2] bg-[#FAFBFC] px-4 py-3">
           <div className={CABECALHO_TABELA}>Datas das previsões</div>
           <div className="mt-2.5 flex flex-col">
             {c.datas.map((d) => (
@@ -69,6 +738,60 @@ function LinhaClinica({ c }: { c: LinhaSemProntuai }) {
           </div>
           <div className="mt-2.5 text-[12.5px] text-[#767A7B]">{c.resumo}</div>
           <div className="mt-1 text-[12px] text-[#9AA3A8]">{c.credenciado}</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Pedidos com previsão de liberação na janela, separados pelo mesmo corte das
+ * duas tabelas abaixo. É volume AINDA NÃO liberado: não se soma ao que a
+ * "Cobertura das expedições" mede, que é realizado. Daí o card ficar aqui, junto
+ * das tabelas de previsão, e não ao lado da cobertura.
+ */
+function CartaoPrevistos({ card }: { card: CardPrevistos }) {
+  return (
+    <div className={`${CARTAO} px-[22px] pt-5 pb-[22px]`}>
+      <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
+        <div>
+          <div className={TITULO}>Pedidos previstos</div>
+          <div className={SUB}>
+            {card.janela} · pedidos ainda não liberados no BRNET · não entram na cobertura
+          </div>
+        </div>
+        <div className="text-right">
+          <div className="text-[30px] font-medium leading-none tracking-[-0.025em] text-[#193B4F] tabular-nums">
+            {card.totalLabel}
+          </div>
+          <div className="mt-1.5 text-[12.5px] text-[#767A7B]">no período selecionado</div>
+        </div>
+      </div>
+
+      {card.total > 0 && (
+        <div className="mt-[18px] flex h-[10px] w-full overflow-hidden rounded-[5px] bg-[#F3F3F3]">
+          {card.partes.map((x) => (
+            <div key={x.rotulo} style={{ width: `${x.pct}%`, background: x.cor }} />
+          ))}
+        </div>
+      )}
+
+      <div className="mt-[18px] grid grid-cols-1 gap-4 sm:grid-cols-2">
+        {card.partes.map((x) => (
+          <div key={x.rotulo} className={`${styles.tip} ${styles.tipBaixo} flex flex-col gap-1.5`} data-tip={x.tip}>
+            <div className="flex items-center gap-2">
+              <div className="size-2.5 flex-none rounded-[2px]" style={{ background: x.cor }} />
+              <div className="text-[13px] text-[#767A7B]">{x.rotulo}</div>
+            </div>
+            <div className="text-[22px] font-medium leading-none text-[#193B4F] tabular-nums">{x.label}</div>
+            <div className="text-[12.5px] text-[#767A7B]">{x.sub}</div>
+          </div>
+        ))}
+      </div>
+
+      {card.total === 0 && (
+        <div className="mt-4 text-[13px] text-[#767A7B]">
+          Nenhum pedido com previsão de liberação nesta janela.
         </div>
       )}
     </div>
@@ -353,29 +1076,37 @@ export function AbaUtilizacao({
         </div>
       </div>
 
+      {/* Bloco de previsão, em ordem de dependência: o total (1.1) abre, a adesão
+          por clínica (1.3) detalha o lado habilitado, a projeção (1.4) usa essa
+          adesão, a comparação (2.1) e a oportunidade (2.4) se apoiam na base
+          dela, e a prioridade de inclusão (2.2/2.3) fecha com o simulador. */}
+      {visao.previstos && <CartaoPrevistos card={visao.previstos} />}
+
+      {visao.adesao && visao.previstos && (
+        <TabelaAdesao linhas={visao.adesao} janela={visao.previstos.janela} periodo={visao.periodoLabel} />
+      )}
+
+      {visao.projecao && <CartaoProjecao card={visao.projecao} />}
+
+      {visao.comparacao && <CartaoComparacao c={visao.comparacao} />}
+
+      {visao.oportunidades && visao.oportunidades.length > 0 && (
+        <TabelaOportunidades linhas={visao.oportunidades} periodo={visao.periodoLabel} />
+      )}
+
       <div className={`${CARTAO} px-[22px] pt-5 pb-2`}>
-        <div className={TITULO}>Clínicas com expedições previstas fora do ProntuAI</div>
+        <div className={TITULO}>Prioridade de inclusão no ProntuAI</div>
         <div className={SUB}>
           {visao.semProntuai === null
             ? "Lista indisponível: não foi possível consultar o BRNET na última atualização"
-            : `${visao.semProntuai.length} credenciadas · ${visao.pedidosSemProntuai} pedidos com previsão de liberação a partir de hoje · menos de 3 documentos no ProntuAI`}
+            : `${visao.semProntuai.length} credenciadas sem cadastro habilitado · ${visao.pedidosSemProntuai} pedidos previstos ${visao.previstos?.janela ?? ""}`}
         </div>
         {visao.semProntuai && visao.semProntuai.length > 0 && (
-          <div className="mt-4 max-h-[420px] overflow-auto">
-            <div className="min-w-[640px]">
-              <div
-                className={`${CABECALHO_TABELA} sticky top-0 z-10 grid ${COLUNAS_SEM_PRONTUAI} gap-x-[18px] border-b border-[#DFE0E2] bg-white px-1 pb-2.5`}
-              >
-                <div>Clínica</div>
-                <div>Cidade</div>
-                <div>Previstos</div>
-                <div>Próxima previsão</div>
-              </div>
-              {visao.semProntuai.map((c) => (
-                <LinhaClinica key={`${c.name}-${c.local}`} c={c} />
-              ))}
-            </div>
-          </div>
+          <TabelaPrioridade
+            linhas={visao.semProntuai}
+            janela={visao.previstos?.janela ?? ""}
+            simulador={visao.simulador}
+          />
         )}
       </div>
     </div>
