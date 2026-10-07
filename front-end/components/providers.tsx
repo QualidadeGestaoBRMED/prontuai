@@ -30,7 +30,10 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
   // enquanto não for, a duração da sessão fica nula no aviso e o resto segue.
   const iat = (session as { iat?: number } | null)?.iat
 
-  // `authFetch` roda fora do React e não enxerga a sessão.
+  // `authFetch` roda fora do React e não enxerga a sessão. Só registra quando
+  // há e-mail: assim que o cookie morre o `useSession` devolve null, e é
+  // justamente aí que a última dica precisa sobreviver — quem guarda essa
+  // regra é `registrarSessaoConhecida`.
   useEffect(() => {
     registrarSessaoConhecida({ email, iat })
   }, [email, iat])
