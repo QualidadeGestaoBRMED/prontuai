@@ -248,7 +248,7 @@ async def request_logging_middleware(request: Request, call_next):
                 "path": request.url.path,
                 "status_code": status_code,
                 "duration_ms": round(elapsed_ms, 2),
-                "ip": request.client.host if request.client else None,
+                "ip": _get_client_ip(request),
                 "user_agent": request.headers.get("user-agent"),
             },
         )
@@ -262,7 +262,7 @@ async def request_logging_middleware(request: Request, call_next):
                 "path": request.url.path,
                 "status_code": status_code,
                 "duration_ms": round(elapsed_ms, 2),
-                "ip": request.client.host if request.client else None,
+                "ip": _get_client_ip(request),
                 "user_agent": request.headers.get("user-agent"),
             },
         )
@@ -319,7 +319,7 @@ async def request_logging_middleware(request: Request, call_next):
                     method=request.method,
                     path=request.url.path,
                     status_code=status_code,
-                    ip=request.client.host if request.client else None,
+                    ip=_get_client_ip(request),
                     user_agent=request.headers.get("user-agent"),
                     request_id=get_request_id(),
                     metadata=audit_context.get("metadata"),
