@@ -33,6 +33,12 @@ class Settings:
     # Exigir dígito perto do termo encontrado (evidência de resultado, não de
     # citação de protocolo). Desligar aumenta cobertura e o risco de falso positivo.
     EXAM_CATALOG_SCAN_REQUIRE_VALUE = os.getenv("EXAM_CATALOG_SCAN_REQUIRE_VALUE", "true").lower() == "true"
+    # Ajuste do veredito pelo conteúdo do laudo (app/services/laudo_evidencia.py).
+    # RECUPERAR só tira pendência falsa (lipidograma em componentes, triagem por droga,
+    # glicose em mg/dL, etanol pelo material, RX com conclusão). EXIGIR pode criar
+    # pendência: exame só citado no ASO, sem o laudo, em 6 tipos de exame.
+    LAUDO_RECUPERAR_POR_CONTEUDO = os.getenv("LAUDO_RECUPERAR_POR_CONTEUDO", "true").lower() == "true"
+    LAUDO_EXIGIR_EVIDENCIA = os.getenv("LAUDO_EXIGIR_EVIDENCIA", "true").lower() == "true"
     AUDIT_LOG_ALL_REQUESTS = os.getenv("AUDIT_LOG_ALL_REQUESTS", "false").lower() == "true"
     # Configurações do FAQ
     CAMINHO_INDEX_FAQ = os.getenv("CAMINHO_INDEX_FAQ", "data/faq_index.faiss")

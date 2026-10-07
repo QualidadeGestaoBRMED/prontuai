@@ -5,7 +5,7 @@ import unicodedata
 from typing import Dict, Any, Optional, List
 from fastapi import UploadFile
 from app.services import ocr_service, brmed_service, validacao_service
-from app.services import exam_catalog_source
+from app.services import exam_catalog_source, laudo_evidencia
 from app.core.config import settings
 from app.core import metrics
 from app.core.pii import mask_cpf, mask_identifier, mask_name
@@ -1072,6 +1072,31 @@ async def _processar_documento_completo_impl(
         run_id=run_id
     )
     logger.info(f"[WORKFLOW] Validação concluída em {time.perf_counter() - t_validacao:.2f}s")
+
+    # Corrige o veredito pelo conteúdo do laudo, sobre o markdown local. Fica depois
+    # da comparação para que nenhuma chamada nova à OpenAI seja feita.
+    if not resultado_validacao.get("erro") and (
+        settings.LAUDO_RECUPERAR_POR_CONTEUDO or settings.LAUDO_EXIGIR_EVIDENCIA
+    ):
+        comparativo_laudo = resultado_validacao.get("exames_comparativo", [])
+        mudancas_laudo = laudo_evidencia.ajustar_comparativo(
+            comparativo_laudo,
+            f" {_normalizar_busca(markdown_content or '')} ",
+            _normalizar_busca,
+            recuperar=settings.LAUDO_RECUPERAR_POR_CONTEUDO,
+            exigir_laudo=settings.LAUDO_EXIGIR_EVIDENCIA,
+        )
+        if mudancas_laudo:
+            faltantes_laudo = [e["exame"] for e in comparativo_laudo if e.get("status") == "faltante"]
+            resultado_validacao["exames_faltantes"] = faltantes_laudo
+            resultado_validacao["exames_presentes"] = [e["exame"] for e in comparativo_laudo if e.get("status") == "encontrado"]
+            resultado_validacao["status_liberado"] = not faltantes_laudo
+            resultado_validacao["mensagem"] = (
+                f"Faltam exames obrigatórios: {', '.join(faltantes_laudo)}"
+                if faltantes_laudo
+                else "Todos os exames obrigatórios foram enviados. Liberação concedida."
+            )
+            _log_event("laudo_evidencia", run_id=run_id, mudancas=mudancas_laudo)
     await send_progress(90, "validacao", "Validação concluída, preparando resultado...")
     logger.info(f"[WORKFLOW] Validação concluída.")
     _log_event(
