@@ -141,7 +141,11 @@ julgamento AS (
                  || '|sem o exame|sem o pesquisa|nao foi realiz|nao realiz|nao foi feito'
                  || '|duas vezes|duplicad|homologacao'
                  || '|clinica nao inseriu|clinica nao anexou|nao inseriu a guia|nao anexou a guia'
-                 || '|outro ticket|nao esta na grade|fora da grade')
+                 || '|outro ticket|nao esta na grade|fora da grade'
+                 -- exame feito fora (toxicologico capilar no parceiro); revisores
+                 -- escrevem "caeptox", nao "caepetox"
+                 || '|parceir|caeptox|feito por laborat|realizado por laborat'
+                 || '|nao se faz necessari|nao e necessari|nao exigid')
                 THEN true
             -- humano rejeitou por pedido do cliente ou pendencia externa
             WHEN h.humano_status = 'rejected' AND motivo ~ (
@@ -261,7 +265,9 @@ falhas_exame AS (
            upper(btrim(e ->> 'exame')) AS exame,
            CASE WHEN r.motivo ~ ('outro sistema|outro lugar|outra plataforma|outro site|por fora'
                               || '|caepetox|autorizad|combinad|cliente pediu|liberar sem'
-                              || '|nao foi realiz|nao realiz')
+                              || '|nao foi realiz|nao realiz'
+                              || '|parceir|caeptox|feito por laborat|realizado por laborat'
+                              || '|nao se faz necessari|nao e necessari|nao exigid')
                 THEN 'externo' ELSE 'alarme' END AS tipo
     FROM revertidos r
     CROSS JOIN gran g
