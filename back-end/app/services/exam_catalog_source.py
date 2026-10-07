@@ -239,15 +239,21 @@ def varrer_markdown(
         for termo in sorted(grupo, key=len, reverse=True):
             if len(termo) < MIN_TERMO_VARREDURA:
                 continue
-            casou = _regex(termo).search(markdown_norm)
-            if not casou:
+            # Todas as ocorrências, não só a primeira: o nome costuma aparecer
+            # antes na lista de exames pedidos (sem resultado por perto) e só
+            # depois no laudo. Medido na semana de 28/09/2026: olhar só a
+            # primeira descartava TGO/TGP com "23 U L" logo depois do nome.
+            ocorrencias = list(_regex(termo).finditer(markdown_norm))
+            if not ocorrencias:
                 continue
-            contexto = markdown_norm[
-                max(0, casou.start() - JANELA_VALOR) : casou.end() + JANELA_VALOR
-            ]
-            tem_evidencia = bool(
-                _UNIDADE.search(contexto) or _VOCABULARIO_LAUDO.search(contexto)
-            )
+            tem_evidencia = False
+            for casou in ocorrencias:
+                contexto = markdown_norm[
+                    max(0, casou.start() - JANELA_VALOR) : casou.end() + JANELA_VALOR
+                ]
+                if _UNIDADE.search(contexto) or _VOCABULARIO_LAUDO.search(contexto):
+                    tem_evidencia = True
+                    break
             if exigir_valor and not tem_evidencia:
                 logger.info(
                     "[VARREDURA] '%s' encontrado para '%s' sem evidência de resultado "

@@ -10,6 +10,18 @@ from fastapi.security import HTTPAuthorizationCredentials
 from app.models.user import User, UserRole
 
 
+class FakeRequest:
+    """Requisição mínima para as guardas de acesso, que agora a recebem.
+
+    `get_current_user` e as `require_*` passaram a registrar a recusa na trilha
+    (ver `_registrar_recusa`), e para isso precisam da requisição.
+    """
+
+    def __init__(self, path="/v1/recurso"):
+        self.state = types.SimpleNamespace()
+        self.url = types.SimpleNamespace(path=path)
+
+
 class FakeUserDB:
     def __init__(self, users_by_email=None):
         self.users_by_email = users_by_email or {}
@@ -169,7 +181,7 @@ def test_get_current_user_supports_dev_bypass_only_in_non_production(
     monkeypatch.setenv("DEV_AUTH_NAME", "Dev User")
     monkeypatch.setenv("DEV_AUTH_ROLE", "ADMIN")
 
-    user = asyncio.run(auth.get_current_user(credentials=None))
+    user = asyncio.run(auth.get_current_user(FakeRequest(), credentials=None))
 
     assert user.email == "dev@grupobrmed.com.br"
     assert user.role == UserRole.ADMIN
@@ -186,7 +198,7 @@ def test_require_admin_rejects_non_admin(monkeypatch: pytest.MonkeyPatch):
     )
 
     with pytest.raises(HTTPException) as exc_info:
-        asyncio.run(auth.require_admin(checker))
+        asyncio.run(auth.require_admin(FakeRequest(), checker))
 
     assert exc_info.value.status_code == 403
     assert "administradores" in exc_info.value.detail.lower()
@@ -248,7 +260,7 @@ def test_require_checker_rejects_sender_for_validation_updates(monkeypatch: pyte
     )
 
     with pytest.raises(HTTPException) as exc_info:
-        asyncio.run(auth.require_checker(sender))
+        asyncio.run(auth.require_checker(FakeRequest(), sender))
 
     assert exc_info.value.status_code == 403
     assert "checadores" in exc_info.value.detail.lower()

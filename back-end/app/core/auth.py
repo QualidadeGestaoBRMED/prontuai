@@ -7,7 +7,7 @@ import uuid
 import os
 from typing import Optional, List, Any
 from jose import JWTError, jwt
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from app.models.user import User, TokenData, UserRole
 from app.core.database import user_db
@@ -16,6 +16,61 @@ from app.core.logging import set_user_context
 import logging
 
 logger = logging.getLogger(__name__)
+
+
+def _sujeito_nao_verificado(token: str) -> Optional[str]:
+    """Extrai o `sub` de um token que não passou na validação.
+
+    O valor não é confiável — ninguém conferiu a assinatura — e serve só para
+    dizer de quem era a sessão que venceu. Mesma ideia de
+    `_email_nao_verificado` em `app/api/v1/auth.py`.
+    """
+    try:
+        return jwt.get_unverified_claims(token).get("sub")
+    except Exception:
+        return None
+
+
+def _registrar_recusa(
+    request: Optional[Request],
+    action: str,
+    motivo: str,
+    *,
+    email: Optional[str] = None,
+    **extra,
+) -> None:
+    """Registra uma recusa de acesso no log e na trilha de auditoria.
+
+    Estas recusas aconteciam em silêncio. A tabela guardava o usuário (o
+    middleware o recupera do Bearer), mas nunca o motivo — e requisição GET
+    sequer é auditada por padrão. Resultado: "fulano parou de conseguir
+    acessar" não deixava rastro nenhum, justamente nos dois casos que derrubam
+    um usuário inteiro: conta desativada e papel sem permissão.
+
+    Escreve em `request.state.audit`, não em `set_audit_context()`: contextvar
+    gravado no handler não sobe até o middleware (ver o comentário em
+    `main.py`). Mesma convenção de `action`/`motivo` do `_trilha` de
+    `app/api/v1/auth.py`.
+    """
+    metadata = {k: v for k, v in extra.items() if v is not None}
+    metadata["motivo"] = motivo
+
+    if request is not None:
+        estado = getattr(request.state, "audit", None) or {}
+        estado = {
+            **estado,
+            "action": action,
+            "resource": "auth",
+            "metadata": {**estado.get("metadata", {}), **metadata},
+        }
+        if email:
+            estado["user_email"] = email
+        request.state.audit = estado
+
+    logger.warning(
+        action,
+        extra={"auth_action": action, "auth_motivo": motivo, "auth_email": email},
+    )
 
 # Configurações JWT
 ALGORITHM = "HS256"
@@ -198,7 +253,13 @@ def decode_token(token: str) -> TokenData:
         return TokenData(email=email, role=parsed_role, name=name, clinic_id=clinic_id)
 
     except JWTError as e:
-        logger.error(f"Erro ao decodificar token: {e}")
+        # O token vencido ainda carrega de quem era. Sem isto, as milhares de
+        # linhas de expiração por dia não identificavam ninguém.
+        logger.error(
+            "Erro ao decodificar token: %s",
+            e,
+            extra={"auth_email": _sujeito_nao_verificado(token)},
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token inválido ou expirado",
@@ -229,6 +290,7 @@ def decode_token_claims(token: str) -> dict[str, Any]:
 
 
 async def get_current_user(
+    request: Request,
     credentials: HTTPAuthorizationCredentials = Depends(security)
 ) -> User:
     """
@@ -308,6 +370,13 @@ async def get_current_user(
     user = user_db.get_user_by_email(token_data.email)
 
     if user is None:
+        _registrar_recusa(
+            request,
+            "auth.access.denied",
+            "usuario_inexistente",
+            email=token_data.email,
+            rota=request.url.path if request is not None else None,
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Usuário não encontrado",
@@ -315,6 +384,15 @@ async def get_current_user(
         )
 
     if not user.is_active:
+        # Desativar é a única revogação que mata o access token na hora, porque
+        # esta checagem é feita a cada requisição. Era também a mais silenciosa.
+        _registrar_recusa(
+            request,
+            "auth.access.denied",
+            "usuario_inativo",
+            email=user.email,
+            rota=request.url.path if request is not None else None,
+        )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Usuário inativo"
@@ -322,6 +400,31 @@ async def get_current_user(
 
     set_user_context(user)
     return user
+
+
+def _exigir_papel(
+    request: Optional[Request],
+    current_user: User,
+    permitidos,
+    detail: str,
+) -> User:
+    """Aplica uma guarda de papel, registrando a recusa antes de levantar.
+
+    Centraliza o que estava repetido em nove guardas `require_*`, todas
+    levantando 403 em silêncio. Ver `_registrar_recusa`.
+    """
+    if current_user.role in permitidos:
+        return current_user
+    _registrar_recusa(
+        request,
+        "auth.access.denied",
+        "papel_sem_permissao",
+        email=current_user.email,
+        papel=current_user.role.value,
+        papeis_exigidos=[p.value for p in permitidos],
+        rota=request.url.path if request is not None else None,
+    )
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=detail)
 
 
 def require_roles(allowed_roles: List[UserRole]):
@@ -333,39 +436,45 @@ def require_roles(allowed_roles: List[UserRole]):
         async def admin_only(user: User = Depends(require_roles([UserRole.ADMIN]))):
             return {"message": "Admin area"}
     """
-    async def role_checker(current_user: User = Depends(get_current_user)) -> User:
-        if current_user.role not in allowed_roles:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Permissão negada. Requer uma das roles: {[r.value for r in allowed_roles]}"
-            )
-        return current_user
+    async def role_checker(
+        request: Request,
+        current_user: User = Depends(get_current_user),
+    ) -> User:
+        return _exigir_papel(
+            request, current_user, allowed_roles,
+            f"Permissão negada. Requer uma das roles: {[r.value for r in allowed_roles]}",
+        )
 
     return role_checker
 
 
 # Helpers específicos para cada role
-async def require_admin(current_user: User = Depends(get_current_user)) -> User:
+async def require_admin(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+) -> User:
     """Requer role ADMIN. Reservado a operações destrutivas/de sistema (exclusões, migrações)."""
-    if current_user.role != UserRole.ADMIN:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Apenas administradores podem acessar este recurso"
-        )
-    return current_user
+    return _exigir_papel(
+        request, current_user, (UserRole.ADMIN,),
+        "Apenas administradores podem acessar este recurso",
+    )
 
 
-async def require_management(current_user: User = Depends(get_current_user)) -> User:
+async def require_management(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+) -> User:
     """Requer role ADMIN ou MANAGER (gestão administrativa sem operações destrutivas)."""
-    if current_user.role not in [UserRole.ADMIN, UserRole.MANAGER]:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Apenas administradores ou gestores podem acessar este recurso"
-        )
-    return current_user
+    return _exigir_papel(
+        request, current_user, (UserRole.ADMIN, UserRole.MANAGER),
+        "Apenas administradores ou gestores podem acessar este recurso",
+    )
 
 
-async def require_exam_catalog(current_user: User = Depends(get_current_user)) -> User:
+async def require_exam_catalog(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+) -> User:
     """
     Requer ADMIN ou CURATOR.
 
@@ -373,12 +482,10 @@ async def require_exam_catalog(current_user: User = Depends(get_current_user)) -
     motor reconhece em cada prontuário, e essa curadoria foi separada da gestão
     administrativa. Por isso não usa `require_management`.
     """
-    if current_user.role not in [UserRole.ADMIN, UserRole.CURATOR]:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Apenas administradores ou curadores podem acessar o catálogo de exames"
-        )
-    return current_user
+    return _exigir_papel(
+        request, current_user, (UserRole.ADMIN, UserRole.CURATOR),
+        "Apenas administradores ou curadores podem acessar o catálogo de exames",
+    )
 
 
 async def get_current_upload_user(
@@ -459,7 +566,10 @@ DOCUMENT_ROLES = (
 )
 
 
-async def require_document_reader(current_user: User = Depends(get_current_user)) -> User:
+async def require_document_reader(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+) -> User:
     """
     Requer um papel que trabalhe com documentos.
 
@@ -467,12 +577,10 @@ async def require_document_reader(current_user: User = Depends(get_current_user)
     só decide quem pode chegar até ele. O CURATOR entra em modo somente
     leitura — a escrita é barrada pelas guardas das rotas de escrita.
     """
-    if current_user.role not in DOCUMENT_ROLES:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Seu perfil não tem acesso a documentos"
-        )
-    return current_user
+    return _exigir_papel(
+        request, current_user, DOCUMENT_ROLES,
+        "Seu perfil não tem acesso a documentos",
+    )
 
 
 # Quem vê o dashboard de indicadores. Lista única: o front espelha esta mesma
@@ -480,7 +588,10 @@ async def require_document_reader(current_user: User = Depends(get_current_user)
 DASHBOARD_ROLES = (UserRole.ADMIN, UserRole.MANAGER)
 
 
-async def require_dashboard(current_user: User = Depends(get_current_user)) -> User:
+async def require_dashboard(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+) -> User:
     """
     Requer um papel com acesso ao dashboard de indicadores.
 
@@ -489,39 +600,40 @@ async def require_dashboard(current_user: User = Depends(get_current_user)) -> U
     sem que a gestão administrativa mudasse junto, e com esta separação a troca
     é uma linha em `DASHBOARD_ROLES`.
     """
-    if current_user.role not in DASHBOARD_ROLES:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Seu perfil não tem acesso ao dashboard de indicadores"
-        )
-    return current_user
+    return _exigir_papel(
+        request, current_user, DASHBOARD_ROLES,
+        "Seu perfil não tem acesso ao dashboard de indicadores",
+    )
 
 
-async def require_checker(current_user: User = Depends(get_current_user)) -> User:
+async def require_checker(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+) -> User:
     """Requer role CHECKER, ADMIN ou MANAGER"""
-    if current_user.role not in [UserRole.CHECKER, UserRole.ADMIN, UserRole.MANAGER]:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Apenas checadores ou administradores podem acessar este recurso"
-        )
-    return current_user
+    return _exigir_papel(
+        request, current_user, (UserRole.CHECKER, UserRole.ADMIN, UserRole.MANAGER),
+        "Apenas checadores ou administradores podem acessar este recurso",
+    )
 
 
-async def require_sender(current_user: User = Depends(get_current_user)) -> User:
+async def require_sender(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+) -> User:
     """Requer role SENDER, ADMIN ou MANAGER"""
-    if current_user.role not in [UserRole.SENDER, UserRole.ADMIN, UserRole.MANAGER]:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Apenas enviadores ou administradores podem acessar este recurso"
-        )
-    return current_user
+    return _exigir_papel(
+        request, current_user, (UserRole.SENDER, UserRole.ADMIN, UserRole.MANAGER),
+        "Apenas enviadores ou administradores podem acessar este recurso",
+    )
 
 
-async def require_upload_sender(current_user: User = Depends(get_current_upload_user)) -> User:
+async def require_upload_sender(
+    request: Request,
+    current_user: User = Depends(get_current_upload_user),
+) -> User:
     """Requer token curto de upload para role SENDER, ADMIN ou MANAGER."""
-    if current_user.role not in [UserRole.SENDER, UserRole.ADMIN, UserRole.MANAGER]:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Apenas enviadores ou administradores podem enviar documentos"
-        )
-    return current_user
+    return _exigir_papel(
+        request, current_user, (UserRole.SENDER, UserRole.ADMIN, UserRole.MANAGER),
+        "Apenas enviadores ou administradores podem enviar documentos",
+    )
