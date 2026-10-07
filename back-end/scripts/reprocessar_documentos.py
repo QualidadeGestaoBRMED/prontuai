@@ -30,6 +30,25 @@ POR QUE ETAPAS, E NÃO UM "REPROCESSAR TUDO"
     O OCR não precisa rodar: ele usa o cliente `OpenAI` **síncrono** e por isso
     nunca sofreu do bug de event loop que motivou este script.
 
+ETAPA `catalogo`: REMEDIR FALTANTES COM O CATÁLOGO ATUAL
+    As etapas acima consertam erro técnico. Esta responde outra pergunta: "o
+    documento que a IA barrou por exame faltante passaria hoje?". Serve para o
+    ciclo entender por que não passou -> corrigir o catálogo -> rodar de novo.
+
+    Refaz o portão de extração (`_filtrar_exames_ocr`, com o catálogo de agora e
+    a varredura do markdown) e a comparação, contra a exigência do BRNET DA ÉPOCA,
+    que está no banco. Não chama o BRNET nem o OCR. Com `--reextrair`, refaz
+    também a extração por IA sobre o markdown guardado (`extrair_exames_ia`, com a
+    mesma redação de PII da produção): pega o exame que o extrator antigo não
+    citou e que o catálogo novo deixaria passar. Custa uma chamada à OpenAI.
+
+    Seleção por faltante, não por erro: `--todos` pega quem terminou com exame
+    faltante no período `--de/--ate`; `--so-divergentes` só os que o revisor
+    liberou mesmo assim, que são os falsos faltantes da acurácia.
+
+    `validation_status` NUNCA muda nesta etapa, nem em documento sem revisão: o
+    script mede e registra o veredito novo, não libera documento sozinho.
+
 O QUE NUNCA É TOCADO
     - A decisão humana. Documento já aprovado/rejeitado na checagem só entra com
       `--incluir-revisados`, e mesmo então `validation_status` e `reviewed_by`
@@ -72,6 +91,8 @@ USO
     python scripts/reprocessar_documentos.py --todos --etapa brnet
     python scripts/reprocessar_documentos.py --todos --aplicar
     python scripts/reprocessar_documentos.py --doc <uuid> --erro 'Timeout%'
+    python scripts/reprocessar_documentos.py --etapa catalogo --todos --de 2026-09-28 --ate 2026-10-04 --incluir-revisados
+    python scripts/reprocessar_documentos.py --etapa catalogo --todos --so-divergentes --reextrair --incluir-revisados --json saida.json
 """
 import argparse
 import asyncio
@@ -105,6 +126,7 @@ from app.services import (  # noqa: E402
 
 ETAPA_COMPARACAO = "comparacao"
 ETAPA_BRNET = "brnet"
+ETAPA_CATALOGO = "catalogo"
 
 PADROES_COMPARACAO = [
     # O mesmo bug aparece com dois textos, conforme a exceção que chega ao
@@ -150,6 +172,10 @@ ETAPAS = {
         "descricao": "reconsulta a fonte externa e segue até a comparação",
         "padroes": PADROES_BRNET,
     },
+    ETAPA_CATALOGO: {
+        "descricao": "refaz filtro do catálogo atual e comparação nos documentos com exame faltante",
+        "padroes": [],
+    },
 }
 
 # Fica em SQL porque não há método de repositório que busque por conteúdo do
@@ -166,6 +192,24 @@ WHERE d.result_payload IS NOT NULL
     WHERE (d.result_payload::jsonb) ->> 'erro' LIKE padrao
   )
 ORDER BY d.uploaded_at DESC
+LIMIT :limite
+"""
+
+# Documento que terminou com exame faltante (sem erro técnico) no período.
+# `so_divergentes` restringe aos que um revisor liberou mesmo assim.
+SQL_CANDIDATOS_FALTANTES = """
+SELECT d.id
+FROM documents d
+WHERE d.result_payload IS NOT NULL
+  AND d.archived_at IS NULL
+  AND d.ocr_markdown IS NOT NULL
+  AND coalesce(array_length(d.exams_brnet, 1), 0) > 0
+  AND (d.result_payload::jsonb) ->> 'erro' IS NULL
+  AND jsonb_array_length(coalesce((d.result_payload::jsonb) #> '{validation_result,exames_faltantes}', '[]'::jsonb)) > 0
+  AND (CAST(:de AS date) IS NULL OR d.created_at >= CAST(:de AS date))
+  AND (CAST(:ate AS date) IS NULL OR d.created_at < CAST(:ate AS date) + 1)
+  AND (NOT :so_divergentes OR (d.validation_status = 'validated' AND d.reviewed_by IS NOT NULL))
+ORDER BY d.created_at
 LIMIT :limite
 """
 
@@ -244,6 +288,15 @@ def _elegivel(
     documentos com comparativo vazio falharam antes da comparação.
     """
     erro = payload.get("erro")
+
+    if etapa == ETAPA_CATALOGO:
+        if erro:
+            return f"terminou em erro técnico, não em faltante (erro={erro!r}); use --etapa comparacao ou brnet"
+        if not document.ocr_markdown:
+            return "sem ocr_markdown"
+        if not (document.exams_brnet or payload.get("exames_brnet")):
+            return "sem exames do BRNET da época"
+        return None
 
     sem_conserto = _motivo_sem_conserto(erro)
     if sem_conserto:
@@ -377,7 +430,15 @@ def _montar_payload(
     # indistinguível de um que sempre esteve certo, e a medição de acurácia do
     # período contaminado fica sem como excluir estes documentos.
     novo["reprocessado_por"] = "scripts/reprocessar_documentos.py"
-    novo["reprocessado_motivo"] = payload.get("erro")
+    novo["reprocessado_motivo"] = payload.get("erro") or resultado.get("_motivo")
+    if resultado.get("_motivo") == "catalogo":
+        # O filtro do catálogo mudou a lista de exames do OCR; payload e colunas
+        # precisam acompanhar, senão a tela mostra a lista antiga.
+        novo["exames_ocr"] = resultado["_exames_ocr_usados"]
+        novo["ocr_result"] = {
+            **(payload.get("ocr_result") or {}),
+            "exames_extraidos": resultado["_exames_ocr_usados"],
+        }
 
     # Na etapa `brnet` a consulta trouxe exigência, nome e dados da expedição
     # novos — são justamente o que faltava, então substituem o que estava lá.
@@ -407,8 +468,9 @@ def _montar_payload(
             "exames_extraidos": resultado["_exames_ocr_usados"],
         }
 
-    # Campo interno do script, não faz parte do contrato do payload.
+    # Campos internos do script, não fazem parte do contrato do payload.
     novo.pop("_exames_ocr_usados", None)
+    novo.pop("_motivo", None)
     return novo
 
 
@@ -421,7 +483,9 @@ async def _obter_exames_brnet(
     fonte externa — é o ponto de toda a etapa, já que o erro dela foi exatamente
     essa consulta ter falhado.
     """
-    if etapa == ETAPA_COMPARACAO:
+    if etapa in (ETAPA_COMPARACAO, ETAPA_CATALOGO):
+        # Na etapa catalogo a exigência é a da época de propósito: o que se mede é
+        # o efeito do catálogo, não uma mudança de pedido no BRNET.
         guardados = list(document.exams_brnet or payload.get("exames_brnet") or [])
         return guardados, None, None
 
@@ -442,12 +506,34 @@ async def _obter_exames_brnet(
     return exames, resposta, None
 
 
+async def _reextrair_exames(markdown: str) -> Optional[List[str]]:
+    """Refaz a extração por IA sobre o markdown guardado, como o pipeline faz.
+
+    Os valores cadastrais vão para a redação (`extrair_exames_ia` apaga cada um
+    do texto antes de enviar); são extraídos aqui, localmente, pelas mesmas
+    funções do OCR. Nada disso sai do ambiente.
+    """
+    from app.services import ocr_service  # noqa: PLC0415 - import pesado, só se usado
+
+    valores = [
+        ocr_service.extract_patient_name_from_markdown(markdown),
+        ocr_service.extrair_cpf_regex(markdown),
+        ocr_service.extrair_cnpj_regex(markdown),
+        ocr_service.extrair_passaporte_regex(markdown),
+    ]
+    info = await asyncio.to_thread(ocr_service.extrair_exames_ia, markdown, valores)
+    if info.get("erro"):
+        return None
+    return list(info.get("exames") or [])
+
+
 async def _reprocessar(
     document_id: str,
     aplicar: bool,
     incluir_revisados: bool,
     etapa: str,
     padroes: List[str],
+    reextrair: bool = False,
 ) -> Dict[str, Any]:
     document = user_db.get_document_by_id(document_id)
     if not document:
@@ -484,7 +570,20 @@ async def _reprocessar(
     if erro_brnet:
         return {**base, "situacao": "falhou_de_novo", "detalhe": erro_brnet}
 
-    if etapa == ETAPA_COMPARACAO:
+    faltantes_antes = list((payload.get("validation_result") or {}).get("exames_faltantes") or [])
+    base["faltantes_antes"] = faltantes_antes
+    base["humano"] = document.validation_status if revisado else None
+
+    if etapa == ETAPA_CATALOGO:
+        exames_ocr = list(document.exams_ocr or payload.get("exames_ocr") or [])
+        if reextrair:
+            extraidos = await _reextrair_exames(markdown)
+            if extraidos is None:
+                return {**base, "situacao": "falhou_de_novo", "detalhe": "reextração por IA falhou"}
+            # União: o que a extração antiga já tinha continua valendo.
+            exames_ocr = list(dict.fromkeys(exames_ocr + extraidos))
+        exames_ocr = workflow_service._filtrar_exames_ocr(exames_ocr, exames_brnet, markdown)
+    elif etapa == ETAPA_COMPARACAO:
         # `exames_ocr` já vem filtrado por `_filtrar_exames_ocr` de quando o
         # documento foi processado — é exatamente a lista que a comparação
         # recebeu. Refiltrar aqui mudaria a entrada e o reprocessamento deixaria
@@ -528,6 +627,7 @@ async def _reprocessar(
         "faltantes": len([e for e in comparativo if e["status"] == "faltante"]),
         "extras": len([e for e in comparativo if e["status"] == "extra_no_ocr"]),
         "liberado": resultado["status_liberado"],
+        "faltantes_depois": [e["exame"] for e in comparativo if e["status"] == "faltante"],
         "confianca_antes": payload.get("confidence_score"),
         "confianca_depois": confianca["confidence_score"],
     }
@@ -535,6 +635,8 @@ async def _reprocessar(
         return resumo
 
     resultado["_exames_ocr_usados"] = exames_ocr
+    if etapa == ETAPA_CATALOGO:
+        resultado["_motivo"] = "catalogo"
     novo_payload = _montar_payload(payload, resultado, confianca, brnet)
     detalhes = confianca["confidence_details"]
 
@@ -553,7 +655,10 @@ async def _reprocessar(
         # a tela e o payload divergem.
         campos["exams_brnet"] = exames_brnet
         campos["exams_ocr"] = exames_ocr
-    if not revisado:
+    if etapa == ETAPA_CATALOGO:
+        campos["exams_ocr"] = exames_ocr
+    elif not revisado:
+        # Na etapa catalogo o status nunca muda: o script mede, não libera.
         campos["validation_status"] = "pending"
 
     user_db.update_document(document_id=document_id, **campos)
@@ -573,6 +678,9 @@ async def _reprocessar(
                     "exames_encontrados": resumo["encontrados"],
                     "exames_faltantes": resumo["faltantes"],
                     "status_liberado": resultado["status_liberado"],
+                    "faltantes_antes": faltantes_antes,
+                    "faltantes_depois": resumo["faltantes_depois"],
+                    "reextraido": bool(reextrair and etapa == ETAPA_CATALOGO),
                     "confianca_antes": payload.get("confidence_score"),
                     "confianca_depois": confianca["confidence_score"],
                     "decisao_humana_preservada": revisado,
@@ -591,6 +699,51 @@ def _candidatos(padroes: List[str], limite: int) -> List[str]:
             text(SQL_CANDIDATOS), {"padroes": list(padroes), "limite": limite}
         ).fetchall()
     return [linha[0] for linha in linhas]
+
+
+def _candidatos_faltantes(de: Optional[str], ate: Optional[str], so_divergentes: bool, limite: int) -> List[str]:
+    with user_db.engine.connect() as conexao:
+        linhas = conexao.execute(
+            text(SQL_CANDIDATOS_FALTANTES),
+            {"de": de, "ate": ate, "so_divergentes": so_divergentes, "limite": limite},
+        ).fetchall()
+    return [linha[0] for linha in linhas]
+
+
+def _resumo_catalogo(resultados: List[Dict[str, Any]]) -> None:
+    """Antes x depois, e o que importa para a acurácia: concordância com o revisor."""
+    medidos = [r for r in resultados if r["situacao"].startswith("ok")]
+    if not medidos:
+        return
+    passam = [r for r in medidos if not r["faltantes_depois"]]
+    caiu = [r for r in medidos if len(r["faltantes_depois"]) < len(r["faltantes_antes"])]
+    revisados = [r for r in medidos if r.get("humano") in ("validated", "rejected")]
+    # IA "concorda" com o revisor quando libera o que ele liberou e barra o que ele barrou.
+    concorda_antes = sum(1 for r in revisados if (r["humano"] == "validated") == (not r["faltantes_antes"]))
+    concorda_depois = sum(1 for r in revisados if (r["humano"] == "validated") == (not r["faltantes_depois"]))
+    resolvidos: Dict[str, int] = {}
+    restantes: Dict[str, int] = {}
+    for r in medidos:
+        depois = set(r["faltantes_depois"])
+        for exame in r["faltantes_antes"]:
+            alvo = restantes if exame in depois else resolvidos
+            alvo[exame] = alvo.get(exame, 0) + 1
+
+    print("\nRESUMO DA ETAPA CATALOGO")
+    print(f"  documentos medidos ............. {len(medidos)}")
+    print(f"  passariam agora (sem faltante) . {len(passam)}")
+    print(f"  com menos faltantes que antes .. {len(caiu)}")
+    if revisados:
+        print(f"  com decisão humana ............. {len(revisados)}")
+        print(f"  concordância IA x revisor ...... antes {concorda_antes} -> depois {concorda_depois}")
+    if resolvidos:
+        print("  faltantes que deixaram de faltar:")
+        for exame, n in sorted(resolvidos.items(), key=lambda x: -x[1])[:20]:
+            print(f"    {n:>4}  {exame}")
+    if restantes:
+        print("  faltantes que continuam:")
+        for exame, n in sorted(restantes.items(), key=lambda x: -x[1])[:20]:
+            print(f"    {n:>4}  {exame}")
 
 
 def _listar_erros() -> int:
@@ -666,7 +819,12 @@ async def _executar(args: argparse.Namespace) -> int:
         return 2
 
     ids = list(args.doc or [])
-    if args.todos:
+    if args.todos and etapa == ETAPA_CATALOGO:
+        ids.extend(
+            i for i in _candidatos_faltantes(args.de, args.ate, args.so_divergentes, args.limite)
+            if i not in ids
+        )
+    elif args.todos:
         ids.extend(i for i in _candidatos(padroes, args.limite) if i not in ids)
 
     if not ids:
@@ -675,7 +833,12 @@ async def _executar(args: argparse.Namespace) -> int:
         return 0
 
     print(f"etapa: {etapa} — {ETAPAS[etapa]['descricao']}")
-    print(f"padrões: {', '.join(padroes)}")
+    if etapa == ETAPA_CATALOGO:
+        print(f"período: {args.de or 'início'} a {args.ate or 'hoje'}"
+              f"{' | só divergentes' if args.so_divergentes else ''}"
+              f"{' | com reextração por IA' if args.reextrair else ''}")
+    else:
+        print(f"padrões: {', '.join(padroes)}")
     print(f"{len(ids)} documento(s) | {'GRAVANDO' if args.aplicar else 'DRY-RUN (use --aplicar)'}\n")
 
     resultados = []
@@ -684,7 +847,7 @@ async def _executar(args: argparse.Namespace) -> int:
         # OpenAI (e na etapa brnet também uma à API externa). Um lote concorrente
         # grande só troca este problema por rate limit. O volume real é de dezenas.
         resultado = await _reprocessar(
-            document_id, args.aplicar, args.incluir_revisados, etapa, padroes
+            document_id, args.aplicar, args.incluir_revisados, etapa, padroes, args.reextrair
         )
         resultados.append(resultado)
         situacao = resultado["situacao"]
@@ -697,6 +860,13 @@ async def _executar(args: argparse.Namespace) -> int:
                 f"confianca={resultado['confianca_antes']}->{resultado['confianca_depois']}"
                 + ("  [decisão humana preservada]" if resultado["revisado"] else "")
             )
+            if etapa == ETAPA_CATALOGO:
+                antes, depois = resultado["faltantes_antes"], resultado["faltantes_depois"]
+                saiu = [e for e in antes if e not in depois]
+                print(f"      faltantes: {len(antes)} -> {len(depois)}"
+                      f"{'  | resolvidos: ' + ', '.join(saiu) if saiu else ''}"
+                      f"{'  | continuam: ' + ', '.join(depois) if depois else ''}"
+                      f"{'  | revisor: ' + resultado['humano'] if resultado.get('humano') else ''}")
         else:
             print(f"[{indice}/{len(ids)}] {document_id} {situacao}: {resultado.get('detalhe', '')}")
 
@@ -706,6 +876,8 @@ async def _executar(args: argparse.Namespace) -> int:
         contagem[resultado["situacao"]] = contagem.get(resultado["situacao"], 0) + 1
     for situacao, quantos in sorted(contagem.items()):
         print(f"  {situacao}: {quantos}")
+    if etapa == ETAPA_CATALOGO:
+        _resumo_catalogo(resultados)
 
     if args.json:
         with open(args.json, "w", encoding="utf-8") as saida:
@@ -762,6 +934,19 @@ def main() -> int:
         dest="sem_indice",
         action="store_true",
         help="prossegue mesmo sem o índice de similaridade (comparação degradada)",
+    )
+    parser.add_argument("--de", metavar="AAAA-MM-DD", help="etapa catalogo: documentos enviados a partir desta data")
+    parser.add_argument("--ate", metavar="AAAA-MM-DD", help="etapa catalogo: documentos enviados até esta data (inclusive)")
+    parser.add_argument(
+        "--so-divergentes",
+        dest="so_divergentes",
+        action="store_true",
+        help="etapa catalogo: só documentos com faltante que o revisor liberou mesmo assim",
+    )
+    parser.add_argument(
+        "--reextrair",
+        action="store_true",
+        help="etapa catalogo: refaz a extração por IA sobre o markdown guardado (1 chamada OpenAI por documento)",
     )
     parser.add_argument("--json", metavar="ARQUIVO", help="salva o relatório em JSON")
     args = parser.parse_args()
