@@ -27,7 +27,7 @@ export type DocumentApi = {
   updated_at?: string | null
 }
 
-export type DocumentQueue = "pendentes" | "checagem"
+export type DocumentQueue = "pendentes" | "checagem" | "historico"
 
 export type DocumentSummaryCounts = {
   approved: number

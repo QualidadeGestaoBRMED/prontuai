@@ -7,6 +7,11 @@ from enum import Enum
 class DocumentQueue(str, Enum):
     PENDENTES = "pendentes"
     CHECAGEM = "checagem"
+    # Histórico não filtra nada: é a tela que mostra TODOS os documentos do
+    # escopo do usuário. Existe como fila mesmo assim para a tela poder pedir
+    # paginação sem precisar omitir o parâmetro — omitir significaria "sem
+    # fila", que é o mesmo resultado mas não diz a intenção em log nem em trace.
+    HISTORICO = "historico"
 
 
 class Document(BaseModel):
