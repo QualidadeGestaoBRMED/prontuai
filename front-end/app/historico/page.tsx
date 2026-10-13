@@ -69,6 +69,15 @@ function HistoricoContent() {
   const sortedResults = useMemo(() => documents.map(documentToProcessResult), [documents])
   const showRefreshing = refreshing
 
+  // Spinner só no PRIMEIRO carregamento, como a Checagem já fazia. Condicionar
+  // à lista vazia (`sortedResults.length === 0`) parecia equivalente e não é:
+  // toda busca sem resultado troca a tabela pelo spinner, desmontando o campo
+  // de busca junto — o foco e o texto digitado se perdem no meio da digitação.
+  const [carregouUmaVez, setCarregouUmaVez] = useState(false)
+  useEffect(() => {
+    if (!loading) setCarregouUmaVez(true)
+  }, [loading])
+
   useEffect(() => {
     if (!canFilterByClinic) setClinicFilter("all")
   }, [canFilterByClinic, setClinicFilter])
@@ -144,7 +153,7 @@ function HistoricoContent() {
                 </div>
               )}
 
-              {loading && sortedResults.length === 0 ? (
+              {loading && !carregouUmaVez ? (
                 <div className="border rounded-lg bg-white p-6 flex items-center gap-3 text-muted-foreground">
                   <Loader2 className="size-4 animate-spin" />
                   <span>Sincronizando documentos com o banco...</span>
