@@ -7,6 +7,7 @@ refactor (documentado em CONTEXTO.md): quebrar a classe em mixins por
 agregado dentro de `app.core.db`.
 """
 import os
+import re
 import time
 import json
 import logging
@@ -47,6 +48,36 @@ from app.core.db.models import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _filtro_busca_documento(termo: str):
+    """Condição da busca única das telas de lista (Histórico, Pendentes, Checagem).
+
+    Um campo só atende a CPF, nome do paciente, nome do arquivo e e-mail de
+    quem enviou, então a condição é um OR sobre as quatro colunas.
+
+    **O CPF é comparado também sem pontuação.** A coluna guarda só dígitos
+    (`05700231735`), mas o usuário copia o CPF da própria tela, que o exibe
+    formatado (`057.002.317-35`) — e aí o `ILIKE` não casava com nada. A busca
+    do Histórico fazia essa normalização quando ainda filtrava no cliente; ao
+    passar para o banco ela se perdeu, e com ela a busca por CPF.
+
+    O `regexp_replace` impede uso de índice nessa condição, mas isso não muda
+    nada na prática: `ILIKE '%...%'` já não usa índice btree.
+    """
+    like = f"%{termo}%"
+    condicoes = [
+        DocumentModel.cpf.ilike(like),
+        DocumentModel.filename.ilike(like),
+        DocumentModel.uploaded_by_user_email.ilike(like),
+        DocumentModel.patient_name.ilike(like),
+    ]
+    digitos = re.sub(r"\D", "", termo)
+    if digitos:
+        condicoes.append(
+            func.regexp_replace(DocumentModel.cpf, r"\D", "", "g").ilike(f"%{digitos}%")
+        )
+    return or_(*condicoes)
 
 
 class PostgresUserDatabase:
@@ -1406,15 +1437,7 @@ class PostgresUserDatabase:
 
             normalized_search = (search or "").strip()
             if normalized_search:
-                like = f"%{normalized_search}%"
-                scoped_query = scoped_query.filter(
-                    or_(
-                        DocumentModel.cpf.ilike(like),
-                        DocumentModel.filename.ilike(like),
-                        DocumentModel.uploaded_by_user_email.ilike(like),
-                        DocumentModel.patient_name.ilike(like),
-                    )
-                )
+                scoped_query = scoped_query.filter(_filtro_busca_documento(normalized_search))
 
             if queue == "pendentes":
                 scoped_query = scoped_query.filter(
@@ -1483,14 +1506,8 @@ class PostgresUserDatabase:
                 scoped_summary_query = scoped_summary_query.filter(DocumentModel.clinic_id == filter_clinic_id)
 
             if normalized_search:
-                like = f"%{normalized_search}%"
                 scoped_summary_query = scoped_summary_query.filter(
-                    or_(
-                        DocumentModel.cpf.ilike(like),
-                        DocumentModel.filename.ilike(like),
-                        DocumentModel.uploaded_by_user_email.ilike(like),
-                        DocumentModel.patient_name.ilike(like),
-                    )
+                    _filtro_busca_documento(normalized_search)
                 )
 
             summary_row = scoped_summary_query.one()
