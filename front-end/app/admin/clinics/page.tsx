@@ -41,6 +41,44 @@ interface ClinicUser {
   name: string;
   role: string;
   is_active: boolean;
+  /** Último documento enviado por este usuário. ISO, ou null se nunca enviou. */
+  last_upload_at: string | null;
+  /** Último `auth.login.success` deste e-mail. ISO, ou null se nunca logou. */
+  last_login_at: string | null;
+}
+
+/** Corpo de `GET /v1/clinics/{id}/users`. */
+interface ClinicUsersResposta {
+  /**
+   * Último envio da clínica por QUALQUER usuário, inclusive quem já foi
+   * desvinculado — por isso não é o máximo da lista abaixo.
+   */
+  ultimo_envio_clinica: string | null;
+  usuarios: ClinicUser[];
+}
+
+/**
+ * "há 3 dias", "hoje", "nunca".
+ *
+ * Numa investigação a pergunta é "faz quanto tempo?", e a data crua obriga a
+ * fazer a conta de cabeça. A data exata vai no `title`, para quem precisar
+ * dela.
+ */
+function haQuantoTempo(iso: string | null): { texto: string; titulo?: string; alerta: boolean } {
+  if (!iso) return { texto: "nunca", alerta: true };
+  const data = new Date(iso);
+  if (Number.isNaN(data.getTime())) return { texto: "—", alerta: false };
+
+  const dias = Math.floor((Date.now() - data.getTime()) / 86_400_000);
+  const titulo = data.toLocaleString("pt-BR");
+  // 30 dias é o corte do alerta: abaixo disso a clínica está em uso normal.
+  const alerta = dias >= 30;
+
+  if (dias <= 0) return { texto: "hoje", titulo, alerta: false };
+  if (dias === 1) return { texto: "ontem", titulo, alerta: false };
+  if (dias < 30) return { texto: `há ${dias} dias`, titulo, alerta };
+  if (dias < 365) return { texto: `há ${Math.floor(dias / 30)} meses`, titulo, alerta };
+  return { texto: `há mais de um ano`, titulo, alerta };
 }
 
 export default function ClinicsAdminPage() {
@@ -49,7 +87,7 @@ export default function ClinicsAdminPage() {
   // Usuários por clínica, carregados sob demanda ao abrir a linha. Só ADMIN vê o
   // controle, e o back-end recusa de qualquer forma (`require_admin`).
   const [abertos, setAbertos] = useState<Set<string>>(new Set());
-  const [usuarios, setUsuarios] = useState<Record<string, ClinicUser[]>>({});
+  const [usuarios, setUsuarios] = useState<Record<string, ClinicUsersResposta>>({});
   const [carregandoUsuarios, setCarregandoUsuarios] = useState<Set<string>>(new Set());
   const [erroUsuarios, setErroUsuarios] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
@@ -123,8 +161,14 @@ export default function ClinicsAdminPage() {
       try {
         const resposta = await authFetch(API_ENDPOINTS.CLINIC_USERS(clinicId));
         if (!resposta.ok) throw new Error(`HTTP ${resposta.status}`);
-        const lista: ClinicUser[] = await resposta.json();
-        setUsuarios((a) => ({ ...a, [clinicId]: lista }));
+        const corpo: ClinicUsersResposta = await resposta.json();
+        setUsuarios((a) => ({
+          ...a,
+          [clinicId]: {
+            ultimo_envio_clinica: corpo.ultimo_envio_clinica ?? null,
+            usuarios: corpo.usuarios ?? [],
+          },
+        }));
       } catch {
         setErroUsuarios((a) => ({ ...a, [clinicId]: "Não foi possível carregar os usuários." }));
       } finally {
@@ -425,34 +469,95 @@ export default function ClinicsAdminPage() {
                               <p className="text-sm text-gray-500">Carregando usuários…</p>
                             ) : erroUsuarios[clinic.id] ? (
                               <p className="text-sm text-red-600">{erroUsuarios[clinic.id]}</p>
-                            ) : !usuarios[clinic.id]?.length ? (
-                              /* Distingue de erro: a clínica existe e não tem ninguém
-                                 vinculado — numa investigação isso é a resposta. */
-                              <p className="text-sm text-gray-500">
-                                Nenhum usuário vinculado a esta clínica.
-                              </p>
                             ) : (
-                              <div className="space-y-1.5">
-                                <p className="text-xs uppercase tracking-wide text-gray-500">
-                                  {usuarios[clinic.id].length} usuário
-                                  {usuarios[clinic.id].length > 1 ? "s" : ""} vinculado
-                                  {usuarios[clinic.id].length > 1 ? "s" : ""}
-                                </p>
-                                {usuarios[clinic.id].map((u) => (
-                                  <div
-                                    key={u.id}
-                                    className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm"
-                                  >
-                                    <span className="font-mono text-gray-800">{u.email}</span>
-                                    <span className="text-gray-500">{u.name}</span>
-                                    {!u.is_active && (
-                                      <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs text-red-800">
-                                        inativo
+                              (() => {
+                                const dados = usuarios[clinic.id];
+                                if (!dados) return null;
+                                const envioClinica = haQuantoTempo(dados.ultimo_envio_clinica);
+                                const lista = dados.usuarios;
+                                return (
+                                  <div className="space-y-3">
+                                    <p className="text-xs uppercase tracking-wide text-gray-500">
+                                      Último envio da clínica:{" "}
+                                      <span
+                                        title={envioClinica.titulo}
+                                        className={
+                                          envioClinica.alerta
+                                            ? "font-semibold text-amber-700"
+                                            : "font-semibold text-gray-700"
+                                        }
+                                      >
+                                        {envioClinica.texto}
                                       </span>
+                                    </p>
+
+                                    {lista.length === 0 ? (
+                                      /* Distingue de erro: a clínica existe e não tem
+                                         ninguém vinculado — numa investigação isso é a
+                                         resposta. */
+                                      <p className="text-sm text-gray-500">
+                                        Nenhum usuário vinculado a esta clínica.
+                                      </p>
+                                    ) : (
+                                      <div className="space-y-1">
+                                        <p className="text-xs uppercase tracking-wide text-gray-500">
+                                          {lista.length} usuário
+                                          {lista.length > 1 ? "s" : ""} vinculado
+                                          {lista.length > 1 ? "s" : ""}
+                                        </p>
+                                        <table className="w-full text-sm">
+                                          <thead>
+                                            <tr className="text-left text-xs uppercase tracking-wide text-gray-400">
+                                              <th className="py-1 pr-4 font-normal">Usuário</th>
+                                              <th className="py-1 pr-4 font-normal">Último envio</th>
+                                              <th className="py-1 font-normal">Último login</th>
+                                            </tr>
+                                          </thead>
+                                          <tbody>
+                                            {lista.map((u) => {
+                                              const envio = haQuantoTempo(u.last_upload_at);
+                                              const login = haQuantoTempo(u.last_login_at);
+                                              return (
+                                                <tr key={u.id} className="align-top">
+                                                  <td className="py-1 pr-4">
+                                                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                                                      <span className="font-mono text-gray-800">
+                                                        {u.email}
+                                                      </span>
+                                                      <span className="text-gray-500">{u.name}</span>
+                                                      {!u.is_active && (
+                                                        <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs text-red-800">
+                                                          inativo
+                                                        </span>
+                                                      )}
+                                                    </div>
+                                                  </td>
+                                                  <td
+                                                    className={`py-1 pr-4 whitespace-nowrap ${
+                                                      envio.alerta ? "text-amber-700" : "text-gray-600"
+                                                    }`}
+                                                    title={envio.titulo}
+                                                  >
+                                                    {envio.texto}
+                                                  </td>
+                                                  <td
+                                                    className={`py-1 whitespace-nowrap ${
+                                                      login.alerta ? "text-amber-700" : "text-gray-600"
+                                                    }`}
+                                                    title={login.titulo}
+                                                  >
+                                                    {login.texto}
+                                                  </td>
+                                                </tr>
+                                              );
+                                            })}
+                                          </tbody>
+                                        </table>
+                                      </div>
                                     )}
                                   </div>
-                                ))}
-                              </div>
+                                );
+                              })()
                             )}
                           </td>
                         </tr>

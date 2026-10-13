@@ -126,6 +126,15 @@ async def list_clinic_users(
 
     Na prática são os SENDER: os outros papéis têm `clinic_id` nulo porque
     enxergam todas as clínicas.
+
+    Cada usuário vem com `last_upload_at` e `last_login_at`, que são o resto da
+    mesma pergunta: saber *quem* está vinculado não diz se a clínica está
+    operando. "Tem três SENDER cadastrados, nenhum logou em dois meses" e "tem
+    um só, logou hoje e nunca enviou" exigem respostas opostas, e hoje as duas
+    aparecem iguais na tela.
+
+    `ultimo_envio_clinica` fecha o caso em que ninguém da lista enviou nada
+    porque quem enviava foi desvinculado — o envio continua sendo da clínica.
     """
     try:
         if not user_db.get_clinic_by_id(clinic_id):
@@ -134,22 +143,45 @@ async def list_clinic_users(
                 detail="Clínica não encontrada",
             )
         usuarios = user_db.list_users(include_inactive=True, clinic_id=clinic_id)
+        ordenados = sorted(
+            usuarios, key=lambda x: (not x.is_active, (x.name or "").lower())
+        )
+
+        # Duas consultas agregadas para a lista inteira, não uma por usuário.
+        atividade = user_db.get_users_activity(
+            user_ids=[u.id for u in ordenados],
+            user_emails=[u.email for u in ordenados],
+        )
+        ultimo_envio_clinica = user_db.get_clinic_last_upload(clinic_id)
+
+        def _iso(valor):
+            return valor.isoformat() if valor else None
+
         # Sem e-mail nem nome no log: a trilha registra quem consultou e quantos
         # vieram, não quem são.
         logger.info(
             "[CLINICS] %s listou %s usuário(s) da clínica %s",
             current_user.email, len(usuarios), clinic_id,
         )
-        return [
-            {
-                "id": u.id,
-                "email": u.email,
-                "name": u.name,
-                "role": u.role.value if hasattr(u.role, "value") else str(u.role),
-                "is_active": u.is_active,
-            }
-            for u in sorted(usuarios, key=lambda x: (not x.is_active, (x.name or "").lower()))
-        ]
+        return {
+            "ultimo_envio_clinica": _iso(ultimo_envio_clinica),
+            "usuarios": [
+                {
+                    "id": u.id,
+                    "email": u.email,
+                    "name": u.name,
+                    "role": u.role.value if hasattr(u.role, "value") else str(u.role),
+                    "is_active": u.is_active,
+                    "last_upload_at": _iso(
+                        atividade.get(u.id, {}).get("last_upload_at")
+                    ),
+                    "last_login_at": _iso(
+                        atividade.get(u.id, {}).get("last_login_at")
+                    ),
+                }
+                for u in ordenados
+            ],
+        }
     except HTTPException:
         raise
     except Exception as e:
