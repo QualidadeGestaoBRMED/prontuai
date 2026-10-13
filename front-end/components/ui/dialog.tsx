@@ -46,15 +46,83 @@ function DialogOverlay({
   );
 }
 
+/**
+ * Devolve o clique à página assim que o modal começa a fechar.
+ *
+ * Enquanto um Dialog modal está aberto, o Radix põe `pointer-events: none` no
+ * `<body>` e só o restaura quando o conteúdo desmonta — o que acontece depois
+ * da animação de saída (`duration-200`). Medido nesta tela: por ~400ms depois
+ * de fechar, `document.elementFromPoint` sobre um botão devolve `DIV`/`HTML` em
+ * vez do `BUTTON`, ou seja, o clique do usuário não chega a lugar nenhum.
+ *
+ * Na prática é "fechei e cliquei no próximo e não abriu" — exatamente o que a
+ * Checagem faz o dia inteiro (fecha um prontuário, clica no seguinte). Some com
+ * o problema liberar o `<body>` quando o `data-state` vira `closed`, sem
+ * esperar a animação: o conteúdo que está saindo tem `pointer-events` próprio,
+ * então a animação continua igual.
+ *
+ * A checagem por outro dialog ainda aberto cobre modais empilhados — na
+ * Checagem o diálogo de parecer abre POR CIMA do de detalhes, e fechar só o de
+ * cima não pode destravar a página que o de baixo ainda está bloqueando.
+ */
+function useLiberarCliqueAoFechar(node: HTMLDivElement | null) {
+  React.useEffect(() => {
+    if (!node) return;
+
+    const liberar = () => {
+      if (!document.querySelector('[role="dialog"][data-state="open"]')) {
+        document.body.style.pointerEvents = "";
+      }
+      // O overlay cobre a tela inteira (`inset-0 z-50`) e continua no DOM
+      // durante o fade-out, então o clique seguinte bate NELE. Tem de ser
+      // estilo inline: o Radix põe `pointer-events: auto` inline nas camadas,
+      // e classe do Tailwind não vence inline (medido — a classe não pegou).
+      document
+        .querySelectorAll<HTMLElement>(
+          '[data-slot="dialog-overlay"][data-state="closed"],[data-slot="dialog-content"][data-state="closed"]',
+        )
+        .forEach((el) => {
+          el.style.pointerEvents = "none";
+        });
+    };
+
+    const observador = new MutationObserver(() => {
+      if (node.getAttribute("data-state") === "closed") liberar();
+    });
+    observador.observe(node, { attributes: true, attributeFilter: ["data-state"] });
+
+    return () => {
+      observador.disconnect();
+      // Desmonte sem passar por `closed` (navegação, por exemplo) deixaria o
+      // body travado para sempre.
+      liberar();
+    };
+  }, [node]);
+}
+
 function DialogContent({
   className,
   children,
+  ref: refExterno,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content>) {
+  // `useState`, e não `useRef`: o conteúdo do Dialog só existe no DOM enquanto
+  // ele está aberto, e um ref não dispara render — o efeito acima rodaria uma
+  // única vez, na montagem deste componente, quando o nó ainda é `null`, e
+  // nunca instalaria o observador. Com estado, ele roda de novo a cada vez que
+  // o nó entra e sai.
+  const [contentNode, setContentNode] = React.useState<HTMLDivElement | null>(null);
+  useLiberarCliqueAoFechar(contentNode);
+
   return (
     <DialogPortal>
       <DialogOverlay />
       <DialogPrimitive.Content
+        ref={(node: HTMLDivElement | null) => {
+          setContentNode(node);
+          if (typeof refExterno === "function") refExterno(node);
+          else if (refExterno) refExterno.current = node;
+        }}
         data-slot="dialog-content"
         className={cn(
           "bg-background data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 fixed top-1/2 left-1/2 z-50 grid max-h-[calc(100%-2rem)] w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto rounded-xl border p-6 shadow-lg duration-200 sm:max-w-[95vw] sm:max-w-[1600px]",
