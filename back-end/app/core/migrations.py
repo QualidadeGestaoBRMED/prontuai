@@ -100,6 +100,19 @@ def check_if_migration_needed() -> tuple[bool, list[str]]:
             logger.warning("⚠️  Migration 008 necessária: tabela document_feedbacks não existe")
             migrations_needed.append("008_add_document_feedback.sql")
 
+        # Verificar migration 009: índices das listagens paginadas de documentos.
+        # Única checagem que olha pg_indexes e não information_schema.columns:
+        # a migration não cria coluna nenhuma, só índice. Basta conferir um dos
+        # três — eles nascem e morrem juntos, no mesmo arquivo.
+        cursor.execute("""
+            SELECT indexname
+            FROM pg_indexes
+            WHERE tablename='documents' AND indexname='idx_documents_uploaded_at'
+        """)
+        if not cursor.fetchone():
+            logger.warning("⚠️  Migration 009 necessária: índice idx_documents_uploaded_at não existe")
+            migrations_needed.append("009_add_documents_list_indexes.sql")
+
         cursor.close()
         conn.close()
 
