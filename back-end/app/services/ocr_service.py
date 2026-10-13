@@ -175,8 +175,22 @@ def textract_to_markdown(textract_response: dict) -> str:
     - Blocos do tipo LINE são convertidos em linhas de texto
     - Texto curto em maiúsculas (≤ 4 palavras) se torna cabeçalho markdown (##)
     - Preserva padrões UF/CPF para detecção via regex
+    - Troca de página vira um comentário `<!-- pagina N -->`
+
+    O marcador de página existe porque o nome de um exame aparecer no markdown
+    não prova que o laudo veio junto: o ASO imprime a lista de exames
+    complementares, e o nome lido dali é indistinguível do nome lido de um laudo
+    de verdade. Com a página é possível perguntar se o exame aparece FORA da
+    página do ASO — ver `_evidencia_por_pagina` em `workflow_service`.
+
+    Sai como comentário HTML para não virar conteúdo: o markdown vai para o
+    prompt de extração e para a redação de PII, e um comentário não é texto do
+    documento. Só é emitido quando o Textract informa a página, o que acontece
+    no caminho assíncrono (PDF de várias páginas); no síncrono o campo não vem e
+    o markdown fica exatamente como era.
     """
     lines = []
+    pagina_atual = None
 
     for block in textract_response.get('Blocks', []):
         if block['BlockType'] == 'LINE':
@@ -184,6 +198,11 @@ def textract_to_markdown(textract_response: dict) -> str:
 
             if not text:
                 continue
+
+            pagina = block.get('Page')
+            if pagina is not None and pagina != pagina_atual:
+                lines.append(f"\n<!-- pagina {pagina} -->\n")
+                pagina_atual = pagina
 
             # Detectar possíveis cabeçalhos de exames:
             # - Texto curto (até 4 palavras)

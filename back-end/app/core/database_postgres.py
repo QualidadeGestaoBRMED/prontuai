@@ -815,8 +815,14 @@ class PostgresUserDatabase:
         finally:
             session.close()
 
-    def list_users(self, include_inactive: bool = False) -> List[User]:
+    def list_users(
+        self, include_inactive: bool = False, clinic_id: Optional[str] = None
+    ) -> List[User]:
         """Lista usuários com filtragem opcional.
+
+        `clinic_id` recorta pelos usuários vinculados a uma clínica. Na prática
+        são os SENDER: ADMIN, MANAGER e CHECKER têm `clinic_id` nulo, porque
+        enxergam todas as clínicas.
 
         Uma linha inconsistente **não** derruba a lista. Antes derrubava: a tela
         de administração inteira respondia 500 por causa de um registro, sem dizer
@@ -846,6 +852,8 @@ class PostgresUserDatabase:
             )
             if not include_inactive:
                 query = query.filter(UserModel.is_active == True)
+            if clinic_id is not None:
+                query = query.filter(UserModel.clinic_id == clinic_id)
 
             usuarios: List[User] = []
             invalidas: List[str] = []
