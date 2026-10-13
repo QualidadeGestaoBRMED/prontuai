@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useSession } from "next-auth/react";
 import { AppSidebar } from "@/components/app-sidebar";
 import {
@@ -84,12 +84,11 @@ function haQuantoTempo(iso: string | null): { texto: string; titulo?: string; al
 export default function ClinicsAdminPage() {
   const { data: session } = useSession();
   const [clinics, setClinics] = useState<Clinic[]>([]);
-  // Usuários por clínica, carregados sob demanda ao abrir a linha. Só ADMIN vê o
-  // controle, e o back-end recusa de qualquer forma (`require_admin`).
-  const [abertos, setAbertos] = useState<Set<string>>(new Set());
-  const [usuarios, setUsuarios] = useState<Record<string, ClinicUsersResposta>>({});
-  const [carregandoUsuarios, setCarregandoUsuarios] = useState<Set<string>>(new Set());
-  const [erroUsuarios, setErroUsuarios] = useState<Record<string, string>>({});
+  // Usuários da clínica que está aberta no modal de edição. Só ADMIN enxerga a
+  // seção, e o back-end recusa de qualquer forma (`require_admin`).
+  const [usuariosClinica, setUsuariosClinica] = useState<ClinicUsersResposta | null>(null);
+  const [carregandoUsuarios, setCarregandoUsuarios] = useState(false);
+  const [erroUsuarios, setErroUsuarios] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [editModalOpen, setEditModalOpen] = useState(false);
@@ -135,52 +134,44 @@ export default function ClinicsAdminPage() {
   const podeCarregar = bypassAuth || !!session?.user?.email;
   const ehAdmin = bypassAuth || session?.user?.role === "ADMIN";
 
+  // Qual clínica a busca em voo está carregando. Abrir uma clínica, fechar e
+  // abrir outra depressa deixa duas respostas correndo, e a primeira pode
+  // chegar por último — sem esta trava, o modal mostraria os usuários da
+  // clínica errada.
+  const usuariosPedidosRef = useRef<string | null>(null);
+
   /**
-   * Abre a linha e busca os usuários na primeira vez.
+   * Busca os usuários da clínica aberta no modal de edição.
    *
    * Sob demanda de propósito: são 117 clínicas na base, e trazer os usuários de
    * todas no carregamento da tela custaria uma consulta por clínica para uma
    * informação que só é olhada uma de cada vez, numa investigação pontual.
+   *
+   * Sem cache entre aberturas: `last_login_at` e `last_upload_at` envelhecem, e
+   * guardar a resposta faria o modal mostrar "há 2 dias" de uma consulta da
+   * manhã. Uma requisição por abertura é barata — é um clique explícito.
    */
-  const alternarUsuarios = useCallback(
-    async (clinicId: string) => {
-      setAbertos((atual) => {
-        const proximo = new Set(atual);
-        if (!proximo.delete(clinicId)) proximo.add(clinicId);
-        return proximo;
+  const carregarUsuarios = useCallback(async (clinicId: string) => {
+    usuariosPedidosRef.current = clinicId;
+    setUsuariosClinica(null);
+    setErroUsuarios(null);
+    setCarregandoUsuarios(true);
+    try {
+      const resposta = await authFetch(API_ENDPOINTS.CLINIC_USERS(clinicId));
+      if (!resposta.ok) throw new Error(`HTTP ${resposta.status}`);
+      const corpo: ClinicUsersResposta = await resposta.json();
+      if (usuariosPedidosRef.current !== clinicId) return;
+      setUsuariosClinica({
+        ultimo_envio_clinica: corpo.ultimo_envio_clinica ?? null,
+        usuarios: corpo.usuarios ?? [],
       });
-      if (usuarios[clinicId] || carregandoUsuarios.has(clinicId)) return;
-
-      setCarregandoUsuarios((a) => new Set(a).add(clinicId));
-      setErroUsuarios((a) => {
-        if (!(clinicId in a)) return a;
-        const proximo = { ...a };
-        delete proximo[clinicId];
-        return proximo;
-      });
-      try {
-        const resposta = await authFetch(API_ENDPOINTS.CLINIC_USERS(clinicId));
-        if (!resposta.ok) throw new Error(`HTTP ${resposta.status}`);
-        const corpo: ClinicUsersResposta = await resposta.json();
-        setUsuarios((a) => ({
-          ...a,
-          [clinicId]: {
-            ultimo_envio_clinica: corpo.ultimo_envio_clinica ?? null,
-            usuarios: corpo.usuarios ?? [],
-          },
-        }));
-      } catch {
-        setErroUsuarios((a) => ({ ...a, [clinicId]: "Não foi possível carregar os usuários." }));
-      } finally {
-        setCarregandoUsuarios((a) => {
-          const proximo = new Set(a);
-          proximo.delete(clinicId);
-          return proximo;
-        });
-      }
-    },
-    [usuarios, carregandoUsuarios],
-  );
+    } catch {
+      if (usuariosPedidosRef.current !== clinicId) return;
+      setErroUsuarios("Não foi possível carregar os usuários.");
+    } finally {
+      if (usuariosPedidosRef.current === clinicId) setCarregandoUsuarios(false);
+    }
+  }, []);
 
   const fetchClinics = useCallback(async () => {
     if (!podeCarregar) return;
@@ -323,6 +314,9 @@ export default function ClinicsAdminPage() {
     setSelectedClinic(clinic);
     setFormName(clinic.name);
     setEditModalOpen(true);
+    // Só para ADMIN: a seção nem é renderizada para MANAGER, e o back-end
+    // responderia 403 (`require_admin`) — pedir à toa só geraria erro no log.
+    if (ehAdmin) carregarUsuarios(clinic.id);
   };
 
   return (
@@ -408,25 +402,9 @@ export default function ClinicsAdminPage() {
                     </tr>
                   ) : (
                     clinics.map((clinic) => (
-                      <Fragment key={clinic.id}>
-                      <tr>
+                      <tr key={clinic.id}>
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                          <div className="flex items-center gap-2">
-                            {ehAdmin && (
-                              <button
-                                type="button"
-                                onClick={() => alternarUsuarios(clinic.id)}
-                                aria-expanded={abertos.has(clinic.id)}
-                                aria-label={`Ver usuários de ${clinic.name}`}
-                                className="text-gray-400 hover:text-gray-700 transition-colors"
-                              >
-                                <span className="inline-block w-3 text-xs">
-                                  {abertos.has(clinic.id) ? "▾" : "▸"}
-                                </span>
-                              </button>
-                            )}
-                            <span>{clinic.name}</span>
-                          </div>
+                          {clinic.name}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
                           {clinic.email}
@@ -462,107 +440,6 @@ export default function ClinicsAdminPage() {
                           </Button>
                         </td>
                       </tr>
-                      {ehAdmin && abertos.has(clinic.id) && (
-                        <tr className="bg-gray-50">
-                          <td colSpan={5} className="px-6 py-4">
-                            {carregandoUsuarios.has(clinic.id) ? (
-                              <p className="text-sm text-gray-500">Carregando usuários…</p>
-                            ) : erroUsuarios[clinic.id] ? (
-                              <p className="text-sm text-red-600">{erroUsuarios[clinic.id]}</p>
-                            ) : (
-                              (() => {
-                                const dados = usuarios[clinic.id];
-                                if (!dados) return null;
-                                const envioClinica = haQuantoTempo(dados.ultimo_envio_clinica);
-                                const lista = dados.usuarios;
-                                return (
-                                  <div className="space-y-3">
-                                    <p className="text-xs uppercase tracking-wide text-gray-500">
-                                      Último envio da clínica:{" "}
-                                      <span
-                                        title={envioClinica.titulo}
-                                        className={
-                                          envioClinica.alerta
-                                            ? "font-semibold text-amber-700"
-                                            : "font-semibold text-gray-700"
-                                        }
-                                      >
-                                        {envioClinica.texto}
-                                      </span>
-                                    </p>
-
-                                    {lista.length === 0 ? (
-                                      /* Distingue de erro: a clínica existe e não tem
-                                         ninguém vinculado — numa investigação isso é a
-                                         resposta. */
-                                      <p className="text-sm text-gray-500">
-                                        Nenhum usuário vinculado a esta clínica.
-                                      </p>
-                                    ) : (
-                                      <div className="space-y-1">
-                                        <p className="text-xs uppercase tracking-wide text-gray-500">
-                                          {lista.length} usuário
-                                          {lista.length > 1 ? "s" : ""} vinculado
-                                          {lista.length > 1 ? "s" : ""}
-                                        </p>
-                                        <table className="w-full text-sm">
-                                          <thead>
-                                            <tr className="text-left text-xs uppercase tracking-wide text-gray-400">
-                                              <th className="py-1 pr-4 font-normal">Usuário</th>
-                                              <th className="py-1 pr-4 font-normal">Último envio</th>
-                                              <th className="py-1 font-normal">Último login</th>
-                                            </tr>
-                                          </thead>
-                                          <tbody>
-                                            {lista.map((u) => {
-                                              const envio = haQuantoTempo(u.last_upload_at);
-                                              const login = haQuantoTempo(u.last_login_at);
-                                              return (
-                                                <tr key={u.id} className="align-top">
-                                                  <td className="py-1 pr-4">
-                                                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                                                      <span className="font-mono text-gray-800">
-                                                        {u.email}
-                                                      </span>
-                                                      <span className="text-gray-500">{u.name}</span>
-                                                      {!u.is_active && (
-                                                        <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs text-red-800">
-                                                          inativo
-                                                        </span>
-                                                      )}
-                                                    </div>
-                                                  </td>
-                                                  <td
-                                                    className={`py-1 pr-4 whitespace-nowrap ${
-                                                      envio.alerta ? "text-amber-700" : "text-gray-600"
-                                                    }`}
-                                                    title={envio.titulo}
-                                                  >
-                                                    {envio.texto}
-                                                  </td>
-                                                  <td
-                                                    className={`py-1 whitespace-nowrap ${
-                                                      login.alerta ? "text-amber-700" : "text-gray-600"
-                                                    }`}
-                                                    title={login.titulo}
-                                                  >
-                                                    {login.texto}
-                                                  </td>
-                                                </tr>
-                                              );
-                                            })}
-                                          </tbody>
-                                        </table>
-                                      </div>
-                                    )}
-                                  </div>
-                                );
-                              })()
-                            )}
-                          </td>
-                        </tr>
-                      )}
-                      </Fragment>
                     ))
                   )}
                 </tbody>
@@ -635,7 +512,9 @@ export default function ClinicsAdminPage() {
 
         {/* Edit Clinic Modal */}
         <Dialog open={editModalOpen} onOpenChange={setEditModalOpen}>
-          <DialogContent>
+          {/* Rolagem: com a lista de usuários dentro, o modal passa da altura
+              da tela numa clínica com muitos SENDER. */}
+          <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-[640px]">
             <DialogHeader>
               <DialogTitle>Editar Clínica</DialogTitle>
               <DialogDescription>
@@ -660,6 +539,97 @@ export default function ClinicsAdminPage() {
                   onChange={(e) => setFormName(e.target.value)}
                 />
               </div>
+
+              {/* Usuários vinculados — só ADMIN. MANAGER edita a clínica sem
+                  enxergar as pessoas dela, e o back-end recusa de qualquer
+                  forma (`require_admin`). É leitura: nada aqui é salvo pelo
+                  botão Salvar, que continua mexendo só no nome. */}
+              {ehAdmin && (
+                <div className="border-t border-gray-200 pt-4">
+                  <Label className="text-xs uppercase tracking-wide text-gray-500">
+                    Usuários vinculados
+                  </Label>
+
+                  {carregandoUsuarios ? (
+                    <p className="mt-2 text-sm text-gray-500">Carregando usuários…</p>
+                  ) : erroUsuarios ? (
+                    <p className="mt-2 text-sm text-red-600">{erroUsuarios}</p>
+                  ) : !usuariosClinica ? null : (
+                    <div className="mt-2 space-y-3">
+                      <p className="text-xs uppercase tracking-wide text-gray-500">
+                        Último envio da clínica:{" "}
+                        <span
+                          title={haQuantoTempo(usuariosClinica.ultimo_envio_clinica).titulo}
+                          className={
+                            haQuantoTempo(usuariosClinica.ultimo_envio_clinica).alerta
+                              ? "font-semibold text-amber-700"
+                              : "font-semibold text-gray-700"
+                          }
+                        >
+                          {haQuantoTempo(usuariosClinica.ultimo_envio_clinica).texto}
+                        </span>
+                      </p>
+
+                      {usuariosClinica.usuarios.length === 0 ? (
+                        /* Distingue de erro: a clínica existe e não tem ninguém
+                           vinculado — numa investigação isso é a resposta. */
+                        <p className="text-sm text-gray-500">
+                          Nenhum usuário vinculado a esta clínica.
+                        </p>
+                      ) : (
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="text-left text-xs uppercase tracking-wide text-gray-400">
+                              <th className="py-1 pr-4 font-normal">Usuário</th>
+                              {/* nowrap: "Último envio" quebrava em duas linhas
+                                  dentro da largura do modal. */}
+                              <th className="py-1 pr-4 font-normal whitespace-nowrap">Último envio</th>
+                              <th className="py-1 font-normal whitespace-nowrap">Último login</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {usuariosClinica.usuarios.map((u) => {
+                              const envio = haQuantoTempo(u.last_upload_at);
+                              const login = haQuantoTempo(u.last_login_at);
+                              return (
+                                <tr key={u.id} className="align-top">
+                                  <td className="py-1 pr-4">
+                                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                                      <span className="font-mono text-gray-800">{u.email}</span>
+                                      <span className="text-gray-500">{u.name}</span>
+                                      {!u.is_active && (
+                                        <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs text-red-800">
+                                          inativo
+                                        </span>
+                                      )}
+                                    </div>
+                                  </td>
+                                  <td
+                                    className={`py-1 pr-4 whitespace-nowrap ${
+                                      envio.alerta ? "text-amber-700" : "text-gray-600"
+                                    }`}
+                                    title={envio.titulo}
+                                  >
+                                    {envio.texto}
+                                  </td>
+                                  <td
+                                    className={`py-1 whitespace-nowrap ${
+                                      login.alerta ? "text-amber-700" : "text-gray-600"
+                                    }`}
+                                    title={login.titulo}
+                                  >
+                                    {login.texto}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             <DialogFooter>
