@@ -37,6 +37,11 @@ EXAM_SIMILARITY_INDEX_HMAC_PATH = f"{EXAM_SIMILARITY_INDEX_PATH}.hmac"
 EXAM_SIMILARITY_DATA_HMAC_PATH = f"{EXAM_SIMILARITY_DATA_PATH}.hmac"
 EXAM_SIMILARITY_CSV_PATH = os.path.join(settings.BASE_DIR, "exames_similares_final.csv")
 MAX_SIMILARITY_TERM_LENGTH = 180
+# Teto da confiança quando o PDF não tem páginas suficientes para os laudos dos
+# exames exigidos. 70 por ser o primeiro degrau abaixo da faixa que a tela trata
+# como alta — o documento continua seguindo o fluxo normal, só deixa de parecer
+# certo. Ver `_paginas_insuficientes`.
+TETO_CONFIANCA_POUCAS_PAGINAS = 70
 MAX_SIMILARS_PER_ENTRY = 40
 
 
@@ -245,6 +250,112 @@ def _is_no_open_exam_order_error(error_payload: Any) -> bool:
         return False
     normalized_error = _normalize_error_text(error_payload.get("erro"))
     return "expedicao em aberto nao encontrada" in normalized_error
+
+
+# Marcador que `ocr_service.textract_to_markdown` emite a cada troca de página.
+_RE_PAGINA_MARKDOWN = re.compile(r"<!--\s*pagina\s+(\d+)\s*-->")
+
+
+def _paginas_do_markdown(markdown: str) -> Optional[int]:
+    """Quantas páginas o documento tem, ou None quando não dá para saber.
+
+    Sai dos marcadores do OCR. `None` no caminho síncrono do Textract, que não
+    informa página, e em todo documento processado antes do marcador existir —
+    por isso quem usa este número precisa tratar `None` como "não avaliar", e
+    nunca como zero.
+    """
+    if not markdown:
+        return None
+    paginas = {int(n) for n in _RE_PAGINA_MARKDOWN.findall(markdown)}
+    return max(paginas) if paginas else None
+
+
+_RE_ABERTURA_LISTA_ASO = re.compile(
+    r"Procedimentos\s+Realizados|Exames\s+complementares", re.I
+)
+
+
+def _exames_sem_laudo(markdown: str, exames_brnet: list[str]) -> Optional[list[str]]:
+    """Exames exigidos que não aparecem em nenhuma página fora da do ASO.
+
+    **Não decide nada.** O resultado é gravado no payload para ser comparado com
+    o que os revisores apontam, e só depois disso virar regra. A medição que
+    justifica essa cautela está abaixo.
+
+    A pergunta que ele tenta responder é a causa de 12 das 16 rejeições por exame
+    faltante na semana de 05/10: o nome do exame foi lido da lista de "exames
+    complementares" impressa no ASO, e não de um laudo. Para a IA os dois são o
+    mesmo texto.
+
+    Procura por página — o marcador vem de `ocr_service.textract_to_markdown` —
+    pulando a que abre a lista do ASO, e usa `exam_catalog_source.varrer_markdown`
+    em vez de comparar o nome cru: o laudo de GLICEMIA DE JEJUM se chama GLICOSE,
+    o de RADIOGRAFIA se chama RAIOS X, o de AUDIOMETRIA TONAL se chama AUDIOGRAMA.
+    Comparar literal marcava esses três como ausentes.
+
+    POR QUE NÃO VIRA DECISÃO AINDA
+        Medido nos 16 documentos reprocessados: a regra encontra as 12 cobranças
+        reais dos revisores, mas marca 70% de todos os exames exigidos. O excesso
+        não é ajuste fino de limiar — é premissa errada. "Exame exigido" não é
+        "exame que gera laudo separado": o CLÍNICO OCUPACIONAL é a própria
+        consulta, registrada na ficha médica, e nunca terá página própria.
+
+        Fechar essa lacuna exige saber quais exames produzem laudo, que é
+        metadado de curadoria e não existe no catálogo. Gravar o resultado é o
+        caminho para levantá-lo: semanas de comparação entre o que isto aponta e
+        o que o revisor cobrou mostram quais nomes aparecem sempre e devem sair.
+
+    `None` quando não dá para avaliar — sem marcador de página ou sem exigência.
+    """
+    if not markdown or not exames_brnet:
+        return None
+    paginas = _RE_PAGINA_MARKDOWN.split(markdown)
+    if len(paginas) < 2:
+        return None
+
+    alvos = {}
+    for exame in exames_brnet:
+        normalizado = _normalizar_busca(exame)
+        if normalizado:
+            alvos.setdefault(normalizado, exame)
+    if not alvos:
+        return None
+
+    # `split` com grupo devolve [antes, num, texto, num, texto, ...]; o texto de
+    # cada página são os índices ímpares a partir de 2.
+    encontrados: set[str] = set()
+    for i in range(2, len(paginas), 2):
+        trecho = paginas[i]
+        if _RE_ABERTURA_LISTA_ASO.search(trecho):
+            continue  # página do ASO: a lista impressa ali não é prova de laudo
+        pendentes = [a for a in alvos if a not in encontrados]
+        if not pendentes:
+            break
+        achados = exam_catalog_source.varrer_markdown(
+            f" {_normalizar_busca(trecho)} ", pendentes
+        )
+        encontrados |= set(achados)
+
+    return [nome for norm, nome in alvos.items() if norm not in encontrados]
+
+
+def _paginas_insuficientes(paginas: Optional[int], exigidos: int) -> bool:
+    """O PDF tem menos páginas do que seria preciso para conter todos os laudos.
+
+    Reserva duas páginas para o que não é laudo — o ASO e a ficha médica — e
+    compara o resto com o número de exames exigidos. É aritmética, não leitura:
+    um documento de 2 páginas não pode trazer o laudo de 11 exames, qualquer que
+    seja o conteúdo.
+
+    Medido nos 16 documentos que a checagem rejeitou por exame faltante na
+    semana de 05/10: pega 6 deles sem abrir o arquivo. Não serve de veredito —
+    exame feito fora, laudo de duas páginas e exame sem laudo próprio (o clínico
+    ocupacional é a própria consulta) fazem a conta variar. Serve para a
+    confiança parar de dizer 100.
+    """
+    if paginas is None or exigidos <= 0:
+        return False
+    return (paginas - 2) < exigidos
 
 
 def _extrair_linhas_markdown(markdown: str) -> list[tuple[str, str]]:
@@ -1132,13 +1243,48 @@ async def _processar_documento_completo_impl(
     )
     quality_score = analysis_details["quality"]["score"]
     confiabilidade_score = round((quality_score * 0.4) + (cobertura_obrigatorios * 100 * 0.6))
+
+    # Guarda por contagem de páginas. Não muda o desfecho — o documento segue
+    # para o mesmo lugar —, só impede que a confiança afirme 100 num PDF que
+    # comprovadamente não cabe os laudos. Dos 16 rejeitados por exame faltante
+    # na semana de 05/10, quinze tinham confiança 100.
+    paginas_documento = _paginas_do_markdown(markdown_content or "")
+    poucas_paginas = _paginas_insuficientes(paginas_documento, len(exames_brnet or []))
+    if poucas_paginas:
+        confiabilidade_score = min(confiabilidade_score, TETO_CONFIANCA_POUCAS_PAGINAS)
+
     confidence_details = {
         "score": confiabilidade_score,
         "quality_score": quality_score,
         "mandatory_coverage": round(cobertura_obrigatorios, 4),
         "mandatory_found": obrigatorios_encontrados,
         "mandatory_total": obrigatorios_total,
+        # `None` significa "não foi possível contar", não "zero páginas".
+        "paginas": paginas_documento,
+        "paginas_insuficientes": poucas_paginas,
     }
+    if poucas_paginas:
+        _log_event(
+            "paginas_insuficientes",
+            run_id=run_id,
+            paginas=paginas_documento,
+            exames_exigidos=len(exames_brnet or []),
+            score_limitado_a=confiabilidade_score,
+        )
+
+    # Sinal em observação: exame exigido sem evidência de laudo fora da página do
+    # ASO. NÃO entra no comparativo, na confiança nem no status — só é gravado,
+    # para ser comparado com o que os revisores apontam. Ver `_exames_sem_laudo`.
+    sem_laudo = _exames_sem_laudo(markdown_content or "", exames_brnet or [])
+    if sem_laudo is not None:
+        confidence_details["exames_sem_laudo"] = sem_laudo
+        _log_event(
+            "exames_sem_laudo",
+            run_id=run_id,
+            quantos=len(sem_laudo),
+            de=len(exames_brnet or []),
+            exames=sem_laudo[:20],
+        )
 
     # Prepara o objeto de resposta final para o frontend
     resposta_final = {

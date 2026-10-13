@@ -127,8 +127,14 @@ clin AS (
     GROUP BY 1, 2, 3
 ),
 -- base de acuracia: IA x humano, com classificacao do "jeitinho"
+--
+-- `DISTINCT ON (content_hash)` tira o reenvio: o mesmo arquivo mandado duas
+-- vezes pela mesma clinica vira duas divergencias com a mesma causa, e a
+-- segunda nao e um erro novo da IA. Mede-se pouco -- 1 caso em 50 na semana de
+-- 05/10, zero em quatro das seis semanas olhadas --, mas o que entra e ruido
+-- puro. Documento sem content_hash cai no proprio id e segue contando.
 julgamento AS (
-    SELECT
+    SELECT DISTINCT ON (COALESCE(d.content_hash, d.id))
         d.created_at,
         ia.ia_status,
         h.humano_status,
@@ -164,6 +170,9 @@ julgamento AS (
                                 ELSE d.rejection_reason END, '')),
             'ÁÀÂÃÉÊÍÓÔÕÚÜÇáàâãéêíóôõúüç', 'AAAAEEIOOOUUCaaaaeeiooouuc')) AS motivo
     ) mm
+    -- Entre reenvios do mesmo arquivo fica o PRIMEIRO: e nele que a IA decidiu
+    -- sem saber de nada, e e essa decisao que a acuracia mede.
+    ORDER BY COALESCE(d.content_hash, d.id), d.created_at, d.id
 ),
 -- Por que a divergencia aconteceu. So classifica o que conta contra a acuracia.
 motivado AS (
