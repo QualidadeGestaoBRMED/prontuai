@@ -894,6 +894,107 @@ class PostgresUserDatabase:
         finally:
             session.close()
 
+    def get_users_activity(
+        self,
+        user_ids: List[str],
+        user_emails: List[str],
+    ) -> dict[str, dict[str, Optional[datetime]]]:
+        """Último envio e último login de um conjunto de usuários.
+
+        Devolve `{user_id: {"last_upload_at": dt|None, "last_login_at": dt|None}}`.
+
+        **Duas consultas agregadas, nunca uma por usuário.** Uma clínica grande
+        tem dezenas de SENDER; fazer N+1 aqui transformaria abrir a linha da
+        clínica numa espera visível.
+
+        As duas chaves são diferentes de propósito:
+
+        - o envio sai de `documents.uploaded_by_user_id`, que é a chave real e
+          sobrevive a troca de e-mail;
+        - o login sai de `audit_logs`, que **não tem** `user_id` preenchido de
+          forma confiável na trilha de autenticação (`auth.login.success` grava
+          `user_email`, inclusive nas recusas em que ainda não há usuário
+          resolvido — ver CLAUDE.md). Por isso o join do login é por e-mail.
+
+        Só `auth.login.success` conta. `auth.refresh.success` é o token sendo
+        renovado em segundo plano: contaria como "logou agora" uma aba deixada
+        aberta, que é justamente o oposto do que a pergunta quer saber.
+        """
+        vazio: dict[str, dict[str, Optional[datetime]]] = {
+            uid: {"last_upload_at": None, "last_login_at": None} for uid in user_ids
+        }
+        if not user_ids:
+            return vazio
+
+        session = self._get_session()
+        try:
+            for uid, ultimo in (
+                session.query(
+                    DocumentModel.uploaded_by_user_id,
+                    func.max(DocumentModel.uploaded_at),
+                )
+                .filter(DocumentModel.uploaded_by_user_id.in_(user_ids))
+                .group_by(DocumentModel.uploaded_by_user_id)
+            ):
+                if uid in vazio:
+                    vazio[uid]["last_upload_at"] = ultimo
+
+            # O e-mail volta para o id do usuário correspondente.
+            por_email = {
+                (email or "").lower(): uid
+                for uid, email in zip(user_ids, user_emails)
+                if email
+            }
+            if por_email:
+                # A comparação é pela COLUNA crua, não por `lower(user_email)`:
+                # existe `idx_audit_logs_user_email` sobre a coluna, e envolvê-la
+                # numa função descarta o índice e vira Seq Scan — numa tabela que
+                # cresce a cada requisição não-GET do sistema inteiro. A caixa é
+                # coberta mandando as duas formas na lista do IN e normalizando a
+                # chave depois, em Python.
+                procurados = {e for e in user_emails if e}
+                procurados |= {e.lower() for e in procurados}
+                for email, ultimo in (
+                    session.query(
+                        AuditLogModel.user_email,
+                        func.max(AuditLogModel.created_at),
+                    )
+                    .filter(
+                        AuditLogModel.user_email.in_(sorted(procurados)),
+                        AuditLogModel.action == "auth.login.success",
+                    )
+                    .group_by(AuditLogModel.user_email)
+                ):
+                    uid = por_email.get((email or "").lower())
+                    if uid is None:
+                        continue
+                    anterior = vazio[uid]["last_login_at"]
+                    # Duas caixas do mesmo e-mail podem cair no mesmo usuário.
+                    if anterior is None or (ultimo and ultimo > anterior):
+                        vazio[uid]["last_login_at"] = ultimo
+
+            return vazio
+        finally:
+            session.close()
+
+    def get_clinic_last_upload(self, clinic_id: str) -> Optional[datetime]:
+        """Data do último documento enviado pela clínica, por qualquer usuário.
+
+        Não é o máximo dos usuários de hoje: documento enviado por alguém que
+        foi desvinculado ou desativado continua sendo envio da clínica. É essa
+        diferença que responde "a clínica está parada?" sem depender de quem
+        ainda está na lista.
+        """
+        session = self._get_session()
+        try:
+            return (
+                session.query(func.max(DocumentModel.uploaded_at))
+                .filter(DocumentModel.clinic_id == clinic_id)
+                .scalar()
+            )
+        finally:
+            session.close()
+
     def create_user(self, email: str, name: str, role: UserRole = UserRole.CHECKER, clinic_id: Optional[str] = None) -> User:
         """Cria um novo usuário."""
         session = self._get_session()
@@ -2310,15 +2411,24 @@ class PostgresUserDatabase:
         finally:
             session.close()
 
-    def get_exam_catalog_stats(self) -> ExamCatalogStats:
-        """Resumo do catálogo para o cabeçalho do painel."""
+    def get_exam_catalog_stats(
+        self, pendencias: Optional[List[ExamPendency]] = None
+    ) -> ExamCatalogStats:
+        """Resumo do catálogo para o cabeçalho do painel.
+
+        `pendencias` vem de fora porque a consulta que as produz varre todos os
+        documentos (~1,65s no dev) e o painel já a pede para a aba de
+        pendências. Recebendo a lista pronta, o cabeçalho e a aba dividem um
+        único scan — ver `app/services/exam_pendencies.py`. Sem o parâmetro, o
+        método continua autossuficiente (é o que os testes usam).
+        """
         session = self._get_session()
         try:
             pais_com_variacao = (
                 session.query(ExamVariationModel.parent_id).distinct().subquery()
             )
-            # Uma chamada só: a consulta de pendências varre todos os documentos.
-            pendencias = self.listar_pendencias_catalogo(limit=10000)
+            if pendencias is None:
+                pendencias = self.listar_pendencias_catalogo(limit=10000)
             # Pai desativado não vale na comparação; contá-lo como "confirmado no
             # BRNET" ou "sem variação" inflava o cabeçalho.
             pai_ativo = ExamParentModel.is_active.is_(True)
