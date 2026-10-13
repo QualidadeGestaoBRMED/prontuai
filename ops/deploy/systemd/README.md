@@ -27,7 +27,7 @@ de crontab do usuario (sobrevive a reboot, tem logs no journal, e retry via
 mkdir -p /home/ec2-user/prontuai-db/script
 cp ops/deploy/backup_postgres.sh ops/deploy/restore_postgres.sh \
    ops/deploy/purge_old_records.sh ops/deploy/archive_documents_to_drive.sh \
-   ops/deploy/lib.sh \
+   ops/deploy/offload_backups_to_drive.sh ops/deploy/lib.sh \
   /home/ec2-user/prontuai-db/script/
 
 sudo cp ops/deploy/systemd/prontuai-db-backup.service /etc/systemd/system/
@@ -41,7 +41,9 @@ sudo systemctl enable --now prontuai-db-purge.timer
 
 O arquivamento no Drive tem um passo a mais (configurar o rclone e rodar o
 primeiro lote a mao) e esta em `ops/deploy/arquivamento-drive.md`; nao habilite
-`prontuai-archive-drive.timer` antes de seguir aquele runbook.
+`prontuai-archive-drive.timer` antes de seguir aquele runbook. O offload dos
+backups para o Drive tambem exige um passo antes (o remote `crypt`); ver a
+secao propria abaixo.
 
 ## Purga semanal (`prontuai-db-purge.timer`)
 
@@ -84,16 +86,89 @@ ARCHIVE_DRY_RUN=true /home/ec2-user/prontuai-db/script/archive_documents_to_driv
 Ele compartilha o mesmo `flock` do backup e da purga (ver abaixo) e, como a
 purga, **pula** a execução se o backup ainda estiver rodando.
 
+## Teto do bucket de backup (`prontuai-offload-backups.timer`)
+
+Roda todo dia as 05:00 e mantem o bucket de backup abaixo de um teto, movendo
+os dumps mais antigos para o Google Drive: acima de `OFFLOAD_TRIGGER_GB`
+(default 3.5) move ate ficar abaixo de `OFFLOAD_TARGET_GB` (default 3). O teto
+e de 4 GB, e o gatilho fica abaixo dele para um dump novo nao furar o teto
+entre duas execucoes. Abaixo do gatilho a execucao e so um `rclone size`.
+
+O R2 nao faz isso sozinho: lifecycle rule olha idade, nao tamanho, e nao tem
+destino fora do R2.
+
+O que sai, nesta ordem: os dumps soltos na raiz do prefixo (`legado`, gravados
+por um `backup_postgres.sh` anterior a ago/2026, sem subpasta de cadencia),
+depois `monthly/` e `weekly/` (`OFFLOAD_CADENCES`), do
+mais antigo para o mais novo, **nunca** os 2 mais recentes de cada cadencia
+(`OFFLOAD_KEEP_LATEST`), para o restore de emergencia continuar saindo do R2.
+`daily/` fica de fora no default porque a lifecycle rule ja o expira. Cada dump
+sai com o seu `.sha256`, e o par so e apagado do R2 depois de verificado no
+destino lendo o conteudo (`cryptcheck`), nao so pelo tamanho.
+
+### Remote `crypt` (obrigatorio)
+
+Sao dumps completos do banco de producao, e o script recusa destino sem
+criptografia (a nao ser com `OFFLOAD_ALLOW_PLAINTEXT=true`). Sobre o remote
+`gdrive` do arquivamento (`ops/deploy/arquivamento-drive.md`), **sem sudo**:
+
+```bash
+# Gere as duas senhas e guarde-as NO COFRE DE SENHAS, fora da VPS. Sem elas,
+# perdida a VPS, os dumps no Drive sao ilegiveis — inclusive para nos.
+SENHA="$(openssl rand -base64 32)"; SAL="$(openssl rand -base64 32)"
+rclone config create gdrive-crypt crypt \
+  remote gdrive:prontuai/backups-postgres-v2 \
+  filename_encryption off directory_name_encryption false suffix none \
+  password "$SENHA" password2 "$SAL" --obscure
+rclone listremotes --long          # gdrive-crypt: crypt
+```
+
+So o CONTEUDO e cifrado; o nome fica legivel no Drive
+(`prontuai-AAAAMMDD-HHMMSS.dump`), para dar para achar um dump pela data sem
+abrir a VPS. O nome nao carrega dado nenhum alem do instante do backup. Essas
+tres opcoes nao podem ser trocadas num remote que ja tem arquivos — os nomes
+antigos param de ser decifrados —, entao mudar de ideia depois exige copiar
+tudo para uma pasta nova (foi o que gerou o sufixo `-v2`).
+
+Depois, no `.env` do banco: `OFFLOAD_RCLONE_REMOTE=gdrive-crypt:`. A origem
+(R2) nao precisa de entrada no `rclone.conf`: o script monta o remote a partir
+das mesmas `BACKUP_S3_*` do backup.
+
+### Instalar
+
+```bash
+OFFLOAD_DRY_RUN=true /home/ec2-user/prontuai-db/script/offload_backups_to_drive.sh
+
+sudo cp ops/deploy/systemd/prontuai-offload-backups.service /etc/systemd/system/
+sudo cp ops/deploy/systemd/prontuai-offload-backups.timer /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now prontuai-offload-backups.timer
+```
+
+### Restaurar um dump que foi para o Drive
+
+`restore_postgres.sh` le `s3://` ou caminho local, nao o Drive. Baixe antes (o
+`crypt` decifra no caminho):
+
+```bash
+rclone lsf gdrive-crypt:monthly/
+rclone copy gdrive-crypt:monthly/prontuai-AAAAMMDD-HHMMSS.dump /tmp/restore/
+rclone copy gdrive-crypt:monthly/prontuai-AAAAMMDD-HHMMSS.dump.sha256 /tmp/restore/
+cd /tmp/restore && [ "$(sha256sum prontuai-*.dump | cut -d' ' -f1)" = "$(cat prontuai-*.dump.sha256)" ] && echo OK
+/home/ec2-user/prontuai-db/script/restore_postgres.sh /tmp/restore/prontuai-AAAAMMDD-HHMMSS.dump
+```
+
 ### Por que os jobs nao concorrem
 
-Backup, purga e arquivamento compartilham um **lock com `flock`** (`db_maintenance_lock`, em
+Backup, purga, arquivamento e offload compartilham um **lock com `flock`** (`db_maintenance_lock`, em
 `ops/deploy/lib.sh`): quem chega depois **espera**, e o lock e liberado quando o
 script termina, inclusive se ele morrer.
 
 - backup: espera ate 1h e, se nao conseguir, **falha** — um backup diario que
   nao acontece precisa aparecer como unit falho no journal.
-- purga e arquivamento: esperam ate 30min e, se nao conseguirem, **pulam** com
-  aviso — sao semanais, e perder uma execucao nao tem consequencia.
+- purga, arquivamento e offload: esperam ate 30min e, se nao conseguirem,
+  **pulam** com aviso — perder uma execucao nao tem consequencia (o offload
+  tem folga entre o gatilho e o teto justamente para isso).
 
 Ajustaveis por `DB_LOCK_WAIT`; o arquivo de lock, por `DB_LOCK_FILE`.
 
@@ -130,7 +205,10 @@ collector do postgres_exporter ficou 18 dias quebrado com `pg_up` em 1.
 
 Os alertas correspondentes estao em `otel/grafana/provisioning/alerting/alerts.yml`:
 backup sem sucesso ha 26h (critical), purga ha 9 dias (warning), arquivamento
-ha 10 dias (warning), e exit code diferente de zero (warning).
+ha 10 dias (warning), offload dos backups ha 3 dias (warning), e exit code
+diferente de zero (warning). O offload sai com codigo 1 quando algum dump nao
+passou na verificacao ou quando nao ha elegiveis suficientes para voltar abaixo
+do gatilho — nos dois casos o bucket segue crescendo e alguem precisa olhar.
 
 `noDataState: Alerting` nos dois primeiros e proposital: se o job nunca
 reportou, a serie nem existe, e "sem dado" e exatamente o alarme desejado.
