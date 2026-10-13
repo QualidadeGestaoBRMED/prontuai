@@ -2310,15 +2310,24 @@ class PostgresUserDatabase:
         finally:
             session.close()
 
-    def get_exam_catalog_stats(self) -> ExamCatalogStats:
-        """Resumo do catálogo para o cabeçalho do painel."""
+    def get_exam_catalog_stats(
+        self, pendencias: Optional[List[ExamPendency]] = None
+    ) -> ExamCatalogStats:
+        """Resumo do catálogo para o cabeçalho do painel.
+
+        `pendencias` vem de fora porque a consulta que as produz varre todos os
+        documentos (~1,65s no dev) e o painel já a pede para a aba de
+        pendências. Recebendo a lista pronta, o cabeçalho e a aba dividem um
+        único scan — ver `app/services/exam_pendencies.py`. Sem o parâmetro, o
+        método continua autossuficiente (é o que os testes usam).
+        """
         session = self._get_session()
         try:
             pais_com_variacao = (
                 session.query(ExamVariationModel.parent_id).distinct().subquery()
             )
-            # Uma chamada só: a consulta de pendências varre todos os documentos.
-            pendencias = self.listar_pendencias_catalogo(limit=10000)
+            if pendencias is None:
+                pendencias = self.listar_pendencias_catalogo(limit=10000)
             # Pai desativado não vale na comparação; contá-lo como "confirmado no
             # BRNET" ou "sem variação" inflava o cabeçalho.
             pai_ativo = ExamParentModel.is_active.is_(True)

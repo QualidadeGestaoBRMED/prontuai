@@ -17,7 +17,7 @@ from app.core.auth import require_exam_catalog
 from app.core.config import settings
 from app.core.database import user_db
 from app.core.logging import set_audit_context
-from app.services import exam_catalog_source, exam_vector_service
+from app.services import exam_catalog_source, exam_pendencies, exam_vector_service
 from app.models.exam import (
     ExamCatalogStats,
     ExamPendency,
@@ -64,6 +64,10 @@ async def _pos_escrita(termos: list[tuple[str, str, bool]]) -> dict:
     # Primeiro o cache: mesmo que a vetorização falhe, o vocabulário novo passa a
     # valer — e é ele que conserta a maior parte dos casos medidos.
     exam_catalog_source.invalidar()
+    # A lista de pendências muda junto: cadastrar um pai ou vincular uma
+    # variação tira o nome da lista, e o painel recarrega logo depois de
+    # escrever. Sem isto, o curador veria a pendência que acabou de resolver.
+    exam_pendencies.invalidar()
 
     if termos and not exam_vector_service.vetorizacao_disponivel():
         relatorio["aviso"] = "OPENAI_API_KEY não configurada: termos ficaram sem vetor"
@@ -106,7 +110,13 @@ async def _pos_escrita(termos: list[tuple[str, str, bool]]) -> dict:
 async def get_catalog_stats(current_user: User = Depends(require_exam_catalog)):
     """Resumo do catálogo para o cabeçalho do painel."""
     try:
-        return user_db.get_exam_catalog_stats()
+        # As pendências vêm do cache compartilhado com `/pendencies`: é a mesma
+        # varredura de todos os documentos, e o painel pedia as duas coisas em
+        # sequência a cada carga.
+        pendencias = exam_pendencies.obter(
+            user_db.listar_pendencias_catalogo, limit=10000
+        )
+        return user_db.get_exam_catalog_stats(pendencias=pendencias)
     except Exception as e:
         logger.exception(f"[EXAMS] Erro ao obter estatísticas do catálogo: {e}")
         raise HTTPException(
@@ -128,7 +138,7 @@ async def list_pendencies(
     pede. Regra completa em `listar_pendencias_catalogo`.
     """
     try:
-        return user_db.listar_pendencias_catalogo(limit=limit)
+        return exam_pendencies.obter(user_db.listar_pendencias_catalogo, limit=limit)
     except Exception as e:
         logger.exception(f"[EXAMS] Erro ao listar pendências: {e}")
         raise HTTPException(
