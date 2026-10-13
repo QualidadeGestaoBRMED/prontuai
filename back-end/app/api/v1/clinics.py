@@ -4,7 +4,7 @@ Apenas administradores podem gerenciar clínicas.
 """
 from fastapi import APIRouter, HTTPException, status, Depends
 from typing import List
-from app.core.auth import require_management, get_current_user
+from app.core.auth import require_admin, require_management, get_current_user
 from app.core.database import user_db
 from app.core import metrics
 from app.models.user import User, UserRole, GLOBAL_READ_ROLES
@@ -102,6 +102,61 @@ async def list_clinic_options(current_user: User = Depends(get_current_user)):
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Erro ao listar opções de clínicas"
+        )
+
+
+@router.get("/{clinic_id}/users")
+async def list_clinic_users(
+    clinic_id: str,
+    current_user: User = Depends(require_admin),
+):
+    """
+    Usuários vinculados a uma clínica — só e-mail, nome e situação.
+
+    **Só ADMIN**, de propósito. O resto desta tela é `require_management`, então
+    MANAGER continua listando e editando clínicas sem enxergar as pessoas delas.
+
+    Serve à investigação: hoje, para saber quem envia por uma clínica, é preciso
+    pegar o nome dela, filtrar no Histórico e tirar o e-mail de um documento.
+    Isso só funciona se a clínica já enviou alguma coisa — e a pergunta costuma
+    ser justamente por que ela não enviou.
+
+    Inativo entra na lista, marcado. Numa investigação, "o usuário existe mas
+    está desativado" é a resposta, não ruído.
+
+    Na prática são os SENDER: os outros papéis têm `clinic_id` nulo porque
+    enxergam todas as clínicas.
+    """
+    try:
+        if not user_db.get_clinic_by_id(clinic_id):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Clínica não encontrada",
+            )
+        usuarios = user_db.list_users(include_inactive=True, clinic_id=clinic_id)
+        # Sem e-mail nem nome no log: a trilha registra quem consultou e quantos
+        # vieram, não quem são.
+        logger.info(
+            "[CLINICS] %s listou %s usuário(s) da clínica %s",
+            current_user.email, len(usuarios), clinic_id,
+        )
+        return [
+            {
+                "id": u.id,
+                "email": u.email,
+                "name": u.name,
+                "role": u.role.value if hasattr(u.role, "value") else str(u.role),
+                "is_active": u.is_active,
+            }
+            for u in sorted(usuarios, key=lambda x: (not x.is_active, (x.name or "").lower()))
+        ]
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Erro ao listar usuários da clínica %s: %s", clinic_id, e)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Erro ao listar usuários da clínica",
         )
 
 

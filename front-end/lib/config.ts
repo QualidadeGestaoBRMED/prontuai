@@ -26,6 +26,8 @@ export const API_ENDPOINTS = {
   CLINICS: `${API_PROXY_BASE}/v1/clinics`,
   CLINIC_OPTIONS: `${API_PROXY_BASE}/v1/clinics/options`,
   CLINIC_BY_ID: (id: string) => `${API_PROXY_BASE}/v1/clinics/${id}`,
+  /** Usuários vinculados à clínica. Só ADMIN — ver `clinics.py`. */
+  CLINIC_USERS: (id: string) => `${API_PROXY_BASE}/v1/clinics/${id}/users`,
 
   // Catálogo de exames similares (painel de curadoria)
   EXAMS: `${API_PROXY_BASE}/v1/exams`,

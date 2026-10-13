@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { Fragment, useState, useEffect, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import { AppSidebar } from "@/components/app-sidebar";
 import {
@@ -34,9 +34,24 @@ interface Clinic {
   updated_at: string;
 }
 
+/** Usuário vinculado a uma clínica, como volta de `GET /v1/clinics/{id}/users`. */
+interface ClinicUser {
+  id: string;
+  email: string;
+  name: string;
+  role: string;
+  is_active: boolean;
+}
+
 export default function ClinicsAdminPage() {
   const { data: session } = useSession();
   const [clinics, setClinics] = useState<Clinic[]>([]);
+  // Usuários por clínica, carregados sob demanda ao abrir a linha. Só ADMIN vê o
+  // controle, e o back-end recusa de qualquer forma (`require_admin`).
+  const [abertos, setAbertos] = useState<Set<string>>(new Set());
+  const [usuarios, setUsuarios] = useState<Record<string, ClinicUser[]>>({});
+  const [carregandoUsuarios, setCarregandoUsuarios] = useState<Set<string>>(new Set());
+  const [erroUsuarios, setErroUsuarios] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [editModalOpen, setEditModalOpen] = useState(false);
@@ -72,8 +87,59 @@ export default function ClinicsAdminPage() {
     }
   };
 
+  // Mesmo tratamento da tela de Auditoria: esperar por `session.user.email`
+  // deixava a tabela presa no skeleton para sempre quando o bypass de dev está
+  // ligado, porque nesse modo não existe sessão do NextAuth. Vale só para a
+  // LEITURA — criar, editar e desativar continuam exigindo sessão de verdade.
+  const bypassAuth =
+    process.env.NODE_ENV !== "production" &&
+    process.env.NEXT_PUBLIC_DEV_AUTH_BYPASS === "true";
+  const podeCarregar = bypassAuth || !!session?.user?.email;
+  const ehAdmin = bypassAuth || session?.user?.role === "ADMIN";
+
+  /**
+   * Abre a linha e busca os usuários na primeira vez.
+   *
+   * Sob demanda de propósito: são 117 clínicas na base, e trazer os usuários de
+   * todas no carregamento da tela custaria uma consulta por clínica para uma
+   * informação que só é olhada uma de cada vez, numa investigação pontual.
+   */
+  const alternarUsuarios = useCallback(
+    async (clinicId: string) => {
+      setAbertos((atual) => {
+        const proximo = new Set(atual);
+        if (!proximo.delete(clinicId)) proximo.add(clinicId);
+        return proximo;
+      });
+      if (usuarios[clinicId] || carregandoUsuarios.has(clinicId)) return;
+
+      setCarregandoUsuarios((a) => new Set(a).add(clinicId));
+      setErroUsuarios((a) => {
+        if (!(clinicId in a)) return a;
+        const proximo = { ...a };
+        delete proximo[clinicId];
+        return proximo;
+      });
+      try {
+        const resposta = await authFetch(API_ENDPOINTS.CLINIC_USERS(clinicId));
+        if (!resposta.ok) throw new Error(`HTTP ${resposta.status}`);
+        const lista: ClinicUser[] = await resposta.json();
+        setUsuarios((a) => ({ ...a, [clinicId]: lista }));
+      } catch {
+        setErroUsuarios((a) => ({ ...a, [clinicId]: "Não foi possível carregar os usuários." }));
+      } finally {
+        setCarregandoUsuarios((a) => {
+          const proximo = new Set(a);
+          proximo.delete(clinicId);
+          return proximo;
+        });
+      }
+    },
+    [usuarios, carregandoUsuarios],
+  );
+
   const fetchClinics = useCallback(async () => {
-    if (!session?.user?.email) return;
+    if (!podeCarregar) return;
 
     try {
       const response = await authFetch(API_ENDPOINTS.CLINICS);
@@ -88,7 +154,7 @@ export default function ClinicsAdminPage() {
     } finally {
       setLoading(false);
     }
-  }, [session?.user?.email]);
+  }, [podeCarregar]);
 
   useEffect(() => {
     fetchClinics();
@@ -298,9 +364,25 @@ export default function ClinicsAdminPage() {
                     </tr>
                   ) : (
                     clinics.map((clinic) => (
-                      <tr key={clinic.id}>
+                      <Fragment key={clinic.id}>
+                      <tr>
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                          {clinic.name}
+                          <div className="flex items-center gap-2">
+                            {ehAdmin && (
+                              <button
+                                type="button"
+                                onClick={() => alternarUsuarios(clinic.id)}
+                                aria-expanded={abertos.has(clinic.id)}
+                                aria-label={`Ver usuários de ${clinic.name}`}
+                                className="text-gray-400 hover:text-gray-700 transition-colors"
+                              >
+                                <span className="inline-block w-3 text-xs">
+                                  {abertos.has(clinic.id) ? "▾" : "▸"}
+                                </span>
+                              </button>
+                            )}
+                            <span>{clinic.name}</span>
+                          </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
                           {clinic.email}
@@ -336,6 +418,46 @@ export default function ClinicsAdminPage() {
                           </Button>
                         </td>
                       </tr>
+                      {ehAdmin && abertos.has(clinic.id) && (
+                        <tr className="bg-gray-50">
+                          <td colSpan={5} className="px-6 py-4">
+                            {carregandoUsuarios.has(clinic.id) ? (
+                              <p className="text-sm text-gray-500">Carregando usuários…</p>
+                            ) : erroUsuarios[clinic.id] ? (
+                              <p className="text-sm text-red-600">{erroUsuarios[clinic.id]}</p>
+                            ) : !usuarios[clinic.id]?.length ? (
+                              /* Distingue de erro: a clínica existe e não tem ninguém
+                                 vinculado — numa investigação isso é a resposta. */
+                              <p className="text-sm text-gray-500">
+                                Nenhum usuário vinculado a esta clínica.
+                              </p>
+                            ) : (
+                              <div className="space-y-1.5">
+                                <p className="text-xs uppercase tracking-wide text-gray-500">
+                                  {usuarios[clinic.id].length} usuário
+                                  {usuarios[clinic.id].length > 1 ? "s" : ""} vinculado
+                                  {usuarios[clinic.id].length > 1 ? "s" : ""}
+                                </p>
+                                {usuarios[clinic.id].map((u) => (
+                                  <div
+                                    key={u.id}
+                                    className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm"
+                                  >
+                                    <span className="font-mono text-gray-800">{u.email}</span>
+                                    <span className="text-gray-500">{u.name}</span>
+                                    {!u.is_active && (
+                                      <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs text-red-800">
+                                        inativo
+                                      </span>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      )}
+                      </Fragment>
                     ))
                   )}
                 </tbody>
