@@ -57,12 +57,20 @@ function ordenar<T>(linhas: T[], ordem: Ordem, valor: (l: T, col: string) => num
 /** Cabeçalho clicável. O padrão de cada coluna é o que menos surpreende: texto sobe, número desce. */
 function Th({
   label,
+  sub,
   col,
   ordem,
   onOrdenar,
   numerica,
 }: {
   label: string;
+  /**
+   * Segunda linha do cabeçalho, para a coluna dizer a unidade e a janela do
+   * próprio número. Sem isso, "16,3" com uma barra ao lado não informa se é por
+   * semana ou por mês, nem de quantas semanas — e o rodapé, que explicava,
+   * estava longe demais de quem lê a linha.
+   */
+  sub?: string;
   col: string;
   ordem: Ordem;
   onOrdenar: (col: string, padrao: Dir) => void;
@@ -74,14 +82,19 @@ function Th({
       type="button"
       onClick={() => onOrdenar(col, numerica ? "desc" : "asc")}
       aria-label={`Ordenar por ${label}`}
-      className={`${CABECALHO_TABELA} flex items-center gap-1 text-left transition-colors hover:text-[#193B4F] ${
+      className={`flex flex-col gap-[3px] text-left transition-colors hover:text-[#193B4F] ${
         ativa ? "text-[#193B4F]" : ""
       }`}
     >
-      {label}
-      <span aria-hidden="true" className={`text-[8px] leading-none ${ativa ? "opacity-70" : "opacity-0"}`}>
-        {ativa && ordem.dir === "asc" ? "▲" : "▼"}
+      <span className={`${CABECALHO_TABELA} flex items-center gap-1 ${ativa ? "text-[#193B4F]" : ""}`}>
+        {label}
+        <span aria-hidden="true" className={`text-[8px] leading-none ${ativa ? "opacity-70" : "opacity-0"}`}>
+          {ativa && ordem.dir === "asc" ? "▲" : "▼"}
+        </span>
       </span>
+      {sub && (
+        <span className="text-[10px] font-normal normal-case tracking-normal text-[#9AA3A8]">{sub}</span>
+      )}
     </button>
   );
 }
@@ -160,11 +173,8 @@ function TabelaUsoSemana({ uso }: { uso: UsoSemanal }) {
     : l.fora,
   );
 
-  const projecao =
-    uso.proxima.previstos > 0 ? Math.round((uso.proxima.previstos * semana.adesao) / 100) : null;
-
   return (
-    <div className={`${CARTAO} px-[22px] pt-5 pb-2`}>
+    <div className={`${CARTAO} px-[22px] pt-5 pb-5`}>
       <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
         <div>
           <div className={TITULO}>Quem está usando pouco</div>
@@ -310,21 +320,6 @@ function TabelaUsoSemana({ uso }: { uso: UsoSemanal }) {
         </div>
       </div>
 
-      {/* O que sobrou da projeção: uma linha, não um card. Ela não decide nada
-          sozinha — serve para dimensionar a semana que vem com a adesão que
-          acabou de ser medida. */}
-      <div className="px-1 pb-3 pt-3 text-[12.5px] leading-[1.5] text-[#767A7B]">
-        Adesão = pedidos que passaram pelo ProntuAI ÷ previstos da semana. O que falta tem dois donos
-        diferentes: <span className="text-[#A05E1E]">liberado por fora</span> é adesão da clínica;{" "}
-        <span className="text-[#5F6B72]">não liberado</span> é prazo do credenciado.
-        {projecao !== null && (
-          <>
-            {" "}Mantida a adesão desta semana, dos {uso.proxima.previstos.toLocaleString("pt-BR")} previstos
-            para {uso.proxima.label} devem passar pela plataforma{" "}
-            <span className="font-medium text-[#193B4F]">{projecao.toLocaleString("pt-BR")}</span>.
-          </>
-        )}
-      </div>
     </div>
   );
 }
@@ -378,18 +373,39 @@ function Simulador({
         </button>
       </div>
 
+      {/* Cada número diz de que semana ele é. "Hoje, por semana" não dizia, e
+          "hoje" num painel que fala de semana fechada se lê como o dia de hoje —
+          que é justamente o que o número não é. */}
       <div className="mt-4 grid grid-cols-2 gap-x-5 gap-y-3.5 lg:grid-cols-4">
         {[
-          { r: "Aumento no volume semanal", v: aumento === null ? "—" : `+${p1(aumento)}%`, destaque: true },
-          { r: "Hoje, por semana", v: n0(viaProntuaiSemana) },
-          { r: "Com as marcadas", v: n0(viaProntuaiSemana + ganho) },
-          { r: "Média somada", v: n0(mediaSel) },
+          {
+            r: "Passam hoje pela plataforma",
+            v: n0(viaProntuaiSemana),
+            sub: `pedidos na semana de ${semana}`,
+          },
+          {
+            r: "Somando as marcadas",
+            v: n0(viaProntuaiSemana + ganho),
+            sub: "pedidos por semana, estimados",
+          },
+          {
+            r: "Aumento no volume semanal",
+            v: aumento === null ? "—" : `+${p1(aumento)}%`,
+            sub: "sobre o que passa hoje",
+            destaque: true,
+          },
+          {
+            r: "Média somada das marcadas",
+            v: `${n0(mediaSel)}/sem`,
+            sub: "liberações, antes da adesão",
+          },
         ].map((x) => (
           <div key={x.r} className="flex flex-col gap-1">
             <div className={CABECALHO_TABELA}>{x.r}</div>
             <div className={`tabular-nums leading-none ${x.destaque ? "text-[24px] font-medium text-[#00AFAA]" : "text-[17px] text-[#193B4F]"}`}>
               {x.v}
             </div>
+            <div className="text-[11px] text-[#9AA3A8]">{x.sub}</div>
           </div>
         ))}
       </div>
@@ -406,31 +422,36 @@ function Simulador({
 // As duas precisam ser literais: o Tailwind compila só as classes que encontra
 // no código-fonte. Montar a segunda com `.replace()` sobre a primeira gerava uma
 // classe em runtime que nunca foi compilada, e a linha inteira perdia o grid.
-const COLUNAS_FORA = "grid-cols-[28px_1.8fr_1.1fr_1.9fr_0.8fr_0.9fr]";
-const COLUNAS_FORA_LINHA = "grid-cols-[1.8fr_1.1fr_1.9fr_0.8fr_0.9fr]";
+const COLUNAS_FORA = "grid-cols-[28px_1.7fr_1fr_2fr_1.05fr_1.05fr]";
+const COLUNAS_FORA_LINHA = "grid-cols-[1.7fr_1fr_2fr_1.05fr_1.05fr]";
 
 /**
- * "Quem vale a pena incluir": credenciados fora do ProntuAI, ranqueados pela
- * média semanal de liberações.
+ * "Quem vale a pena incluir": credenciados fora do ProntuAI, ranqueados pelos
+ * pedidos PREVISTOS na janela.
  *
- * Ordem padrão pela média, e não pelos previstos da janela: previsto é a foto de
- * um instante, e o ranking por previsto põe em primeiro tanto o pico isolado
- * quanto o credenciado lento — o único que ainda tem pedido pendente quando a
- * consulta roda. A média é o ritmo.
+ * Este é o indicador do futuro, e o de cima é o do passado — a divisão é do
+ * pedido, não uma escolha de implementação. Por isso a ordem é pelo previsto: a
+ * pergunta que abre a lista é "quais têm previsão de liberação maior".
+ *
+ * A média semanal não ordena, ela confere. O previsto é a foto de um instante e
+ * pode ser um pico; quem diz se aquele volume é o ritmo da clínica é a coluna da
+ * média, a marca de PICO e o gráfico que abre na linha. Ranquear pelo futuro,
+ * desconfiar, clicar, conferir no passado.
  *
  * Nenhuma métrica de adesão aqui. Adesão é sobre quem já está dentro, e mora no
  * indicador de cima.
  */
 function TabelaForaProntuai({
   linhas,
-  janela,
+  janelaMedia,
   simulador,
 }: {
   linhas: LinhaForaProntuai[];
-  janela: string;
+  /** Intervalo das 12 semanas que entram na média: "27/07 a 05/10". */
+  janelaMedia: string;
   simulador: { viaProntuaiSemana: number; adesao: number; semana: string } | null;
 }) {
-  const { ordem, ordenarPor } = useOrdem({ col: "media", dir: "desc" });
+  const { ordem, ordenarPor } = useOrdem({ col: "previstos", dir: "desc" });
   const [busca, setBusca] = useState("");
   const [uf, setUf] = useState("");
   const [marcadas, setMarcadas] = useState<Set<string>>(new Set());
@@ -499,29 +520,51 @@ function TabelaForaProntuai({
       )}
 
       <div className="mt-3 max-h-[460px] overflow-auto">
-        <div className="min-w-[860px]">
+        <div className="min-w-[920px]">
           <div
-            className={`sticky top-0 z-10 grid ${COLUNAS_FORA} gap-x-[18px] border-b border-[#DFE0E2] bg-white px-1 pb-2.5`}
+            className={`sticky top-0 z-10 grid ${COLUNAS_FORA} items-end gap-x-[18px] border-b border-[#DFE0E2] bg-white px-1 pb-2.5`}
           >
             <span aria-hidden="true" />
             <Th label="Clínica" col="name" ordem={ordem} onOrdenar={ordenarPor} />
             <Th label="Cidade" col="local" ordem={ordem} onOrdenar={ordenarPor} />
-            <Th label="Liberações/semana" col="media" ordem={ordem} onOrdenar={ordenarPor} numerica />
-            <Th label="Semanas ativas" col="regularidade" ordem={ordem} onOrdenar={ordenarPor} numerica />
-            <Th label="Previstos" col="previstos" ordem={ordem} onOrdenar={ordenarPor} numerica />
+            <Th
+              label="Média por semana"
+              sub={`liberações · ${janelaMedia}`}
+              col="media"
+              ordem={ordem}
+              onOrdenar={ordenarPor}
+              numerica
+            />
+            <Th
+              label="Semanas com liberação"
+              sub="das 12 semanas"
+              col="regularidade"
+              ordem={ordem}
+              onOrdenar={ordenarPor}
+              numerica
+            />
+            <Th
+              label="Previstos"
+              sub="a liberar na janela"
+              col="previstos"
+              ordem={ordem}
+              onOrdenar={ordenarPor}
+              numerica
+            />
           </div>
           {visiveis.map((c) => (
-            <LinhaFora key={c.credenciado} c={c} marcada={marcadas.has(c.credenciado)} onMarcar={alternar} />
+            <LinhaFora
+              key={c.credenciado}
+              c={c}
+              janelaMedia={janelaMedia}
+              marcada={marcadas.has(c.credenciado)}
+              onMarcar={alternar}
+            />
           ))}
           {!visiveis.length && (
             <div className="px-1 py-6 text-[13px] text-[#767A7B]">Nenhuma clínica com esses filtros.</div>
           )}
         </div>
-      </div>
-      <div className="px-1 pb-3 pt-3 text-[12.5px] leading-[1.5] text-[#767A7B]">
-        Liberações/semana é a <span className="font-medium text-[#193B4F]">média das últimas 12 semanas
-        fechadas</span>, com as semanas sem liberação contadas como zero. Clique na linha para ver o histórico
-        semana a semana e conferir se o volume é o ritmo da clínica ou foi uma semana só. Previstos: {janela}.
       </div>
     </>
   );
@@ -536,10 +579,12 @@ function TabelaForaProntuai({
  */
 function LinhaFora({
   c,
+  janelaMedia,
   marcada,
   onMarcar,
 }: {
   c: LinhaForaProntuai;
+  janelaMedia: string;
   marcada: boolean;
   onMarcar: (credenciado: string) => void;
 }) {
@@ -580,7 +625,10 @@ function LinhaFora({
             <div className="h-1.5 flex-1 overflow-hidden rounded-[3px] bg-[#F3F3F3]">
               <div className="h-full rounded-[3px] bg-[#007891]" style={{ width: `${c.pct}%` }} />
             </div>
-            <div className="w-[38px] text-right font-medium tabular-nums">{c.mediaLabel}</div>
+            <div className="flex w-[74px] items-baseline justify-end gap-1">
+              <span className="font-medium tabular-nums">{c.mediaLabel}</span>
+              <span className="text-[11px] text-[#9AA3A8]">/sem</span>
+            </div>
           </div>
           <div className="tabular-nums text-[#767A7B]">{c.regularidadeLabel}</div>
           <div className="flex items-center gap-1.5">
@@ -599,10 +647,10 @@ function LinhaFora({
       {aberta && (
         <div className="mb-3 ml-[54px] mr-1 rounded-[10px] border border-[#DFE0E2] bg-[#FAFBFC] px-4 py-3">
           <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-            <div className={CABECALHO_TABELA}>Liberações por semana</div>
+            <div className={CABECALHO_TABELA}>Liberações por semana · uma coluna = uma semana</div>
             <div className="text-[12.5px] text-[#767A7B]">
-              média {c.mediaLabel}/semana · {c.semanasAtivas} das últimas 12 semanas com liberação ·{" "}
-              {c.total} no período
+              média de {c.mediaLabel} por semana · {c.semanasAtivas} das 12 semanas de {janelaMedia} com
+              liberação · {c.total} liberações nessas 12 semanas
             </div>
           </div>
 
@@ -960,17 +1008,17 @@ export function AbaUtilizacao({
           pena incluir. Nenhum número se repete entre os dois. */}
       {visao.usoSemanal && <TabelaUsoSemana uso={visao.usoSemanal} />}
 
-      <div className={`${CARTAO} px-[22px] pt-5 pb-2`}>
+      <div className={`${CARTAO} px-[22px] pt-5 pb-5`}>
         <div className={TITULO}>Quem vale a pena incluir</div>
         <div className={SUB}>
           {visao.foraProntuai === null
             ? "Lista indisponível: não foi possível consultar o BRNET na última atualização"
-            : `${visao.foraProntuai.length} credenciadas sem cadastro habilitado · ranqueadas pelo volume semanal recorrente`}
+            : `${visao.foraProntuai.length} credenciadas sem cadastro habilitado · ranqueadas pelos pedidos previstos ${visao.janelaPrevistos} · PICO marca previsto muito acima do ritmo da clínica`}
         </div>
         {visao.foraProntuai && visao.foraProntuai.length > 0 && (
           <TabelaForaProntuai
             linhas={visao.foraProntuai}
-            janela={visao.janelaPrevistos}
+            janelaMedia={visao.janelaMedia}
             simulador={visao.simulador}
           />
         )}

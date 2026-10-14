@@ -377,11 +377,6 @@ export interface SemanaUso {
 export interface UsoSemanal {
   /** Da mais recente para a mais antiga. */
   semanas: SemanaUso[];
-  /**
-   * Próxima semana ISO inteira — alvo da projeção do rodapé. Inteira e no
-   * futuro, para a conta não misturar dias já vividos com dias por viver.
-   */
-  proxima: { label: string; previstos: number };
 }
 
 /** Uma linha do painel "Datas das previsões". */
@@ -507,6 +502,8 @@ export interface VisaoDashboard {
   foraProntuai: LinhaForaProntuai[] | null;
   /** Janela para frente dos previstos: "de hoje a 12/11 · 30 dias". */
   janelaPrevistos: string;
+  /** Intervalo das semanas da média: "27/07 a 05/10". */
+  janelaMedia: string;
   /**
    * Insumos do simulador. Ele não recalcula nada do painel: parte do volume
    * semanal que hoje passa pela plataforma e aplica, sobre a média das
@@ -906,26 +903,9 @@ export function calcularVisao({ dados, filtro, comparar, verTodasClinicas }: Opc
         };
       });
 
-    // Alvo da projeção: a próxima semana ISO inteira. A semana em curso não
-    // serve — metade dela já aconteceu, e os previstos que sobraram são só a
-    // ponta que ainda não venceu.
-    const proximaISO = maisDias(semanaAtual, 7);
-    const fimProxima = maisDias(proximaISO, 6);
-    return {
-      semanas,
-      proxima: {
-        label: intervaloSemana(proximaISO),
-        previstos: comProntuai.reduce(
-          (a, c) =>
-            a +
-            c.previsoes.reduce(
-              (s, x) => s + (x.data >= proximaISO && x.data <= fimProxima ? x.pedidos : 0),
-              0,
-            ),
-          0,
-        ),
-      },
-    };
+    // Nada de projeção aqui: este indicador é do passado inteiro. O futuro é o
+    // outro, e misturar os dois foi o que fez a projeção virar um card.
+    return { semanas };
   })();
 
   // Ordem padrão: média desc, desempatando pelo volume total da janela. As
@@ -1185,6 +1165,9 @@ export function calcularVisao({ dados, filtro, comparar, verTodasClinicas }: Opc
     janelaPrevistos: temJanela
       ? `de hoje a ${dataCurta(fimJanelaISO)} · ${diasJanela} dias`
       : "sem data de referência do back-end — previstos indisponíveis",
+    janelaMedia: semanasRecentes.length
+      ? `${dataCurta(semanasRecentes[0])} a ${dataCurta(maisDias(semanasRecentes[semanasRecentes.length - 1], 6))}`
+      : "—",
 
     periodoLabel: nomePeriodo(cfg.periodo.serie, atual),
 
