@@ -278,8 +278,8 @@ function TabelaUsoSemana({ uso }: { uso: UsoSemanal }) {
               key={l.clinica}
               className={`${styles.linhaTip} grid ${COLUNAS_USO} items-center gap-x-[18px] border-b border-[#F3F3F3] px-1 py-3 text-[13.5px] text-[#193B4F]`}
             >
-              {/* Mesma estrutura de "Adoção por clínica", e por um motivo de
-                  CSS, não de estilo: `.tipNome` é `inline-block` para encolher
+              {/* O nome vem dentro de um invólucro por um motivo de CSS, não
+                  de estilo: `.tipNome` é `inline-block` para encolher
                   até o tamanho do texto e a seta do balão apontar para o nome.
                   Como filho direto do grid ele é blocado, estica pela coluna
                   inteira e a seta passa a apontar para a coluna seguinte — que é
@@ -935,55 +935,6 @@ export function AbaUtilizacao({
           % dos pedidos atendidos nas credenciadas que passaram pelo ProntuAI · meta 100%
         </div>
         <BarrasPercentuais series={visao.coberturaSeries} cor="#00AFAA" />
-      </div>
-
-      <div className={`${CARTAO} px-[22px] pt-5 pb-2`}>
-        <div className={TITULO}>Adoção por clínica</div>
-        {/* O rótulo acompanha o "ver todas" do ranking: as duas tabelas leem a
-            mesma lista, então dizer "top 6" com 43 linhas na tela seria mentira. */}
-        <div className={SUB}>
-          {visao.adocao.length === visao.totalClinicas
-            ? `Todas as ${visao.totalClinicas} clínicas`
-            : `Top ${visao.adocao.length} por volume`}{" "}
-          · documentos enviados, revisados e liberados
-        </div>
-        <div className="mt-4 overflow-x-auto">
-          <div className="min-w-[720px]">
-            <div
-              className={`${CABECALHO_TABELA} grid grid-cols-[2fr_1fr_1fr_1fr_1fr_1.2fr] gap-x-[18px] border-b border-[#DFE0E2] px-1 pb-2.5`}
-            >
-              <div>Clínica</div>
-              <div>Usuários</div>
-              <div>Docs</div>
-              <div>Revisados</div>
-              <div>Liberados</div>
-              <div>% liberados</div>
-            </div>
-            {visao.adocao.map((a) => (
-              <div
-                key={a.name}
-                className={`${styles.linhaTip} grid grid-cols-[2fr_1fr_1fr_1fr_1fr_1.2fr] items-center gap-x-[18px] border-b border-[#F3F3F3] px-1 py-3 text-[13.5px] text-[#193B4F]`}
-              >
-                <div className="flex min-w-0 items-center gap-2.5">
-                  <div className="size-2 flex-shrink-0 rounded-full" style={{ background: a.statusColor }} />
-                  <span className={`${styles.tip} ${styles.tipNome} min-w-0`} data-tip={a.tip}>
-                    <span className="block truncate">{a.name}</span>
-                  </span>
-                </div>
-                <div>{a.users}</div>
-                <div>{a.docs}</div>
-                <div>{a.reviewed}</div>
-                <div>{a.exped}</div>
-                <div className="flex items-center gap-2.5">
-                  <div className="h-1.5 flex-1 overflow-hidden rounded-[3px] bg-[#F3F3F3]">
-                    <div className="h-full rounded-[3px] bg-[#007891]" style={{ width: `${a.pct}%` }} />
-                  </div>
-                  <div className="w-[42px] text-right font-medium">{a.pctLabel}</div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
       </div>
 
       {/* Bloco de previsão. Duas perguntas, nesta ordem: quem já está dentro e

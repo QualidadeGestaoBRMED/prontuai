@@ -331,18 +331,6 @@ export interface LinhaRanking {
   tip: string;
 }
 
-export interface LinhaAdocao {
-  name: string;
-  users: number;
-  docs: number;
-  reviewed: number;
-  exped: number;
-  pct: number;
-  pctLabel: string;
-  statusColor: string;
-  tip: string;
-}
-
 /**
  * Uma linha de "Quem está usando pouco": uma clínica habilitada numa semana
  * fechada. Os três desfechos somam `previstos`, então a barra fecha em 100%.
@@ -509,7 +497,6 @@ export interface VisaoDashboard {
   prazoTecnico: GraficoPrazo;
   ranking: LinhaRanking[];
   totalClinicas: number;
-  adocao: LinhaAdocao[];
   /**
    * "Quem está usando pouco": adesão por clínica habilitada, semana a semana.
    * Substituiu a tabela de adesão, o card de projeção e a tabela de
@@ -1165,21 +1152,6 @@ export function calcularVisao({ dados, filtro, comparar, verTodasClinicas }: Opc
     }),
 
     totalClinicas: todas.length,
-
-    adocao: clinicas.map((c) => {
-      const p = Math.round(pct(c.validados, c.docs));
-      return {
-        name: c.nome,
-        users: c.usuarios,
-        docs: c.docs,
-        reviewed: c.revisados,
-        exped: c.validados,
-        pct: p,
-        pctLabel: `${p}%`,
-        statusColor: p >= 90 ? POS : p >= 75 ? CORES.alerta : NEG,
-        tip: `${c.nome} — ${fmt(c.docs - c.revisados)} aguardando revisão de ${fmt(c.docs)} enviados`,
-      };
-    }),
 
     foraProntuai: temBrnet
       ? linhasForaRanqueadas
