@@ -113,6 +113,16 @@ def check_if_migration_needed() -> tuple[bool, list[str]]:
             logger.warning("⚠️  Migration 009 necessária: índice idx_documents_uploaded_at não existe")
             migrations_needed.append("009_add_documents_list_indexes.sql")
 
+        # Verificar migration 010: motivos estruturados da rejeição
+        cursor.execute("""
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_name='documents' AND column_name='rejection_codes'
+        """)
+        if not cursor.fetchone():
+            logger.warning("⚠️  Migration 010 necessária: coluna rejection_codes não existe")
+            migrations_needed.append("010_add_rejection_codes.sql")
+
         cursor.close()
         conn.close()
 

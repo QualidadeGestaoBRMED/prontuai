@@ -217,6 +217,9 @@ class PostgresUserDatabase:
             connection.execute(text("ALTER TABLE documents ADD COLUMN IF NOT EXISTS reviewed_at TIMESTAMP"))
             connection.execute(text("ALTER TABLE documents ADD COLUMN IF NOT EXISTS approval_reason TEXT"))
             connection.execute(text("ALTER TABLE documents ADD COLUMN IF NOT EXISTS rejection_reason TEXT"))
+            # Também na migration 010; repetido aqui pelo mesmo motivo do
+            # archived_at abaixo: este método roda em todo startup.
+            connection.execute(text("ALTER TABLE documents ADD COLUMN IF NOT EXISTS rejection_codes JSONB"))
             connection.execute(text("ALTER TABLE documents ADD COLUMN IF NOT EXISTS confidence_score DOUBLE PRECISION"))
             connection.execute(text("ALTER TABLE documents ADD COLUMN IF NOT EXISTS quality_score DOUBLE PRECISION"))
             connection.execute(text("ALTER TABLE documents ADD COLUMN IF NOT EXISTS mandatory_coverage DOUBLE PRECISION"))
@@ -1305,6 +1308,7 @@ class PostgresUserDatabase:
             reviewed_at=_as_utc(getattr(model, "reviewed_at", None)),
             approval_reason=getattr(model, "approval_reason", None),
             rejection_reason=getattr(model, "rejection_reason", None),
+            rejection_codes=getattr(model, "rejection_codes", None),
             confidence_score=model.confidence_score,
             quality_score=model.quality_score,
             mandatory_coverage=model.mandatory_coverage,
@@ -1671,7 +1675,8 @@ class PostgresUserDatabase:
         file_path: Optional[str] = None,
         content_hash: Optional[str] = None,
         uploaded_by_user_email: Optional[str] = None,
-        review_timing: Optional[dict] = None
+        review_timing: Optional[dict] = None,
+        rejection_codes: Optional[List[dict]] = None
     ) -> Document:
         """Atualiza documento.
 
@@ -1730,6 +1735,8 @@ class PostgresUserDatabase:
                 doc_model.approval_reason = approval_reason
             if rejection_reason is not None:
                 doc_model.rejection_reason = rejection_reason
+            if rejection_codes is not None:
+                doc_model.rejection_codes = rejection_codes
             if confidence_score is not None:
                 doc_model.confidence_score = confidence_score
             if quality_score is not None:

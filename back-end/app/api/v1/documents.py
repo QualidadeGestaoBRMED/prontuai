@@ -706,6 +706,14 @@ async def update_document(
         review_timing = (
             sanitizar_review_timing(payload.review_timing, document_id) if e_decisao else None
         )
+        # Motivos estruturados só valem para documento que termina rejeitado.
+        # Quem volta atrás e aprova leva junto os códigos da rejeição anterior —
+        # senão a contagem por motivo somaria documento que hoje está aprovado.
+        rejection_codes = None
+        if effective_status == "rejected" and payload.rejection_codes is not None:
+            rejection_codes = [c.model_dump(exclude_none=True) for c in payload.rejection_codes]
+        elif effective_status == "validated" and getattr(document, "rejection_codes", None):
+            rejection_codes = []
 
         try:
             updated = user_db.update_document(
@@ -722,6 +730,7 @@ async def update_document(
                 approval_reason=approval_reason,
                 rejection_reason=rejection_reason,
                 review_timing=review_timing,
+                rejection_codes=rejection_codes,
             )
         except TypeError:
             # Compatibilidade com implementações antigas do backend de persistência.
@@ -789,6 +798,7 @@ async def update_document(
                             "after_status": effective_status,
                         "approval_reason": approval_reason,
                         "rejection_reason": rejection_reason,
+                        "rejection_codes": rejection_codes,
                         "validation_message": (
                             payload.result_payload.get("validation_result", {}).get("analysis")
                             if isinstance(payload.result_payload, dict)

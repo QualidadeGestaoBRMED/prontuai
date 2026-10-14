@@ -43,6 +43,12 @@ CATEGORIAS_EXAME: frozenset[str] = frozenset({
     "SINONIMO_NAO_RECONHECIDO", # extraído, mas fora do catálogo de sinônimos
     "FALTANTE_INCORRETO",       # apontado como faltante, mas existia
     "EXTRA_INCORRETO",          # apontado como extra, mas era legítimo
+    "ENCONTRADO_INCORRETO",     # apontado como encontrado, mas não estava no documento
+    # Dado como encontrado, e estava lá — mas não servia. A IA aceitou um exame
+    # que a clínica precisa reenviar.
+    "EXAME_OUTRA_DATA",         # era de outra data (antigo, vencido, de outro atendimento)
+    "EXAME_ILEGIVEL",           # veio cortado, ilegível ou incompleto (sem conclusão, sem resultado)
+    "EXAME_SEM_ASSINATURA",     # sem carimbo ou assinatura do profissional
     "VALIDADE_PERIODICIDADE",   # erro de validade/periodicidade do exame
     "DADO_BRNET",               # a exigência veio errada ou desatualizada do BRNET
     "OUTRO",
@@ -64,6 +70,7 @@ CATEGORIAS_DOCUMENTO: frozenset[str] = frozenset({
     "OCR_NOME",             # nome do paciente lido errado ou corrompido
     "OCR_CPF",              # CPF lido errado
     "OCR_DATA",             # data do exame/ASO lida errada
+    "OCR_CNPJ",             # CNPJ da empresa lido errado
     "DOC_ILEGIVEL",         # o documento não foi lido de forma aproveitável
     "ASO_INCOMPLETO",       # ASO cortado, ou só uma das duas páginas
     "ASO_SEM_APTIDAO",      # ASO sem a marcação de apto/inapto
@@ -72,6 +79,16 @@ CATEGORIAS_DOCUMENTO: frozenset[str] = frozenset({
     "ANEXOS_SEPARADOS",     # exames do mesmo paciente vieram em anexos diferentes
     "ENVIO_DUPLICADO",      # o mesmo documento foi enviado mais de uma vez
     "PACIENTE_TROCADO",     # o documento é de outro paciente
+    "ASO_SEM_REAPROVEITAMENTO",  # a clínica não usou o ASO com reaproveitamento enviado no agendamento
+    # Erros da consulta ao BRNET, quando a IA para antes de comparar exames:
+    # 347 dos 628 motivos de rejeição gravados no dev eram a mensagem dessas
+    # falhas copiada. Sem estas, o revisor não tinha como dizer que ela errou ali.
+    "BRNET_EXPEDICAO",      # a expedição em aberto existia
+    "BRNET_PACIENTE",       # o paciente estava cadastrado
+    "BRNET_EXIGENCIA",      # as exigências de exame vieram erradas
+    # "Outro", contado em `notes`. Precisa ser código, e não só texto: a rota
+    # exige ao menos um problema apontado em todo parecer negativo.
+    "OUTRO_PROBLEMA",
 })
 
 # União das duas, para quem só precisa saber se um código é válido.
@@ -84,7 +101,7 @@ STATUS_COM_DETALHES: frozenset[str] = frozenset({
     "IA_INCORRETA",
 })
 
-# Teto do que o revisor consegue marcar: 7 categorias × exames de um documento.
+# Teto do que o revisor consegue marcar: categorias de exame × exames de um documento.
 # Generoso de propósito — serve para barrar payload absurdo, não para limitar uso.
 MAX_ITENS = 200
 
