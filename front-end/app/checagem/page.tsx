@@ -16,6 +16,8 @@ import { lerDocumentoArquivado, mensagemDocumentoArquivado } from "@/lib/documen
 import { DocumentDetailsModalChecagem } from "@/components/document-details-modal-checagem"
 import {
   FeedbackChecagemDialog,
+  decisaoDaIA,
+  examesDoResultado,
   type DecisaoConfirmada,
   type FeedbackAlvo,
 } from "@/components/feedback-checagem-dialog"
@@ -165,23 +167,6 @@ export default function Page() {
   }
 
   /**
-   * O documento veio aprovado PELA IA?
-   *
-   * Mesma regra do selo "Aprovado pela IA" da lista (`decisaoIA`, logo acima):
-   * ninguém revisou ainda e o status é aprovado. Se houve revisão humana, quem
-   * aprovou foi uma pessoa, não a IA, e a pré-seleção não se aplica.
-   *
-   * Falha técnica fica de fora por construção: quando a IA não lê o CPF ou não
-   * acha o paciente, o documento cai em rejeitado, nunca em aprovado. Isso
-   * importa — medido no dev, entre os rejeitados sem exame faltante, 153 de 522
-   * são falha técnica e 80 são regra de negócio. Tratá-los como "a IA aprovou"
-   * marcaria "A IA errou" sem que a IA tivesse julgado nada, contaminando a
-   * medição de acurácia que este parecer alimenta.
-   */
-  const iaChegouAAprovar = (result: ProcessResult): boolean =>
-    !result.reviewedBy && result.status === "approved"
-
-  /**
    * Abre o diálogo que CONFIRMA a decisão e, de quebra, coleta o parecer.
    * Substitui os dois AlertDialogs que viviam dentro do modal de detalhes: o
    * parecer precisa aparecer ANTES da aprovação, e empilhar mais um diálogo
@@ -202,8 +187,8 @@ export default function Page() {
       cpf: result.cpf,
       modo: "decisao",
       decisao,
-      iaAprovou: iaChegouAAprovar(result),
-      exames: result.result?.validation_result?.exames_faltantes ?? [],
+      ia: decisaoDaIA(result.result),
+      exames: examesDoResultado(result.result),
     })
   }
 
@@ -215,7 +200,9 @@ export default function Page() {
       paciente: result.patientName,
       cpf: result.cpf,
       modo: "avaliacao",
-      exames: result.result?.validation_result?.exames_faltantes ?? [],
+      decisao: result.status === "approved" ? "aprovado" : "rejeitado",
+      ia: decisaoDaIA(result.result),
+      exames: examesDoResultado(result.result),
     })
   }
 
@@ -229,16 +216,16 @@ export default function Page() {
   }
 
   /**
-   * Grava a decisão e, se houver, o parecer — nesta ordem. O back-end recusa
-   * parecer de documento sem decisão humana (409), então o parecer é coletado
-   * antes e persistido depois. Lança se a decisão falhar: o diálogo continua
-   * aberto com tudo preenchido.
+   * Grava a decisão e o parecer — nesta ordem. O back-end recusa parecer de
+   * documento sem decisão humana (409), então o parecer é coletado antes e
+   * persistido depois. Lança se a decisão falhar: o diálogo continua aberto
+   * com tudo marcado.
    */
-  const confirmarDecisao = async ({ parecer }: DecisaoConfirmada) => {
+  const confirmarDecisao = async ({ parecer, rejeicao }: DecisaoConfirmada) => {
     const alvo = feedbackAlvo
-    if (!alvo?.decisao) return
+    if (!alvo) return
     if (alvo.decisao === "aprovado") await handleAprovar(alvo.documentId)
-    else await handleRejeitar(alvo.documentId)
+    else await handleRejeitar(alvo.documentId, rejeicao)
 
     // Decisão gravada: fecha o diálogo e o modal de detalhes que ficou atrás.
     // Não passa por `fecharFeedback` de propósito — lá o cronômetro é religado,
@@ -250,7 +237,8 @@ export default function Page() {
       return null
     })
 
-    if (!parecer) return
+    // Sem toast de sucesso: o parecer agora vai em toda decisão, e o toast da
+    // própria decisão já confirma o clique.
     try {
       const resposta = await authFetch(API_ENDPOINTS.DOCUMENT_FEEDBACK(alvo.documentId), {
         method: "PUT",
@@ -258,7 +246,6 @@ export default function Page() {
         body: JSON.stringify(parecer),
       })
       if (!resposta.ok) throw new Error(`HTTP ${resposta.status}`)
-      toast.success("Obrigado pelo parecer!")
     } catch (error) {
       // A decisão já foi gravada: perder o parecer não pode desfazê-la nem
       // prender o revisor no diálogo.
@@ -330,10 +317,16 @@ export default function Page() {
    * o que foi gravado antes permanece como histórico —, mas rejeição nova não
    * grava mais texto ali.
    */
-  const handleRejeitar = async (id: string) => {
+  /**
+   * `rejeicao` é o motivo montado pelo modal: o texto que a clínica lê e os
+   * códigos que o geraram. Vai também em `result_payload.rejectionReason`,
+   * porque é dali que a tela lê primeiro (lib/document-mapper.ts).
+   */
+  const handleRejeitar = async (id: string, rejeicao?: DecisaoConfirmada["rejeicao"]) => {
     const reviewTiming = reviewTimer.encerrar(id)
     const result = dbResults.find((r) => r.id === id)
-    updateProcessResultStatus(id, "rejected", session?.user?.email || "revisor@grupobrmed.com.br")
+    const motivo = rejeicao?.motivo.trim() || undefined
+    updateProcessResultStatus(id, "rejected", session?.user?.email || "revisor@grupobrmed.com.br", motivo)
 
     const headers: Record<string, string> = { "Content-Type": "application/json" }
 
@@ -343,11 +336,14 @@ export default function Page() {
         headers,
         body: JSON.stringify({
           validation_status: "rejected",
+          rejection_reason: motivo,
+          rejection_codes: rejeicao?.codigos,
           ...(reviewTiming ? { review_timing: reviewTiming } : {}),
           result_payload: {
             ...(result?.result || {}),
             reviewed_by: session?.user?.email || "revisor@grupobrmed.com.br",
             reviewed_at: new Date().toISOString(),
+            rejectionReason: motivo,
           },
         }),
       })
@@ -489,7 +485,7 @@ export default function Page() {
                   <CheckagemTable
                     documentos={documentos}
                     onAprovar={handleAprovar}
-                    onRejeitar={handleRejeitar}
+                    onRejeitar={(id) => handleRejeitar(id)}
                     onViewDetails={handleViewDetails}
                     serverPagination={{
                       page,

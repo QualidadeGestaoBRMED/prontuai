@@ -91,6 +91,10 @@ class DocumentModel(Base):
     reviewed_at = Column(DateTime, nullable=True)
     approval_reason = Column(Text, nullable=True)
     rejection_reason = Column(Text, nullable=True)
+    # Motivos estruturados da rejeição (migration 010): [{codigo, exame?}].
+    # `rejection_reason` continua sendo o texto que a clínica lê; isto é o
+    # que permite contar. NULL em tudo que foi rejeitado antes da migration.
+    rejection_codes = Column(JSONB, nullable=True)
     confidence_score = Column(Float, nullable=True)
     quality_score = Column(Float, nullable=True)
     mandatory_coverage = Column(Float, nullable=True)

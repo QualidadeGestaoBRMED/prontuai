@@ -1,18 +1,16 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangleIcon, Loader2Icon, PlusIcon, XIcon } from "lucide-react";
+import { AlertTriangleIcon, BotIcon, CheckIcon, Loader2Icon, PlusIcon, XIcon } from "lucide-react";
 import { toast } from "sonner";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { API_ENDPOINTS } from "@/lib/config";
 import { authFetch } from "@/lib/auth-fetch";
@@ -20,169 +18,318 @@ import { cn } from "@/lib/utils";
 import {
   CATEGORIAS_DOCUMENTO,
   CATEGORIAS_EXAME,
-  OPCOES_FEEDBACK,
-  STATUS_COM_DETALHES,
-  comporResumo,
+  OPCOES_EXAME,
+  ROTULO_REJEICAO_EXAME,
+  juntarNomes,
+  type Area,
+  type CodigoRejeicao,
   type DocumentFeedback,
   type DocumentFeedbackInput,
   type FeedbackIssueItem,
-  type FeedbackStatus,
+  type RejectionCode,
+  type Veredito,
 } from "@/types/feedback";
+import type { DocumentProcessingResult } from "@/types/process";
+
+/** Um exame da lista do modal, com o que a IA disse dele. */
+export type ExamePrevisto = { nome: string; veredito: Veredito | null };
+
+/** O que a IA decidiu sozinha, antes de qualquer revisão humana. */
+export type DecisaoIA = {
+  decisao: "aprovado" | "rejeitado";
+  /** `false` quando ela parou antes de comparar exames (CPF, CNPJ, BRNET). */
+  comparou: boolean;
+  /** O que ela disse, numa frase. Se ela acertou a rejeição, é o motivo que fica. */
+  motivo: string;
+  /** Exames que ela apontou como faltantes, com o nome do BRNET. */
+  faltantes: string[];
+};
 
 export type FeedbackAlvo = {
   documentId: string;
   paciente?: string;
   cpf?: string;
   /**
-   * "decisao": o diálogo veio de Aprovar/Rejeitar e a decisão AINDA NÃO foi
-   * tomada — ele confirma a decisão e, de quebra, coleta o parecer.
-   * "avaliacao": veio do botão "Avaliar IA" de um documento já decidido; aqui
-   * só se coleta o parecer.
+   * "decisao": veio de Aprovar/Rejeitar e a decisão AINDA NÃO foi gravada — o
+   * diálogo a confirma e coleta o parecer junto.
+   * "avaliacao": veio de "Avaliar IA" num documento já decidido.
    */
   modo: "decisao" | "avaliacao";
-  /** No modo "decisao", qual decisão está sendo confirmada. */
-  decisao?: "aprovado" | "rejeitado";
-  /**
-   * A IA chegou a um veredito de aprovação neste documento: comparou de verdade
-   * e não apontou nenhum exame faltante.
-   *
-   * Não basta a lista de faltantes estar vazia. Quando a IA falha antes de
-   * comparar — não leu o CPF, o CNPJ veio errado, o paciente não estava no BRNET
-   * — ela também fica vazia, e ali a IA não aprovou nada: não houve julgamento.
-   * Medido no banco de dev entre os rejeitados sem faltantes: dos 522, 153 são
-   * falha técnica e 80 são regra de negócio (expedição em aberto), todos com
-   * `erro` preenchido e sem exames obrigatórios. Tratar esses como "a IA
-   * aprovou" marcaria "A IA errou" em 45% dos casos sem que a IA tivesse
-   * errado — e contaminaria a própria medição de acurácia que este parecer
-   * alimenta.
-   */
-  iaAprovou?: boolean;
-  /**
-   * Exames que o BRNET exigia e a IA não encontrou, com o nome canônico que a
-   * API devolveu (`validation_result.exames_faltantes`).
-   *
-   * Vem daqui, e não da `tabela_comparacao`, por dois motivos: a tabela falta em
-   * 12% dos documentos, e ela mistura nome de catálogo com texto saído do OCR —
-   * deixar o revisor apontar um nome de OCR sujaria justamente o dado que deve
-   * alimentar o catálogo de sinônimos.
-   */
-  exames: string[];
+  /** A decisão humana: a que está sendo confirmada, ou a que já foi gravada. */
+  decisao: "aprovado" | "rejeitado";
+  ia: DecisaoIA;
+  /** Os exames que o revisor pode apontar — ver `examesDoResultado`. */
+  exames: ExamePrevisto[];
 };
 
 /** O que sai do diálogo quando ele confirma uma decisão. */
 export type DecisaoConfirmada = {
-  /** Parecer sobre a IA, ou null quando o revisor optou por não avaliar. */
-  parecer: DocumentFeedbackInput | null;
+  parecer: DocumentFeedbackInput;
+  /** Só na rejeição: o texto que a clínica lê e os códigos que o geraram. */
+  rejeicao?: { motivo: string; codigos: RejectionCode[] };
 };
 
 type Props = {
   alvo: FeedbackAlvo | null;
   onClose: () => void;
   /**
-   * Só no modo "decisao". Grava a decisão e, se houver, o parecer — nesta
-   * ordem, porque o back-end recusa parecer de documento sem decisão humana
-   * (409). Deve lançar em caso de falha: o diálogo fica aberto com tudo
-   * preenchido, para o revisor não perder o que digitou.
+   * Só no modo "decisao". Grava a decisão e o parecer — nesta ordem, porque o
+   * back-end recusa parecer de documento sem decisão humana (409). Deve lançar
+   * em caso de falha: o diálogo fica aberto com tudo marcado.
    */
   onConfirmarDecisao?: (dados: DecisaoConfirmada) => Promise<void>;
 };
-
-/** Exames marcados e exames digitados, por categoria. */
-type Selecao = Record<string, { daLista: string[]; digitados: string[] }>;
-
-const VAZIO = { daLista: [], digitados: [] };
-
-// Todo exame da lista é faltante — é o único recorte que a API devolve aqui.
-const VEREDITO_DA_LISTA = "faltante";
-
-/**
- * Paleta do modal, nos tokens do sistema (app/globals.css) e nos mesmos
- * padrões das telas de catálogo e dashboard: `primary` é o azul-escuro da marca,
- * `secondary` o petróleo, e caixas/pílulas usam `primary` com transparência.
- * Centralizado aqui para as dezenas de ocorrências não voltarem a divergir —
- * antes era tudo cor crua do Tailwind (blue/amber), fora da identidade visual.
- */
-const ESTILO = {
-  rotulo: "text-[11px] font-semibold uppercase tracking-[0.16em] text-secondary",
-  caixa: "rounded-lg border border-primary/10 bg-primary/5 p-3",
-  cartao: "border-primary/15 bg-card hover:border-primary/25 hover:bg-primary/5",
-  cartaoAtivo: "border-secondary bg-secondary/10 ring-1 ring-secondary/30",
-  pilula:
-    "border-primary/15 bg-primary/5 text-primary/80 hover:border-primary/25 hover:bg-primary/10",
-  pilulaAtiva: "border-secondary bg-secondary text-white shadow-sm",
-  exame:
-    "border-primary/15 bg-white/80 text-foreground hover:border-primary/25 hover:bg-primary/5",
-  exameAtivo: "border-secondary bg-secondary/10 font-medium text-secondary",
-  resumo: "rounded-lg border border-secondary/20 bg-secondary/5 p-3",
-  // Atenção (falta preencher) no âmbar da marca; erro de verdade segue o
-  // vermelho que os formulários do sistema já usam.
-  pendencia: "text-destructive",
-  erro: "text-red-600",
-  obrigatorio: "text-red-600",
-} as const;
 
 /** Para comparar nomes de exame: sem caixa, sem acento, sem espaço sobrando. */
 function normalizarNome(nome: string): string {
   return nome
     .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[̀-ͯ]/g, "")
     .replace(/\s+/g, " ")
     .trim()
     .toLowerCase();
 }
 
+/** O payload às vezes chega sem a lista, ou com algo que não é lista. */
+function textos(valor: unknown): string[] {
+  return Array.isArray(valor) ? valor.filter((v): v is string => typeof v === "string") : [];
+}
+
+const MINUSCULAS = new Set(["a", "ao", "com", "da", "das", "de", "do", "dos", "e", "em", "na", "no", "o", "ou", "por", "sem"]);
+
 /**
- * Parecer do revisor sobre o acerto da IA.
+ * "RAIO-X DE TÓRAX PA (OIT)" → "Raio-X de tórax PA (OIT)". O BRNET devolve tudo
+ * em caixa alta, e uma fileira de pílulas em maiúsculas é ruído puro. Siglas
+ * (até 3 letras, ou entre parênteses) ficam como estão. Só para exibir: o que
+ * vai para a API é sempre o nome original.
+ */
+export function nomeLegivel(nome: string): string {
+  if (/\p{Ll}/u.test(nome)) return nome;
+  let profundidade = 0;
+  let primeira = true;
+  let saida = "";
+  for (const parte of nome.split(/([\p{L}\p{N}]+)/u)) {
+    if (!/^[\p{L}\p{N}]+$/u.test(parte)) {
+      for (const c of parte) {
+        if (c === "(") profundidade++;
+        if (c === ")") profundidade = Math.max(0, profundidade - 1);
+      }
+      saida += parte;
+      continue;
+    }
+    const minuscula = parte.toLowerCase();
+    let palavra =
+      profundidade > 0 || /\d/.test(parte) || (parte.length <= 3 && !MINUSCULAS.has(minuscula))
+        ? parte
+        : minuscula;
+    if (primeira) {
+      palavra = palavra.charAt(0).toUpperCase() + palavra.slice(1);
+      primeira = false;
+    }
+    saida += palavra;
+  }
+  return saida;
+}
+
+/**
+ * Os exames que o BRNET exigia, cada um com o que a IA disse dele.
  *
- * Portado do `FeedbackCard` da Triagem BR NET, com duas diferenças de fundo: lá
- * o parecer é obrigatório e destrava o download, aqui é **opcional** e nunca
- * bloqueia nada (a decisão já foi persistida antes deste modal abrir, em outra
- * requisição — falhar aqui não a desfaz); e aqui **todo motivo de exame aponta
- * para um exame**, porque "faltante incorreto" solto no documento não diz em
- * quê e não serve para corrigir o motor de comparação. Os erros que não são de
- * exame (nome, CPF, data, ilegibilidade) têm bloco próprio e viajam em
- * `document_issues` — um deles sozinho já é parecer válido.
+ * O nome vem de `brmed_result.exames_obrigatorios` — nome de catálogo, saído da
+ * API e não do OCR — e não da `tabela_comparacao`, que falta em 12% dos
+ * documentos e mistura nome de catálogo com texto lido do PDF. A tabela só
+ * entra para saber quem ficou "parcialmente encontrado". Os extras (nome de
+ * OCR) ficam de fora: não pesam na decisão, e só alongariam a lista.
  *
- * Duas portas de entrada: a decisão (aprovar/rejeitar) e o botão "Avaliar IA" de
- * um documento já decidido. Por causa da segunda, o modal **busca o parecer
- * salvo ao abrir** — sem isso, quem respondeu na hora da decisão e voltasse
- * depois sobrescreveria a própria resposta sem ver o que estava lá.
+ * Sem `validation_result` a IA não chegou a comparar e o veredito fica nulo:
+ * mostrar "encontrado" ali seria inventar um julgamento que não houve.
+ */
+export function examesDoResultado(r?: DocumentProcessingResult | null): ExamePrevisto[] {
+  if (!r) return [];
+  const comparou = Boolean(r.validation_result);
+  const faltantes = new Set(textos(r.validation_result?.exames_faltantes).map(normalizarNome));
+  const parciais = new Set(
+    (Array.isArray(r.tabela_comparacao) ? r.tabela_comparacao : [])
+      .filter((t) => t?.status === "parcialmente_encontrado" && typeof t.exame === "string")
+      .map((t) => normalizarNome(t.exame)),
+  );
+  const vistos = new Set<string>();
+  const lista: ExamePrevisto[] = [];
+  const incluir = (nome: string, veredito: Veredito | null) => {
+    const chave = normalizarNome(nome);
+    if (!chave || vistos.has(chave)) return;
+    vistos.add(chave);
+    lista.push({ nome: nome.trim(), veredito });
+  };
+  for (const nome of textos(r.brmed_result?.exames_obrigatorios)) {
+    const chave = normalizarNome(nome);
+    incluir(
+      nome,
+      !comparou
+        ? null
+        : faltantes.has(chave)
+          ? "faltante"
+          : parciais.has(chave)
+            ? "parcialmente_encontrado"
+            : "encontrado",
+    );
+  }
+  // Faltante fora da lista de exigidos não deveria existir, mas a lista de
+  // exigidos pode faltar no payload — e o faltante é justamente o exame que o
+  // revisor mais precisa conseguir apontar.
+  for (const nome of textos(r.validation_result?.exames_faltantes)) incluir(nome, "faltante");
+  return lista;
+}
+
+/**
+ * O que a IA decidiu, lido do resultado dela — e não do status do documento,
+ * que depois da revisão passa a ser o da pessoa.
+ *
+ * Erro de negócio ou técnico (paciente não encontrado, CNPJ inválido, expedição
+ * em aberto) é rejeição sem comparação: 347 dos 628 motivos de rejeição
+ * gravados no dev eram essa mensagem copiada.
+ */
+export function decisaoDaIA(r?: DocumentProcessingResult | null): DecisaoIA {
+  const erro = [r?.erro, r?.error, r?.business_error?.message].find(
+    (x): x is string => typeof x === "string" && x.trim().length > 0,
+  );
+  if (erro) return { decisao: "rejeitado", comparou: false, motivo: erro.trim(), faltantes: [] };
+  const faltantes = textos(r?.validation_result?.exames_faltantes);
+  if (faltantes.length > 0) {
+    return {
+      decisao: "rejeitado",
+      comparou: true,
+      motivo: `Faltou: ${juntarNomes(faltantes.map(nomeLegivel))}.`,
+      faltantes,
+    };
+  }
+  const exigidos = textos(r?.brmed_result?.exames_obrigatorios).length;
+  return {
+    decisao: "aprovado",
+    comparou: true,
+    motivo: exigidos
+      ? `Encontrou ${exigidos === 1 ? "o exame exigido" : `os ${exigidos} exames exigidos`} pelo BRNET.`
+      : "Aprovou o documento.",
+    faltantes: [],
+  };
+}
+
+type Linha = ExamePrevisto & { avulso: boolean };
+
+const ROTULO_AREA: Record<Area, string> = {
+  exames: "Nos exames",
+  brnet: "Na consulta ao BRNET",
+  paciente: "Nos dados do paciente",
+  documento: "No documento",
+  outro: "Outro",
+};
+
+const PERGUNTA_AREA: Record<Exclude<Area, "exames" | "outro">, string> = {
+  brnet: "O que estava errado na consulta?",
+  paciente: "O que ela leu errado?",
+  documento: "O que veio errado no documento?",
+};
+
+function opcoesDe(linha: Linha) {
+  if (linha.avulso) return OPCOES_EXAME.avulso;
+  return linha.veredito === "faltante" ? OPCOES_EXAME.faltante : OPCOES_EXAME.encontrado;
+}
+
+function areaDe(problema: string): Exclude<Area, "exames"> | undefined {
+  return CATEGORIAS_DOCUMENTO.find((c) => c.valor === problema)?.area;
+}
+
+/**
+ * O texto que o modal escreve sozinho em `notes`: uma frase por exame e uma
+ * por problema, na ordem da tela. Pura de propósito — roda ao salvar e ao
+ * reabrir um parecer, para separar o texto automático do comentário do revisor.
+ */
+function frasesDoParecer(itens: Array<{ categoria: string; exame: string }>, problemas: string[]) {
+  const frases: string[] = [];
+  for (const { categoria, exame } of itens) {
+    const frase = CATEGORIAS_EXAME.find((c) => c.valor === categoria)?.frase;
+    if (frase) frases.push(frase(nomeLegivel(exame)));
+  }
+  for (const valor of problemas) {
+    const frase = CATEGORIAS_DOCUMENTO.find((c) => c.valor === valor)?.frase;
+    if (frase) frases.push(frase);
+  }
+  return frases;
+}
+
+const ESTILO = {
+  pergunta: "mb-2 flex flex-wrap items-baseline gap-2 text-sm font-semibold text-foreground",
+  dica: "text-xs font-normal text-muted-foreground",
+  grupo: "mb-1.5 mt-3 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground first:mt-0",
+  pilula:
+    "inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-border bg-white px-3 py-1.5 text-[13px] text-foreground transition-colors hover:border-primary/40 dark:bg-white/5",
+  pilulaAtiva: "border-primary bg-primary text-primary-foreground hover:border-primary dark:bg-primary",
+  radio:
+    "cursor-pointer rounded-lg border border-border bg-white px-2.5 py-1 text-[12.5px] text-foreground transition-colors hover:border-primary/40 dark:bg-white/5",
+  radioAtivo: "border-secondary bg-secondary/10 font-semibold ring-1 ring-inset ring-secondary dark:bg-secondary/15",
+  passo: "animate-in fade-in-0 slide-in-from-top-1 duration-200 motion-reduce:animate-none",
+} as const;
+
+/** Bolinha de seleção das pílulas de múltipla escolha. */
+function Marca({ ativa }: { ativa: boolean }) {
+  return (
+    <span
+      className={cn(
+        "grid size-3.5 place-items-center rounded-full border-[1.5px]",
+        ativa ? "border-primary-foreground bg-primary-foreground text-primary" : "border-border",
+      )}
+    >
+      {ativa && <CheckIcon className="size-2.5" strokeWidth={4} />}
+    </span>
+  );
+}
+
+/**
+ * Confirma a decisão do revisor e pergunta uma coisa só: a IA acertou?
+ *
+ * Se acertou, acabou — numa rejeição, o motivo dela vira o motivo que vai para
+ * a clínica. Se errou, o modal pergunta onde, e cada resposta abre a próxima
+ * pergunta: nos exames → em quais → o que houve com cada um, com as opções do
+ * que a IA tinha dito daquele exame. O "o que aconteceu" do parecer e o motivo
+ * da rejeição saem dessas respostas; o revisor só escreve em "Outro".
+ *
+ * Substitui o texto livre de "Motivo da rejeição" e os três cartões de status
+ * da versão anterior. A ideia é ser mais rápido do que digitar: quando a
+ * decisão do revisor bate com a da IA, "Acertou" já vem marcado e o foco
+ * começa no botão de confirmar — Enter e pronto. Quando contraria, "Errou" já
+ * vem aberto, porque ali é preciso dizer onde.
+ *
+ * O status do parecer é deduzido, não perguntado: acertou → IA_CORRETA; errou
+ * numa decisão igual à dela → com ressalvas; errou numa decisão contrária →
+ * IA_INCORRETA.
  *
  * Enquanto está aberto o cronômetro de revisão fica pausado, então o tempo de
- * preencher não entra no `review_active_ms` (ver docs/tempo-de-revisao-desenho.md).
+ * responder não entra no `review_active_ms` (ver docs/tempo-de-revisao-desenho.md).
  */
 export function FeedbackChecagemDialog({ alvo, onClose, onConfirmarDecisao }: Props) {
   // O último alvo aberto, para desenhar a tela enquanto ela SOME. Quem fecha
   // zera `alvo` na hora, mas o Radix ainda anima a saída por ~200ms; sem isto,
-  // nesse intervalo o título virava "Como foi o resultado da IA?", o motivo da
-  // rejeição sumia e a lista de exames trocava pelo aviso de lista vazia — tudo
-  // visível no fade (medido: aos 60ms o título já tinha trocado).
+  // nesse intervalo o título e as perguntas trocavam no meio do fade.
   const ultimoAlvo = useRef<FeedbackAlvo | null>(alvo);
   if (alvo) ultimoAlvo.current = alvo;
   const vis = alvo ?? ultimoAlvo.current;
 
-  const [status, setStatus] = useState<FeedbackStatus | "">("");
-  const [categorias, setCategorias] = useState<string[]>([]);
-  const [selecao, setSelecao] = useState<Selecao>({});
-  const [rascunhos, setRascunhos] = useState<Record<string, string>>({});
-  const [problemasDoc, setProblemasDoc] = useState<string[]>([]);
+  const [veredito, setVeredito] = useState<"acertou" | "errou" | null>(null);
+  const [areas, setAreas] = useState<Area[]>([]);
+  /** Exames apontados, pelo nome original (o que vai para a API). */
+  const [exames, setExames] = useState<string[]>([]);
+  /** A resposta de "O que houve?" de cada exame apontado. */
+  const [oque, setOque] = useState<Record<string, string>>({});
+  /** Problemas marcados nas perguntas de BRNET, paciente e documento. */
+  const [problemas, setProblemas] = useState<string[]>([]);
+  const [avulsos, setAvulsos] = useState<Linha[]>([]);
+  const [incluindo, setIncluindo] = useState(false);
+  const [rascunho, setRascunho] = useState("");
   const [notas, setNotas] = useState("");
+  const [comentando, setComentando] = useState(false);
   const [carregando, setCarregando] = useState(false);
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [existente, setExistente] = useState<DocumentFeedback | null>(null);
-  /**
-   * O status na tela veio da sugestão automática e o revisor ainda não encostou
-   * em nada do parecer.
-   *
-   * Enquanto isso for verdade o parecer é tratado como NÃO PREENCHIDO: não trava
-   * o botão e não é enviado. Sem esta distinção a sugestão viraria obrigação —
-   * "A IA errou" exige detalhamento, então pré-marcá-la bastava para o botão de
-   * rejeitar nascer desabilitado, e a issue pede o contrário ("pré-selecionar,
-   * sem bloquear a escolha"). Qualquer toque do revisor no parecer encerra o
-   * estado de sugestão e as regras normais voltam a valer.
-   */
-  const [sugestaoIntocada, setSugestaoIntocada] = useState(false);
 
   // Depende de `alvo`, não de `alvo.documentId`: o componente fica montado entre
   // uma abertura e outra, e cada abertura cria um objeto novo. Com o id na lista
@@ -191,23 +338,19 @@ export function FeedbackChecagemDialog({ alvo, onClose, onConfirmarDecisao }: Pr
   useEffect(() => {
     if (!alvo) return;
     let vivo = true;
-    setStatus("");
-    setCategorias([]);
-    setSelecao({});
-    setRascunhos({});
-    setProblemasDoc([]);
+    const concorda = alvo.ia.decisao === alvo.decisao;
+    setVeredito(concorda ? "acertou" : "errou");
+    setAreas([]);
+    setExames([]);
+    setOque({});
+    setProblemas([]);
+    setAvulsos([]);
+    setIncluindo(false);
+    setRascunho("");
     setNotas("");
+    setComentando(false);
     setErro(null);
     setExistente(null);
-    setSugestaoIntocada(false);
-    // Rejeitar algo que a IA tinha aprovado já é, em si, a afirmação de que a
-    // IA errou — o revisor não deveria ter de dizer de novo. A sugestão é só
-    // isto: fica marcada e o revisor troca à vontade, inclusive para "acertou
-    // com ressalvas", que é o caso em que a rejeição veio de outro motivo.
-    if (alvo.modo === "decisao" && alvo.decisao === "rejeitado" && alvo.iaAprovou) {
-      setStatus("IA_INCORRETA");
-      setSugestaoIntocada(true);
-    }
     // No modo "decisao" o documento ainda nem foi decidido: não existe parecer
     // anterior para buscar, e o GET só atrasaria a abertura.
     if (alvo.modo === "decisao") return;
@@ -217,37 +360,50 @@ export function FeedbackChecagemDialog({ alvo, onClose, onConfirmarDecisao }: Pr
       .then((salvo: DocumentFeedback | null) => {
         if (!vivo || !salvo) return;
         setExistente(salvo);
-        setStatus(salvo.status);
-        // Remonta a tela a partir dos pares gravados: categorias na ordem em que
-        // aparecem, e cada exame de volta na coluna certa (marcado da lista ou
-        // digitado à mão).
-        const doBanco: Selecao = {};
-        for (const item of salvo.issue_items ?? []) {
-          const atual = doBanco[item.categoria] ?? { daLista: [], digitados: [] };
-          if (item.fora_da_lista) atual.digitados = [...atual.digitados, item.exame];
-          else atual.daLista = [...atual.daLista, item.exame];
-          doBanco[item.categoria] = atual;
+        if (salvo.status === "IA_CORRETA") {
+          setVeredito("acertou");
+          return;
         }
-        const docs = salvo.document_issues ?? [];
-        setCategorias(Object.keys(doBanco));
-        setSelecao(doBanco);
-        setProblemasDoc(docs);
-        // `notes` foi gravado como resumo automático + detalhe manual. Refaz o
-        // resumo a partir dos pares e devolve ao campo só o que sobrar — senão,
-        // ao salvar de novo, o resumo entraria duplicado.
-        const resumoSalvo = comporResumo(
-          Object.entries(doBanco).map(([categoria, v]) => ({
-            categoria,
-            nomes: [...v.daLista, ...v.digitados],
-          })),
-          docs,
-        ).join("\n");
+        setVeredito("errou");
+        // Remonta as respostas a partir do que foi gravado. Exame que não está
+        // mais na lista (digitado, ou o resultado foi reprocessado) volta como
+        // avulso.
+        const doBanco: Record<string, string> = {};
+        const marcados: string[] = [];
+        const restaurados: Linha[] = [];
+        for (const item of salvo.issue_items ?? []) {
+          const chave = normalizarNome(item.exame);
+          const linha =
+            alvo.exames.find((e) => normalizarNome(e.nome) === chave) ??
+            restaurados.find((e) => normalizarNome(e.nome) === chave);
+          const nome = linha?.nome ?? item.exame;
+          if (!linha) restaurados.push({ nome, veredito: null, avulso: true });
+          if (!marcados.includes(nome)) marcados.push(nome);
+          doBanco[nome] ??= item.categoria;
+        }
+        const docs = (salvo.document_issues ?? []).filter((p) => p !== "OUTRO_PROBLEMA");
+        const areasSalvas = new Set<Area>();
+        if (marcados.length) areasSalvas.add("exames");
+        for (const p of salvo.document_issues ?? []) {
+          const area = areaDe(p);
+          if (area) areasSalvas.add(area);
+        }
+        setAreas([...areasSalvas]);
+        setExames(marcados);
+        setOque(doBanco);
+        setProblemas(docs);
+        setAvulsos(restaurados);
+        // `notes` foi gravado como frases automáticas + comentário. Refaz as
+        // frases e devolve ao campo só o comentário — senão, ao salvar de novo,
+        // o texto automático entraria duplicado.
+        const automatico = frasesDoParecer(salvo.issue_items ?? [], docs).join("\n");
         const gravado = salvo.notes ?? "";
-        setNotas(
-          resumoSalvo && gravado.startsWith(resumoSalvo)
-            ? gravado.slice(resumoSalvo.length).trim()
-            : gravado,
-        );
+        const comentario =
+          automatico && gravado.startsWith(automatico)
+            ? gravado.slice(automatico.length).trim()
+            : gravado;
+        setNotas(comentario);
+        setComentando(Boolean(comentario));
       })
       .catch(() => undefined)
       .finally(() => {
@@ -258,612 +414,519 @@ export function FeedbackChecagemDialog({ alvo, onClose, onConfirmarDecisao }: Pr
     };
   }, [alvo]);
 
-  const exames = useMemo(
-    () => [...(vis?.exames ?? [])].sort((a, b) => a.localeCompare(b, "pt-BR")),
-    [vis],
-  );
-
-  // Trocar de status NÃO apaga o que foi marcado: os três cartões ficam lado a
-  // lado, e um clique errado em "A IA acertou" levava motivos, exames e texto
-  // embora sem volta. Os detalhes só ficam escondidos — e não são enviados,
-  // porque `montarParecer` só os inclui quando o status pede detalhamento.
-  //
-  // Clicar no cartão já marcado DESMARCA. Sem isso não há saída: escolher um
-  // status que pede detalhamento trava o botão de enviar até detalhar, e o
-  // parecer é opcional. Passou a importar quando a rejeição de algo aprovado
-  // pela IA começou a vir com "A IA errou" já marcado — o revisor que só quer
-  // rejeitar precisa conseguir limpar a sugestão.
-  function selecionarStatus(valor: FeedbackStatus) {
-    setSugestaoIntocada(false);
-    setStatus((atual) => (atual === valor ? "" : valor));
-    setErro(null);
-  }
-
-  function alternarCategoria(valor: string) {
-    setSugestaoIntocada(false);
-    setErro(null);
-    setCategorias((atuais) => {
-      if (!atuais.includes(valor)) return [...atuais, valor];
-      // Desmarcar o motivo leva junto os exames dele: deixar seleção órfã de um
-      // chip apagado mandaria para o servidor item que a tela não mostra mais.
-      setSelecao((atual) => {
-        const copia = { ...atual };
-        delete copia[valor];
-        return copia;
-      });
-      setRascunhos((atual) => {
-        const copia = { ...atual };
-        delete copia[valor];
-        return copia;
-      });
-      return atuais.filter((x) => x !== valor);
-    });
-  }
-
-  function alternarProblemaDoc(valor: string) {
-    setSugestaoIntocada(false);
-    setErro(null);
-    setProblemasDoc((atuais) =>
-      atuais.includes(valor) ? atuais.filter((x) => x !== valor) : [...atuais, valor],
-    );
-  }
-
-  function alternarExame(categoria: string, exame: string) {
-    setSugestaoIntocada(false);
-    setErro(null);
-    setSelecao((atual) => {
-      const item = atual[categoria] ?? VAZIO;
-      const daLista = item.daLista.includes(exame)
-        ? item.daLista.filter((x) => x !== exame)
-        : [...item.daLista, exame];
-      return { ...atual, [categoria]: { ...item, daLista } };
-    });
-  }
-
-  function adicionarDigitado(categoria: string) {
-    setSugestaoIntocada(false);
-    const nome = (rascunhos[categoria] ?? "").trim();
-    if (!nome) return;
-    setErro(null);
-    // Digitou um exame que está na lista do BRNET, só que em outra caixa ou sem
-    // acento? Marca o chip da lista, com o nome canônico. Sem isto ele entrava
-    // como `fora_da_lista`, com nome fora do padrão e marcado para curadoria, e
-    // se o revisor também clicasse no chip o resumo saía "SUMÁRIO DE URINA (EAS)
-    // e sumário de urina (eas) estavam..." — com o back gravando um item só.
-    const daLista = exames.find((e) => normalizarNome(e) === normalizarNome(nome));
-    setSelecao((atual) => {
-      const item = atual[categoria] ?? VAZIO;
-      if (daLista) {
-        if (item.daLista.includes(daLista)) return atual;
-        return { ...atual, [categoria]: { ...item, daLista: [...item.daLista, daLista] } };
-      }
-      const jaTem = [...item.daLista, ...item.digitados].some(
-        (x) => normalizarNome(x) === normalizarNome(nome),
-      );
-      if (jaTem) return atual;
-      return { ...atual, [categoria]: { ...item, digitados: [...item.digitados, nome] } };
-    });
-    setRascunhos((atual) => ({ ...atual, [categoria]: "" }));
-  }
-
-  function removerDigitado(categoria: string, nome: string) {
-    setSelecao((atual) => {
-      const item = atual[categoria] ?? VAZIO;
-      return {
-        ...atual,
-        [categoria]: { ...item, digitados: item.digitados.filter((x) => x !== nome) },
-      };
-    });
-  }
-
-  const itens: FeedbackIssueItem[] = useMemo(() => {
-    return categorias.flatMap((categoria) => {
-      const item = selecao[categoria] ?? VAZIO;
-      return [
-        ...item.daLista.map((exame) => ({
-          categoria,
-          exame,
-          veredito_ia: VEREDITO_DA_LISTA,
-          fora_da_lista: false,
-        })),
-        ...item.digitados.map((exame) => ({
-          categoria,
-          exame,
-          veredito_ia: null,
-          fora_da_lista: true,
-        })),
-      ];
-    });
-  }, [categorias, selecao]);
-
-  const precisaDetalhes = Boolean(status) && STATUS_COM_DETALHES.includes(status as FeedbackStatus);
-  // Todo motivo marcado precisa de pelo menos um exame: um chip aceso e vazio
-  // seria exatamente o parecer solto que este formulário existe para evitar.
-  const semExame = categorias.filter(
-    (c) => !itens.some((i) => i.categoria === c),
-  );
-  // Um problema de documento sozinho já basta: nome corrompido é erro real da IA
-  // e não tem exame a que amarrar.
-  const apontouAlgo = itens.length > 0 || problemasDoc.length > 0;
-  /**
-   * O "o que aconteceu" que o modal escreve sozinho. Por isso a descrição deixou
-   * de ser obrigatória: o par motivo↔exame já diz o quê e onde, e a frase diz
-   * isso por extenso. O revisor só escreve quando quer acrescentar algo — ou
-   * quando marcou "Outro", que não tem frase pronta.
-   */
-  const resumo = useMemo(
-    () =>
-      comporResumo(
-        categorias.map((categoria) => {
-          const item = selecao[categoria] ?? VAZIO;
-          return { categoria, nomes: [...item.daLista, ...item.digitados] };
-        }),
-        problemasDoc,
-      ),
-    [categorias, selecao, problemasDoc],
-  );
-  const pediuOutro = categorias.includes("OUTRO");
-  const detalheObrigatorio = pediuOutro || (apontouAlgo && resumo.length === 0);
-  const textoFinal = [resumo.join("\n"), notas.trim()].filter(Boolean).join("\n\n");
-
-  const parecerValido = Boolean(
-    status &&
-      (!precisaDetalhes ||
-        (apontouAlgo &&
-          semExame.length === 0 &&
-          (!detalheObrigatorio || notas.trim().length > 0))),
-  );
-
   const modoDecisao = vis?.modo === "decisao";
   const rejeitando = vis?.decisao === "rejeitado";
-  // Rejeitar não pede mais texto livre: o campo "Motivo da rejeição" saiu, e o
-  // que há para dizer sobre o acerto da IA vai no parecer estruturado abaixo.
-  // No modo decisão o parecer é opcional: sem status escolhido, aprova/rejeita
-  // e pronto. Mas começar a preencher e parar no meio não passa — seria enviar
-  // motivo sem exame, que é o que o formato existe para impedir.
-  //
-  // `sugestaoIntocada` é a exceção: ali o status apareceu sozinho, o revisor não
-  // pediu nada, e cobrar detalhamento dele seria transformar uma sugestão em
-  // obrigação. Nesse estado o parecer não conta como começado.
-  const parecerPendente = modoDecisao
-    ? Boolean(status) && !sugestaoIntocada && !parecerValido
-    : !parecerValido;
-  const podeEnviar = modoDecisao ? !parecerPendente : parecerValido;
-  const formularioValido = podeEnviar;
+  const ia = vis?.ia;
+  const concorda = ia?.decisao === vis?.decisao;
+  // Rejeitar o que a IA aprovou e dizer que ela acertou não deixa motivo
+  // nenhum para a clínica: o único caminho ali é apontar onde ela errou.
+  const acertoImpossivel = rejeitando && ia?.decisao === "aprovado";
 
-  /**
-   * O que falta para poder enviar, na ordem em que aparece no formulário.
-   *
-   * Existe porque o botão desabilitado não explica nada: no teste em tela, um
-   * motivo aceso sem exame escolhido deixava o revisor diante de um botão cinza
-   * e um rodapé dizendo "leva menos de um minuto", sem pista do que fazer. A
-   * mensagem de `enviar()` nunca aparecia — botão desabilitado não dispara
-   * clique.
-   */
-  const pendencia = (() => {
-    if (!precisaDetalhes || parecerValido) return null;
-    // Sugestão intocada não é pendência: nada está travado e não há o que
-    // cobrar de quem não pediu para preencher nada.
-    if (sugestaoIntocada) return null;
-    // O motivo aceso e vazio vem ANTES do "marque o que a IA errou": com um chip
-    // aceso, o revisor já marcou — pedir que marque de novo mandaria ele olhar
-    // para o lugar errado da tela.
-    if (semExame.length > 0) {
-      const rotulos = semExame
-        .map((c) => CATEGORIAS_EXAME.find((x) => x.valor === c)?.rotulo ?? c)
-        .join(", ");
-      // Sem faltante do BRNET não há o que escolher: o único caminho é digitar.
-      const verbo = exames.length === 0 ? "Informe" : "Escolha";
-      return `${verbo} ao menos um exame para: ${rotulos}.`;
+  const linhas: Linha[] = useMemo(
+    () => [...(vis?.exames ?? []).map((e) => ({ ...e, avulso: false })), ...avulsos],
+    [vis, avulsos],
+  );
+
+  const areasPossiveis: Area[] = ia?.comparou
+    ? ["exames", "paciente", ...(rejeitando ? (["documento"] as const) : []), "outro"]
+    : ["brnet", "paciente", ...(rejeitando ? (["documento"] as const) : []), "outro"];
+
+  const errou = veredito === "errou";
+  const apontaExames = errou && areas.includes("exames");
+
+  const itens: FeedbackIssueItem[] = useMemo(() => {
+    if (!apontaExames) return [];
+    return exames.flatMap((nome) => {
+      const linha = linhas.find((l) => l.nome === nome);
+      if (!linha) return [];
+      const categoria = oque[nome] ?? opcoesDe(linha)[0].categoria;
+      return [{ categoria, exame: nome, veredito_ia: linha.veredito, fora_da_lista: linha.avulso }];
+    });
+  }, [apontaExames, exames, linhas, oque]);
+
+  // Só os problemas das perguntas que estão abertas: desmarcar "No documento"
+  // esconde a pergunta e leva junto o que estava marcado nela.
+  const problemasValidos = useMemo(
+    () => (errou ? problemas.filter((p) => areas.includes(areaDe(p) as Area)) : []),
+    [errou, problemas, areas],
+  );
+  const pediuOutro = errou && areas.includes("outro");
+  const documentIssues = [...problemasValidos, ...(pediuOutro ? ["OUTRO_PROBLEMA"] : [])];
+
+  /** O motivo que a clínica lê, e os códigos que o geraram. Só na rejeição. */
+  const rejeicao = useMemo(() => {
+    if (!rejeitando || !ia) return null;
+    if (!errou) {
+      return {
+        motivo: ia.motivo,
+        codigos: ia.faltantes.map((exame) => ({ codigo: "EXAME_FALTANTE" as const, exame })),
+      };
     }
-    if (!apontouAlgo) return "Marque o que a IA errou — em algum exame ou no documento.";
-    return pediuOutro ? "Conte o que houve em “Outro”." : "Descreva o que aconteceu.";
+    // Errou: parte do que ela apontou como faltante, tira o que o revisor disse
+    // que não faltava, e soma o que ele apontou como faltando ou vindo errado.
+    const apontados = new Set(itens.map((i) => i.exame));
+    const porCodigo = new Map<CodigoRejeicao, string[]>();
+    const somar = (codigo: CodigoRejeicao, exame: string) =>
+      porCodigo.set(codigo, [...(porCodigo.get(codigo) ?? []), exame]);
+    for (const exame of ia.faltantes) if (!apontados.has(exame)) somar("EXAME_FALTANTE", exame);
+    for (const item of itens) {
+      const linha = linhas.find((l) => l.nome === item.exame);
+      const codigo = linha && opcoesDe(linha).find((o) => o.categoria === item.categoria)?.rejeicao;
+      if (codigo) somar(codigo, item.exame);
+    }
+    const partes: string[] = [];
+    const codigos: RejectionCode[] = [];
+    for (const [codigo, nomes] of porCodigo) {
+      partes.push(`${ROTULO_REJEICAO_EXAME[codigo]}: ${juntarNomes(nomes.map(nomeLegivel))}.`);
+      for (const exame of nomes) codigos.push({ codigo, exame });
+    }
+    for (const p of problemasValidos) {
+      const categoria = CATEGORIAS_DOCUMENTO.find((c) => c.valor === p);
+      if (categoria?.area !== "documento") continue;
+      partes.push(categoria.frase);
+      codigos.push({ codigo: p as CodigoRejeicao });
+    }
+    if (notas.trim()) partes.push(notas.trim());
+    return { motivo: partes.join(" "), codigos };
+  }, [rejeitando, ia, errou, itens, linhas, problemasValidos, notas]);
+
+  const frases = errou ? frasesDoParecer(itens, problemasValidos) : [];
+  const textoParecer = [frases.join("\n"), notas.trim()].filter(Boolean).join("\n\n");
+
+  /** O que falta responder, na ordem das perguntas. */
+  const pendencia = (() => {
+    if (!veredito) return "Diga se a IA acertou.";
+    if (!errou) return null;
+    if (areas.length === 0) return "Escolha onde a IA errou.";
+    if (apontaExames && exames.length === 0) return "Escolha os exames.";
+    for (const area of ["brnet", "paciente", "documento"] as const) {
+      if (areas.includes(area) && !problemasValidos.some((p) => areaDe(p) === area)) {
+        return PERGUNTA_AREA[area].replace("?", ".").replace(/^O que/, "Responda: o que");
+      }
+    }
+    if (pediuOutro && !notas.trim()) return "Conte o que aconteceu.";
+    if (rejeitando && rejeicao && !rejeicao.motivo) {
+      return "Falta o motivo para a clínica: marque o que veio errado ou comente.";
+    }
+    return null;
   })();
 
   function montarParecer(): DocumentFeedbackInput | null {
-    // Sugestão que o revisor não confirmou não vira parecer. Além de não ser
-    // dele, "A IA errou" sem detalhamento é recusado pelo back-end
-    // (`STATUS_COM_DETALHES`) — enviar assim derrubaria a rejeição inteira.
-    if (!status || sugestaoIntocada) return null;
+    if (!veredito) return null;
+    if (!errou) return { status: "IA_CORRETA", issue_items: [], document_issues: [], notes: null };
     return {
-      status,
-      issue_items: precisaDetalhes ? itens : [],
-      document_issues: precisaDetalhes ? problemasDoc : [],
-      notes: precisaDetalhes ? textoFinal || null : null,
+      status: concorda ? "IA_CORRETA_COM_AJUSTES" : "IA_INCORRETA",
+      issue_items: itens,
+      document_issues: documentIssues,
+      notes: textoParecer || null,
     };
   }
 
-  async function confirmarDecisao() {
-    if (!alvo || !onConfirmarDecisao || !podeEnviar) return;
-    setSalvando(true);
+  function escolherVeredito(valor: "acertou" | "errou") {
+    if (valor === "acertou" && acertoImpossivel) return;
+    setVeredito(valor);
     setErro(null);
-    try {
-      // Não chama onClose(): depois de decidir, quem fecha (e fecha também o
-      // modal de detalhes atrás) é a página. Fechar por aqui passaria pelo
-      // caminho de cancelamento, que religa o cronômetro de revisão e deixaria
-      // um acumulador órfão tiquetaqueando num documento já decidido.
-      await onConfirmarDecisao({
-        parecer: montarParecer(),
-      });
-    } catch (e) {
-      // A página não gravou: o diálogo fica aberto com tudo preenchido.
-      setErro(e instanceof Error ? e.message : String(e));
-    } finally {
-      setSalvando(false);
-    }
   }
 
-  async function enviar() {
-    if (!alvo || !status || !formularioValido) {
-      setErro(
-        semExame.length > 0
-          ? `Escolha ao menos um exame para: ${semExame
-              .map((c) => CATEGORIAS_EXAME.find((x) => x.valor === c)?.rotulo ?? c)
-              .join(", ")}.`
-          : precisaDetalhes
-            ? "Marque o que a IA errou, em quais exames, e descreva o que aconteceu."
-            : "Selecione como foi o resultado da IA.",
-      );
-      return;
-    }
-    const corpo: DocumentFeedbackInput = {
-      status,
-      issue_items: precisaDetalhes ? itens : [],
-      document_issues: precisaDetalhes ? problemasDoc : [],
-      notes: precisaDetalhes ? textoFinal || null : null,
-    };
+  function alternar<T>(lista: T[], valor: T): T[] {
+    return lista.includes(valor) ? lista.filter((x) => x !== valor) : [...lista, valor];
+  }
+
+  function incluirExame() {
+    const nome = rascunho.trim();
+    if (!nome) return;
+    // Digitou um exame que já está na lista, só que em outra caixa ou sem
+    // acento? Marca o da lista, com o nome original. Sem isto ele entrava como
+    // `fora_da_lista`, com nome fora do padrão e marcado para curadoria.
+    const jaListado = linhas.find((l) => normalizarNome(l.nome) === normalizarNome(nome));
+    if (!jaListado) setAvulsos((atuais) => [...atuais, { nome, veredito: null, avulso: true }]);
+    const alvoNome = jaListado?.nome ?? nome;
+    setExames((atuais) => (atuais.includes(alvoNome) ? atuais : [...atuais, alvoNome]));
+    setRascunho("");
+    setIncluindo(false);
+  }
+
+  async function confirmar() {
+    const parecer = montarParecer();
+    if (!alvo || !parecer || pendencia) return;
     setSalvando(true);
     setErro(null);
     try {
+      if (alvo.modo === "decisao") {
+        // Não chama onClose(): depois de decidir, quem fecha (e fecha também o
+        // modal de detalhes atrás) é a página. Fechar por aqui passaria pelo
+        // caminho de cancelamento, que religa o cronômetro de revisão.
+        await onConfirmarDecisao?.({ parecer, rejeicao: rejeicao ?? undefined });
+        return;
+      }
       const resposta = await authFetch(API_ENDPOINTS.DOCUMENT_FEEDBACK(alvo.documentId), {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(corpo),
+        body: JSON.stringify(parecer),
       });
       if (!resposta.ok) {
         const dados = await resposta.json().catch(() => null);
         throw new Error(dados?.detail ?? `Falha ao salvar o parecer (HTTP ${resposta.status}).`);
       }
-      // Sem isto o modal só sumia e o revisor não tinha como saber se gravou.
       toast.success(existente ? "Parecer atualizado." : "Obrigado pelo parecer!");
       onClose();
     } catch (e) {
+      // Nada foi gravado: o diálogo fica aberto com tudo marcado.
       setErro(e instanceof Error ? e.message : String(e));
     } finally {
       setSalvando(false);
     }
   }
 
+  const faltantesDaIA = linhas.filter((l) => !l.avulso && l.veredito === "faltante");
+  const encontradosDaIA = linhas.filter(
+    (l) => !l.avulso && (l.veredito === "encontrado" || l.veredito === "parcialmente_encontrado"),
+  );
+
+  const pilulaExame = (linha: Linha) => {
+    const ativo = exames.includes(linha.nome);
+    return (
+      <button
+        key={linha.nome}
+        type="button"
+        aria-pressed={ativo}
+        onClick={() => setExames((atuais) => alternar(atuais, linha.nome))}
+        className={cn(ESTILO.pilula, ativo && ESTILO.pilulaAtiva)}
+      >
+        <Marca ativa={ativo} />
+        {nomeLegivel(linha.nome)}
+      </button>
+    );
+  };
+
+  const resumo =
+    rejeitando && modoDecisao && rejeicao?.motivo
+      ? { rotulo: "Motivo que vai para a clínica", texto: rejeicao.motivo }
+      : errou && frases.length > 0
+        ? { rotulo: "Vai registrar", texto: frases.join(" ") }
+        : null;
+
   return (
-    // ESC e clique fora também são bloqueados durante o envio: fechar no meio do
-    // PUT deixaria o revisor sem saber se o parecer foi gravado.
+    // ESC e clique fora também são bloqueados durante o envio: fechar no meio da
+    // gravação deixaria o revisor sem saber se a decisão foi registrada.
     <Dialog open={!!alvo} onOpenChange={(aberto) => !aberto && !salvando && onClose()}>
-      {/* Ancorado no topo, e não centralizado: centralizado, o diálogo cresce para
-          os dois lados a cada chip marcado e o próximo alvo foge do cursor
-          (medido: 56px de salto depois de um único clique). */}
-      <DialogContent className="top-[4vh] max-h-[92vh] translate-y-0 sm:max-w-2xl">
-        <DialogHeader>
-          <DialogTitle>
+      {/* Ancorado no topo, e não centralizado: centralizado, o diálogo cresce
+          para os dois lados a cada pergunta que abre e o próximo alvo foge do
+          cursor. */}
+      <DialogContent
+        className="top-[6vh] flex max-h-[88vh] translate-y-0 flex-col gap-0 overflow-hidden p-0 sm:max-w-[560px]"
+        // O foco começa no botão de confirmar: quando "Acertou" já vem marcado,
+        // Enter confirma de primeira.
+        onOpenAutoFocus={(e) => {
+          e.preventDefault();
+          document.getElementById("feedback-confirmar")?.focus();
+        }}
+        onKeyDown={(e) => {
+          if ((e.target as HTMLElement).closest("input, textarea")) return;
+          const tecla = e.key.toLowerCase();
+          if (tecla === "a") escolherVeredito("acertou");
+          if (tecla === "e") escolherVeredito("errou");
+        }}
+      >
+        <DialogHeader className="gap-1 px-6 pt-6 pr-12">
+          <DialogTitle className="text-[19px] font-bold">
             {modoDecisao
               ? rejeitando
                 ? "Rejeitar documento"
                 : "Aprovar documento"
               : "Como foi o resultado da IA?"}
           </DialogTitle>
-          <DialogDescription>
-            {modoDecisao ? (
-              <>
-                {rejeitando ? "Rejeitando" : "Aprovando"} o documento
-                {vis?.paciente ? (
-                  <>
-                    {" de "}
-                    <strong>{vis.paciente}</strong>
-                  </>
-                ) : null}
-                {vis?.cpf ? ` (CPF: ${vis.cpf})` : ""}.
-              </>
+          <DialogDescription className="text-[13px]">
+            {vis?.paciente ? (
+              <span className="font-semibold text-foreground/80">{vis.paciente}</span>
             ) : (
-              <>
-                Documento
-                {vis?.paciente ? (
-                  <>
-                    {" de "}
-                    <strong>{vis.paciente}</strong>
-                  </>
-                ) : null}
-                . Esta resposta é opcional e não muda a decisão registrada — ela
-                alimenta a medição de acurácia e a correção do motor de comparação.
-              </>
+              "Documento"
             )}
+            {vis?.cpf ? ` · CPF ${vis.cpf}` : ""}
+            {!modoDecisao && ` · ${rejeitando ? "rejeitado" : "aprovado"}`}
+            {existente ? ` · avaliado por ${existente.reviewed_by_email ?? "outro revisor"}` : ""}
           </DialogDescription>
         </DialogHeader>
 
-        {modoDecisao && (
-          <div className="border-t pt-3">
-            <p className="text-sm font-medium text-foreground">
-              Como foi o resultado da IA?{" "}
-              <span className="font-normal text-muted-foreground">— opcional</span>
-            </p>
-            <p className="mt-0.5 text-xs text-muted-foreground">
-              Não muda a decisão acima. Alimenta a medição de acurácia e a correção do
-              motor de comparação.
-            </p>
-          </div>
-        )}
-
-        {carregando && (
-          <p className="flex items-center gap-2 py-2 text-sm text-muted-foreground">
-            <Loader2Icon className="size-4 animate-spin" /> Carregando parecer…
-          </p>
-        )}
-
-        <div className="grid gap-2 sm:grid-cols-3">
-          {OPCOES_FEEDBACK.map((opcao) => (
-            <button
-              key={opcao.valor}
-              type="button"
-              onClick={() => selecionarStatus(opcao.valor)}
-              className={cn(
-                "cursor-pointer rounded-lg border px-4 py-3 text-left transition-colors",
-                status === opcao.valor
-                  ? ESTILO.cartaoAtivo
-                  : ESTILO.cartao,
-              )}
-            >
-              <span className="block text-sm font-medium text-foreground">{opcao.titulo}</span>
-              <span className="mt-1 block text-xs leading-4 text-muted-foreground">
-                {opcao.descricao}
-              </span>
-            </button>
-          ))}
-        </div>
-
-        {precisaDetalhes && (
-          <div className="grid max-h-[46vh] gap-4 overflow-y-auto pr-1">
-            <div>
-              {/* "Em quais exames?" ficava aqui e descrevia o passo ERRADO: logo
-                  abaixo vêm os motivos, não os exames — estes só aparecem depois,
-                  dentro do motivo escolhido. O nome do bloco é o que a ajuda de
-                  "Problemas do documento" já usava para se referir a ele ("erros
-                  que não são de exame"), e a pergunta do rótulo antigo virou a
-                  linha de apoio, que é onde ela descreve o fluxo de verdade. */}
-              <p className={ESTILO.rotulo}>
-                Erros nos exames
-              </p>
-              <p className="mt-0.5 text-xs text-muted-foreground">
-                Marque o erro e, em seguida, em quais exames ele aconteceu.
-              </p>
-              <div className="mt-2 flex flex-wrap gap-2">
-                {CATEGORIAS_EXAME.map(({ valor, rotulo, ajuda }) => (
-                  <button
-                    key={valor}
-                    type="button"
-                    title={ajuda}
-                    onClick={() => alternarCategoria(valor)}
-                    className={cn(
-                      "cursor-pointer rounded-full border px-3 py-1.5 text-xs transition-colors",
-                      categorias.includes(valor)
-                        ? ESTILO.pilulaAtiva
-                        : ESTILO.pilula,
-                    )}
-                  >
-                    {rotulo}
-                  </button>
-                ))}
+        <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-6 pt-4">
+          <div className="grid gap-[18px]">
+            {ia && (
+              <div className="flex items-start gap-2.5 rounded-[10px] bg-primary/5 px-3 py-2.5 text-[13px] leading-snug text-foreground/85">
+                <BotIcon className="mt-px size-4 shrink-0 text-muted-foreground" />
+                <span>
+                  <span className="font-semibold text-foreground">
+                    {ia.decisao === "rejeitado" ? "A IA rejeitou." : "A IA aprovou."}
+                  </span>{" "}
+                  {ia.motivo}
+                </span>
               </div>
-            </div>
+            )}
 
-            {categorias.map((categoria) => {
-              const meta = CATEGORIAS_EXAME.find((c) => c.valor === categoria);
-              const item = selecao[categoria] ?? VAZIO;
-              const semLista = exames.length === 0;
-              return (
-                <div key={categoria} className={ESTILO.caixa}>
-                  <p className="text-sm font-medium text-foreground">
-                    {meta?.rotulo ?? categoria}
-                    <span className="ml-2 text-xs font-normal text-muted-foreground">
-                      {semLista ? "— digite o exame" : "— em quais exames?"}
-                    </span>
-                  </p>
-                  <p className="mt-0.5 text-xs text-muted-foreground">{meta?.ajuda}</p>
+            {carregando ? (
+              <p className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2Icon className="size-4 animate-spin" /> Carregando parecer…
+              </p>
+            ) : (
+              <>
+                <section>
+                  <p className="mb-2.5 text-[15px] font-semibold text-foreground">A IA acertou?</p>
+                  <div className="grid grid-cols-2 gap-2.5" role="radiogroup" aria-label="A IA acertou?">
+                    <BotaoVeredito
+                      tipo="acertou"
+                      ativo={veredito === "acertou"}
+                      desabilitado={acertoImpossivel}
+                      onClick={() => escolherVeredito("acertou")}
+                      titulo="Acertou"
+                      detalhe={
+                        acertoImpossivel
+                          ? "Ela aprovou; você está rejeitando"
+                          : rejeitando && ia?.decisao === "rejeitado"
+                            ? "Mantém o motivo dela"
+                            : "Confirma o resultado"
+                      }
+                    />
+                    <BotaoVeredito
+                      tipo="errou"
+                      ativo={errou}
+                      onClick={() => escolherVeredito("errou")}
+                      titulo="Errou"
+                      detalhe="Vou apontar onde"
+                    />
+                  </div>
+                </section>
 
-                  {semLista ? (
-                    <p className="mt-2 text-xs text-muted-foreground">
-                      O BRNET não apontou exame faltante neste documento — digite o nome
-                      abaixo.
-                    </p>
-                  ) : (
-                    <div className="mt-2 flex flex-wrap gap-1.5">
-                      {exames.map((nome) => (
+                {errou && (
+                  <div className="grid gap-[18px]">
+                    <section className={ESTILO.passo}>
+                      <p className={ESTILO.pergunta}>
+                        Onde ela errou? <span className={ESTILO.dica}>pode marcar mais de um</span>
+                      </p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {areasPossiveis.map((area) => {
+                          const ativa = areas.includes(area);
+                          return (
+                            <button
+                              key={area}
+                              type="button"
+                              aria-pressed={ativa}
+                              onClick={() => {
+                                setAreas((atuais) => alternar(atuais, area));
+                                setErro(null);
+                              }}
+                              className={cn(ESTILO.pilula, ativa && ESTILO.pilulaAtiva)}
+                            >
+                              <Marca ativa={ativa} />
+                              {ROTULO_AREA[area]}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </section>
+
+                    {areasPossiveis
+                      .filter((area) => areas.includes(area))
+                      .map((area) => {
+                        if (area === "exames") {
+                          return (
+                            <div key={area} className="grid gap-[18px]">
+                              <section className={ESTILO.passo}>
+                                <p className={ESTILO.pergunta}>Em quais exames?</p>
+                                {faltantesDaIA.length > 0 && (
+                                  <>
+                                    <p className={ESTILO.grupo}>Ela apontou como faltante</p>
+                                    <div className="flex flex-wrap gap-1.5">
+                                      {faltantesDaIA.map(pilulaExame)}
+                                    </div>
+                                  </>
+                                )}
+                                <p className={ESTILO.grupo}>
+                                  {faltantesDaIA.length > 0 ? "Ela deu como encontrado" : "Exames que ela encontrou"}
+                                </p>
+                                <div className="flex flex-wrap gap-1.5">
+                                  {encontradosDaIA.map(pilulaExame)}
+                                  {avulsos.map(pilulaExame)}
+                                  {incluindo ? (
+                                    <span className="inline-flex items-center rounded-full border border-secondary bg-white py-0.5 pl-3 pr-1 dark:bg-white/5">
+                                      <input
+                                        autoFocus
+                                        value={rascunho}
+                                        onChange={(e) => setRascunho(e.target.value)}
+                                        onKeyDown={(e) => {
+                                          if (e.key === "Enter") {
+                                            // Enter aqui inclui o exame; não confirma o modal.
+                                            e.preventDefault();
+                                            incluirExame();
+                                          }
+                                        }}
+                                        onBlur={() => !rascunho.trim() && setIncluindo(false)}
+                                        maxLength={120}
+                                        placeholder="Nome do exame"
+                                        aria-label="Nome do exame"
+                                        className="w-44 bg-transparent py-1 text-[13px] outline-none"
+                                      />
+                                      <button
+                                        type="button"
+                                        onClick={incluirExame}
+                                        className="cursor-pointer rounded-full px-2 py-1 text-xs font-semibold text-secondary hover:bg-secondary/10"
+                                      >
+                                        Incluir
+                                      </button>
+                                    </span>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      onClick={() => setIncluindo(true)}
+                                      className={cn(ESTILO.pilula, "border-dashed text-muted-foreground")}
+                                    >
+                                      <PlusIcon className="size-3.5" />
+                                      Outro exame
+                                    </button>
+                                  )}
+                                </div>
+                              </section>
+
+                              {exames.length > 0 && (
+                                <section className={ESTILO.passo}>
+                                  <p className={ESTILO.pergunta}>O que houve?</p>
+                                  <div>
+                                    {exames.map((nome) => {
+                                      const linha = linhas.find((l) => l.nome === nome);
+                                      if (!linha) return null;
+                                      const opcoes = opcoesDe(linha);
+                                      const atual = oque[nome] ?? opcoes[0].categoria;
+                                      // Um parecer antigo pode ter resposta que hoje não é
+                                      // oferecida para este exame: aparece junto, para não sumir.
+                                      const extra = opcoes.some((o) => o.categoria === atual)
+                                        ? []
+                                        : [{ categoria: atual, rotulo: CATEGORIAS_EXAME.find((c) => c.valor === atual)?.rotulo ?? atual }];
+                                      return (
+                                        <div
+                                          key={nome}
+                                          className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-t py-2.5 first:border-t-0 first:pt-0.5"
+                                        >
+                                          <span className="min-w-0 text-sm font-medium text-foreground">
+                                            {nomeLegivel(nome)}
+                                            <span className="block text-[11px] font-normal text-muted-foreground">
+                                              {linha.avulso
+                                                ? "fora da lista"
+                                                : linha.veredito === "faltante"
+                                                  ? "IA: faltante"
+                                                  : "IA: encontrado"}
+                                            </span>
+                                          </span>
+                                          <div className="flex flex-wrap gap-1" role="radiogroup" aria-label={nomeLegivel(nome)}>
+                                            {[...opcoes, ...extra].map((o) => (
+                                              <button
+                                                key={o.categoria}
+                                                type="button"
+                                                role="radio"
+                                                aria-checked={atual === o.categoria}
+                                                onClick={() => setOque((atuais) => ({ ...atuais, [nome]: o.categoria }))}
+                                                className={cn(ESTILO.radio, atual === o.categoria && ESTILO.radioAtivo)}
+                                              >
+                                                {o.rotulo}
+                                              </button>
+                                            ))}
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </section>
+                              )}
+                            </div>
+                          );
+                        }
+                        if (area === "outro") {
+                          return (
+                            <section key={area} className={ESTILO.passo}>
+                              <p className={ESTILO.pergunta}>O que aconteceu?</p>
+                              <Textarea
+                                value={notas}
+                                onChange={(e) => setNotas(e.target.value)}
+                                rows={2}
+                                maxLength={2000}
+                                placeholder="Conte em poucas palavras."
+                                className="bg-white text-[13px] dark:bg-white/5"
+                              />
+                            </section>
+                          );
+                        }
+                        return (
+                          <section key={area} className={ESTILO.passo}>
+                            <p className={ESTILO.pergunta}>{PERGUNTA_AREA[area]}</p>
+                            <div className="flex flex-wrap gap-1.5">
+                              {CATEGORIAS_DOCUMENTO.filter((c) => c.area === area).map((c) => {
+                                const ativo = problemas.includes(c.valor);
+                                return (
+                                  <button
+                                    key={c.valor}
+                                    type="button"
+                                    aria-pressed={ativo}
+                                    onClick={() => setProblemas((atuais) => alternar(atuais, c.valor))}
+                                    className={cn(ESTILO.pilula, ativo && ESTILO.pilulaAtiva)}
+                                  >
+                                    {c.rotulo}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </section>
+                        );
+                      })}
+
+                    {areas.length > 0 && !pediuOutro &&
+                      (comentando ? (
+                        <Textarea
+                          autoFocus={!notas}
+                          value={notas}
+                          onChange={(e) => setNotas(e.target.value)}
+                          rows={2}
+                          maxLength={2000}
+                          placeholder="Comentário opcional."
+                          className={cn("bg-white text-[13px] dark:bg-white/5", ESTILO.passo)}
+                        />
+                      ) : (
                         <button
-                          key={nome}
                           type="button"
-                          onClick={() => alternarExame(categoria, nome)}
-                          className={cn(
-                            "cursor-pointer rounded-md border px-2 py-1 text-xs transition-colors",
-                            item.daLista.includes(nome)
-                              ? ESTILO.exameAtivo
-                              : ESTILO.exame,
-                          )}
+                          onClick={() => setComentando(true)}
+                          className="inline-flex w-fit cursor-pointer items-center gap-1 text-[13px] text-secondary hover:underline"
                         >
-                          {nome}
+                          <PlusIcon className="size-3.5" /> Acrescentar comentário
                         </button>
                       ))}
-                    </div>
-                  )}
-
-                  {item.digitados.length > 0 && (
-                    <div className="mt-2 flex flex-wrap gap-1.5">
-                      {item.digitados.map((nome) => (
-                        <span
-                          key={nome}
-                          className={cn("inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs", ESTILO.exameAtivo)}
-                        >
-                          {nome}
-                          <button
-                            type="button"
-                            aria-label={`Remover ${nome}`}
-                            onClick={() => removerDigitado(categoria, nome)}
-                            className="cursor-pointer opacity-60 hover:opacity-100"
-                          >
-                            <XIcon className="size-3" />
-                          </button>
-                        </span>
-                      ))}
-                    </div>
-                  )}
-
-                  <div className="mt-2 flex gap-2">
-                    <Input
-                      value={rascunhos[categoria] ?? ""}
-                      onChange={(ev) =>
-                        setRascunhos((atual) => ({ ...atual, [categoria]: ev.target.value }))
-                      }
-                      onKeyDown={(ev) => {
-                        if (ev.key !== "Enter") return;
-                        // Enter aqui não pode submeter nem fechar o modal.
-                        ev.preventDefault();
-                        adicionarDigitado(categoria);
-                      }}
-                      maxLength={300}
-                      placeholder={
-                        semLista
-                          ? "Nome do exame como está no documento"
-                          : "Outro exame, fora da lista acima"
-                      }
-                      className="h-8 text-xs"
-                    />
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      className="h-8 shrink-0"
-                      onClick={() => adicionarDigitado(categoria)}
-                      disabled={!(rascunhos[categoria] ?? "").trim()}
-                    >
-                      <PlusIcon className="size-3.5" />
-                      Incluir
-                    </Button>
                   </div>
-                </div>
-              );
-            })}
-
-            <div>
-              <p className={ESTILO.rotulo}>
-                Problemas do documento
-              </p>
-              <p className="mt-0.5 text-xs text-muted-foreground">
-                Erros que não são de exame — não precisam apontar nada na lista acima.
-              </p>
-              <div className="mt-2 flex flex-wrap gap-2">
-                {CATEGORIAS_DOCUMENTO.map(({ valor, rotulo, ajuda }) => (
-                  <button
-                    key={valor}
-                    type="button"
-                    title={ajuda}
-                    onClick={() => alternarProblemaDoc(valor)}
-                    className={cn(
-                      "cursor-pointer rounded-full border px-3 py-1.5 text-xs transition-colors",
-                      problemasDoc.includes(valor)
-                        ? ESTILO.pilulaAtiva
-                        : ESTILO.pilula,
-                    )}
-                  >
-                    {rotulo}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {resumo.length > 0 && (
-              <div className={ESTILO.resumo}>
-                <p className={ESTILO.rotulo}>
-                  O que aconteceu
-                </p>
-                <ul className="mt-1.5 space-y-1 text-sm text-foreground">
-                  {resumo.map((frase) => (
-                    <li key={frase}>{frase}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
-            <label className="block">
-              <span className={ESTILO.rotulo}>
-                {detalheObrigatorio ? (
-                  <>
-                    {pediuOutro ? "Conte o que houve em “Outro”" : "Conte o que aconteceu"}{" "}
-                    <span className={ESTILO.obrigatorio}>*</span>
-                  </>
-                ) : (
-                  <>
-                    Quer acrescentar algo?{" "}
-                    <span className="font-normal normal-case tracking-normal">— opcional</span>
-                  </>
                 )}
-              </span>
-              <Textarea
-                value={notas}
-                onChange={(e) => {
-                  setSugestaoIntocada(false);
-                  setNotas(e.target.value);
-                  setErro(null);
-                }}
-                rows={2}
-                maxLength={5000}
-                placeholder={
-                  pediuOutro
-                    ? "Ex.: o exame veio com o resultado de outro paciente."
-                    : "Ex.: estava na página 2, com o nome abreviado."
-                }
-                className="mt-2"
-              />
-            </label>
-          </div>
-        )}
-
-        {erro && (
-          <p className={cn("flex items-center gap-2 text-sm", ESTILO.erro)}>
-            <AlertTriangleIcon className="size-4 shrink-0" /> {erro}
-          </p>
-        )}
-
-        <DialogFooter className="sm:justify-between">
-          <p
-            className={cn(
-              "text-xs",
-              pendencia ? ESTILO.pendencia : "text-muted-foreground",
+              </>
             )}
-          >
-            {pendencia
-              ? pendencia
-              : precisaDetalhes && apontouAlgo
-              ? [
-                  itens.length > 0 &&
-                    `${itens.length} ${itens.length === 1 ? "exame" : "exames"}`,
-                  problemasDoc.length > 0 &&
-                    `${problemasDoc.length} no documento`,
-                ]
-                  .filter(Boolean)
-                  .join(" · ")
-              : existente
-                ? `Já avaliado por ${existente.reviewed_by_email ?? "outro revisor"}.`
-                : modoDecisao
-                  ? "Pode seguir sem avaliar: o parecer é opcional."
-                  : "Responder leva menos de um minuto — e é opcional."}
-          </p>
-          <div className="flex gap-2">
+          </div>
+        </div>
+
+        <div className="grid gap-3 border-t px-6 pb-[18px] pt-3.5">
+          {resumo && (
+            <div className="grid gap-0.5 text-[13px] leading-normal text-foreground/85">
+              <span className="text-[11px] text-muted-foreground">{resumo.rotulo}</span>
+              {resumo.texto}
+            </div>
+          )}
+          {erro && (
+            <p className="flex items-center gap-2 text-sm text-red-600">
+              <AlertTriangleIcon className="size-4 shrink-0" /> {erro}
+            </p>
+          )}
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            {pendencia && !carregando && (
+              <span className="mr-auto text-xs text-destructive">{pendencia}</span>
+            )}
             <Button variant="ghost" onClick={onClose} disabled={salvando}>
-              {modoDecisao ? "Cancelar" : "Agora não"}
+              Cancelar
             </Button>
             <Button
-              onClick={modoDecisao ? confirmarDecisao : enviar}
-              disabled={salvando || carregando || !podeEnviar}
-              // Mesmas cores dos botões que este diálogo substituiu: verde no
-              // "Aprovar" do modal de detalhes, vermelho na confirmação de
-              // rejeição. `variant="destructive"` não serve — neste tema ele é
-              // âmbar (#CC851E), e o "Rejeitar" saía alaranjado.
+              id="feedback-confirmar"
+              onClick={confirmar}
+              disabled={salvando || carregando || Boolean(pendencia)}
+              // Mesmas cores dos botões do modal de detalhes. `variant="destructive"`
+              // não serve — neste tema ele é âmbar, e o "Rejeitar" saía alaranjado.
               className={
                 modoDecisao
                   ? rejeitando
@@ -874,20 +937,66 @@ export function FeedbackChecagemDialog({ alvo, onClose, onConfirmarDecisao }: Pr
             >
               {salvando && <Loader2Icon className="animate-spin" />}
               {modoDecisao
-                ? status
-                  ? rejeitando
-                    ? "Rejeitar e enviar parecer"
-                    : "Aprovar e enviar parecer"
-                  : rejeitando
-                    ? "Rejeitar"
-                    : "Aprovar"
+                ? rejeitando
+                  ? "Rejeitar"
+                  : "Aprovar"
                 : existente
                   ? "Salvar alterações"
-                  : "Enviar parecer"}
+                  : "Salvar parecer"}
             </Button>
           </div>
-        </DialogFooter>
+        </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/** Um dos dois botões de "A IA acertou?". */
+function BotaoVeredito({
+  tipo,
+  ativo,
+  desabilitado,
+  onClick,
+  titulo,
+  detalhe,
+}: {
+  tipo: "acertou" | "errou";
+  ativo: boolean;
+  desabilitado?: boolean;
+  onClick: () => void;
+  titulo: string;
+  detalhe: string;
+}) {
+  const Icone = tipo === "acertou" ? CheckIcon : XIcon;
+  return (
+    <button
+      type="button"
+      role="radio"
+      aria-checked={ativo}
+      disabled={desabilitado}
+      onClick={onClick}
+      className={cn(
+        "flex cursor-pointer items-center gap-3 rounded-xl border-[1.5px] border-border bg-white p-3.5 text-left transition-colors hover:border-primary/40 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:border-border dark:bg-white/5",
+        ativo && tipo === "acertou" && "border-secondary bg-secondary/10 hover:border-secondary dark:bg-secondary/15",
+        ativo && tipo === "errou" && "border-destructive bg-destructive/10 hover:border-destructive dark:bg-destructive/15",
+      )}
+    >
+      <span
+        className={cn(
+          "grid size-[30px] shrink-0 place-items-center rounded-full border-[1.5px] border-border text-muted-foreground transition-colors",
+          ativo && tipo === "acertou" && "border-secondary bg-secondary text-white",
+          ativo && tipo === "errou" && "border-destructive bg-destructive text-white",
+        )}
+      >
+        <Icone className="size-4" strokeWidth={2.6} />
+      </span>
+      <span className="min-w-0">
+        <span className="block text-[15px] font-semibold text-foreground">{titulo}</span>
+        <span className="mt-px block text-xs text-muted-foreground">{detalhe}</span>
+      </span>
+      <kbd className="ml-auto hidden self-start rounded border px-1.5 font-mono text-[10px] text-muted-foreground sm:block">
+        {tipo === "acertou" ? "A" : "E"}
+      </kbd>
+    </button>
   );
 }

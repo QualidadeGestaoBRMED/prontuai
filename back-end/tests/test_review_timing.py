@@ -283,3 +283,87 @@ def test_cronometragem_impossivel_nao_bloqueia_a_decisao(monkeypatch):
     )
     assert kwargs["validation_status"] == "rejected"
     assert kwargs["review_timing"] is None
+
+
+# --------------------------------------------------------------------------
+# Motivos estruturados da rejeição: só valem para documento que termina
+# rejeitado, e aprovar depois limpa os da rejeição anterior.
+# --------------------------------------------------------------------------
+from pydantic import ValidationError
+
+from app.models.document import RejectionCode
+
+CODIGOS = [
+    {"codigo": "EXAME_FALTANTE", "exame": "Espirometria"},
+    {"codigo": "ASO_INCOMPLETO"},
+]
+
+
+def test_rejeicao_grava_os_codigos(monkeypatch):
+    fake_db = FakeDocumentDB(validation_status="pending")
+    kwargs = patch_documento(
+        monkeypatch,
+        fake_db,
+        DocumentUpdate(
+            validation_status="rejected",
+            rejection_reason="Faltou: Espirometria. ASO cortado ou em duas páginas.",
+            rejection_codes=CODIGOS,
+        ),
+    )
+    assert kwargs["rejection_codes"] == CODIGOS
+    assert kwargs["rejection_reason"].startswith("Faltou: Espirometria")
+
+
+def test_codigos_sao_ignorados_em_aprovacao(monkeypatch):
+    fake_db = FakeDocumentDB(validation_status="pending")
+    kwargs = patch_documento(
+        monkeypatch,
+        fake_db,
+        DocumentUpdate(validation_status="validated", rejection_codes=CODIGOS),
+    )
+    assert kwargs["rejection_codes"] is None
+
+
+def test_aprovar_depois_de_rejeitar_limpa_os_codigos(monkeypatch):
+    fake_db = FakeDocumentDB(validation_status="rejected", reviewed_by="checker@grupobrmed.com.br")
+    fake_db.documento.rejection_codes = CODIGOS
+    kwargs = patch_documento(monkeypatch, fake_db, DocumentUpdate(validation_status="validated"))
+    assert kwargs["rejection_codes"] == []
+
+
+def test_patch_sem_codigos_nao_mexe_nos_gravados(monkeypatch):
+    fake_db = FakeDocumentDB(validation_status="rejected")
+    kwargs = patch_documento(monkeypatch, fake_db, DocumentUpdate(validation_status="rejected"))
+    assert kwargs["rejection_codes"] is None
+
+
+def test_codigo_de_exame_exige_o_exame():
+    with pytest.raises(ValidationError):
+        RejectionCode(codigo="EXAME_FALTANTE")
+    with pytest.raises(ValidationError):
+        RejectionCode(codigo="EXAME_FALTANTE", exame="   ")
+
+
+def test_codigo_de_documento_recusa_exame():
+    with pytest.raises(ValidationError):
+        RejectionCode(codigo="ASO_INCOMPLETO", exame="Audiometria")
+
+
+def test_codigo_desconhecido_e_recusado():
+    with pytest.raises(ValidationError):
+        RejectionCode(codigo="QUALQUER_COISA")
+
+
+def test_codigos_de_rejeicao_batem_com_os_do_front():
+    """`front-end/types/feedback.ts` é a outra metade: código que só um lado
+    conhece vira chip que a API recusa, ou motivo que nunca é oferecido."""
+    import pathlib
+    import re
+
+    from app.models.document import CODIGOS_REJEICAO
+
+    arquivo = pathlib.Path(__file__).resolve().parents[2] / "front-end" / "types" / "feedback.ts"
+    if not arquivo.exists():  # pragma: no cover - back-end publicado sozinho
+        pytest.skip("front-end não está neste checkout")
+    bloco = arquivo.read_text(encoding="utf-8").split("export const CODIGOS_REJEICAO")[1].split("]")[0]
+    assert set(re.findall(r'"([A-Z_]+)"', bloco)) == set(CODIGOS_REJEICAO)
