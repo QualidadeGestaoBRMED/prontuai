@@ -385,23 +385,23 @@ def _cruzar_expedicoes(
 
     São complementares: todo pedido previsto cai em exatamente uma.
 
-    `realizados_dia` e `realizados_prontuai_dia` saem quebrados por dia de
-    LIBERAÇÃO, a mesma datação de `expedicoes_dia` — a adesão por clínica é o
-    recorte por clínica do KPI "Expedições via ProntuAI", e as duas contas
-    precisam reconciliar. Pedido atendido e ainda não liberado não entra em
-    nenhuma das duas: não é realizado, é previsto. Quebrados por dia porque o filtro de período é da tela:
-    trocar de período não pode custar uma ida ao banco.
-
     Previsto e realizado nunca se somam nem se dividem um pelo outro. São
     grandezas diferentes e viajam em campos diferentes: previsto é pedido ainda
     NÃO liberado (`p.liberado` falso) com data futura; realizado é pedido já
-    atendido. A divisão que a adesão faz é realizado ÷ realizado.
+    atendido.
 
-    A única exceção é `desfecho_previsao_semana`, e ela é legítima porque não
-    divide agregado por agregado: acompanha **o mesmo pedido**, ligado pelo id,
-    da previsão até o desfecho. Para cada semana de previsão, a tripla
-    `[via_prontuai, liberado_fora, nao_liberado]` — exclusiva e somando os
-    previstos daquela semana.
+    O único ponto em que os dois se encontram é `desfecho_previsao_semana`, e
+    ele é legítimo porque não divide agregado por agregado: acompanha **o mesmo
+    pedido**, ligado pelo id, da previsão até o desfecho. Para cada semana de
+    previsão, a tripla `[via_prontuai, liberado_fora, nao_liberado]` — exclusiva
+    e somando os previstos daquela semana.
+
+    A quebra diária de realizados por clínica (`realizados_dia`,
+    `realizados_prontuai_dia`) e os previstos por UF (`previstos_uf_dia`) saíram
+    em out/2026 com os indicadores que os liam — a tabela de adesão por período
+    e a comparação dentro × fora. Eram 35% do payload do painel. O realizado por
+    dia continua existindo no agregado (`expedicoes_dia`), que é o que o KPI de
+    cobertura usa; a UF de cada credenciado vai nas próprias linhas.
 
     A previsão sai **quebrada por data** (`previsoes`), não só a mais próxima: o
     prazo do credenciado é de 1 a 3 dias úteis após o atendimento, então quase
@@ -424,7 +424,6 @@ def _cruzar_expedicoes(
             "expedicoes_prontuai_dia": {},
             "clinicas_sem_prontuai": None,
             "clinicas_com_prontuai": None,
-            "previstos_uf_dia": None,
         }
 
     clinica_por_pedido = clinica_por_pedido or {}
@@ -513,11 +512,14 @@ def _cruzar_expedicoes(
             return credenciado
         return max(sorted(por_clinica), key=lambda nome: por_clinica[nome])
 
-    # ── realizados: global (KPI de cobertura) e por clínica (adesão) ──────────
+    # ── realizados: global (KPI de cobertura) ────────────────────────────────
+    # Por clínica a quebra diária saiu: a adesão por clínica passou a ser medida
+    # pela semana de previsão (`desfecho_previsao_semana`), que acompanha o
+    # mesmo pedido dos dois lados. `realizados` continua só como conjunto de
+    # cadastros com liberação, para o cadastro sem previsto não sumir da lista.
     atendidos: dict[str, int] = {}
     via_prontuai: dict[str, int] = {}
-    realizados: dict[str, dict[str, int]] = {}
-    realizados_prontuai: dict[str, dict[str, int]] = {}
+    realizados: set[str] = set()
     for pid, p in pedidos.items():
         # Realizado é pedido EXPEDIDO, datado pelo dia da liberação — é o que a
         # 1.2 define ("realizados são documentos efetivamente expedidos"). Até
@@ -537,14 +539,8 @@ def _cruzar_expedicoes(
         atendidos[p.liberacao] = atendidos.get(p.liberacao, 0) + 1
         if processado_no_prontuai:
             via_prontuai[p.liberacao] = via_prontuai.get(p.liberacao, 0) + 1
-        if not usa_prontuai(p.credenciado):
-            continue
-        nome = cadastro(p.credenciado)
-        dias = realizados.setdefault(nome, {})
-        dias[p.liberacao] = dias.get(p.liberacao, 0) + 1
-        if processado_no_prontuai:
-            dias_ok = realizados_prontuai.setdefault(nome, {})
-            dias_ok[p.liberacao] = dias_ok.get(p.liberacao, 0) + 1
+        if usa_prontuai(p.credenciado):
+            realizados.add(cadastro(p.credenciado))
 
     # ── previstos: pedidos ainda não liberados, com data ─────────────────────
     hoje_iso = hoje.isoformat()
@@ -552,13 +548,6 @@ def _cruzar_expedicoes(
     sem: dict[str, dict[str, Any]] = {}
     datas_com: dict[str, dict[str, int]] = {}
     datas_sem: dict[str, dict[str, int]] = {}
-    # Previstos por UF e por dia, de cada lado do corte. Sai à parte das listas
-    # por clínica porque a UF é do CREDENCIADO, não do cadastro: um cadastro pode
-    # receber de credenciados em UFs diferentes, e atribuir a UF do cadastro
-    # inteiro colocaria os pedidos de uma praça na conta da outra. Por dia
-    # porque a janela de previsão é recortada na tela.
-    uf_com: dict[str, dict[str, int]] = {}
-    uf_sem: dict[str, dict[str, int]] = {}
 
     def novo(chave: str, nome: str, p: _Pedido, habilitada: bool) -> dict[str, Any]:
         return {
@@ -591,8 +580,6 @@ def _cruzar_expedicoes(
             item["pedidos_previstos"] += 1
             dias = datas.setdefault(chave, {})
             dias[p.previsao] = dias.get(p.previsao, 0) + 1
-            por_uf = (uf_com if habilitada else uf_sem).setdefault(p.uf or "—", {})
-            por_uf[p.previsao] = por_uf.get(p.previsao, 0) + 1
 
     # ── reconciliação previsto × expedido, e histórico de quem está fora ─────
     # Duas perguntas diferentes, uma varredura só.
@@ -670,8 +657,6 @@ def _cruzar_expedicoes(
             docs_por_cadastro[chave] = docs_por_cadastro.get(chave, 0) + qtd
     for nome, item in com.items():
         item["documentos"] = docs_por_cadastro.get(nome, 0)
-        item["realizados_dia"] = realizados.get(nome, {})
-        item["realizados_prontuai_dia"] = realizados_prontuai.get(nome, {})
         item["desfecho_previsao_semana"] = desfecho_semana.get(nome, {})
     for credenciado, item in sem.items():
         item["documentos"] = docs_por_credenciado.get(credenciado, 0)
@@ -697,7 +682,6 @@ def _cruzar_expedicoes(
         # Credenciado sem cadastro e sem previsto não tem por que aparecer.
         "clinicas_sem_prontuai": finalizar(sem, datas_sem, True),
         "clinicas_com_prontuai": finalizar(com, datas_com, False),
-        "previstos_uf_dia": {"dentro": uf_com, "fora": uf_sem},
     }
 
 

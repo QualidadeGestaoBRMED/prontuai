@@ -316,9 +316,9 @@ def test_cadastro_sem_nenhum_documento_e_habilitado():
     assert r["clinicas_sem_prontuai"] == []
     (linha,) = r["clinicas_com_prontuai"]
     assert linha["clinica"] == "Qualimetra" and linha["documentos"] == 0
-    # realizou 1 e nenhum passou pelo ProntuAI: adesão 0%, que é diferente de nula
-    assert sum(linha["realizados_dia"].values()) == 1
-    assert linha["realizados_prontuai_dia"] == {}
+    # liberou 1 e nenhum passou pelo ProntuAI — continua no agregado global
+    assert r["expedicoes_dia"] == {"2026-09-01": 1}
+    assert r["expedicoes_prontuai_dia"] == {}
 
 
 @pytest.mark.parametrize(
@@ -373,7 +373,6 @@ def test_brnet_indisponivel_esvazia_tudo_sem_inventar():
         "expedicoes_prontuai_dia": {},
         "clinicas_sem_prontuai": None,
         "clinicas_com_prontuai": None,
-        "previstos_uf_dia": None,
     }
 
 
@@ -514,8 +513,12 @@ def por_clinica(resultado, nome):
     return next(c for c in resultado["clinicas_com_prontuai"] if c["clinica"] == nome)
 
 
-def test_realizados_por_clinica_saem_quebrados_por_dia_de_atendimento():
-    """A adesão é o recorte por clínica do KPI de cobertura: mesma datação."""
+def test_realizado_sai_so_no_agregado_global():
+    """A quebra diária por clínica saiu em out/2026 com a tabela que a lia.
+
+    O realizado continua existindo onde o KPI de cobertura o usa: no agregado
+    por dia de LIBERAÇÃO. A clínica entra na lista, mas sem série diária.
+    """
     cred = "RECIFE - PE - CRED A"
     pedidos = {
         1: pedido("2026-09-01", cred), 2: pedido("2026-09-01", cred),
@@ -524,12 +527,10 @@ def test_realizados_por_clinica_saem_quebrados_por_dia_de_atendimento():
     docs = {1: 1, 2: 1, 3: 1, 4: 1}
     clinicas = {n: "Clinica A" for n in (1, 2, 3, 4)}
     r = ds._cruzar_expedicoes(pedidos, docs, date(2026, 9, 22), clinicas, cadastros("CRED A"))
+    assert r["expedicoes_dia"] == {"2026-09-01": 2, "2026-09-02": 1}
+    assert r["expedicoes_prontuai_dia"] == {"2026-09-01": 2, "2026-09-02": 1}
     c = por_clinica(r, "CRED A")
-    assert c["realizados_dia"] == {"2026-09-01": 2, "2026-09-02": 1}
-    assert c["realizados_prontuai_dia"] == {"2026-09-01": 2, "2026-09-02": 1}
-    # o total por clínica fecha com o global, que alimenta o KPI de cobertura
-    assert r["expedicoes_dia"] == c["realizados_dia"]
-    assert r["expedicoes_prontuai_dia"] == c["realizados_prontuai_dia"]
+    assert "realizados_dia" not in c and "realizados_prontuai_dia" not in c
 
 
 def test_dois_credenciados_do_mesmo_cadastro_viram_uma_clinica():
@@ -546,21 +547,21 @@ def test_dois_credenciados_do_mesmo_cadastro_viram_uma_clinica():
     r = ds._cruzar_expedicoes(pedidos, docs, date(2026, 9, 22), {}, cadastros("Rede X"))
     assert len(r["clinicas_com_prontuai"]) == 1
     c = por_clinica(r, "Rede X")
-    assert sum(c["realizados_dia"].values()) == 6
-    assert sum(c["realizados_prontuai_dia"].values()) == 6   # todos processados
+    assert sum(r["expedicoes_dia"].values()) == 6
     assert c["pedidos_previstos"] == 2                       # os dois previstos somam
-    assert c["documentos"] == 6
+    assert c["documentos"] == 6                              # das duas praças
 
 
 def test_clinica_habilitada_sem_previsto_ainda_aparece():
-    """A adesão dela existe — é o que a tabela 1.3 mede. Zero previstos não a some."""
+    """Quem liberou está na lista mesmo sem nada previsto — é o que `realizados`
+    (hoje um conjunto de cadastros) garante."""
     cred = "RECIFE - PE - CRED A"
     pedidos = {n: pedido("2026-09-01", cred) for n in (1, 2, 3)}
     docs = {n: 1 for n in (1, 2, 3)}
     r = ds._cruzar_expedicoes(pedidos, docs, date(2026, 9, 22), {}, cadastros("CRED A"))
     c = por_clinica(r, "CRED A")
     assert c["pedidos_previstos"] == 0 and c["previsoes"] == []
-    assert sum(c["realizados_dia"].values()) == 3
+    assert sum(r["expedicoes_dia"].values()) == 3
 
 
 def test_credenciado_sem_cadastro_nao_gera_realizados_por_clinica():
@@ -582,13 +583,11 @@ def test_realizado_e_previsto_nunca_se_cruzam():
         4: pedido(None, cred, "2026-09-25"),
     }
     docs = {n: 1 for n in (1, 2, 3)}
-    c = por_clinica(
-        ds._cruzar_expedicoes(pedidos, docs, date(2026, 9, 22), {}, cadastros("CRED A")),
-        "CRED A",
-    )
-    assert sum(c["realizados_dia"].values()) == 3
+    r = ds._cruzar_expedicoes(pedidos, docs, date(2026, 9, 22), {}, cadastros("CRED A"))
+    c = por_clinica(r, "CRED A")
+    assert sum(r["expedicoes_dia"].values()) == 3
     assert c["pedidos_previstos"] == 1
-    assert "2026-09-25" not in c["realizados_dia"]
+    assert "2026-09-25" not in r["expedicoes_dia"]
 
 
 def test_parentese_do_rotulo_nao_impede_o_casamento():
@@ -661,9 +660,8 @@ def test_atendido_sem_liberacao_nao_e_realizado(monkeypatch):
     assert saida["expedicoes_dia"] == {"2026-09-03": 1}
     assert saida["expedicoes_prontuai_dia"] == {"2026-09-03": 1}
 
-    (linha,) = [c for c in saida["clinicas_com_prontuai"] if c["credenciado"] == cred]
-    assert linha["realizados_dia"] == {"2026-09-03": 1}
-    assert linha["realizados_prontuai_dia"] == {"2026-09-03": 1}
+    # e a clínica aparece na lista por ter liberado, mesmo sem nenhum previsto
+    assert [c["clinica"] for c in saida["clinicas_com_prontuai"]] == [cred]
 
 
 def test_liberado_conta_no_dia_da_liberacao_nao_do_atendimento(monkeypatch):
@@ -700,50 +698,6 @@ def test_cadastros_com_o_mesmo_nome_normalizado_se_fundem():
     assert ds._indexar_cadastros(["QUALIMETRA", "Qualimetra"]) == {"qualimetra": "QUALIMETRA"}
     # parêntese descartado pode colidir com um cadastro de nome igual sem ele
     assert ds._chave_nome("CISVIVER (CONDIÇÃO ESPECIAL)") == ds._chave_nome("Cisviver")
-
-
-# ── 2.1: previstos por UF, de cada lado do corte ───────────────────────────
-
-
-def test_previstos_por_uf_seguem_o_credenciado_nao_o_cadastro():
-    """Cadastro que recebe de duas praças não joga tudo na UF de uma delas."""
-    a, b = "RECIFE - PE - REDE X", "SALVADOR - BA - REDE X"
-    pedidos = {
-        1: pedido(None, a, "2026-09-25"), 2: pedido(None, a, "2026-09-25"),
-        3: pedido(None, b, "2026-09-26"),
-        4: pedido(None, "NATAL - RN - SEM CADASTRO", "2026-09-27"),
-    }
-    r = ds._cruzar_expedicoes(pedidos, {}, date(2026, 9, 22), {}, cadastros("Rede X"))
-    assert r["previstos_uf_dia"]["dentro"] == {"PE": {"2026-09-25": 2}, "BA": {"2026-09-26": 1}}
-    assert r["previstos_uf_dia"]["fora"] == {"RN": {"2026-09-27": 1}}
-    # a lista por clínica continua agregando as duas praças numa linha só
-    assert len(r["clinicas_com_prontuai"]) == 1
-    assert r["clinicas_com_prontuai"][0]["pedidos_previstos"] == 3
-
-
-def test_uf_por_dia_fecha_com_os_previstos_das_listas():
-    """Invariante da 2.1: dentro + fora por UF = total de previstos."""
-    pedidos = {
-        1: pedido(None, "RECIFE - PE - COM", "2026-09-25"),
-        2: pedido(None, "NATAL - RN - SEM", "2026-09-26"),
-        3: pedido(None, "NATAL - RN - SEM", "2026-09-01"),   # vencido, fora da conta
-        4: pedido(None, "NATAL - RN - SEM", "2026-09-28", True),  # liberado, fora da conta
-    }
-    r = ds._cruzar_expedicoes(pedidos, {}, date(2026, 9, 22), {}, cadastros("COM"))
-    soma_uf = sum(
-        n for lado in r["previstos_uf_dia"].values() for dias in lado.values() for n in dias.values()
-    )
-    soma_listas = sum(
-        c["pedidos_previstos"]
-        for c in r["clinicas_com_prontuai"] + r["clinicas_sem_prontuai"]
-    )
-    assert soma_uf == soma_listas == 2
-
-
-def test_credenciado_sem_uf_cai_num_balde_proprio():
-    pedidos = {1: ds._Pedido(None, "ROTULO SOLTO", None, None, None, "2026-09-25", False, None)}
-    r = ds._cruzar_expedicoes(pedidos, {}, date(2026, 9, 22), {}, cadastros())
-    assert r["previstos_uf_dia"]["fora"] == {"—": {"2026-09-25": 1}}
 
 
 # ── reconciliação previsto × expedido, por semana de previsão ──────────────

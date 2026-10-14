@@ -106,17 +106,6 @@ export interface CredenciadoPrevisto {
   /** Documentos processados pelo ProntuAI em todo o histórico. */
   documentos: number;
   /**
-   * Realizados da clínica por dia de LIBERAÇÃO — o denominador da adesão.
-   * Realizado é pedido efetivamente expedido; atendido e ainda não liberado
-   * conta como previsto, não como realizado.
-   * Mesma datação de `expedicoes_dia`, para a adesão por clínica ser o recorte
-   * por clínica do KPI "Expedições via ProntuAI" e os dois números fecharem.
-   * Só existe no lado habilitado; quem não tem cadastro não tem adesão a medir.
-   */
-  realizados_dia?: Record<string, number>;
-  /** Dos mesmos realizados, os que tiveram documento liberado no ProntuAI. */
-  realizados_prontuai_dia?: Record<string, number>;
-  /**
    * Reconciliação previsto × expedido, por semana de PREVISÃO (chave = segunda
    * da semana ISO): `[via_prontuai, liberado_fora, nao_liberado]`.
    *
@@ -132,8 +121,8 @@ export interface CredenciadoPrevisto {
   desfecho_previsao_semana?: Record<string, [number, number, number]>;
   /**
    * Liberações do credenciado por semana ISO, em todo o histórico buscado no
-   * BRNET (~7 meses). Só do lado **sem** cadastro: dentro, o mesmo histórico já
-   * está em `realizados_dia`.
+   * BRNET (~7 meses). Só do lado **sem** cadastro: dentro, quem responde pela
+   * adesão é `desfecho_previsao_semana`.
    *
    * É o que permite ranquear a inclusão por volume recorrente — mediana das
    * semanas — em vez de pelo previsto da janela, que premia o pico isolado e o
@@ -188,15 +177,6 @@ export interface DadosDashboard {
    * inexistente, e é justamente o que a tabela revela.
    */
   clinicas_com_prontuai: CredenciadoPrevisto[] | null;
-  /**
-   * Previstos por UF e por dia, de cada lado do corte — a abertura por UF da
-   * comparação dentro × fora. Vem à parte das listas por clínica porque a UF é
-   * do CREDENCIADO: um cadastro pode receber de praças em UFs diferentes, e
-   * usar a UF do cadastro jogaria os pedidos de uma na conta da outra.
-   * `"—"` é o balde de credenciado sem UF no rótulo. null junto com as listas.
-   */
-  previstos_uf_dia: { dentro: Record<string, Record<string, number>>;
-                      fora: Record<string, Record<string, number>> } | null;
   /** Quando a consulta rodou (ISO com fuso) — origem do "hoje" dos rótulos. */
   gerado_em?: string;
   /**
