@@ -5,10 +5,13 @@
  * aqui só tem layout. As medidas (tamanhos de fonte quebrados, alturas de
  * barra) vêm do protótipo aprovado e são intencionais.
  */
-import { useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 
 import type {
   BarraPercentual,
+  BarraSemana,
   GraficoPrazo,
   Kpi,
   LinhaForaProntuai,
@@ -435,7 +438,7 @@ const COLUNAS_FORA_LINHA = "grid-cols-[1.7fr_1fr_2fr_1.05fr_1.05fr]";
  *
  * A média semanal não ordena, ela confere. O previsto é a foto de um instante e
  * pode ser um pico; quem diz se aquele volume é o ritmo da clínica é a coluna da
- * média, a marca de PICO e o gráfico que abre na linha. Ranquear pelo futuro,
+ * média, a marca de PICO e o gráfico que abre no modal. Ranquear pelo futuro,
  * desconfiar, clicar, conferir no passado.
  *
  * Nenhuma métrica de adesão aqui. Adesão é sobre quem já está dentro, e mora no
@@ -444,16 +447,28 @@ const COLUNAS_FORA_LINHA = "grid-cols-[1.7fr_1fr_2fr_1.05fr_1.05fr]";
 function TabelaForaProntuai({
   linhas,
   janelaMedia,
+  janelaPrevistos,
   simulador,
 }: {
   linhas: LinhaForaProntuai[];
   /** Intervalo das 12 semanas que entram na média: "27/07 a 05/10". */
   janelaMedia: string;
+  /** Janela dos previstos: "de hoje a 12/11 · 30 dias". */
+  janelaPrevistos: string;
   simulador: { viaProntuaiSemana: number; adesao: number; semana: string } | null;
 }) {
   const { ordem, ordenarPor } = useOrdem({ col: "previstos", dir: "desc" });
   const [busca, setBusca] = useState("");
   const [marcadas, setMarcadas] = useState<Set<string>>(new Set());
+  // Quem está aberto e se o modal está aberto são estados separados: ao
+  // fechar, a clínica continua montada durante a animação de saída, em vez de
+  // o conteúdo sumir antes do modal.
+  const [aberta, setAberta] = useState<string | null>(null);
+  const [modalAberto, setModalAberto] = useState(false);
+  const abrir = (credenciado: string) => {
+    setAberta(credenciado);
+    setModalAberto(true);
+  };
 
   const termo = semAcento(busca.trim());
   const filtradas = linhas.filter(
@@ -539,9 +554,9 @@ function TabelaForaProntuai({
             <LinhaFora
               key={c.credenciado}
               c={c}
-              janelaMedia={janelaMedia}
               marcada={marcadas.has(c.credenciado)}
               onMarcar={alternar}
+              onAbrir={abrir}
             />
           ))}
           {!visiveis.length && (
@@ -549,34 +564,40 @@ function TabelaForaProntuai({
           )}
         </div>
       </div>
+
+      <ModalHistoricoFora
+        linhas={visiveis}
+        credenciado={aberta}
+        aberto={modalAberto}
+        onFechar={() => setModalAberto(false)}
+        onIr={setAberta}
+        janelaMedia={janelaMedia}
+        janelaPrevistos={janelaPrevistos}
+        marcadas={marcadas}
+        onMarcar={alternar}
+      />
     </>
   );
 }
 
 /**
- * Linha do ranking, com o histórico semanal no painel que abre.
- *
- * O gráfico é o argumento inteiro do indicador: a linha tracejada é a média, e
- * a coluna que sobe muito acima dela está marcada. É olhando para ele que se
- * decide se o volume da clínica é comportamento ou foi uma semana.
+ * Linha do ranking. Clicar abre o histórico da clínica no modal; a marcação do
+ * simulador fica fora do botão — aninhar input em button é inválido, e o
+ * clique de um roubaria o do outro.
  */
 function LinhaFora({
   c,
-  janelaMedia,
   marcada,
   onMarcar,
+  onAbrir,
 }: {
   c: LinhaForaProntuai;
-  janelaMedia: string;
   marcada: boolean;
   onMarcar: (credenciado: string) => void;
+  onAbrir: (credenciado: string) => void;
 }) {
-  const [aberta, setAberta] = useState(false);
-  const maior = Math.max(1, ...c.serie.map((s) => s.liberacoes));
   return (
     <div className={`border-b border-[#F3F3F3] ${marcada ? "bg-[#E6EDF4]" : ""}`}>
-      {/* A marcação do simulador fica fora do botão que abre o histórico:
-          aninhar input em button é inválido, e o clique de um roubaria o do outro. */}
       <div className={`grid ${COLUNAS_FORA} items-center gap-x-[18px] px-1`}>
         <label className="flex cursor-pointer items-center justify-center py-3">
           <input
@@ -589,15 +610,15 @@ function LinhaFora({
         </label>
         <button
           type="button"
-          onClick={() => setAberta((v) => !v)}
-          aria-expanded={aberta}
-          className={`col-span-5 grid ${COLUNAS_FORA_LINHA} items-center gap-x-[18px] rounded-[6px] py-3 text-left text-[13.5px] text-[#193B4F] transition-colors hover:bg-[#F7F9FA]`}
+          onClick={() => onAbrir(c.credenciado)}
+          aria-haspopup="dialog"
+          className={`group col-span-5 grid ${COLUNAS_FORA_LINHA} items-center gap-x-[18px] rounded-[6px] py-3 text-left text-[13.5px] text-[#193B4F] transition-colors hover:bg-[#F7F9FA]`}
         >
           <div className="flex min-w-0 items-center gap-2">
             <svg
               viewBox="0 0 16 16"
               aria-hidden="true"
-              className={`size-3.5 flex-none text-[#767A7B] transition-transform ${aberta ? "rotate-90" : ""}`}
+              className="size-3.5 flex-none text-[#9AA3A8] transition-colors group-hover:text-[#007891]"
             >
               <path d="M6 4l4 4-4 4" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
@@ -618,93 +639,499 @@ function LinhaFora({
             <span className="tabular-nums">{c.previstos}</span>
             {/* O aviso de pico mora na coluna de previstos porque é dela que o
                 engano nasce: o número grande da janela que não se repete. */}
-            {c.picoPrevisto && (
-              <span className="rounded-[5px] bg-[#F7EDDC] px-1.5 py-0.5 text-[10px] font-medium tracking-[0.04em] text-[#A05E1E]">
-                PICO
-              </span>
-            )}
+            {c.picoPrevisto && <MarcaPico />}
           </div>
         </button>
       </div>
+    </div>
+  );
+}
 
-      {aberta && (
-        <div className="mb-3 ml-[54px] mr-1 rounded-[10px] border border-[#DFE0E2] bg-[#FAFBFC] px-4 py-3">
-          <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-            <div className={CABECALHO_TABELA}>Liberações por semana · uma coluna = uma semana</div>
-            <div className="text-[12.5px] text-[#767A7B]">
-              média de {c.mediaLabel} por semana · {c.semanasAtivas} das 12 semanas de {janelaMedia} com
-              liberação · {c.total} liberações nessas 12 semanas
+function MarcaPico() {
+  return (
+    <span className="rounded-[5px] bg-[#F7EDDC] px-1.5 py-0.5 text-[10px] font-medium tracking-[0.04em] text-[#A05E1E]">
+      PICO
+    </span>
+  );
+}
+
+const MESES = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+
+/**
+ * Topo e passo "redondos" para o eixo Y — 0, 20, 40, 60, e não 0, 15, 30, 45.
+ * A folga de 12% acima da maior coluna é o espaço do número que vai em cima
+ * dela; sem isso a coluna mais alta encostava no teto e o rótulo sumia.
+ */
+function escalaY(maximo: number) {
+  const alvo = Math.max(1, maximo * 1.12);
+  if (alvo <= 4) return { topo: 4, passo: 1 };
+  const bruto = alvo / 4;
+  const potencia = 10 ** Math.floor(Math.log10(bruto));
+  const passo = [1, 2, 5, 10].map((m) => m * potencia).find((p) => p >= bruto) ?? 10 * potencia;
+  return { topo: passo * Math.ceil(alvo / passo), passo };
+}
+
+/**
+ * Listra da semana corrente: ainda está acontecendo, e o número só pode subir.
+ * Uma por cor, porque a semana corrente também pode já ter estourado o ritmo —
+ * e aí as duas coisas precisam aparecer.
+ */
+const LISTRA_PARCIAL = "repeating-linear-gradient(135deg, #7EBFCC 0 4px, #C9E5EB 4px 8px)";
+const LISTRA_PARCIAL_PICO = "repeating-linear-gradient(135deg, #CC851E 0 4px, #EBC48C 4px 8px)";
+
+function ItemLegenda({ amostra, rotulo }: { amostra: ReactNode; rotulo: string }) {
+  return (
+    <span className="flex items-center gap-1.5 whitespace-nowrap">
+      {amostra}
+      {rotulo}
+    </span>
+  );
+}
+
+/**
+ * Colunas por semana com a média tracejada — o pedido literal: "pra eu entender
+ * se aquilo é um outlier, uma anomalia".
+ *
+ * As colunas não têm espaçamento entre si (o respiro é padding de cada uma):
+ * assim cada coluna ocupa exatamente 1/n da largura, e a faixa das 12 semanas
+ * da média, posicionada por porcentagem, cai alinhada com elas.
+ */
+function GraficoSemanas({
+  serie,
+  media,
+  mediaLabel,
+}: {
+  serie: BarraSemana[];
+  media: number;
+  mediaLabel: string;
+}) {
+  const maior = serie.reduce((m, s) => Math.max(m, s.liberacoes), 0);
+  const { topo, passo } = escalaY(Math.max(maior, media));
+  const ticks = Array.from({ length: Math.round(topo / passo) + 1 }, (_, k) => k * passo);
+  const altura = (v: number) => `${(v / topo) * 100}%`;
+  const n = serie.length;
+  const inicioMedia = serie.findIndex((s) => s.naMedia);
+  const semanasMedia = serie.filter((s) => s.naMedia).length;
+
+  const mes = (iso: string, primeiro: boolean) => {
+    const m = Number(iso.slice(5, 7));
+    // O ano só onde ele muda a leitura: no começo do eixo e na virada.
+    return primeiro || m === 1 ? `${MESES[m - 1]}/${iso.slice(2, 4)}` : MESES[m - 1];
+  };
+
+  if (!maior) {
+    return (
+      <div className="flex h-full min-h-[240px] flex-col items-center justify-center rounded-[12px] border border-dashed border-[#DFE0E2] px-6 text-center">
+        <div className="text-[14px] font-medium text-[#193B4F]">Nenhuma liberação no histórico do BRNET</div>
+        <div className="mt-1.5 max-w-[420px] text-[13px] text-[#767A7B]">
+          {n ? `De ${serie[0].label} até hoje esta clínica não liberou nenhum pedido` : "Sem histórico buscado"} — o
+          que ela tem é só previsão futura, sem passado que a confirme.
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex h-full min-h-[300px] flex-col">
+      <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-2">
+        <div>
+          <div className="text-[14px] font-semibold text-[#193B4F]">Liberações por semana</div>
+          <div className="mt-0.5 text-[12px] text-[#9AA3A8]">
+            uma coluna = uma semana · passe o mouse numa coluna para ver as datas
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[11.5px] text-[#767A7B]">
+          <ItemLegenda amostra={<span className="h-0 w-4 border-t-[1.5px] border-dashed border-[#B4453A]" />} rotulo="média das 12 semanas" />
+          <ItemLegenda amostra={<span className="h-2.5 w-3 rounded-[2px] bg-[#E3F1F4]" />} rotulo="semanas da média" />
+          <ItemLegenda amostra={<span className="size-2.5 rounded-[2px] bg-[#CC851E]" />} rotulo="fora do ritmo dela" />
+          <ItemLegenda amostra={<span className="size-2.5 rounded-[2px]" style={{ background: LISTRA_PARCIAL }} />} rotulo="semana em andamento" />
+        </div>
+      </div>
+
+      <div className="mt-9 flex min-h-0 flex-1">
+        <div className="relative w-9 flex-none" aria-hidden="true">
+          {ticks.map((t) => (
+            <div
+              key={t}
+              className="absolute right-2.5 translate-y-1/2 text-[10.5px] tabular-nums text-[#9AA3A8]"
+              style={{ bottom: altura(t) }}
+            >
+              {t}
+            </div>
+          ))}
+        </div>
+
+        <div className="relative flex-1">
+          {ticks.map((t) => (
+            <div
+              key={t}
+              className={`absolute inset-x-0 border-t ${t === 0 ? "border-[#C6CBCE]" : "border-[#F0F1F2]"}`}
+              style={{ bottom: altura(t) }}
+            />
+          ))}
+
+          {semanasMedia > 0 && (
+            <div
+              className="absolute inset-y-0 rounded-[6px] bg-[#E3F1F4]/70"
+              style={{ left: `${(inicioMedia / n) * 100}%`, width: `${(semanasMedia / n) * 100}%` }}
+            >
+              <div className="absolute inset-x-0 -top-6 truncate text-center text-[10.5px] font-medium text-[#4F8A99]">
+                12 semanas da média
+              </div>
+            </div>
+          )}
+
+          <div className="absolute inset-0 flex">
+            {serie.map((s, i) => {
+              // Nas bordas, o balão centralizado vazaria para fora do modal e
+              // seria cortado; ali ele se alinha pela borda da coluna.
+              const borda = i / n < 0.15 ? styles.tipInicio : i / n > 0.85 ? styles.tipFim : "";
+              return (
+                <div
+                  key={s.iso}
+                  className={`${styles.tip} ${borda} group relative flex h-full flex-1 flex-col justify-end px-[1.5px]`}
+                  data-tip={s.tip}
+                >
+                  <div className="pointer-events-none absolute inset-0 rounded-[3px] transition-colors group-hover:bg-[#193B4F]/[0.05]" />
+                  {/* A semana corrente aparece mesmo zerada: sem o fundo, uma
+                      coluna vazia no fim do eixo se lia como "parou de liberar". */}
+                  {s.parcial && (
+                    <div
+                      className="pointer-events-none absolute inset-0 rounded-[3px]"
+                      style={{ background: "repeating-linear-gradient(135deg, #193B4F0D 0 4px, transparent 4px 8px)" }}
+                    />
+                  )}
+                  {s.liberacoes > 0 && (
+                    <div
+                      className={`relative mb-1 hidden text-center text-[10px] leading-none tabular-nums lg:block ${
+                        s.pico ? "font-semibold text-[#A05E1E]" : "text-[#5F6B72]"
+                      }`}
+                    >
+                      {s.liberacoes}
+                    </div>
+                  )}
+                  <div
+                    className="relative w-full rounded-t-[3px] transition-[height] duration-300 ease-out"
+                    style={{
+                      height: altura(s.liberacoes),
+                      minHeight: s.liberacoes ? 2 : 0,
+                      background: s.parcial
+                        ? s.pico
+                          ? LISTRA_PARCIAL_PICO
+                          : LISTRA_PARCIAL
+                        : s.pico
+                          ? "#CC851E"
+                          : "#7EBFCC",
+                    }}
+                  />
+                </div>
+              );
+            })}
+          </div>
+
+          {/* A tracejada é a média. Fica por cima das colunas, não atrás: o que
+              se quer ver é quais delas a ultrapassam. */}
+          <div
+            className="pointer-events-none absolute inset-x-0 z-10 border-t-[1.5px] border-dashed border-[#B4453A] transition-[bottom] duration-300 ease-out"
+            style={{ bottom: altura(media) }}
+          />
+        </div>
+
+        <div className="relative w-[78px] flex-none" aria-hidden="true">
+          <div
+            className="absolute left-2 translate-y-1/2 whitespace-nowrap text-[11px] font-medium text-[#B4453A] transition-[bottom] duration-300 ease-out"
+            style={{ bottom: altura(media) }}
+          >
+            média {mediaLabel}
+          </div>
+        </div>
+      </div>
+
+      <div className="ml-9 mr-[78px] mt-2 flex" aria-hidden="true">
+        {serie.map((s, i) => {
+          const novoMes = i === 0 || serie[i - 1].iso.slice(5, 7) !== s.iso.slice(5, 7);
+          return (
+            <div key={s.iso} className="relative h-4 flex-1">
+              {novoMes && (
+                <span className="absolute left-[1.5px] whitespace-nowrap border-l border-[#DFE0E2] pl-1 text-[11px] leading-4 text-[#767A7B]">
+                  {mes(s.iso, i === 0)}
+                </span>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function NumeroModal({
+  rotulo,
+  valor,
+  unidade,
+  sub,
+  destaque,
+  extra,
+}: {
+  rotulo: string;
+  valor: string;
+  unidade?: string;
+  sub: string;
+  destaque?: boolean;
+  extra?: ReactNode;
+}) {
+  return (
+    <div className="flex min-w-0 flex-col gap-1.5">
+      <div className={CABECALHO_TABELA}>{rotulo}</div>
+      <div className="flex items-baseline gap-1.5">
+        <span
+          className={`leading-none tabular-nums ${
+            destaque ? "text-[28px] font-medium text-[#007891]" : "text-[22px] text-[#193B4F]"
+          }`}
+        >
+          {valor}
+        </span>
+        {unidade && <span className="text-[12px] text-[#9AA3A8]">{unidade}</span>}
+        {extra}
+      </div>
+      <div className="text-[11.5px] leading-snug text-[#9AA3A8]">{sub}</div>
+    </div>
+  );
+}
+
+/**
+ * O histórico de uma clínica de "Quem vale a pena incluir", em tela quase cheia.
+ *
+ * É aqui que o fluxo do indicador se completa — ranquear pelo futuro, desconfiar,
+ * abrir, conferir no passado. Por isso o modal anda pela lista (setas da tela ou
+ * do teclado) na ordem em que ela está: numa reunião, quem apresenta passa de uma
+ * clínica para a seguinte sem fechar e reabrir. E dá para marcar a clínica para o
+ * simulador daqui mesmo, que é onde a decisão é tomada.
+ */
+function ModalHistoricoFora({
+  linhas,
+  credenciado,
+  aberto,
+  onFechar,
+  onIr,
+  janelaMedia,
+  janelaPrevistos,
+  marcadas,
+  onMarcar,
+}: {
+  /** A lista como está na tela: mesma busca e mesma ordem. */
+  linhas: LinhaForaProntuai[];
+  credenciado: string | null;
+  aberto: boolean;
+  onFechar: () => void;
+  onIr: (credenciado: string) => void;
+  janelaMedia: string;
+  janelaPrevistos: string;
+  marcadas: Set<string>;
+  onMarcar: (credenciado: string) => void;
+}) {
+  const i = credenciado === null ? -1 : linhas.findIndex((l) => l.credenciado === credenciado);
+  const c = i >= 0 ? linhas[i] : null;
+  // A série é montada só aqui, para a clínica aberta (ver `LinhaForaProntuai.serie`).
+  const serie = useMemo(() => (c ? c.serie() : []), [c]);
+  const anterior = i > 0 ? linhas[i - 1].credenciado : null;
+  const proxima = i >= 0 && i < linhas.length - 1 ? linhas[i + 1].credenciado : null;
+
+  // No window, e não no onKeyDown do conteúdo: o foco pode estar em qualquer
+  // lugar — inclusive ainda na linha que abriu o modal —, e a seta tem de andar
+  // do mesmo jeito.
+  useEffect(() => {
+    if (!aberto) return;
+    const aoTeclar = (e: KeyboardEvent) => {
+      if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+      const alvo = e.key === "ArrowLeft" ? anterior : e.key === "ArrowRight" ? proxima : null;
+      if (!alvo) return;
+      e.preventDefault();
+      onIr(alvo);
+    };
+    window.addEventListener("keydown", aoTeclar);
+    return () => window.removeEventListener("keydown", aoTeclar);
+  }, [aberto, anterior, proxima, onIr]);
+
+  const picosHistorico = serie.filter((s) => s.pico).length;
+  const ultimaLiberacao = [...serie].reverse().find((s) => s.liberacoes > 0);
+  const marcada = c ? marcadas.has(c.credenciado) : false;
+
+  // A leitura do que o gráfico mostra, em uma frase, só quando há algo a
+  // conferir. Previsto ABAIXO da média não é aviso: a janela só conta o que já
+  // está agendado, e a agenda vai enchendo até o dia chegar.
+  const leitura = !c
+    ? null
+    : c.previstos > 0 && c.media === 0
+      ? `Nenhuma liberação nas 12 semanas da média: ${
+          c.previstos === 1
+            ? "o pedido previsto não tem histórico recente que o confirme"
+            : `os ${c.previstos} previstos não têm histórico recente que os confirme`
+        }. ` +
+        (ultimaLiberacao
+          ? `A última liberação foi na semana de ${ultimaLiberacao.label}.`
+          : "Não há liberação em todo o histórico buscado.")
+      : c.picoPrevisto
+        ? `Mesmo contando só o que já está agendado, os ${c.previstos} previstos passam do dobro do que a média dela ` +
+          `faria esperar na janela (${c.esperadoLabel}). ` +
+          (picosHistorico
+            ? `No histórico, ${picosHistorico} semana${picosHistorico > 1 ? "s ficaram" : " ficou"} fora do ritmo dela — em laranja no gráfico.`
+            : "Nenhuma semana do histórico ficou fora do ritmo dela: um volume assim não tem precedente.")
+        : null;
+
+  const botaoNav =
+    "flex size-[34px] items-center justify-center text-[#193B4F] transition-colors hover:bg-[#F3F6F8] disabled:cursor-default disabled:text-[#C6CBCE] disabled:hover:bg-transparent";
+
+  return (
+    <Dialog open={aberto && !!c} onOpenChange={(v) => !v && onFechar()}>
+      {c && (
+        <DialogContent className="flex h-[calc(100dvh-2rem)] w-[calc(100vw-2rem)] max-w-[1600px] flex-col gap-0 overflow-hidden rounded-[16px] border-[#DFE0E2] bg-white p-0 sm:h-[calc(100dvh-3rem)] sm:w-[calc(100vw-3rem)] sm:max-w-[1600px]">
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-3 border-b border-[#EDEFF0] py-4 pr-14 pl-6">
+            <div className="min-w-0 flex-1">
+              <div className="flex min-w-0 items-center gap-2.5">
+                <DialogTitle className="truncate text-[20px] leading-tight font-semibold text-[#193B4F]">
+                  {c.name}
+                </DialogTitle>
+                {c.picoPrevisto && <MarcaPico />}
+              </div>
+              <DialogDescription className="mt-1 text-[13px] text-[#767A7B]">
+                {c.local} · sem cadastro no ProntuAI
+              </DialogDescription>
+            </div>
+
+            <div className="flex items-center gap-2.5">
+              <label
+                className={`flex h-[34px] cursor-pointer items-center gap-2 rounded-[9px] border px-3 text-[13px] transition-colors ${
+                  marcada
+                    ? "border-[#7EBFCC] bg-[#E6F4F4] text-[#007891]"
+                    : "border-[#DFE0E2] text-[#193B4F] hover:border-[#7EBFCC]"
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  checked={marcada}
+                  onChange={() => onMarcar(c.credenciado)}
+                  className="size-4 cursor-pointer accent-[#00AFAA]"
+                />
+                Incluir na simulação
+              </label>
+
+              <div className="flex items-center overflow-hidden rounded-[9px] border border-[#DFE0E2]">
+                <button
+                  type="button"
+                  disabled={!anterior}
+                  onClick={() => anterior && onIr(anterior)}
+                  aria-label="Clínica anterior"
+                  title="Clínica anterior (←)"
+                  className={botaoNav}
+                >
+                  <svg viewBox="0 0 16 16" aria-hidden="true" className="size-4">
+                    <path d="M10 4L6 8l4 4" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </button>
+                <span className="min-w-[78px] border-x border-[#DFE0E2] px-2 text-center text-[12.5px] leading-[34px] tabular-nums text-[#767A7B]">
+                  {i + 1} de {linhas.length}
+                </span>
+                <button
+                  type="button"
+                  disabled={!proxima}
+                  onClick={() => proxima && onIr(proxima)}
+                  aria-label="Próxima clínica"
+                  title="Próxima clínica (→)"
+                  className={botaoNav}
+                >
+                  <svg viewBox="0 0 16 16" aria-hidden="true" className="size-4">
+                    <path d="M6 4l4 4-4 4" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </button>
+              </div>
             </div>
           </div>
 
-          {c.serie.length > 0 ? (
-            <>
-              <div className="relative mt-3.5 flex h-[96px] items-end gap-[3px]">
-                {/* A tracejada é a média. Fica por cima das colunas, não atrás:
-                    o que se quer ver é quais delas a ultrapassam. */}
-                <div
-                  className="pointer-events-none absolute inset-x-0 z-10 border-t border-dashed border-[#B4453A]"
-                  style={{ bottom: `${(c.media / maior) * 86}px` }}
+          <div className="min-h-0 flex-1 overflow-y-auto lg:grid lg:grid-cols-[minmax(0,1fr)_320px] lg:overflow-hidden">
+            <div className="flex min-h-0 flex-col px-6 pt-5 pb-6">
+              <div className="grid grid-cols-2 gap-x-6 gap-y-4 lg:grid-cols-4">
+                <NumeroModal
+                  rotulo="Média por semana"
+                  valor={c.mediaLabel}
+                  unidade="/sem"
+                  sub={`liberações · ${janelaMedia}`}
+                  destaque
                 />
-                {c.serie.map((s) => (
-                  <div
-                    key={s.label}
-                    className={`${styles.tip} flex flex-1 flex-col items-center justify-end`}
-                    data-tip={s.tip}
-                  >
-                    <div
-                      className="w-full rounded-t-[3px]"
-                      style={{ height: `${Math.max(s.h, s.liberacoes ? 2 : 0)}px`, background: s.pico ? "#CC851E" : "#7EBFCC" }}
-                    />
-                  </div>
-                ))}
+                <NumeroModal rotulo="Semanas com liberação" valor={c.regularidadeLabel} sub="das 12 semanas da média" />
+                <NumeroModal
+                  rotulo="Liberações nas 12 semanas"
+                  valor={c.total.toLocaleString("pt-BR")}
+                  sub="soma da janela da média"
+                />
+                <NumeroModal
+                  rotulo="Previstos"
+                  valor={c.previstos.toLocaleString("pt-BR")}
+                  sub={`a liberar ${janelaPrevistos}`}
+                  extra={c.picoPrevisto ? <MarcaPico /> : undefined}
+                />
               </div>
-              <div className="mt-1.5 flex gap-[3px]">
-                {c.serie.map((s, i) => (
-                  <div key={s.label} className="flex-1 text-center text-[9.5px] text-[#9AA3A8]">
-                    {/* Com 30 semanas o rótulo em toda coluna vira um borrão:
-                        um a cada quatro basta para situar o eixo. */}
-                    {i % 4 === 0 ? s.label : ""}
-                  </div>
-                ))}
-              </div>
-              <div className="mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11.5px] text-[#767A7B]">
-                <span className="flex items-center gap-1.5">
-                  <span className="h-[3px] w-4 border-t border-dashed border-[#B4453A]" /> média
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <span className="size-2.5 rounded-[2px] bg-[#CC851E]" /> semana fora do ritmo dela
-                </span>
-              </div>
-            </>
-          ) : (
-            <div className="mt-2.5 text-[13px] text-[#767A7B]">
-              Sem liberações no histórico do BRNET — só previsão futura.
-            </div>
-          )}
 
-          {c.datas.length > 0 && (
-            <div className="mt-3.5 border-t border-[#EDEFF0] pt-3">
-              <div className={CABECALHO_TABELA}>Datas das previsões</div>
-              <div className="mt-2 flex flex-col">
-                {c.datas.map((d) => (
-                  <div
-                    key={d.label}
-                    className="flex items-baseline justify-between gap-6 border-b border-[#EDEFF0] py-[6px] text-[13px] last:border-b-0"
-                  >
-                    <span className="text-[#5F6B72]">{d.label}</span>
-                    <span className="font-medium tabular-nums text-[#193B4F]">{d.pedidos}</span>
-                  </div>
-                ))}
+              {leitura && (
+                <div className="mt-4 rounded-[10px] border border-[#F0DDBF] bg-[#FBF5EA] px-4 py-2.5 text-[13px] leading-[1.5] text-[#7A4A17]">
+                  {leitura}
+                </div>
+              )}
+
+              <div className="mt-6 min-h-0 flex-1">
+                <GraficoSemanas serie={serie} media={c.media} mediaLabel={c.mediaLabel} />
               </div>
             </div>
-          )}
 
-          <div className="mt-2.5 text-[12.5px] text-[#767A7B]">{c.resumo}</div>
-          <div className="mt-1 text-[12px] text-[#9AA3A8]">{c.credenciado}</div>
-        </div>
+            <aside className="flex flex-col gap-6 border-t border-[#EDEFF0] bg-[#FAFBFC] px-6 py-5 lg:overflow-y-auto lg:border-t-0 lg:border-l">
+              <div>
+                <div className={CABECALHO_TABELA}>Previstos por dia</div>
+                <div className="mt-1 text-[11.5px] text-[#9AA3A8]">{janelaPrevistos}</div>
+                {c.datas.length > 0 ? (
+                  <div className="mt-3.5 flex flex-col gap-2.5">
+                    {c.datas.map((d) => (
+                      <div key={d.label} className="grid grid-cols-[96px_1fr_34px] items-center gap-3 text-[13px]">
+                        <span className="truncate text-[#5F6B72]">{d.label}</span>
+                        <div className="h-1.5 overflow-hidden rounded-[3px] bg-[#EDEFF0]">
+                          <div
+                            className="h-full rounded-[3px] bg-[#007891]"
+                            style={{ width: `${(d.n / Math.max(1, ...c.datas.map((x) => x.n))) * 100}%` }}
+                          />
+                        </div>
+                        <span className="text-right font-medium tabular-nums text-[#193B4F]">{d.pedidos}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="mt-3.5 text-[13px] text-[#767A7B]">Nenhum pedido com previsão na janela.</div>
+                )}
+              </div>
+
+              <div className="border-t border-[#EDEFF0] pt-5">
+                <div className={CABECALHO_TABELA}>Fora da janela</div>
+                <dl className="mt-3 flex flex-col gap-2.5 text-[13px]">
+                  {[
+                    ["Com a previsão já vencida", c.vencidos],
+                    ["Previstos depois da janela", c.depoisDaJanela],
+                    ["Documentos já enviados ao ProntuAI", c.documentos],
+                  ].map(([rotulo, valor]) => (
+                    <div key={rotulo} className="flex items-baseline justify-between gap-4">
+                      <dt className="text-[#5F6B72]">{rotulo}</dt>
+                      <dd className="font-medium tabular-nums text-[#193B4F]">{Number(valor).toLocaleString("pt-BR")}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </div>
+
+              <div className="mt-auto border-t border-[#EDEFF0] pt-4 text-[11.5px] leading-snug text-[#9AA3A8]">
+                <div>No BRNET: {c.credenciado}</div>
+                <div className="mt-2">← → passam para a clínica anterior ou a seguinte · Esc fecha</div>
+              </div>
+            </aside>
+          </div>
+        </DialogContent>
       )}
-    </div>
+    </Dialog>
   );
 }
 
@@ -953,6 +1380,7 @@ export function AbaUtilizacao({
           <TabelaForaProntuai
             linhas={visao.foraProntuai}
             janelaMedia={visao.janelaMedia}
+            janelaPrevistos={visao.janelaPrevistos}
             simulador={visao.simulador}
           />
         )}

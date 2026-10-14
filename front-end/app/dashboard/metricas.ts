@@ -391,19 +391,21 @@ export interface UsoSemanal {
   semanas: SemanaUso[];
 }
 
-/** Uma linha do painel "Datas das previsões". */
+/** Um dia da lista de previsões do modal. */
 export interface DataPrevista {
   label: string;
   pedidos: string;
+  /** O mesmo `pedidos`, numérico, para a barra da lista. */
+  n: number;
 }
 
-/** Uma coluna do histórico semanal que abre ao clicar na linha. */
+/** Uma coluna do histórico semanal do modal. */
 export interface BarraSemana {
+  /** Segunda-feira da semana, ISO. */
+  iso: string;
   /** "29/09". */
   label: string;
   liberacoes: number;
-  /** Altura em px, proporcional à maior semana da própria clínica. */
-  h: number;
   /**
    * Semana que destoa do comportamento dela: mais que o dobro da média e pelo
    * menos 3 liberações acima. As duas condições juntas porque só a razão marca
@@ -411,6 +413,10 @@ export interface BarraSemana {
    * marca a clínica grande, onde oscilar 5 é rotina.
    */
   pico: boolean;
+  /** Uma das semanas fechadas que entram na média. */
+  naMedia: boolean;
+  /** Semana corrente: ainda não acabou, e o número só pode subir. */
+  parcial: boolean;
   tip: string;
 }
 
@@ -427,7 +433,7 @@ export interface BarraSemana {
  *
  * Média, e não mediana, por decisão de produto (14/10/2026). A mediana derruba
  * sozinha a clínica de pico único; a média não, então quem denuncia o pico é o
- * gráfico que abre na linha e a marca de PICO — que é exatamente o fluxo pedido:
+ * gráfico do modal e a marca de PICO — que é exatamente o fluxo pedido:
  * ranquear, desconfiar, clicar e conferir.
  */
 export interface LinhaForaProntuai {
@@ -454,15 +460,29 @@ export interface LinhaForaProntuai {
    * média faria esperar no mesmo número de dias. É o "boom momentâneo".
    */
   picoPrevisto: boolean;
-  /** Histórico semanal inteiro, para o painel que abre. */
-  serie: BarraSemana[];
+  /** O que a média faria esperar nos mesmos dias da janela de previstos. */
+  esperado: number;
+  esperadoLabel: string;
+  /**
+   * Histórico semanal inteiro, para o modal. Uma coluna por semana, inclusive
+   * as zeradas, e o mesmo intervalo para todo credenciado.
+   *
+   * Função, e não lista, porque só o modal lê — uma clínica por vez. Montar as
+   * ~350 × 46 colunas a cada troca de filtro dobrava o custo do recálculo
+   * (medido: 15 → 29 ms), e era exatamente o travamento recém-corrigido.
+   */
+  serie: () => BarraSemana[];
   /** Primeira data prevista, "—" quando não há nenhuma. */
   proxima: string;
   /** ISO da próxima previsão, para ordenar por data e não por texto. */
   proximaISO: string;
   datas: DataPrevista[];
-  /** Vencidos e documentos, no rodapé do painel. */
-  resumo: string;
+  /** Pendentes com a previsão já vencida. */
+  vencidos: number;
+  /** Previstos para depois do fim da janela. */
+  depoisDaJanela: number;
+  /** Documentos que o credenciado já mandou pelo ProntuAI, em todo o histórico. */
+  documentos: number;
   tip: string;
 }
 
@@ -819,6 +839,7 @@ export function calcularVisao({ dados, filtro, comparar, verTodasClinicas }: Opc
       semanal,
       total: recentes.reduce((a, n) => a + n, 0),
       semanasAtivas: recentes.filter((n) => n > 0).length,
+      esperado,
       picoPrevisto: previstos >= 5 && previstos > 2 * esperado,
     };
   });
@@ -827,6 +848,27 @@ export function calcularVisao({ dados, filtro, comparar, verTodasClinicas }: Opc
   // ranquear nem o que incluir.
   const linhasSemProntuai = linhasForaBruto.filter((l) => l.total > 0 || l.previstos > 0);
   const maiorMedia = Math.max(1, ...linhasSemProntuai.map((l) => l.media));
+
+  // Eixo do histórico no modal: toda semana da primeira liberação buscada até a
+  // semana corrente, contínuo e igual para todo credenciado. O back-end só manda
+  // as semanas com liberação; desenhar só elas encostava três semanas soltas
+  // como se fossem seguidas, e o pico isolado — justamente o que o gráfico
+  // existe para denunciar — parecia ritmo.
+  const semanasHistorico = (() => {
+    let inicio = "";
+    let fim = semanaAtualISO;
+    for (const c of semProntuaiBruto) {
+      for (const w in c.liberacoes_semana ?? {}) {
+        if (!inicio || w < inicio) inicio = w;
+        if (!fim || w > fim) fim = w;
+      }
+    }
+    const semanas: string[] = [];
+    if (!inicio) return semanas;
+    for (let w = inicio; w <= fim; w = maisDias(w, 7)) semanas.push(w);
+    return semanas;
+  })();
+  const naJanelaMedia = new Set(semanasRecentes);
 
   // ---- "Quem está usando pouco": previsto × expedido, por semana fechada ---
   // O indicador que a tabela de adesão tentava ser. A diferença é a janela:
@@ -922,29 +964,25 @@ export function calcularVisao({ dados, filtro, comparar, verTodasClinicas }: Opc
     .sort((a, b) => b.media - a.media || b.total - a.total)
     .map((l) => {
       const { c, dias } = l;
-      const docs = c.documentos
-        ? `${c.documentos} documento${c.documentos > 1 ? "s" : ""} no ProntuAI`
-        : "nenhum documento no ProntuAI";
       const foraDaJanela = c.pedidos_previstos - l.previstos;
-      // A série do painel mostra o histórico INTEIRO, não só as 12 semanas da
+      // A série do modal mostra o histórico INTEIRO, não só as 12 semanas da
       // média: a pergunta que ele responde é "isso é comportamento ou foi
       // uma semana?", e cortar o histórico esconderia justamente a resposta.
       const porSemana = c.liberacoes_semana ?? {};
-      const semanas = Object.keys(porSemana).sort();
-      // Fora do `map`: a maior semana é a mesma para a série inteira, e
-      // recalculá-la por coluna fazia o custo crescer com o quadrado do
-      // histórico.
-      const maior = Math.max(1, ...semanas.map((x) => porSemana[x] ?? 0));
-      const serie = semanas.map((w) => {
+      const serie = () => semanasHistorico.map((w) => {
         const liberacoes = porSemana[w] ?? 0;
         const pico = liberacoes > 2 * l.media && liberacoes >= l.media + 3;
+        const parcial = w === semanaAtualISO;
         return {
+          iso: w,
           label: rotuloSemana(w),
           liberacoes,
-          h: Math.round((liberacoes / maior) * 86),
           pico,
+          naMedia: naJanelaMedia.has(w),
+          parcial,
           tip:
-            `${intervaloSemana(w)} — ${fmt(liberacoes)} liberações` +
+            `${intervaloSemana(w)} — ${fmt(liberacoes)} ${liberacoes === 1 ? "liberação" : "liberações"}` +
+            (parcial ? " até agora, semana em andamento" : "") +
             (pico ? ` · acima do ritmo dela (média ${umDecimal(l.media)})` : ""),
         };
       });
@@ -961,14 +999,15 @@ export function calcularVisao({ dados, filtro, comparar, verTodasClinicas }: Opc
         pct: pct(l.media, maiorMedia),
         previstos: l.previstos,
         picoPrevisto: l.picoPrevisto,
+        esperado: l.esperado,
+        esperadoLabel: umDecimal(l.esperado),
         serie,
         proxima: dias.length ? dataCurta(dias[0].data) : "—",
         proximaISO: dias.length ? dias[0].data : "",
-        datas: dias.map((x) => ({ label: rotuloPrevisao(x.data), pedidos: fmt(x.pedidos) })),
-        resumo:
-          (c.vencidos ? `${fmt(c.vencidos)} com previsão vencida · ` : "") +
-          (foraDaJanela ? `${fmt(foraDaJanela)} previstos depois da janela · ` : "") +
-          docs,
+        datas: dias.map((x) => ({ label: rotuloPrevisao(x.data), pedidos: fmt(x.pedidos), n: x.pedidos })),
+        vencidos: c.vencidos,
+        depoisDaJanela: foraDaJanela,
+        documentos: c.documentos,
         tip:
           `${c.nome} — média de ${umDecimal(l.media)} liberações por semana em ` +
           `${l.semanasAtivas} das últimas ${SEMANAS_MEDIA} semanas (${fmt(l.total)} no total)`,
