@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator, model_validator
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 from enum import Enum
@@ -12,6 +12,69 @@ class DocumentQueue(str, Enum):
     # paginação sem precisar omitir o parâmetro — omitir significaria "sem
     # fila", que é o mesmo resultado mas não diz a intenção em log nem em trace.
     HISTORICO = "historico"
+
+
+# Motivos de rejeição estruturados: o que a CLÍNICA precisa corrigir.
+#
+# Substituem o texto livre "Motivo da rejeição", que saiu do modal. Medido em
+# 272 rejeições escritas à mão no banco de dev: 149 (55%) eram "falta X" — o
+# revisor confirmando o faltante que a IA tinha apontado —, e o resto se
+# divide entre exame que veio errado (carimbo, data, ilegível) e problema do
+# documento (ASO, peça faltando, anexos separados). O texto continua em
+# `rejection_reason`, composto pelo modal a partir destes códigos, porque é
+# ele que a clínica lê e que vai para o PDF; os códigos existem para contar.
+#
+# Espelho de `CODIGOS_REJEICAO` em `front-end/types/feedback.ts` —
+# `test_codigos_de_rejeicao_batem_com_os_do_front` compara os dois.
+CODIGOS_REJEICAO_EXAME: frozenset[str] = frozenset({
+    "EXAME_FALTANTE",
+    "EXAME_OUTRA_DATA",
+    "EXAME_ILEGIVEL",
+    "EXAME_SEM_ASSINATURA",
+})
+CODIGOS_REJEICAO_DOCUMENTO: frozenset[str] = frozenset({
+    "ASO_INCOMPLETO",
+    "ASO_SEM_APTIDAO",
+    "ASO_DADO_ERRADO",
+    "ASO_SEM_REAPROVEITAMENTO",
+    "PRONTUARIO_INCOMPLETO",
+    "ANEXOS_SEPARADOS",
+    "ENVIO_DUPLICADO",
+    "PACIENTE_TROCADO",
+    "DOC_ILEGIVEL",
+})
+CODIGOS_REJEICAO: frozenset[str] = CODIGOS_REJEICAO_EXAME | CODIGOS_REJEICAO_DOCUMENTO
+
+
+class RejectionCode(BaseModel):
+    """Um motivo de rejeição. Os de exame dizem qual; os de documento, não."""
+
+    codigo: str
+    exame: Optional[str] = Field(default=None, max_length=300)
+
+    @field_validator("codigo")
+    @classmethod
+    def codigo_valido(cls, value: str) -> str:
+        if value not in CODIGOS_REJEICAO:
+            raise ValueError(f"Motivo de rejeição inválido: {value}")
+        return value
+
+    @field_validator("exame")
+    @classmethod
+    def exame_sem_espaco_solto(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        return value.strip() or None
+
+    @model_validator(mode="after")
+    def exame_conforme_o_codigo(self) -> "RejectionCode":
+        # "Faltou" sem dizer o quê não serve para contar quais exames as
+        # clínicas mais deixam de mandar — que é a razão de existir do código.
+        if self.codigo in CODIGOS_REJEICAO_EXAME and not self.exame:
+            raise ValueError(f"{self.codigo} precisa dizer o exame.")
+        if self.codigo in CODIGOS_REJEICAO_DOCUMENTO and self.exame:
+            raise ValueError(f"{self.codigo} é do documento inteiro e não leva exame.")
+        return self
 
 
 class Document(BaseModel):
@@ -37,6 +100,7 @@ class Document(BaseModel):
     reviewed_at: Optional[datetime] = None
     approval_reason: Optional[str] = None
     rejection_reason: Optional[str] = None
+    rejection_codes: Optional[List[Dict[str, Any]]] = None
     confidence_score: Optional[float] = None
     quality_score: Optional[float] = None
     mandatory_coverage: Optional[float] = None
@@ -134,6 +198,9 @@ class DocumentUpdate(BaseModel):
     reviewed_at: Optional[datetime] = None
     approval_reason: Optional[str] = None
     rejection_reason: Optional[str] = None
+    # Só é gravado quando o documento termina rejeitado (ver update_document em
+    # app/api/v1/documents.py). O teto barra payload absurdo, não uso real.
+    rejection_codes: Optional[List[RejectionCode]] = Field(default=None, max_length=200)
     confidence_score: Optional[float] = None
     quality_score: Optional[float] = None
     mandatory_coverage: Optional[float] = None

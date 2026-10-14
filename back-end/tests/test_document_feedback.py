@@ -200,6 +200,25 @@ def test_problema_de_documento_sozinho_e_parecer_valido(monkeypatch):
     assert salvo.issue_items == []
 
 
+def test_outro_so_com_texto_e_parecer_valido(monkeypatch):
+    """"Outro" no modal não aponta exame nem categoria: vira OUTRO_PROBLEMA, que
+    satisfaz a regra de todo parecer negativo apontar algo, e o texto vai em notes."""
+    banco = BancoFalso([documento()])
+    mod = carregar(monkeypatch, banco)
+    salvo = salvar(mod, banco, entrada(
+        itens=[], docs=["OUTRO_PROBLEMA"], notes="O laudo veio em inglês."))
+    assert salvo.document_issues == ["OUTRO_PROBLEMA"]
+
+
+@pytest.mark.parametrize("categoria", ["EXAME_OUTRA_DATA", "EXAME_ILEGIVEL", "EXAME_SEM_ASSINATURA", "ENCONTRADO_INCORRETO"])
+def test_exame_aceito_que_nao_servia_aponta_o_exame(categoria):
+    with pytest.raises(ValidationError):
+        DocumentFeedbackInput(status="IA_INCORRETA", document_issues=[categoria], notes="x")
+    dados = DocumentFeedbackInput(
+        status="IA_INCORRETA", issue_items=[item(categoria=categoria)], notes="x")
+    assert dados.issue_items[0].categoria == categoria
+
+
 def test_categorias_derivadas_juntam_as_duas_familias():
     dados = entrada(
         itens=[item(categoria="EXTRA_INCORRETO", exame="Glicemia")],

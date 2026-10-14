@@ -1,14 +1,12 @@
 /**
- * Parecer humano sobre o acerto da IA em um documento.
+ * Parecer humano sobre o acerto da IA, e o motivo de rejeição que sai dele.
  *
- * Espelho de `back-end/app/models/feedback.py`: o back-end recusa categoria e
- * status fora destas listas, então mudar uma metade sem a outra deixa o revisor
- * marcando chip que a API rejeita. O teste
- * `back-end/tests/test_document_feedback.py::test_categorias_do_back_batem_com_as_do_front`
- * compara os dois arquivos e quebra quando eles divergem.
- *
- * Duas famílias de motivo: os de exame (lista de pares motivo↔exame) e os do
- * documento inteiro, que não têm exame a que amarrar.
+ * Espelho de `back-end/app/models/feedback.py` (categorias do parecer) e de
+ * `back-end/app/models/document.py` (códigos de rejeição): o back-end recusa o
+ * que não estiver nas listas dele, então mudar uma metade sem a outra deixa o
+ * revisor marcando opção que a API rejeita. Dois testes comparam os arquivos:
+ * `test_categorias_do_back_batem_com_as_do_front` e
+ * `test_codigos_de_rejeicao_batem_com_os_do_front`.
  */
 
 export type FeedbackStatus =
@@ -16,204 +14,16 @@ export type FeedbackStatus =
   | "IA_CORRETA_COM_AJUSTES"
   | "IA_INCORRETA";
 
-/** Status que exigem detalhamento — mesma regra do back-end. */
-export const STATUS_COM_DETALHES: FeedbackStatus[] = [
-  "IA_CORRETA_COM_AJUSTES",
-  "IA_INCORRETA",
-];
-
-export const OPCOES_FEEDBACK: Array<{
-  valor: FeedbackStatus;
-  titulo: string;
-  descricao: string;
-}> = [
-  {
-    valor: "IA_CORRETA",
-    titulo: "A IA acertou",
-    descricao: "A leitura e a comparação bateram com o documento.",
-  },
-  {
-    valor: "IA_CORRETA_COM_AJUSTES",
-    titulo: "A IA acertou com ressalvas",
-    descricao: "Aproveitável, mas algo precisou de correção.",
-  },
-  {
-    valor: "IA_INCORRETA",
-    titulo: "A IA errou",
-    descricao: "O resultado não podia ser usado como veio.",
-  },
-];
-
 /**
- * Frase que o modal escreve sozinho para um motivo, a partir dos exames
- * marcados. `exames` já vem pronto para leitura ("A, B e C"); `plural` diz se
- * é mais de um, para a concordância.
- *
- * Só nomes de exame e texto fixo entram aqui — nunca dado do paciente — então a
- * frase pode ir para `notes` sem risco de PII.
+ * O que a IA disse sobre um exame, como vem da comparação (`tabela_comparacao`).
+ * `null` quando não há veredito: o exame foi digitado pelo revisor, ou a IA
+ * nem chegou a comparar.
  */
-export type Frase = (exames: string, plural: boolean) => string;
-
-export const CATEGORIAS_EXAME: Array<{
-  valor: string;
-  rotulo: string;
-  ajuda: string;
-  /**
-   * Ausente em "Outro" de propósito: ali não há o que dizer por conta própria,
-   * e o revisor precisa contar o que houve.
-   */
-  frase?: Frase;
-}> = [
-  {
-    valor: "FALTANTE_INCORRETO",
-    rotulo: "Faltante que existia",
-    ajuda: "A IA marcou como faltante, mas o exame estava no documento.",
-    frase: (x, p) =>
-      p
-        ? `${x} estavam no documento, mas a IA apontou como faltantes.`
-        : `${x} estava no documento, mas a IA apontou como faltante.`,
-  },
-  {
-    valor: "EXTRA_INCORRETO",
-    rotulo: "Extra que era legítimo",
-    ajuda: "A IA marcou como extra um exame que era legítimo.",
-    frase: (x, p) =>
-      p
-        ? `${x} foram apontados como extras, mas eram exames legítimos.`
-        : `${x} foi apontado como extra, mas era um exame legítimo.`,
-  },
-  {
-    valor: "SINONIMO_NAO_RECONHECIDO",
-    rotulo: "Sinônimo não reconhecido",
-    ajuda: "O exame estava no documento com outro nome e a IA não ligou os dois.",
-    frase: (x, p) =>
-      p
-        ? `${x} estavam no documento com outros nomes, e a IA não reconheceu.`
-        : `${x} estava no documento com outro nome, e a IA não reconheceu.`,
-  },
-  {
-    valor: "EXAME_NAO_RECONHECIDO",
-    rotulo: "Exame não reconhecido",
-    ajuda: "Estava no PDF e a IA não extraiu, por isso caiu como faltante.",
-    frase: (x, p) =>
-      p
-        ? `${x} estavam no PDF, mas a IA não extraiu.`
-        : `${x} estava no PDF, mas a IA não extraiu.`,
-  },
-  {
-    valor: "VALIDADE_PERIODICIDADE",
-    rotulo: "Validade ou periodicidade",
-    ajuda: "O exame existe, mas a validade ou a periodicidade saiu errada.",
-    frase: (x, p) =>
-      p
-        ? `${x} estavam no documento, mas a validade ou a periodicidade saiu errada.`
-        : `${x} estava no documento, mas a validade ou a periodicidade saiu errada.`,
-  },
-  {
-    valor: "DADO_BRNET",
-    rotulo: "Exigência do BRNET",
-    ajuda: "A exigência veio errada ou desatualizada do BRNET.",
-    frase: (x, p) =>
-      p
-        ? `As exigências de ${x} vieram erradas ou desatualizadas do BRNET.`
-        : `A exigência de ${x} veio errada ou desatualizada do BRNET.`,
-  },
-  {
-    valor: "OUTRO",
-    rotulo: "Outro",
-    ajuda: "Algum outro problema neste exame.",
-  },
-];
-
-/**
- * Problemas do documento inteiro — não apontam exame. Ficam num bloco à parte
- * no modal e viajam em `document_issues`, não em `issue_items`.
- *
- * Duas famílias, nesta ordem na tela: o que a clínica enviou errado (ASO e
- * envio) vem primeiro, porque é o que mais aparece, e os erros de leitura da
- * IA vêm depois.
- *
- * A lista de conteúdo saiu do que os revisores escreveram no antigo campo
- * "Motivo da rejeição", removido do modal. Medido em 387 rejeições escritas à
- * mão no banco de dev: o ASO responde por 106 (27%), peça faltando no
- * prontuário por 34, exames em vários anexos por 25 e envio duplicado por 9.
- * As quatro categorias de leitura que existiam cobriam 7 das 387 — o resto não
- * tinha onde ser marcado.
- */
-export const CATEGORIAS_DOCUMENTO: Array<{
-  valor: string;
-  rotulo: string;
-  ajuda: string;
-  /** Frase fixa: o problema é do documento, não há exame para citar. */
-  frase: string;
-}> = [
-  {
-    valor: "ASO_INCOMPLETO",
-    rotulo: "ASO cortado ou em duas páginas",
-    ajuda: "Veio só parte do ASO, ou faltou a segunda página.",
-    frase: "O ASO veio cortado ou com uma das páginas faltando.",
-  },
-  {
-    valor: "ASO_SEM_APTIDAO",
-    rotulo: "ASO sem marcação de aptidão",
-    ajuda: "O ASO não tem a marcação de apto ou inapto.",
-    frase: "O ASO veio sem a marcação de aptidão.",
-  },
-  {
-    valor: "ASO_DADO_ERRADO",
-    rotulo: "ASO com dado errado",
-    ajuda: "Tipagem, data ou carimbo errados no ASO.",
-    frase: "O ASO veio com dado errado.",
-  },
-  {
-    valor: "PRONTUARIO_INCOMPLETO",
-    rotulo: "Faltou peça do prontuário",
-    ajuda: "Veio só o ASO, só os laboratoriais, ou faltou a ficha médica.",
-    frase: "O prontuário veio incompleto: faltou uma das peças.",
-  },
-  {
-    valor: "ANEXOS_SEPARADOS",
-    rotulo: "Exames em vários anexos",
-    ajuda: "Os exames do mesmo paciente vieram em envios separados.",
-    frase: "Os exames do paciente vieram repartidos em mais de um anexo.",
-  },
-  {
-    valor: "ENVIO_DUPLICADO",
-    rotulo: "Documento duplicado",
-    ajuda: "O mesmo documento foi enviado mais de uma vez.",
-    frase: "O mesmo documento foi enviado mais de uma vez.",
-  },
-  {
-    valor: "PACIENTE_TROCADO",
-    rotulo: "Documento de outro paciente",
-    ajuda: "O documento, ou parte dele, é de outro paciente.",
-    frase: "O documento, ou parte dele, é de outro paciente.",
-  },
-  {
-    valor: "OCR_NOME",
-    rotulo: "Nome do paciente",
-    ajuda: "O nome saiu errado ou corrompido na leitura.",
-    frase: "O nome do paciente foi lido errado.",
-  },
-  {
-    valor: "OCR_CPF",
-    rotulo: "CPF",
-    ajuda: "O CPF saiu errado na leitura.",
-    frase: "O CPF foi lido errado.",
-  },
-  {
-    valor: "OCR_DATA",
-    rotulo: "Data",
-    ajuda: "A data do exame ou do ASO saiu errada.",
-    frase: "A data do exame ou do ASO foi lida errada.",
-  },
-  {
-    valor: "DOC_ILEGIVEL",
-    rotulo: "Documento ilegível",
-    ajuda: "O documento não foi lido de forma aproveitável.",
-    frase: "O documento não pôde ser lido de forma aproveitável.",
-  },
-];
+export type Veredito =
+  | "faltante"
+  | "encontrado"
+  | "parcialmente_encontrado"
+  | "extra_no_ocr";
 
 /** "A", "A e B", "A, B e C". */
 export function juntarNomes(nomes: string[]): string {
@@ -222,28 +32,171 @@ export function juntarNomes(nomes: string[]): string {
 }
 
 /**
- * Monta o "o que aconteceu" a partir do que foi marcado: uma frase por motivo
- * (juntando os exames dele) e uma por problema de documento, na ordem da tela.
- * "Outro" não gera frase — é o caso em que só o revisor sabe contar.
+ * Motivos que apontam para um exame. `frase` é o que o modal escreve sozinho em
+ * `notes` — só nome de exame e texto fixo, nunca dado do paciente.
  *
- * Pura de propósito: roda na tela e também na reabertura de um parecer salvo,
- * para separar o texto automático do que o revisor escreveu à mão.
+ * As que o modal não oferece mais (extra, validade, "Outro" de exame) ficam na
+ * lista porque há pareceres gravados com elas, e reabrir um deles precisa saber
+ * o rótulo.
  */
-export function comporResumo(
-  exames: Array<{ categoria: string; nomes: string[] }>,
-  problemasDoc: string[],
-): string[] {
-  const frases: string[] = [];
-  for (const { categoria, nomes } of exames) {
-    const frase = CATEGORIAS_EXAME.find((c) => c.valor === categoria)?.frase;
-    if (frase && nomes.length > 0) frases.push(frase(juntarNomes(nomes), nomes.length > 1));
-  }
-  for (const valor of problemasDoc) {
-    const frase = CATEGORIAS_DOCUMENTO.find((c) => c.valor === valor)?.frase;
-    if (frase) frases.push(frase);
-  }
-  return frases;
-}
+export const CATEGORIAS_EXAME: Array<{
+  valor: string;
+  rotulo: string;
+  frase: (exame: string) => string;
+}> = [
+  {
+    valor: "FALTANTE_INCORRETO",
+    rotulo: "Estava no documento",
+    frase: (x) => `${x} estava no documento, mas a IA apontou como faltante.`,
+  },
+  {
+    valor: "SINONIMO_NAO_RECONHECIDO",
+    rotulo: "Com outro nome",
+    frase: (x) => `${x} estava no documento com outro nome, e a IA não reconheceu.`,
+  },
+  {
+    valor: "DADO_BRNET",
+    rotulo: "Exigência errada no BRNET",
+    frase: (x) => `A exigência de ${x} veio errada do BRNET.`,
+  },
+  {
+    valor: "ENCONTRADO_INCORRETO",
+    rotulo: "Não estava",
+    frase: (x) => `${x} foi dado como encontrado, mas não estava no documento.`,
+  },
+  {
+    valor: "EXAME_OUTRA_DATA",
+    rotulo: "De outra data",
+    frase: (x) => `${x} foi aceito, mas era de outra data.`,
+  },
+  {
+    valor: "EXAME_ILEGIVEL",
+    rotulo: "Ilegível ou incompleto",
+    frase: (x) => `${x} foi aceito, mas estava ilegível ou incompleto.`,
+  },
+  {
+    valor: "EXAME_SEM_ASSINATURA",
+    rotulo: "Sem carimbo",
+    frase: (x) => `${x} foi aceito, mas estava sem carimbo ou assinatura.`,
+  },
+  {
+    valor: "EXAME_NAO_RECONHECIDO",
+    rotulo: "Estava, mas não foi lido",
+    frase: (x) => `${x} estava no documento, mas a IA não extraiu.`,
+  },
+  {
+    valor: "EXTRA_INCORRETO",
+    rotulo: "Era legítimo",
+    frase: (x) => `${x} foi apontado como extra, mas era legítimo.`,
+  },
+  {
+    valor: "VALIDADE_PERIODICIDADE",
+    rotulo: "Validade ou periodicidade",
+    frase: (x) => `A validade ou a periodicidade de ${x} saiu errada.`,
+  },
+  {
+    valor: "OUTRO",
+    rotulo: "Outro",
+    frase: (x) => `Outro problema em ${x}.`,
+  },
+];
+
+/** Onde a IA errou — a primeira pergunta do caminho "Errou". */
+export type Area = "exames" | "brnet" | "paciente" | "documento" | "outro";
+
+/**
+ * Problemas que não apontam exame. `area` diz em qual pergunta do modal cada um
+ * aparece; viajam em `document_issues`.
+ *
+ * Os de "documento" saíram do que os revisores escreviam no antigo campo
+ * "Motivo da rejeição" (272 textos no dev, em ordem de frequência), e são
+ * também motivo de rejeição — o código de rejeição tem o mesmo nome.
+ */
+export const CATEGORIAS_DOCUMENTO: Array<{
+  valor: string;
+  rotulo: string;
+  area: Exclude<Area, "exames">;
+  frase: string;
+}> = [
+  { valor: "BRNET_EXPEDICAO", rotulo: "A expedição existe", area: "brnet", frase: "A expedição em aberto existia no BRNET." },
+  { valor: "BRNET_PACIENTE", rotulo: "O paciente existe", area: "brnet", frase: "O paciente estava cadastrado no BRNET." },
+  { valor: "BRNET_EXIGENCIA", rotulo: "Exigências erradas", area: "brnet", frase: "As exigências de exame vieram erradas do BRNET." },
+  { valor: "OCR_NOME", rotulo: "Nome", area: "paciente", frase: "A IA leu o nome do paciente errado." },
+  { valor: "OCR_CPF", rotulo: "CPF", area: "paciente", frase: "A IA leu o CPF errado." },
+  { valor: "OCR_CNPJ", rotulo: "CNPJ", area: "paciente", frase: "A IA leu o CNPJ errado." },
+  { valor: "OCR_DATA", rotulo: "Data", area: "paciente", frase: "A IA leu a data errada." },
+  { valor: "ASO_INCOMPLETO", rotulo: "ASO cortado", area: "documento", frase: "ASO cortado ou em duas páginas." },
+  { valor: "PRONTUARIO_INCOMPLETO", rotulo: "Só veio parte", area: "documento", frase: "Veio só parte do prontuário." },
+  { valor: "ANEXOS_SEPARADOS", rotulo: "Vários anexos", area: "documento", frase: "Exames enviados em anexos separados." },
+  { valor: "ASO_SEM_APTIDAO", rotulo: "ASO sem aptidão ou NR", area: "documento", frase: "ASO sem marcação de aptidão ou de NR." },
+  { valor: "ASO_DADO_ERRADO", rotulo: "ASO com dado errado", area: "documento", frase: "ASO com data ou carimbo errado." },
+  { valor: "ASO_SEM_REAPROVEITAMENTO", rotulo: "Sem ASO de reaproveitamento", area: "documento", frase: "Não usou o ASO de reaproveitamento." },
+  { valor: "ENVIO_DUPLICADO", rotulo: "Duplicado", area: "documento", frase: "Documento enviado em duplicidade." },
+  { valor: "PACIENTE_TROCADO", rotulo: "De outro paciente", area: "documento", frase: "Documento de outro paciente." },
+  { valor: "DOC_ILEGIVEL", rotulo: "Ilegível", area: "documento", frase: "Documento ilegível." },
+  { valor: "OUTRO_PROBLEMA", rotulo: "Outro", area: "outro", frase: "" },
+];
+
+/**
+ * O que a clínica precisa corrigir. Gravado em `documents.rejection_codes`
+ * junto do texto em `rejection_reason`; os de documento têm o mesmo nome da
+ * categoria do parecer.
+ */
+export const CODIGOS_REJEICAO = [
+  "EXAME_FALTANTE",
+  "EXAME_OUTRA_DATA",
+  "EXAME_ILEGIVEL",
+  "EXAME_SEM_ASSINATURA",
+  "ASO_INCOMPLETO",
+  "ASO_SEM_APTIDAO",
+  "ASO_DADO_ERRADO",
+  "ASO_SEM_REAPROVEITAMENTO",
+  "PRONTUARIO_INCOMPLETO",
+  "ANEXOS_SEPARADOS",
+  "ENVIO_DUPLICADO",
+  "PACIENTE_TROCADO",
+  "DOC_ILEGIVEL",
+] as const;
+
+export type CodigoRejeicao = (typeof CODIGOS_REJEICAO)[number];
+
+export type RejectionCode = { codigo: CodigoRejeicao; exame?: string };
+
+/** Como cada código de exame abre a frase do motivo: "Faltou: A e B." */
+export const ROTULO_REJEICAO_EXAME: Partial<Record<CodigoRejeicao, string>> = {
+  EXAME_FALTANTE: "Faltou",
+  EXAME_OUTRA_DATA: "De outra data",
+  EXAME_ILEGIVEL: "Ilegível ou incompleto",
+  EXAME_SEM_ASSINATURA: "Sem carimbo ou assinatura",
+};
+
+/**
+ * As respostas de "O que houve?" para um exame, pelo que a IA tinha dito dele.
+ * É o que deixa a pergunta curta: num exame que ela deu como faltante, "não
+ * estava" não faz sentido. `rejeicao` é o código que a resposta gera quando o
+ * documento é rejeitado — as que não geram nenhum só corrigem a IA.
+ */
+export const OPCOES_EXAME: Record<
+  "faltante" | "encontrado" | "avulso",
+  Array<{ categoria: string; rotulo: string; rejeicao?: CodigoRejeicao }>
+> = {
+  faltante: [
+    { categoria: "FALTANTE_INCORRETO", rotulo: "Estava no documento" },
+    { categoria: "SINONIMO_NAO_RECONHECIDO", rotulo: "Com outro nome" },
+    { categoria: "DADO_BRNET", rotulo: "Não é exigido" },
+  ],
+  encontrado: [
+    { categoria: "ENCONTRADO_INCORRETO", rotulo: "Não estava", rejeicao: "EXAME_FALTANTE" },
+    { categoria: "EXAME_OUTRA_DATA", rotulo: "De outra data", rejeicao: "EXAME_OUTRA_DATA" },
+    { categoria: "EXAME_ILEGIVEL", rotulo: "Ilegível ou incompleto", rejeicao: "EXAME_ILEGIVEL" },
+    { categoria: "EXAME_SEM_ASSINATURA", rotulo: "Sem carimbo", rejeicao: "EXAME_SEM_ASSINATURA" },
+  ],
+  // Digitado pelo revisor: não estava na lista do BRNET.
+  avulso: [
+    { categoria: "EXAME_NAO_RECONHECIDO", rotulo: "Estava, mas não foi lido" },
+    { categoria: "DADO_BRNET", rotulo: "Faltou (o BRNET não exigiu)", rejeicao: "EXAME_FALTANTE" },
+  ],
+};
 
 /** Um par (motivo, exame) — o que a IA errou e onde. */
 export type FeedbackIssueItem = {
@@ -277,4 +230,3 @@ export type DocumentFeedbackInput = {
   document_issues: string[];
   notes: string | null;
 };
-
