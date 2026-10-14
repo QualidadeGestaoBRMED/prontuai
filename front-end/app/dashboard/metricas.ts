@@ -145,12 +145,39 @@ const rotuloSemana = (chave: string) => {
   return `${pad(d)}/${pad(m)}`;
 };
 
+const isoUTC = (d: Date) =>
+  `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`;
+
+/** Dia ISO deslocado em `dias`. */
+const maisDias = (iso: string, dias: number) => {
+  const { y, m, d } = partes(iso);
+  return isoUTC(new Date(Date.UTC(y, m - 1, d + dias)));
+};
+
+/**
+ * Segunda-feira da semana ISO de uma data. A mesma chave que o back-end usa em
+ * `desfecho_previsao_semana` e `liberacoes_semana` — as duas pontas precisam
+ * concordar sobre onde a semana começa, ou a tela soma caixas diferentes.
+ */
+const semanaDe = (iso: string) => {
+  const { y, m, d } = partes(iso);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  return isoUTC(new Date(Date.UTC(y, m - 1, d - ((dt.getUTCDay() + 6) % 7))));
+};
+
+/** "29/09 a 05/10" — a semana inteira, não só o dia em que ela começa. */
+const intervaloSemana = (inicioISO: string) =>
+  `${rotuloSemana(inicioISO)} a ${rotuloSemana(maisDias(inicioISO, 6))}`;
+
 const rotuloMes = (chave: string) => {
   const { y, m } = partes(chave);
   return `${MESES_ABBR[m - 1]}/${String(y).slice(2)}`;
 };
 
 const fmt = (v: number) => v.toLocaleString("pt-BR");
+/** Uma casa decimal. A média semanal quase nunca é inteira, e "16,333" polui. */
+const umDecimal = (v: number) =>
+  v.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 const num = (v: number) => `${v.toFixed(1).replace(".", ",")}%`;
 const pct = (a: number, b: number) => (b ? (a / b) * 100 : 0);
 
@@ -292,135 +319,69 @@ export interface LinhaAdocao {
 }
 
 /**
- * Uma linha da tabela de adesão (1.3). Mede coisa diferente de `LinhaAdocao`:
- * "Adoção por clínica" olha documentos DENTRO do ProntuAI; aqui o denominador é
- * o realizado do BRNET, e a pergunta é quanto do que a clínica fez passou pela
- * plataforma. Futuro (previstos) e histórico (realizados) convivem na mesma
- * linha mas nunca se dividem um pelo outro.
+ * Uma linha de "Quem está usando pouco": uma clínica habilitada numa semana
+ * fechada. Os três desfechos somam `previstos`, então a barra fecha em 100%.
+ *
+ * Aqui previsto e realizado se encontram — e só aqui. Não é agregado dividido
+ * por agregado: o back-end acompanha o MESMO pedido, pelo id, da previsão até o
+ * desfecho. É o que a `LinhaAdesao` não conseguia fazer, e é por isso que ela
+ * misturava uma janela para frente com outra para trás na mesma linha.
  */
-export interface LinhaAdesao {
+export interface LinhaUsoSemana {
   clinica: string;
   local: string;
   uf: string | null;
-  /** Previstos na janela para frente. */
+  /** Pedidos com previsão de liberação nesta semana. É o denominador. */
   previstos: number;
-  /** Realizados no filtro de período da tela. */
-  realizados: number;
-  realizadosProntuai: number;
-  /** null quando não houve realizados no filtro — nunca 0. */
-  adesao: number | null;
+  /** Liberados e com documento no ProntuAI. */
+  viaProntuai: number;
+  /** Liberados sem passar pela plataforma — o buraco que é com quem cuida de adesão. */
+  fora: number;
+  /** Nem liberados até agora — o buraco que é atraso do credenciado. */
+  naoLiberado: number;
+  /** viaProntuai ÷ previstos, em %. */
+  adesao: number;
   adesaoLabel: string;
   adesaoColor: string;
-  proxima: string;
-  /** ISO da próxima previsão, "" quando não há. Usado só para ordenar. */
-  proximaISO: string;
-  tip: string;
-}
-
-/** Uma linha da abertura por UF da comparação dentro × fora (2.1). */
-export interface LinhaUf {
-  uf: string;
-  dentro: number;
-  fora: number;
-  total: number;
-  /** Fatia desta UF no total previsto do país, em %. */
-  pctTotal: number;
-  /** Quanto dos previstos da própria UF está dentro do ProntuAI, em %. */
-  pctDentro: number;
-  tip: string;
-}
-
-/**
- * Comparação dentro × fora (2.1). Só previstos — nada de realizado entra aqui.
- * `cobertura` é a única ponte permitida: base da 1.4 ÷ total de previstos.
- */
-export interface ComparacaoPrevistos {
-  janela: string;
-  dentro: number;
-  fora: number;
-  total: number;
-  pctDentro: number;
+  /** Larguras da barra empilhada, em % dos previstos. */
+  pctVia: number;
   pctFora: number;
-  dentroLabel: string;
-  foraLabel: string;
-  totalLabel: string;
-  /** base (1.4) ÷ total de previstos. null quando não há base medível. */
-  cobertura: number | null;
-  coberturaLabel: string;
-  porUf: LinhaUf[];
-}
-
-/**
- * Uma linha de oportunidade (2.4): quanto dos previstos de uma clínica
- * habilitada ainda não deve passar pelo ProntuAI.
- */
-export interface LinhaOportunidade {
-  clinica: string;
-  local: string;
-  previstos: number;
-  adesao: number | null;
-  adesaoLabel: string;
-  /**
-   * previstos × (1 − adesão), **sem arredondar**. Adesão nula conta como 0 —
-   * ver `oportunidades`. O valor exato é o que faz a soma fechar com
-   * "previstos das habilitadas − base"; arredondar linha a linha e só depois
-   * somar erra por alguns pedidos, e o critério de aceite é uma igualdade.
-   */
-  oportunidade: number;
-  oportunidadeLabel: string;
-  /** Largura da barra, em % da maior oportunidade. */
-  pct: number;
-  /** Sem realizados no período: a oportunidade é um teto, não uma medida. */
-  semMedida: boolean;
+  pctNao: number;
   tip: string;
 }
 
-/**
- * Projeção (1.4): quanto dos previstos das habilitadas deve passar pelo
- * ProntuAI. `base` é a soma linha a linha de previstos × adesão da tabela 1.3.
- */
-export interface CardProjecao {
-  janela: string;
-  somaPrevistos: number;
-  somaPrevistosLabel: string;
-  base: number;
-  baseLabel: string;
-  /** base ÷ previstos das linhas com adesão medível. null se não houver nenhuma. */
-  adesaoPonderada: number | null;
-  adesaoPonderadaLabel: string;
-  previstosSemAdesaoLabel: string;
-  /**
-   * Premissa em aberto no backlog: clínica com adesão nula fica FORA da base e
-   * do denominador da média. Estes são os previstos que ela carrega, mostrados
-   * à parte para a premissa ficar visível em vez de embutida no número.
-   */
-  previstosSemAdesao: number;
-  clinicasSemAdesao: number;
-}
-
-/** Uma das duas parcelas do card de previstos. */
-export interface ParcelaPrevistos {
-  rotulo: string;
-  valor: number;
+/** Uma semana fechada, com as clínicas que tinham previsão nela. */
+export interface SemanaUso {
+  /** Segunda-feira da semana ISO. */
+  iso: string;
+  /** "29/09 a 05/10". */
   label: string;
-  /** Largura da fatia na barra empilhada, em % do total. */
-  pct: number;
-  cor: string;
-  sub: string;
-  tip: string;
+  linhas: LinhaUsoSemana[];
+  previstos: number;
+  viaProntuai: number;
+  fora: number;
+  naoLiberado: number;
+  /** Ponderada: viaProntuai ÷ previstos da semana inteira. */
+  adesao: number;
+  adesaoLabel: string;
 }
 
 /**
- * Card "Pedidos previstos": pedidos do BRNET ainda NÃO liberados com previsão
- * dentro da janela, separados pelo mesmo corte das duas tabelas. null quando o
- * BRNET não pôde ser consultado.
+ * Indicador "Quem está usando pouco". Só semanas FECHADAS: a adesão precisa do
+ * desfecho para existir, e semana em curso ainda tem pedido no prazo.
+ *
+ * Só semanas a partir de `expedicoes_desde`, também: antes dela o documento não
+ * guardava `pedido_exame_id`, então "passou pelo ProntuAI" daria zero para todo
+ * mundo e a tela acusaria uma debandada que nunca houve.
  */
-export interface CardPrevistos {
-  /** "de hoje a 29/10 · 30 dias". */
-  janela: string;
-  total: number;
-  totalLabel: string;
-  partes: ParcelaPrevistos[];
+export interface UsoSemanal {
+  /** Da mais recente para a mais antiga. */
+  semanas: SemanaUso[];
+  /**
+   * Próxima semana ISO inteira — alvo da projeção do rodapé. Inteira e no
+   * futuro, para a conta não misturar dias já vividos com dias por viver.
+   */
+  proxima: { label: string; previstos: number };
 }
 
 /** Uma linha do painel "Datas das previsões". */
@@ -429,29 +390,74 @@ export interface DataPrevista {
   pedidos: string;
 }
 
-export interface LinhaPrevista {
+/** Uma coluna do histórico semanal que abre ao clicar na linha. */
+export interface BarraSemana {
+  /** "29/09". */
+  label: string;
+  liberacoes: number;
+  /** Altura em px, proporcional à maior semana da própria clínica. */
+  h: number;
+  /**
+   * Semana que destoa do comportamento dela: mais que o dobro da média e pelo
+   * menos 3 liberações acima. As duas condições juntas porque só a razão marca
+   * ruído (1 → 3 é "três vezes mais" e não quer dizer nada) e só a diferença
+   * marca a clínica grande, onde oscilar 5 é rotina.
+   */
+  pico: boolean;
+  tip: string;
+}
+
+/**
+ * Uma linha de "Quem vale a pena incluir": um credenciado SEM cadastro no
+ * ProntuAI. Nenhuma métrica de adesão entra aqui — adesão é sobre quem já está
+ * dentro, e misturar as duas foi o que fez quatro indicadores contarem a mesma
+ * história.
+ *
+ * O ranking é pela MÉDIA semanal de liberações. Previsto da janela não serve de
+ * ordem: é uma foto do instante e premia duas coisas erradas — o pico isolado
+ * ("mil na semana que vem") e o credenciado lento, único que tem pedido pendente
+ * na hora do cálculo.
+ *
+ * Média, e não mediana, por decisão de produto (14/10/2026). A mediana derruba
+ * sozinha a clínica de pico único; a média não, então quem denuncia o pico é o
+ * gráfico que abre na linha e a marca de PICO — que é exatamente o fluxo pedido:
+ * ranquear, desconfiar, clicar e conferir.
+ */
+export interface LinhaForaProntuai {
   /** Rótulo completo do BRNET, mostrado ao expandir. */
   credenciado: string;
   name: string;
   local: string;
   uf: string | null;
-  pedidos: number;
-  /** Primeira data prevista; a quebra por dia fica no painel expansível. */
+  /** Média de liberações por semana nas últimas semanas fechadas. */
+  media: number;
+  mediaLabel: string;
+  /** Liberações somadas na mesma janela da média. */
+  total: number;
+  /** Semanas com ao menos uma liberação, na janela da média. */
+  semanasAtivas: number;
+  /** semanasAtivas ÷ semanas da janela, em %. */
+  regularidade: number;
+  regularidadeLabel: string;
+  /** Largura da barra do ranking, em % da maior média da lista. */
+  pct: number;
+  /** Pedidos previstos na janela para frente — coluna de contexto, não de ordem. */
+  previstos: number;
+  /**
+   * Os previstos da janela destoam do ritmo dela: mais que o dobro do que a
+   * média faria esperar no mesmo número de dias. É o "boom momentâneo".
+   */
+  picoPrevisto: boolean;
+  /** Histórico semanal inteiro, para o painel que abre. */
+  serie: BarraSemana[];
+  /** Primeira data prevista, "—" quando não há nenhuma. */
   proxima: string;
   /** ISO da próxima previsão, para ordenar por data e não por texto. */
   proximaISO: string;
   datas: DataPrevista[];
   /** Vencidos e documentos, no rodapé do painel. */
   resumo: string;
-  /** Fatia desta clínica nos previstos fora do ProntuAI, em %. */
-  participacao: number;
-  participacaoLabel: string;
-  /**
-   * Quanto a base da projeção cresceria se esta clínica entrasse:
-   * previstos × adesão esperada ÷ base. null quando não há base para comparar.
-   */
-  impacto: number | null;
-  impactoLabel: string;
+  tip: string;
 }
 
 export interface LinhaMatriz {
@@ -486,21 +492,28 @@ export interface VisaoDashboard {
   ranking: LinhaRanking[];
   totalClinicas: number;
   adocao: LinhaAdocao[];
-  /** null quando o BRNET não pôde ser consultado. */
-  semProntuai: LinhaPrevista[] | null;
-  pedidosSemProntuai: number;
-  /** Os três dependem do BRNET e vêm null juntos. */
-  previstos: CardPrevistos | null;
-  adesao: LinhaAdesao[] | null;
-  projecao: CardProjecao | null;
-  comparacao: ComparacaoPrevistos | null;
-  oportunidades: LinhaOportunidade[] | null;
   /**
-   * Insumos do simulador (2.3). O simulador não recalcula nada do painel: ele
-   * parte destes números e aplica a adesão escolhida sobre a seleção.
+   * "Quem está usando pouco": adesão por clínica habilitada, semana a semana.
+   * Substituiu a tabela de adesão, o card de projeção e a tabela de
+   * oportunidade — as três liam os mesmos previstos e contavam pedaços da mesma
+   * história, cada uma com uma janela diferente.
    */
-  simulador: { base: number; totalPrevistos: number; adesaoHistorica: number | null } | null;
-  /** Rótulo do filtro de período, para a tabela 1.3 dizer de onde vem cada coluna. */
+  usoSemanal: UsoSemanal | null;
+  /**
+   * "Quem vale a pena incluir": credenciados fora do ProntuAI, ranqueados pela
+   * média semanal. Substituiu o card de previstos, a comparação dentro × fora
+   * e a lista de prioridade ordenada por previstos. null sem o BRNET.
+   */
+  foraProntuai: LinhaForaProntuai[] | null;
+  /** Janela para frente dos previstos: "de hoje a 12/11 · 30 dias". */
+  janelaPrevistos: string;
+  /**
+   * Insumos do simulador. Ele não recalcula nada do painel: parte do volume
+   * semanal que hoje passa pela plataforma e aplica, sobre a média das
+   * clínicas marcadas, a adesão medida na última semana fechada.
+   */
+  simulador: { viaProntuaiSemana: number; adesao: number; semana: string } | null;
+  /** Rótulo do filtro de período, para os blocos retroativos se situarem. */
   periodoLabel: string;
 
   kpisAcuracia: Kpi[];
@@ -762,130 +775,221 @@ export function calcularVisao({ dados, filtro, comparar, verTodasClinicas }: Opc
     temJanela ? c.previsoes.filter((x) => x.data >= hojeISO && x.data <= fimJanelaISO) : [];
   const somaDias = (dias: PrevisaoDia[]) => dias.reduce((a, x) => a + x.pedidos, 0);
 
-  // Realizados entram pela MESMA janela retroativa dos KPIs, com o mesmo corte
-  // em `expedicoes_desde`: a adesão por clínica é o recorte por clínica do KPI
-  // "Expedições via ProntuAI", e janelas diferentes fariam os dois números da
-  // tela discordarem sem motivo.
-  const realizadosDe = (porDia: Record<string, number> | undefined) =>
-    faixaAtual && porDia ? expedicoesEntre(porDia, faixaAtual.ini, faixaAtual.fim, ultimoDoc) : 0;
+  // ---- "Quem vale a pena incluir": ranking por média semanal --------------
+  // Média das últimas SEMANAS_MEDIA semanas fechadas, com os zeros contados —
+  // sem os zeros, a clínica que liberou 400 numa semana e nada nas outras onze
+  // apareceria com 400 por semana.
+  //
+  // Média e não mediana: decisão de produto (14/10/2026), para a tela falar a
+  // mesma língua de quem a lê. A mediana foi medida e descartada; ela derrubaria
+  // sozinha a clínica de pico único, mas o fluxo pedido é outro — ranquear,
+  // desconfiar, clicar e conferir no gráfico. Quem denuncia o pico, então, é a
+  // marca de PICO e as colunas fora do ritmo, não a ordem da lista.
+  //
+  // Janela fixa para todo mundo — comparar clínicas exige o mesmo denominador.
+  const SEMANAS_MEDIA = 12;
+  const semanaAtualISO = temJanela ? semanaDe(hojeISO) : "";
+  const semanasRecentes = temJanela
+    ? Array.from({ length: SEMANAS_MEDIA }, (_, k) => maisDias(semanaAtualISO, -7 * (k + 1))).reverse()
+    : [];
 
-  // ---- 1.2 + 1.3: adesão por clínica com cadastro habilitado ---------------
-  const linhasAdesao: LinhaAdesao[] = comProntuai.map((c) => {
-    const clinica = c.clinica ?? c.nome;
+  const media = (valores: number[]) =>
+    valores.length ? valores.reduce((a, n) => a + n, 0) / valores.length : 0;
+
+  const linhasForaBruto = semProntuaiBruto.map((c) => {
+    const semanal = c.liberacoes_semana ?? {};
+    const recentes = semanasRecentes.map((w) => semanal[w] ?? 0);
+    const med = media(recentes);
     const dias = diasNaJanela(c);
     const previstos = somaDias(dias);
-    const realizados = realizadosDe(c.realizados_dia);
-    const realizadosProntuai = realizadosDe(c.realizados_prontuai_dia);
-    // Sem realizados no filtro a adesão é NULA, nunca zero: zero afirmaria que a
-    // clínica não usou a plataforma, e o que houve foi ausência de medida.
-    const adesao = realizados ? (realizadosProntuai / realizados) * 100 : null;
+    // Quanto a média faria esperar no mesmo número de dias da janela. Mais
+    // que o dobro disso é o "boom" — e o painel que abre mostra se ele é
+    // mesmo um evento isolado.
+    const esperado = (med * diasJanela) / 7;
     return {
-      clinica,
-      local: c.cidade && c.uf ? `${c.cidade}/${c.uf}` : "—",
-      uf: c.uf,
+      c,
+      dias,
       previstos,
-      realizados,
-      realizadosProntuai,
-      adesao,
-      adesaoLabel: adesao === null ? "—" : num(adesao),
-      adesaoColor: adesao === null ? MUTED : adesao >= 90 ? POS : adesao >= 75 ? CORES.alerta : NEG,
-      proxima: dias.length ? dataCurta(dias[0].data) : "—",
-      proximaISO: dias.length ? dias[0].data : "",
-      tip:
-        adesao === null
-          ? `${clinica} — sem realizados no período selecionado, adesão não medível`
-          : `${clinica} — ${fmt(realizadosProntuai)} de ${fmt(realizados)} realizados passaram pelo ProntuAI`,
+      media: med,
+      recentes,
+      semanal,
+      total: recentes.reduce((a, n) => a + n, 0),
+      semanasAtivas: recentes.filter((n) => n > 0).length,
+      picoPrevisto: previstos >= 5 && previstos > 2 * esperado,
     };
   });
 
-  // ---- 1.4: projeção sobre os previstos das habilitadas --------------------
-  // Premissa assumida (pendência aberta no backlog): adesão nula fica FORA da
-  // base e do denominador da média ponderada. Incluí-la como zero puxaria a
-  // média para baixo afirmando algo que não foi medido; deixá-la no denominador
-  // sem contribuir para a base faria o mesmo. Os previstos que ela carrega
-  // aparecem à parte, para a premissa ficar visível na tela.
-  const comAdesao = linhasAdesao.filter((l) => l.adesao !== null);
-  const somaPrevistos = linhasAdesao.reduce((a, l) => a + l.previstos, 0);
-  const base = comAdesao.reduce((a, l) => a + (l.previstos * (l.adesao as number)) / 100, 0);
-  const previstosComAdesao = comAdesao.reduce((a, l) => a + l.previstos, 0);
-  const adesaoPonderada = previstosComAdesao ? (base / previstosComAdesao) * 100 : null;
+  // Entra quem tem histórico OU previsto: sem nenhum dos dois não há o que
+  // ranquear nem o que incluir.
+  const linhasSemProntuai = linhasForaBruto.filter((l) => l.total > 0 || l.previstos > 0);
+  const maiorMedia = Math.max(1, ...linhasSemProntuai.map((l) => l.media));
 
-  // ---- 2.2: prioridade de inclusão ----------------------------------------
-  const linhasSemProntuai = semProntuaiBruto
-    .map((c) => ({ c, dias: diasNaJanela(c) }))
-    // Credenciado sem previsão dentro da janela sai da tabela: a lista é de
-    // prioridade de inclusão, e quem não tem nada previsto não é prioridade.
-    .filter(({ dias }) => somaDias(dias) > 0);
+  // ---- "Quem está usando pouco": previsto × expedido, por semana fechada ---
+  // O indicador que a tabela de adesão tentava ser. A diferença é a janela:
+  // aqui a linha inteira fala de UMA semana — o que foi prometido nela e o que
+  // aconteceu com cada um daqueles pedidos. A tabela antiga punha previsto do
+  // futuro ao lado de realizado do passado, e quem batia o olho lia a divisão
+  // de um pelo outro, que não existia.
+  //
+  // Toda a conta vem de `desfecho_previsao_semana`, montada no back-end pedido
+  // a pedido. Aqui só se agrupa e ordena: nenhuma razão nova é inventada.
+  const usoSemanal: UsoSemanal | null = (() => {
+    if (!temBrnet || !temJanela) return null;
+    // Sem a data em que a ligação por pedido começou não dá para saber em que
+    // semana "passou pelo ProntuAI" vira medida confiável — e o indicador
+    // inteiro é sobre isso.
+    const desde = dados.expedicoes_desde;
+    if (!desde) return null;
 
-  // ---- 2.4: oportunidade nas clínicas já habilitadas ----------------------
-  // Pendência do backlog resolvida pelo próprio critério de aceite: "soma das
-  // oportunidades = previstos das habilitadas − base". Como a base (1.4) deixa
-  // a clínica sem adesão de fora, a única forma de a identidade fechar é a
-  // oportunidade dela ser os previstos INTEIROS, ou seja, adesão tratada como 0.
-  // Excluí-la da lista faria a soma não bater. `semMedida` marca esses casos na
-  // tela: ali a oportunidade é um teto, não uma medida.
-  const linhasOportunidade: LinhaOportunidade[] = linhasAdesao
-    .map((l) => ({ l, oportunidade: l.previstos * (1 - (l.adesao ?? 0) / 100) }))
-    .filter(({ oportunidade }) => oportunidade > 0)
-    .sort((a, b) => b.oportunidade - a.oportunidade)
-    .map(({ l, oportunidade }, _i, todas) => ({
-      clinica: l.clinica,
-      local: l.local,
-      previstos: l.previstos,
-      adesao: l.adesao,
-      adesaoLabel: l.adesaoLabel,
-      oportunidade,
-      oportunidadeLabel: fmt(Math.round(oportunidade)),
-      pct: Math.round(pct(oportunidade, todas[0].oportunidade)),
-      semMedida: l.adesao === null,
-      tip:
-        l.adesao === null
-          ? `${l.clinica} — sem realizados no período: os ${fmt(l.previstos)} previstos contam inteiros, é um teto`
-          : `${l.clinica} — ${fmt(l.previstos)} previstos a ${l.adesaoLabel} de adesão deixam ${fmt(Math.round(oportunidade))} pedidos fora`,
-    }));
+    const semanaAtual = semanaDe(hojeISO);
+    const chaves = new Set<string>();
+    comProntuai.forEach((c) =>
+      Object.keys(c.desfecho_previsao_semana ?? {}).forEach((s) => {
+        // Fechada e inteiramente dentro do período com ligação por pedido.
+        if (s < semanaAtual && s >= desde) chaves.add(s);
+      }),
+    );
+    if (!chaves.size) return null;
 
-  const previstosHabilitados = somaPrevistos;
-  const previstosFora = linhasSemProntuai.reduce((a, { dias }) => a + somaDias(dias), 0);
-  // Premissa assumida (pendência aberta): a adesão esperada de quem ainda não
-  // usa é a média ponderada das que já usam. É o melhor estimador disponível
-  // sem uma meta definida pelo time — e fica num ponto só para ser trocado.
-  const adesaoEsperada = adesaoPonderada;
+    const semanas = [...chaves]
+      .sort()
+      .reverse()
+      .map((iso) => {
+        const linhas: LinhaUsoSemana[] = [];
+        comProntuai.forEach((c) => {
+          const t = c.desfecho_previsao_semana?.[iso];
+          if (!t) return;
+          const [viaProntuai, fora, naoLiberado] = t;
+          const previstos = viaProntuai + fora + naoLiberado;
+          // Clínica sem previsão naquela semana não tem o que reconciliar —
+          // fica fora da lista em vez de entrar como uma linha de zeros.
+          if (!previstos) return;
+          const adesao = (viaProntuai / previstos) * 100;
+          const clinica = c.clinica ?? c.nome;
+          linhas.push({
+            clinica,
+            local: c.cidade && c.uf ? `${c.cidade}/${c.uf}` : "—",
+            uf: c.uf,
+            previstos,
+            viaProntuai,
+            fora,
+            naoLiberado,
+            adesao,
+            adesaoLabel: num(adesao),
+            adesaoColor: adesao >= 90 ? POS : adesao >= 75 ? CORES.alerta : NEG,
+            pctVia: pct(viaProntuai, previstos),
+            pctFora: pct(fora, previstos),
+            pctNao: pct(naoLiberado, previstos),
+            tip:
+              `${clinica} — ${fmt(previstos)} previstos na semana: ${fmt(viaProntuai)} pela plataforma, ` +
+              `${fmt(fora)} liberados por fora, ${fmt(naoLiberado)} ainda não liberados`,
+          });
+        });
+        // Ordem padrão: pelo volume ABSOLUTO que escapou da plataforma, não
+        // pela taxa. 30% de 10 pedidos não é alvo de visita; 15% de 400 é.
+        linhas.sort((a, b) => b.fora - a.fora || b.previstos - a.previstos);
 
-  // ---- 2.1: comparação dentro × fora, aberta por UF -----------------------
-  // Só previstos. A cobertura prevista é a única ponte com o realizado, e ela
-  // vem da base da 1.4 — que já é previsto × adesão, não uma soma de grandezas.
-  const ufDia = dados.previstos_uf_dia;
-  // Mesma regra de `diasNaJanela`: sem data de referência não há janela, e sem
-  // janela não se conta previsto.
-  const somaUf = (porDia: Record<string, number>) =>
-    temJanela
-      ? Object.entries(porDia).reduce(
-          (a, [data, n]) => a + (data >= hojeISO && data <= fimJanelaISO ? n : 0),
-          0,
-        )
-      : 0;
-  const linhasUf: LinhaUf[] = (() => {
-    if (!ufDia) return [];
-    const ufs = [...new Set([...Object.keys(ufDia.dentro), ...Object.keys(ufDia.fora)])];
-    const totalGeral = previstosHabilitados + previstosFora;
-    return ufs
-      .map((uf) => {
-        const dentro = somaUf(ufDia.dentro[uf] ?? {});
-        const fora = somaUf(ufDia.fora[uf] ?? {});
-        const total = dentro + fora;
+        const soma = (f: (l: LinhaUsoSemana) => number) => linhas.reduce((a, l) => a + f(l), 0);
+        const previstos = soma((l) => l.previstos);
+        const viaProntuai = soma((l) => l.viaProntuai);
+        const adesao = pct(viaProntuai, previstos);
         return {
-          uf,
-          dentro,
-          fora,
-          total,
-          pctTotal: pct(total, totalGeral),
-          pctDentro: pct(dentro, total),
-          tip: `${uf} — ${fmt(dentro)} previstos em clínicas habilitadas, ${fmt(fora)} fora (${num(pct(dentro, total))} dentro)`,
+          iso,
+          label: intervaloSemana(iso),
+          linhas,
+          previstos,
+          viaProntuai,
+          fora: soma((l) => l.fora),
+          naoLiberado: soma((l) => l.naoLiberado),
+          adesao,
+          adesaoLabel: num(adesao),
         };
-      })
-      .filter((l) => l.total > 0)
-      .sort((a, b) => b.total - a.total);
+      });
+
+    // Alvo da projeção: a próxima semana ISO inteira. A semana em curso não
+    // serve — metade dela já aconteceu, e os previstos que sobraram são só a
+    // ponta que ainda não venceu.
+    const proximaISO = maisDias(semanaAtual, 7);
+    const fimProxima = maisDias(proximaISO, 6);
+    return {
+      semanas,
+      proxima: {
+        label: intervaloSemana(proximaISO),
+        previstos: comProntuai.reduce(
+          (a, c) =>
+            a +
+            c.previsoes.reduce(
+              (s, x) => s + (x.data >= proximaISO && x.data <= fimProxima ? x.pedidos : 0),
+              0,
+            ),
+          0,
+        ),
+      },
+    };
   })();
+
+  // Ordem padrão: média desc, desempatando pelo volume total da janela. As
+  // duas colunas são do mesmo histórico, então o desempate não troca de
+  // grandeza no meio do ranking.
+  const linhasForaRanqueadas: LinhaForaProntuai[] = linhasSemProntuai
+    .slice()
+    .sort((a, b) => b.media - a.media || b.total - a.total)
+    .map((l) => {
+      const { c, dias } = l;
+      const docs = c.documentos
+        ? `${c.documentos} documento${c.documentos > 1 ? "s" : ""} no ProntuAI`
+        : "nenhum documento no ProntuAI";
+      const foraDaJanela = c.pedidos_previstos - l.previstos;
+      // A série do painel mostra o histórico INTEIRO, não só as 12 semanas da
+      // média: a pergunta que ele responde é "isso é comportamento ou foi
+      // uma semana?", e cortar o histórico esconderia justamente a resposta.
+      const semanas = Object.keys(c.liberacoes_semana ?? {}).sort();
+      const serie = semanas.map((w) => {
+        const liberacoes = (c.liberacoes_semana ?? {})[w] ?? 0;
+        const maior = Math.max(1, ...semanas.map((x) => (c.liberacoes_semana ?? {})[x] ?? 0));
+        const pico = liberacoes > 2 * l.media && liberacoes >= l.media + 3;
+        return {
+          label: rotuloSemana(w),
+          liberacoes,
+          h: Math.round((liberacoes / maior) * 86),
+          pico,
+          tip:
+            `${intervaloSemana(w)} — ${fmt(liberacoes)} liberações` +
+            (pico ? ` · acima do ritmo dela (média ${umDecimal(l.media)})` : ""),
+        };
+      });
+      return {
+        credenciado: c.credenciado,
+        name: c.nome,
+        local: c.cidade && c.uf ? `${c.cidade}/${c.uf}` : "—",
+        uf: c.uf,
+        media: l.media,
+        mediaLabel: umDecimal(l.media),
+        total: l.total,
+        semanasAtivas: l.semanasAtivas,
+        regularidade: pct(l.semanasAtivas, SEMANAS_MEDIA),
+        regularidadeLabel: `${l.semanasAtivas}/${SEMANAS_MEDIA}`,
+        pct: pct(l.media, maiorMedia),
+        previstos: l.previstos,
+        picoPrevisto: l.picoPrevisto,
+        serie,
+        proxima: dias.length ? dataCurta(dias[0].data) : "—",
+        proximaISO: dias.length ? dias[0].data : "",
+        datas: dias.map((x) => ({ label: rotuloPrevisao(x.data), pedidos: fmt(x.pedidos) })),
+        resumo:
+          (c.vencidos ? `${fmt(c.vencidos)} com previsão vencida · ` : "") +
+          (foraDaJanela ? `${fmt(foraDaJanela)} previstos depois da janela · ` : "") +
+          docs,
+        tip:
+          `${c.nome} — média de ${umDecimal(l.media)} liberações por semana em ` +
+          `${l.semanasAtivas} das últimas ${SEMANAS_MEDIA} semanas (${fmt(l.total)} no total)`,
+      };
+    });
+
+  // A semana que serve de premissa ao simulador: a última fechada medida no
+  // indicador de cima. O simulador não inventa adesão nenhuma — usa a que
+  // acabou de ser mostrada na tela, e diz de qual semana ela veio.
+  const ultimaSemana = usoSemanal?.semanas[0] ?? null;
 
   // ---- acurácia: mesma janela de período e de gráfico da utilização --------
   const accP = dados.acuracia?.[cfg.periodo.serie] ?? [];
@@ -947,7 +1051,10 @@ export function calcularVisao({ dados, filtro, comparar, verTodasClinicas }: Opc
       ["Exame faltante que a IA não detectou", soma(accAtual, "mot_exame_nao_detectado"), CORES.negativo],
       ["IA não reconheceu exame que estava no PDF", soma(accAtual, "mot_matching_ia"), CORES.alerta],
       ["Regra formal que a IA ainda não verifica", soma(accAtual, "mot_regra_formal"), CORES.agua],
-      ["Revisor não registrou o motivo", soma(accAtual, "mot_sem_justificativa"), "#9AA9B3"],
+      // Inclui o campo em branco e o motivo sem conteúdo de causa ("ok",
+      // "prontuário correto"). Os dois dizem a mesma coisa: houve divergência e
+      // não se sabe por quê. Ver `dashboard_indicadores.sql`.
+      ["Revisor não informou a causa", soma(accAtual, "mot_sem_justificativa"), "#9AA9B3"],
       ["Outros motivos", soma(accAtual, "mot_outro"), "#BFC3C6"],
     ] as [string, number, string][]
   )
@@ -1072,137 +1179,23 @@ export function calcularVisao({ dados, filtro, comparar, verTodasClinicas }: Opc
       };
     }),
 
-    semProntuai: temBrnet
-      ? linhasSemProntuai.map(({ c, dias }) => {
-          const pedidos = somaDias(dias);
-          const docs = c.documentos
-            ? `${c.documentos} documento${c.documentos > 1 ? "s" : ""} no ProntuAI`
-            : "nenhum documento no ProntuAI";
-          const foraDaJanela = c.pedidos_previstos - pedidos;
-          // Impacto: quanto a base da projeção (1.4) cresceria se esta clínica
-          // entrasse. Proporcional aos previstos, já que a adesão esperada é a
-          // mesma para todas — o ranking por impacto e por previstos coincide
-          // enquanto essa premissa valer, e deixa de coincidir no dia em que a
-          // adesão esperada virar por clínica.
-          const impacto =
-            adesaoEsperada !== null && base ? (pedidos * (adesaoEsperada / 100) * 100) / base : null;
-          return {
-            credenciado: c.credenciado,
-            name: c.nome,
-            local: c.cidade && c.uf ? `${c.cidade}/${c.uf}` : "—",
-            uf: c.uf,
-            pedidos,
-            proxima: dataCurta(dias[0].data),
-            proximaISO: dias[0].data,
-            datas: dias.map((p) => ({ label: rotuloPrevisao(p.data), pedidos: fmt(p.pedidos) })),
-            resumo:
-              (c.vencidos ? `${fmt(c.vencidos)} com previsão vencida · ` : "") +
-              (foraDaJanela ? `${fmt(foraDaJanela)} previstos depois da janela · ` : "") +
-              docs,
-            participacao: pct(pedidos, previstosFora),
-            participacaoLabel: num(pct(pedidos, previstosFora)),
-            impacto,
-            impactoLabel: impacto === null ? "—" : `+${num(impacto).replace("%", "")}%`,
-          };
-        })
+    foraProntuai: temBrnet
+      ? linhasForaRanqueadas
       : null,
-    pedidosSemProntuai: previstosFora,
-
-    adesao: temBrnet ? linhasAdesao : null,
-
-    projecao: temBrnet
-      ? {
-          janela: temJanela
-            ? `de hoje a ${dataCurta(fimJanelaISO)} · ${diasJanela} dias`
-            : "sem data de referência do back-end — previstos indisponíveis",
-          somaPrevistos,
-          somaPrevistosLabel: fmt(somaPrevistos),
-          base,
-          // A base é uma contagem de pedidos: arredondar aqui evita "37,4 pedidos"
-          // na tela sem mexer no número que o critério de aceite confere.
-          baseLabel: adesaoPonderada === null ? "—" : fmt(Math.round(base)),
-          adesaoPonderada,
-          adesaoPonderadaLabel: adesaoPonderada === null ? "—" : num(adesaoPonderada),
-          previstosSemAdesao: somaPrevistos - previstosComAdesao,
-          previstosSemAdesaoLabel: fmt(somaPrevistos - previstosComAdesao),
-          clinicasSemAdesao: linhasAdesao.length - comAdesao.length,
-        }
-      : null,
+    janelaPrevistos: temJanela
+      ? `de hoje a ${dataCurta(fimJanelaISO)} · ${diasJanela} dias`
+      : "sem data de referência do back-end — previstos indisponíveis",
 
     periodoLabel: nomePeriodo(cfg.periodo.serie, atual),
 
-    comparacao: temBrnet
-      ? (() => {
-          const total = previstosHabilitados + previstosFora;
-          return {
-            janela: temJanela
-              ? `de hoje a ${dataCurta(fimJanelaISO)} · ${diasJanela} dias`
-              : "sem data de referência do back-end — previstos indisponíveis",
-            dentro: previstosHabilitados,
-            fora: previstosFora,
-            total,
-            pctDentro: pct(previstosHabilitados, total),
-            pctFora: pct(previstosFora, total),
-            dentroLabel: fmt(previstosHabilitados),
-            foraLabel: fmt(previstosFora),
-            totalLabel: fmt(total),
-            // Cobertura prevista da 2.1 = base da 1.4 ÷ TODOS os previstos,
-            // dentro e fora. Não é a adesão ponderada, que divide só pelos
-            // previstos das habilitadas com adesão medida.
-            cobertura: total && adesaoPonderada !== null ? pct(base, total) : null,
-            coberturaLabel:
-              total && adesaoPonderada !== null ? num(pct(base, total)) : "—",
-            porUf: linhasUf,
-          };
-        })()
-      : null,
+    usoSemanal,
 
-    oportunidades: temBrnet ? linhasOportunidade : null,
-
-    simulador: temBrnet
+    simulador: ultimaSemana
       ? {
-          base,
-          totalPrevistos: previstosHabilitados + previstosFora,
-          adesaoHistorica: adesaoPonderada,
+          viaProntuaiSemana: ultimaSemana.viaProntuai,
+          adesao: ultimaSemana.adesao,
+          semana: ultimaSemana.label,
         }
-      : null,
-
-    previstos: temBrnet
-      ? (() => {
-          const total = previstosHabilitados + previstosFora;
-          const parte = (rotulo: string, valor: number, cor: string, sub: string, tip: string) => ({
-            rotulo,
-            valor,
-            label: fmt(valor),
-            pct: total ? (valor / total) * 100 : 0,
-            cor,
-            sub: total ? `${sub} · ${num(pct(valor, total))} do previsto` : sub,
-            tip,
-          });
-          return {
-            janela: temJanela
-              ? `de hoje a ${dataCurta(fimJanelaISO)} · ${diasJanela} dias`
-              : "sem data de referência do back-end — previstos indisponíveis",
-            total,
-            totalLabel: fmt(total),
-            partes: [
-              parte(
-                "Clínicas com cadastro no ProntuAI",
-                previstosHabilitados,
-                CORES.petroleo,
-                "detalhe na tabela de adesão",
-                "Pedidos com previsão de liberação na janela, em clínicas com cadastro habilitado no ProntuAI.",
-              ),
-              parte(
-                "Clínicas fora do ProntuAI",
-                previstosFora,
-                CORES.alerta,
-                "detalhe em prioridade de inclusão",
-                "Pedidos com previsão de liberação na janela, em credenciados sem cadastro habilitado no ProntuAI. É o volume que ainda chega por fora.",
-              ),
-            ],
-          };
-        })()
       : null,
 
     kpisAcuracia: [
