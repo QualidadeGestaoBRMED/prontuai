@@ -116,6 +116,30 @@ export interface CredenciadoPrevisto {
   realizados_dia?: Record<string, number>;
   /** Dos mesmos realizados, os que tiveram documento liberado no ProntuAI. */
   realizados_prontuai_dia?: Record<string, number>;
+  /**
+   * Reconciliação previsto × expedido, por semana de PREVISÃO (chave = segunda
+   * da semana ISO): `[via_prontuai, liberado_fora, nao_liberado]`.
+   *
+   * Os três são exclusivos e somam os previstos daquela semana — é o que faz a
+   * barra empilhada fechar em 100% sem fatia de resto. Datado pelo dia da
+   * promessa, não pelo da liberação: pedido previsto para sexta e liberado na
+   * segunda conta na semana em que foi prometido.
+   *
+   * Decompõe o buraco entre previsto e expedido em dois donos: "liberou por
+   * fora" é adesão, "não liberou" é atraso do credenciado. Só do lado
+   * habilitado — fora do ProntuAI o primeiro desfecho seria sempre zero.
+   */
+  desfecho_previsao_semana?: Record<string, [number, number, number]>;
+  /**
+   * Liberações do credenciado por semana ISO, em todo o histórico buscado no
+   * BRNET (~7 meses). Só do lado **sem** cadastro: dentro, o mesmo histórico já
+   * está em `realizados_dia`.
+   *
+   * É o que permite ranquear a inclusão por volume recorrente — mediana das
+   * semanas — em vez de pelo previsto da janela, que premia o pico isolado e o
+   * credenciado lento.
+   */
+  liberacoes_semana?: Record<string, number>;
 }
 
 export interface DadosDashboard {

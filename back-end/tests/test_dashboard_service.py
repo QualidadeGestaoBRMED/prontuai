@@ -744,3 +744,106 @@ def test_credenciado_sem_uf_cai_num_balde_proprio():
     pedidos = {1: ds._Pedido(None, "ROTULO SOLTO", None, None, None, "2026-09-25", False, None)}
     r = ds._cruzar_expedicoes(pedidos, {}, date(2026, 9, 22), {}, cadastros())
     assert r["previstos_uf_dia"]["fora"] == {"—": {"2026-09-25": 1}}
+
+
+# ── reconciliação previsto × expedido, por semana de previsão ──────────────
+
+
+def test_semana_e_a_segunda_feira_iso():
+    # 2026-09-22 é terça; 2026-09-27, domingo. Os dois caem na mesma semana.
+    assert ds._semana("2026-09-22") == "2026-09-21"
+    assert ds._semana("2026-09-27") == "2026-09-21"
+    assert ds._semana("2026-09-28") == "2026-09-28"
+
+
+def test_desfecho_separa_quem_liberou_por_fora_de_quem_nao_liberou():
+    """O buraco entre previsto e expedido tem dois donos diferentes."""
+    cred = "RECIFE - PE - CRED A"
+    pedidos = {
+        # previstos para a mesma semana (21–27/09), com os três desfechos
+        1: pedido("2026-09-21", cred, "2026-09-22"),                      # liberado, com doc
+        2: pedido("2026-09-23", cred, "2026-09-23"),                      # liberado, sem doc
+        3: pedido(None, cred, "2026-09-24", liberacao=None),              # não liberado
+    }
+    r = ds._cruzar_expedicoes(pedidos, {1: 1}, date(2026, 9, 28), {}, cadastros("CRED A"))
+    assert por_clinica(r, "CRED A")["desfecho_previsao_semana"] == {"2026-09-21": [1, 1, 1]}
+
+
+def test_desfecho_e_datado_pela_previsao_nao_pela_liberacao():
+    """Previsto para sexta e liberado na segunda conta na semana da PROMESSA."""
+    cred = "RECIFE - PE - CRED A"
+    # previsão 25/09 (sexta, semana de 21/09); liberação 28/09 (segunda seguinte)
+    pedidos = {1: pedido("2026-09-25", cred, "2026-09-25", liberacao="2026-09-28")}
+    r = ds._cruzar_expedicoes(pedidos, {1: 1}, date(2026, 10, 5), {}, cadastros("CRED A"))
+    c = por_clinica(r, "CRED A")
+    assert c["desfecho_previsao_semana"] == {"2026-09-21": [1, 0, 0]}
+    # e o realizado continua datado pelo dia da liberação, como sempre foi
+    assert r["expedicoes_dia"] == {"2026-09-28": 1}
+
+
+def test_os_tres_desfechos_somam_os_previstos_da_semana():
+    """Invariante da barra empilhada: ela fecha em 100% sem fatia de resto."""
+    cred = "RECIFE - PE - CRED A"
+    pedidos = {
+        1: pedido("2026-09-21", cred, "2026-09-21"),
+        2: pedido("2026-09-22", cred, "2026-09-22"),
+        3: pedido(None, cred, "2026-09-23", liberacao=None),
+        4: pedido("2026-09-29", cred, "2026-09-29"),  # outra semana
+    }
+    semanas = por_clinica(
+        ds._cruzar_expedicoes(pedidos, {1: 1}, date(2026, 10, 5), {}, cadastros("CRED A")),
+        "CRED A",
+    )["desfecho_previsao_semana"]
+    assert sum(semanas["2026-09-21"]) == 3
+    assert sum(semanas["2026-09-28"]) == 1
+
+
+def test_liberado_sem_previsao_nao_entra_no_desfecho():
+    """Sem previsão não há semana a que pertencer — mas o realizado continua."""
+    cred = "RECIFE - PE - CRED A"
+    pedidos = {1: pedido("2026-09-21", cred)}
+    r = ds._cruzar_expedicoes(pedidos, {1: 1}, date(2026, 9, 28), {}, cadastros("CRED A"))
+    assert por_clinica(r, "CRED A")["desfecho_previsao_semana"] == {}
+    assert r["expedicoes_dia"] == {"2026-09-21": 1}
+
+
+# ── histórico semanal de quem está fora do ProntuAI ────────────────────────
+
+
+def test_liberacoes_semana_so_existe_do_lado_de_fora():
+    """Dentro, o histórico já está em `realizados_dia`; repetir seria duas verdades."""
+    usa, nao_usa = "RECIFE - PE - CLINICA A", "NATAL - RN - CLINICA B"
+    pedidos = {
+        1: pedido("2026-09-21", usa), 2: pedido("2026-09-22", nao_usa),
+        3: pedido(None, nao_usa, "2026-10-01", liberacao=None),
+    }
+    r = ds._cruzar_expedicoes(pedidos, {}, date(2026, 9, 28), {}, cadastros("CLINICA A"))
+    assert "liberacoes_semana" not in por_clinica(r, "CLINICA A")
+    assert r["clinicas_sem_prontuai"][0]["liberacoes_semana"] == {"2026-09-21": 1}
+
+
+def test_credenciado_de_fora_sem_previsao_entra_pelo_historico():
+    """Quem libera rápido não tem pedido pendente — e não pode sumir do ranking."""
+    cred = "NATAL - RN - CLINICA B"
+    pedidos = {1: pedido("2026-09-21", cred), 2: pedido("2026-09-28", cred)}
+    item = ds._cruzar_expedicoes(pedidos, {}, date(2026, 10, 5))["clinicas_sem_prontuai"][0]
+    assert item["credenciado"] == cred
+    assert item["pedidos_previstos"] == 0
+    assert item["liberacoes_semana"] == {"2026-09-21": 1, "2026-09-28": 1}
+
+
+def test_credenciado_sem_previsao_e_sem_liberacao_continua_de_fora():
+    """Só vencidos, nada liberado: não há o que ranquear nem o que incluir."""
+    pedidos = {1: pedido(None, "NATAL - RN - CLINICA B", "2026-09-01", liberacao=None)}
+    assert ds._cruzar_expedicoes(pedidos, {}, date(2026, 9, 22))["clinicas_sem_prontuai"] == []
+
+
+def test_liberacoes_agregam_por_semana_iso():
+    cred = "NATAL - RN - CLINICA B"
+    # 21, 23 e 27/09 são a mesma semana ISO; 28/09 abre a seguinte
+    pedidos = {
+        1: pedido("2026-09-21", cred), 2: pedido("2026-09-23", cred),
+        3: pedido("2026-09-27", cred), 4: pedido("2026-09-28", cred),
+    }
+    item = ds._cruzar_expedicoes(pedidos, {}, date(2026, 10, 5))["clinicas_sem_prontuai"][0]
+    assert item["liberacoes_semana"] == {"2026-09-21": 3, "2026-09-28": 1}

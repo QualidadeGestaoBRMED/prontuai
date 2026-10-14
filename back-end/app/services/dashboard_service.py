@@ -336,6 +336,18 @@ def _cadastro_do_credenciado(p: _Pedido, cadastros: dict[str, str]) -> Optional[
     return cadastros.get(_chave_nome(p.credenciado)) or cadastros.get(_chave_nome(p.nome))
 
 
+def _semana(iso: str) -> str:
+    """Segunda-feira da semana ISO de uma data, em ISO.
+
+    Chave de todo agrupamento semanal do painel. Semana ISO (segunda a domingo)
+    e não "últimos 7 dias" porque a leitura é sempre de semana fechada: a conta
+    de uma semana não pode mudar de valor conforme o dia em que alguém abre a
+    tela.
+    """
+    d = date.fromisoformat(iso)
+    return (d - timedelta(days=d.weekday())).isoformat()
+
+
 def _primeiro_dia_ligado(primeiro_doc: Optional[date]) -> Optional[str]:
     """Primeiro dia com cobertura medível: o 1º do mês do primeiro documento
     com pedido. Começar no dia exato deixaria o primeiro ponto do gráfico mensal
@@ -363,7 +375,10 @@ def _cruzar_expedicoes(
         via ProntuAI. Entra mesmo sem nunca ter mandado documento — cadastro
         habilitado que não usa a plataforma é adesão baixa, não ausência.
       * `clinicas_sem_prontuai` — agregada por **credenciado**, porque esses não
-        têm cadastro para agregar por. Só previstos.
+        têm cadastro para agregar por. Previstos mais o histórico semanal de
+        liberações (`liberacoes_semana`), que é o que permite ranquear por volume
+        recorrente em vez de pelo pico da janela. Entra quem tem previsão futura
+        **ou** histórico de liberação.
 
     "Habilitada" é ter cadastro ativo em `clinics`, não ter volume. A ponte é por
     nome (`_cadastro_do_credenciado`), única chave possível.
@@ -381,6 +396,12 @@ def _cruzar_expedicoes(
     grandezas diferentes e viajam em campos diferentes: previsto é pedido ainda
     NÃO liberado (`p.liberado` falso) com data futura; realizado é pedido já
     atendido. A divisão que a adesão faz é realizado ÷ realizado.
+
+    A única exceção é `desfecho_previsao_semana`, e ela é legítima porque não
+    divide agregado por agregado: acompanha **o mesmo pedido**, ligado pelo id,
+    da previsão até o desfecho. Para cada semana de previsão, a tripla
+    `[via_prontuai, liberado_fora, nao_liberado]` — exclusiva e somando os
+    previstos daquela semana.
 
     A previsão sai **quebrada por data** (`previsoes`), não só a mais próxima: o
     prazo do credenciado é de 1 a 3 dias úteis após o atendimento, então quase
@@ -573,6 +594,65 @@ def _cruzar_expedicoes(
             por_uf = (uf_com if habilitada else uf_sem).setdefault(p.uf or "—", {})
             por_uf[p.previsao] = por_uf.get(p.previsao, 0) + 1
 
+    # ── reconciliação previsto × expedido, e histórico de quem está fora ─────
+    # Duas perguntas diferentes, uma varredura só.
+    #
+    # 1. Habilitadas (`desfecho_previsao_semana`): do que estava previsto para a
+    #    semana, quanto saiu pela plataforma. Datado pelo dia da PREVISÃO, não
+    #    pelo da liberação — a pergunta é sobre a promessa, não sobre o dia em
+    #    que ela foi cumprida. Os três desfechos são exclusivos e somam os
+    #    previstos da semana, então a barra empilhada da tela fecha em 100% sem
+    #    fatia de resto, e o buraco fica decomposto: "liberou por fora" é com
+    #    quem cuida de adesão, "não liberou" é atraso do credenciado.
+    #
+    #    É a única parte do painel em que previsto e realizado se encontram, e
+    #    só por isto: o pedido é o MESMO dos dois lados, ligado pelo id, nunca um
+    #    agregado dividido pelo outro.
+    #
+    # 2. Fora do ProntuAI (`liberacoes_semana`): quantas liberações o credenciado
+    #    fez por semana. É o histórico que separa quem libera muito toda semana
+    #    de quem teve um pico isolado — ranquear pelo previsto da janela não faz
+    #    essa conta, e ainda favorece o credenciado lento, que é o único com
+    #    pedido pendente no instante do cálculo.
+    #
+    # Semanal, e não diário: o prazo do credenciado é de 1 a 3 dias úteis, então
+    # no dia a dia o pedido previsto para sexta e liberado na segunda apareceria
+    # como descumprimento, e não é. A chave é a segunda-feira da semana ISO.
+    #
+    # Pedido liberado sem previsão fica fora do desfecho (não há semana a que
+    # pertencer) mas continua em `realizados_dia` — as duas medidas respondem
+    # perguntas diferentes e não precisam ter a mesma base.
+    desfecho_semana: dict[str, dict[str, list[int]]] = {}
+    liberacoes_semana: dict[str, dict[str, int]] = {}
+    exemplo_sem: dict[str, _Pedido] = {}
+    for pid, p in pedidos.items():
+        habilitada = usa_prontuai(p.credenciado)
+        if p.previsao and habilitada:
+            semana = desfecho_semana.setdefault(cadastro(p.credenciado), {}).setdefault(
+                _semana(p.previsao), [0, 0, 0]
+            )
+            # "Liberado" é ter data de liberação, a mesma definição de realizado
+            # da 1.2 — não o campo `liberado` da API, que já apareceu marcado sem
+            # data correspondente.
+            if not p.liberacao:
+                semana[2] += 1
+            elif docs_por_pedido.get(pid, 0) > 0:
+                semana[0] += 1
+            else:
+                semana[1] += 1
+        if p.liberacao and not habilitada:
+            dias = liberacoes_semana.setdefault(p.credenciado, {})
+            chave_semana = _semana(p.liberacao)
+            dias[chave_semana] = dias.get(chave_semana, 0) + 1
+            exemplo_sem.setdefault(p.credenciado, p)
+
+    # Credenciado sem cadastro que já liberou entra mesmo sem previsão futura: o
+    # ranking de inclusão passa a ser por volume recorrente, e quem libera rápido
+    # quase nunca tem pedido pendente na hora do cálculo — ficaria invisível
+    # justamente por ser pontual.
+    for credenciado, exemplo in exemplo_sem.items():
+        sem.setdefault(credenciado, novo(credenciado, exemplo.nome or credenciado, exemplo, False))
+
     # Cadastro habilitado sem previsto também entra: a adesão dele existe, e
     # cadastro que não usa a plataforma é justamente o que a tabela revela.
     for nome in realizados:
@@ -592,14 +672,19 @@ def _cruzar_expedicoes(
         item["documentos"] = docs_por_cadastro.get(nome, 0)
         item["realizados_dia"] = realizados.get(nome, {})
         item["realizados_prontuai_dia"] = realizados_prontuai.get(nome, {})
+        item["desfecho_previsao_semana"] = desfecho_semana.get(nome, {})
     for credenciado, item in sem.items():
         item["documentos"] = docs_por_credenciado.get(credenciado, 0)
+        item["liberacoes_semana"] = liberacoes_semana.get(credenciado, {})
 
-    def finalizar(itens: dict[str, dict[str, Any]], datas: dict[str, dict[str, int]], so_com_previsto: bool):
+    def finalizar(itens: dict[str, dict[str, Any]], datas: dict[str, dict[str, int]], so_com_movimento: bool):
         saida = []
         for chave, item in itens.items():
             dias = datas.get(chave, {})
-            if so_com_previsto and not dias:
+            # Do lado de fora, "movimento" é ter previsão futura OU histórico de
+            # liberação. Credenciado que nunca liberou nada e não tem previsto
+            # (só vencidos, por exemplo) continua fora: não há o que ranquear.
+            if so_com_movimento and not dias and not item.get("liberacoes_semana"):
                 continue
             item["previsoes"] = [{"data": d, "pedidos": dias[d]} for d in sorted(dias)]
             saida.append(item)
