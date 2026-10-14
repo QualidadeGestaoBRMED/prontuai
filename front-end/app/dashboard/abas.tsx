@@ -453,15 +453,11 @@ function TabelaForaProntuai({
 }) {
   const { ordem, ordenarPor } = useOrdem({ col: "previstos", dir: "desc" });
   const [busca, setBusca] = useState("");
-  const [uf, setUf] = useState("");
   const [marcadas, setMarcadas] = useState<Set<string>>(new Set());
 
-  const ufs = [...new Set(linhas.map((l) => l.uf).filter((x): x is string => !!x))].sort();
   const termo = semAcento(busca.trim());
   const filtradas = linhas.filter(
-    (l) =>
-      (!uf || l.uf === uf) &&
-      (!termo || semAcento(l.name).includes(termo) || semAcento(l.local).includes(termo)),
+    (l) => !termo || semAcento(l.name).includes(termo) || semAcento(l.local).includes(termo),
   );
   const visiveis = ordenar(filtradas, ordem, (l, col) =>
     col === "name" ? l.name
@@ -488,20 +484,7 @@ function TabelaForaProntuai({
     <>
       <div className="mt-4 flex flex-wrap items-center gap-2.5">
         <CampoBusca valor={busca} onChange={setBusca} placeholder="Buscar clínica ou cidade" />
-        <select
-          value={uf}
-          onChange={(e) => setUf(e.target.value)}
-          aria-label="Filtrar por UF"
-          className="h-[34px] rounded-[9px] border border-[#DFE0E2] bg-white px-2.5 text-[13px] text-[#193B4F] outline-none focus:border-[#7EBFCC]"
-        >
-          <option value="">Todas as UFs</option>
-          {ufs.map((x) => (
-            <option key={x} value={x}>
-              {x}
-            </option>
-          ))}
-        </select>
-        {(uf || termo) && (
+        {termo && (
           <div className="text-[12.5px] text-[#767A7B]">
             {visiveis.length} de {linhas.length} credenciadas
           </div>

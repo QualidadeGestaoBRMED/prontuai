@@ -355,7 +355,6 @@ export interface LinhaAdocao {
 export interface LinhaUsoSemana {
   clinica: string;
   local: string;
-  uf: string | null;
   /** Pedidos com previsão de liberação nesta semana. É o denominador. */
   previstos: number;
   /** Liberados e com documento no ProntuAI. */
@@ -448,7 +447,6 @@ export interface LinhaForaProntuai {
   credenciado: string;
   name: string;
   local: string;
-  uf: string | null;
   /** Média de liberações por semana nas últimas semanas fechadas. */
   media: number;
   mediaLabel: string;
@@ -888,7 +886,6 @@ export function calcularVisao({ dados, filtro, comparar, verTodasClinicas }: Opc
           linhas.push({
             clinica,
             local: c.cidade && c.uf ? `${c.cidade}/${c.uf}` : "—",
-            uf: c.uf,
             previstos,
             viaProntuai,
             fora,
@@ -968,7 +965,6 @@ export function calcularVisao({ dados, filtro, comparar, verTodasClinicas }: Opc
         credenciado: c.credenciado,
         name: c.nome,
         local: c.cidade && c.uf ? `${c.cidade}/${c.uf}` : "—",
-        uf: c.uf,
         media: l.media,
         mediaLabel: umDecimal(l.media),
         total: l.total,
