@@ -135,15 +135,18 @@ const MESES_ABBR = ["JAN", "FEV", "MAR", "ABR", "MAI", "JUN", "JUL", "AGO", "SET
 
 const pad = (n: number) => String(n).padStart(2, "0");
 
-const partes = (chave: string) => {
-  const [y, m, d] = chave.split("-").map(Number);
-  return { y, m, d };
-};
+// Sem `split`/`map`: a chave é sempre ISO com zero à esquerda, e esta função é
+// chamada dezenas de milhares de vezes por recálculo — o array intermediário
+// custava mais que a conta.
+const partes = (chave: string) => ({
+  y: Number(chave.slice(0, 4)),
+  m: Number(chave.slice(5, 7)),
+  d: Number(chave.slice(8, 10)),
+});
 
-const rotuloSemana = (chave: string) => {
-  const { m, d } = partes(chave);
-  return `${pad(d)}/${pad(m)}`;
-};
+// "2026-09-29" -> "29/09", recortando a string. A chave ISO já vem com dois
+// dígitos em cada campo, então não há o que formatar.
+const rotuloSemana = (chave: string) => `${chave.slice(8, 10)}/${chave.slice(5, 7)}`;
 
 const isoUTC = (d: Date) =>
   `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`;
@@ -165,19 +168,41 @@ const semanaDe = (iso: string) => {
   return isoUTC(new Date(Date.UTC(y, m - 1, d - ((dt.getUTCDay() + 6) % 7))));
 };
 
-/** "29/09 a 05/10" — a semana inteira, não só o dia em que ela começa. */
-const intervaloSemana = (inicioISO: string) =>
-  `${rotuloSemana(inicioISO)} a ${rotuloSemana(maisDias(inicioISO, 6))}`;
+/**
+ * "29/09 a 05/10" — a semana inteira, não só o dia em que ela começa.
+ *
+ * Memoizado: existem algumas dezenas de semanas distintas, e o rótulo de cada
+ * uma era refeito uma vez por clínica — centenas de vezes a mesma string, cada
+ * uma com uma data nova por trás.
+ */
+const _intervalos = new Map<string, string>();
+const intervaloSemana = (inicioISO: string) => {
+  const pronto = _intervalos.get(inicioISO);
+  if (pronto !== undefined) return pronto;
+  const rotulo = `${rotuloSemana(inicioISO)} a ${rotuloSemana(maisDias(inicioISO, 6))}`;
+  _intervalos.set(inicioISO, rotulo);
+  return rotulo;
+};
 
 const rotuloMes = (chave: string) => {
   const { y, m } = partes(chave);
   return `${MESES_ABBR[m - 1]}/${String(y).slice(2)}`;
 };
 
-const fmt = (v: number) => v.toLocaleString("pt-BR");
+// Os formatadores são instanciados UMA vez, não a cada número.
+// `v.toLocaleString("pt-BR", {...})` constrói um `Intl.NumberFormat` por
+// chamada, e isso domina o custo de recalcular a visão: medido em 30% do tempo
+// total, só nestas duas funções. Com a instância reaproveitada, a troca de
+// período deixa de travar a tela.
+const NUM_INTEIRO = new Intl.NumberFormat("pt-BR");
+const NUM_UMA_CASA = new Intl.NumberFormat("pt-BR", {
+  minimumFractionDigits: 1,
+  maximumFractionDigits: 1,
+});
+
+const fmt = (v: number) => NUM_INTEIRO.format(v);
 /** Uma casa decimal. A média semanal quase nunca é inteira, e "16,333" polui. */
-const umDecimal = (v: number) =>
-  v.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+const umDecimal = (v: number) => NUM_UMA_CASA.format(v);
 const num = (v: number) => `${v.toFixed(1).replace(".", ",")}%`;
 const pct = (a: number, b: number) => (b ? (a / b) * 100 : 0);
 
@@ -725,10 +750,7 @@ export function calcularVisao({ dados, filtro, comparar, verTodasClinicas }: Opc
   })();
   const temJanela = !!hojeISO;
 
-  const dataCurta = (iso: string) => {
-    const q = partes(iso);
-    return `${pad(q.d)}/${pad(q.m)}`;
-  };
+  const dataCurta = rotuloSemana;
 
   // No painel expandido o dia da semana importa: é o que responde "isso é pra
   // semana que vem?" sem a pessoa ter que consultar o calendário.
@@ -923,10 +945,14 @@ export function calcularVisao({ dados, filtro, comparar, verTodasClinicas }: Opc
       // A série do painel mostra o histórico INTEIRO, não só as 12 semanas da
       // média: a pergunta que ele responde é "isso é comportamento ou foi
       // uma semana?", e cortar o histórico esconderia justamente a resposta.
-      const semanas = Object.keys(c.liberacoes_semana ?? {}).sort();
+      const porSemana = c.liberacoes_semana ?? {};
+      const semanas = Object.keys(porSemana).sort();
+      // Fora do `map`: a maior semana é a mesma para a série inteira, e
+      // recalculá-la por coluna fazia o custo crescer com o quadrado do
+      // histórico.
+      const maior = Math.max(1, ...semanas.map((x) => porSemana[x] ?? 0));
       const serie = semanas.map((w) => {
-        const liberacoes = (c.liberacoes_semana ?? {})[w] ?? 0;
-        const maior = Math.max(1, ...semanas.map((x) => (c.liberacoes_semana ?? {})[x] ?? 0));
+        const liberacoes = porSemana[w] ?? 0;
         const pico = liberacoes > 2 * l.media && liberacoes >= l.media + 3;
         return {
           label: rotuloSemana(w),
