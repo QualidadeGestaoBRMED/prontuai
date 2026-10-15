@@ -1,0 +1,21 @@
+-- 011: motivo externo no parecer da checagem.
+--
+-- "Motivo externo" e a divergencia em que a IA leu o documento certo e o
+-- revisor decidiu diferente por algo que nao estava nele: o toxicologico feito
+-- num parceiro, a guia que a clinica nao anexou com os exames todos no anexo,
+-- exames de outro ticket. O painel de acuracia conta esses casos como ACERTO.
+--
+-- Ate aqui o painel adivinhava o motivo externo por palavra-chave no texto
+-- livre da aprovacao (`approval_reason`). O modal de feedback nao pede texto
+-- para aprovar, entao, sem esta coluna, o sinal sumiria justamente no lado onde
+-- ele e mais comum -- quando a IA rejeita e o humano libera, um terco das vezes
+-- e motivo externo -- e essas divergencias passariam a contar como erro da IA.
+--
+-- NULL = nao houve motivo externo (o caso normal). Os codigos validos vivem em
+-- `app/models/feedback.py::MOTIVOS_EXTERNOS`, validados na API, como as
+-- categorias do parecer -- sem CHECK no banco, igual a elas.
+--
+-- Numa base que sobe do zero a coluna nasce pelo create_all (ver o cabecalho da
+-- 008); este arquivo existe para bases ja de pe, por isso o IF NOT EXISTS.
+
+ALTER TABLE document_feedbacks ADD COLUMN IF NOT EXISTS motivo_externo VARCHAR NULL;

@@ -18,6 +18,7 @@ import { cn } from "@/lib/utils";
 import {
   CATEGORIAS_DOCUMENTO,
   CATEGORIAS_EXAME,
+  MOTIVOS_EXTERNOS,
   OPCOES_EXAME,
   ROTULO_REJEICAO_EXAME,
   juntarNomes,
@@ -26,6 +27,7 @@ import {
   type DocumentFeedback,
   type DocumentFeedbackInput,
   type FeedbackIssueItem,
+  type MotivoExterno,
   type RejectionCode,
   type Veredito,
 } from "@/types/feedback";
@@ -67,6 +69,11 @@ export type DecisaoConfirmada = {
   parecer: DocumentFeedbackInput;
   /** Só na rejeição: o texto que a clínica lê e os códigos que o geraram. */
   rejeicao?: { motivo: string; codigos: RejectionCode[] };
+  /**
+   * Só ao liberar o que a IA rejeitou, por motivo externo: a justificativa da
+   * aprovação, que a clínica lê na notificação.
+   */
+  aprovacao?: { motivo: string };
 };
 
 type Props = {
@@ -287,7 +294,9 @@ function Marca({ ativa }: { ativa: boolean }) {
  * Confirma a decisão do revisor e pergunta uma coisa só: a IA acertou?
  *
  * Se acertou, acabou — numa rejeição, o motivo dela vira o motivo que vai para
- * a clínica. Se errou, o modal pergunta onde, e cada resposta abre a próxima
+ * a clínica. A exceção é liberar o que ela rejeitou: aí "Acertou" quer dizer
+ * que ela leu certo e o revisor liberou por algo fora do documento (o motivo
+ * externo), e o modal pergunta qual. Se errou, o modal pergunta onde, e cada resposta abre a próxima
  * pergunta: nos exames → em quais → o que houve com cada um, com as opções do
  * que a IA tinha dito daquele exame. O "o que aconteceu" do parecer e o motivo
  * da rejeição saem dessas respostas; o revisor só escreve em "Outro".
@@ -330,6 +339,8 @@ export function FeedbackChecagemDialog({ alvo, onClose, onConfirmarDecisao }: Pr
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [existente, setExistente] = useState<DocumentFeedback | null>(null);
+  /** Por que liberou o que a IA rejeitou, quando ela acertou a leitura. */
+  const [motivoExterno, setMotivoExterno] = useState<MotivoExterno | null>(null);
 
   // Depende de `alvo`, não de `alvo.documentId`: o componente fica montado entre
   // uma abertura e outra, e cada abertura cria um objeto novo. Com o id na lista
@@ -349,6 +360,7 @@ export function FeedbackChecagemDialog({ alvo, onClose, onConfirmarDecisao }: Pr
     setRascunho("");
     setNotas("");
     setComentando(false);
+    setMotivoExterno(null);
     setErro(null);
     setExistente(null);
     // No modo "decisao" o documento ainda nem foi decidido: não existe parecer
@@ -362,6 +374,9 @@ export function FeedbackChecagemDialog({ alvo, onClose, onConfirmarDecisao }: Pr
         setExistente(salvo);
         if (salvo.status === "IA_CORRETA") {
           setVeredito("acertou");
+          setMotivoExterno(salvo.motivo_externo ?? null);
+          // Em "Outro" o texto do motivo é o próprio `notes`.
+          if (salvo.motivo_externo === "OUTRO") setNotas(salvo.notes ?? "");
           return;
         }
         setVeredito("errou");
@@ -421,6 +436,10 @@ export function FeedbackChecagemDialog({ alvo, onClose, onConfirmarDecisao }: Pr
   // Rejeitar o que a IA aprovou e dizer que ela acertou não deixa motivo
   // nenhum para a clínica: o único caminho ali é apontar onde ela errou.
   const acertoImpossivel = rejeitando && ia?.decisao === "aprovado";
+  // O caso inverso tem saída: a IA rejeitou, leu certo, e o revisor libera por
+  // algo que não estava no documento. Sem dizer o quê, o painel contaria a
+  // divergência como erro dela.
+  const liberandoContraIA = !rejeitando && ia?.decisao === "rejeitado";
 
   const linhas: Linha[] = useMemo(
     () => [...(vis?.exames ?? []).map((e) => ({ ...e, avulso: false })), ...avulsos],
@@ -433,6 +452,18 @@ export function FeedbackChecagemDialog({ alvo, onClose, onConfirmarDecisao }: Pr
 
   const errou = veredito === "errou";
   const apontaExames = errou && areas.includes("exames");
+  const perguntaMotivoExterno = veredito === "acertou" && liberandoContraIA;
+  const motivoExternoValido = perguntaMotivoExterno ? motivoExterno : null;
+  const textoMotivoOutro = motivoExternoValido === "OUTRO" ? notas.trim() : "";
+
+  /** A justificativa da aprovação, quando o revisor liberou por motivo externo. */
+  const aprovacao = motivoExternoValido
+    ? {
+        motivo:
+          textoMotivoOutro ||
+          (MOTIVOS_EXTERNOS.find((m) => m.codigo === motivoExternoValido)?.frase ?? ""),
+      }
+    : null;
 
   const itens: FeedbackIssueItem[] = useMemo(() => {
     if (!apontaExames) return [];
@@ -496,6 +527,8 @@ export function FeedbackChecagemDialog({ alvo, onClose, onConfirmarDecisao }: Pr
   /** O que falta responder, na ordem das perguntas. */
   const pendencia = (() => {
     if (!veredito) return "Diga se a IA acertou.";
+    if (perguntaMotivoExterno && !motivoExterno) return "Diga por que liberou.";
+    if (motivoExternoValido === "OUTRO" && !textoMotivoOutro) return "Conte qual foi o motivo.";
     if (!errou) return null;
     if (areas.length === 0) return "Escolha onde a IA errou.";
     if (apontaExames && exames.length === 0) return "Escolha os exames.";
@@ -513,7 +546,15 @@ export function FeedbackChecagemDialog({ alvo, onClose, onConfirmarDecisao }: Pr
 
   function montarParecer(): DocumentFeedbackInput | null {
     if (!veredito) return null;
-    if (!errou) return { status: "IA_CORRETA", issue_items: [], document_issues: [], notes: null };
+    if (!errou) {
+      return {
+        status: "IA_CORRETA",
+        issue_items: [],
+        document_issues: [],
+        notes: textoMotivoOutro || null,
+        motivo_externo: motivoExternoValido,
+      };
+    }
     return {
       status: concorda ? "IA_CORRETA_COM_AJUSTES" : "IA_INCORRETA",
       issue_items: itens,
@@ -524,6 +565,9 @@ export function FeedbackChecagemDialog({ alvo, onClose, onConfirmarDecisao }: Pr
 
   function escolherVeredito(valor: "acertou" | "errou") {
     if (valor === "acertou" && acertoImpossivel) return;
+    // O texto de "Qual foi o motivo?" é o mesmo campo do comentário de "Errou",
+    // e lá ele precisa aparecer: escondido, iria para o parecer sem o revisor ver.
+    if (valor === "errou" && notas.trim()) setComentando(true);
     setVeredito(valor);
     setErro(null);
   }
@@ -556,7 +600,11 @@ export function FeedbackChecagemDialog({ alvo, onClose, onConfirmarDecisao }: Pr
         // Não chama onClose(): depois de decidir, quem fecha (e fecha também o
         // modal de detalhes atrás) é a página. Fechar por aqui passaria pelo
         // caminho de cancelamento, que religa o cronômetro de revisão.
-        await onConfirmarDecisao?.({ parecer, rejeicao: rejeicao ?? undefined });
+        await onConfirmarDecisao?.({
+          parecer,
+          rejeicao: rejeicao ?? undefined,
+          aprovacao: aprovacao ?? undefined,
+        });
         return;
       }
       const resposta = await authFetch(API_ENDPOINTS.DOCUMENT_FEEDBACK(alvo.documentId), {
@@ -602,7 +650,9 @@ export function FeedbackChecagemDialog({ alvo, onClose, onConfirmarDecisao }: Pr
   const resumo =
     rejeitando && modoDecisao && rejeicao?.motivo
       ? { rotulo: "Motivo que vai para a clínica", texto: rejeicao.motivo }
-      : errou && frases.length > 0
+      : modoDecisao && aprovacao?.motivo
+        ? { rotulo: "Justificativa que vai para a clínica", texto: aprovacao.motivo }
+        : errou && frases.length > 0
         ? { rotulo: "Vai registrar", texto: frases.join(" ") }
         : null;
 
@@ -682,7 +732,9 @@ export function FeedbackChecagemDialog({ alvo, onClose, onConfirmarDecisao }: Pr
                           ? "Ela aprovou; você está rejeitando"
                           : rejeitando && ia?.decisao === "rejeitado"
                             ? "Mantém o motivo dela"
-                            : "Confirma o resultado"
+                            : liberandoContraIA
+                              ? "Foi motivo externo"
+                              : "Confirma o resultado"
                       }
                     />
                     <BotaoVeredito
@@ -694,6 +746,56 @@ export function FeedbackChecagemDialog({ alvo, onClose, onConfirmarDecisao }: Pr
                     />
                   </div>
                 </section>
+
+                {perguntaMotivoExterno && (
+                  <div className="grid gap-[18px]">
+                    <section className={ESTILO.passo}>
+                      <p className={ESTILO.pergunta}>
+                        Por que liberou mesmo assim?{" "}
+                        <span className={ESTILO.dica}>o motivo não estava no documento</span>
+                      </p>
+                      <div
+                        className="flex flex-wrap gap-1.5"
+                        role="radiogroup"
+                        aria-label="Por que liberou mesmo assim?"
+                      >
+                        {MOTIVOS_EXTERNOS.map((m) => (
+                          <button
+                            key={m.codigo}
+                            type="button"
+                            role="radio"
+                            aria-checked={motivoExterno === m.codigo}
+                            onClick={() => {
+                              setMotivoExterno(m.codigo);
+                              setErro(null);
+                            }}
+                            className={cn(ESTILO.radio, motivoExterno === m.codigo && ESTILO.radioAtivo)}
+                          >
+                            {m.rotulo}
+                          </button>
+                        ))}
+                      </div>
+                    </section>
+                    {motivoExterno === "OUTRO" && (
+                      <section className={ESTILO.passo}>
+                        <p className={ESTILO.pergunta}>Qual foi o motivo?</p>
+                        <Textarea
+                          autoFocus={!notas}
+                          value={notas}
+                          onChange={(e) => setNotas(e.target.value)}
+                          rows={2}
+                          maxLength={2000}
+                          placeholder={
+                            modoDecisao
+                              ? "Em poucas palavras — a clínica lê esta justificativa."
+                              : "Em poucas palavras."
+                          }
+                          className="bg-white text-[13px] dark:bg-white/5"
+                        />
+                      </section>
+                    )}
+                  </div>
+                )}
 
                 {errou && (
                   <div className="grid gap-[18px]">

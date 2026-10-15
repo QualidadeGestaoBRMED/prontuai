@@ -94,6 +94,32 @@ CATEGORIAS_DOCUMENTO: frozenset[str] = frozenset({
 # União das duas, para quem só precisa saber se um código é válido.
 CATEGORIAS: frozenset[str] = CATEGORIAS_EXAME | CATEGORIAS_DOCUMENTO
 
+# Motivo externo: a IA leu o documento certo, e o revisor decidiu diferente por
+# uma razão que não estava nele. Não é erro da IA — o painel de acurácia conta o
+# caso como acerto.
+#
+# Campo PRÓPRIO do parecer, e não mais um código em `document_issues`: aquela
+# lista é "o que a IA errou", e misturar os dois inflaria a contagem de
+# categorias de erro justamente com os casos em que ela não errou.
+#
+# Antes do modal, o painel adivinhava o motivo externo por palavra-chave no
+# texto livre da aprovação. O modal não pede texto para aprovar, então sem este
+# campo o sinal sumia — e a divergência passava a contar como erro da IA.
+#
+# As opções saíram do que os revisores escreviam: medido no dev, sobre as
+# aprovações com justificativa que o painel classificava como motivo externo,
+# exame feito por fora (quase sempre o toxicológico, em parceiro ou outro
+# sistema) 51, guia não anexada com os exames no anexo 40, exames de outro ticket
+# ou lançados em duplicidade 18, liberação sem o exame autorizada pelo cliente 16.
+# "Não exigido na grade" tinha 3 e foi para "Outro".
+MOTIVOS_EXTERNOS: frozenset[str] = frozenset({
+    "EXAME_POR_FORA",       # feito em parceiro ou registrado em outro sistema
+    "GUIA_NAO_ANEXADA",     # a clínica não anexou a guia; os exames estão no anexo
+    "OUTRO_TICKET",         # os exames apontados são de outro ticket, ou lançados duas vezes
+    "CLIENTE_AUTORIZOU",    # liberação sem o exame, autorizada pelo cliente
+    "OUTRO",                # contado em `notes`, que aí é obrigatório
+})
+
 # Status que exigem detalhamento. Sem o "o quê" e o "por quê", um parecer
 # negativo não vira dado utilizável — vira só um contador de queixa.
 STATUS_COM_DETALHES: frozenset[str] = frozenset({
@@ -148,6 +174,15 @@ class DocumentFeedbackInput(BaseModel):
         default_factory=list, max_length=len(CATEGORIAS_DOCUMENTO)
     )
     notes: Optional[str] = Field(default=None, max_length=5000)
+    # Só num parecer IA_CORRETA — a coerência com o status é validada na rota.
+    motivo_externo: Optional[str] = None
+
+    @field_validator("motivo_externo")
+    @classmethod
+    def motivo_externo_valido(cls, value: Optional[str]) -> Optional[str]:
+        if value is not None and value not in MOTIVOS_EXTERNOS:
+            raise ValueError(f"Motivo externo inválido: {value}")
+        return value
 
     @field_validator("document_issues")
     @classmethod
@@ -213,6 +248,7 @@ class DocumentFeedback(BaseModel):
     issue_items: List[FeedbackIssueItem] = Field(default_factory=list)
     document_issues: List[str] = Field(default_factory=list)
     notes: Optional[str] = None
+    motivo_externo: Optional[str] = None
     reviewed_by_email: Optional[str] = None
     reviewed_by_id: Optional[str] = None
     created_at: Optional[datetime] = None

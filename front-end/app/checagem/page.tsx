@@ -221,10 +221,10 @@ export default function Page() {
    * persistido depois. Lança se a decisão falhar: o diálogo continua aberto
    * com tudo marcado.
    */
-  const confirmarDecisao = async ({ parecer, rejeicao }: DecisaoConfirmada) => {
+  const confirmarDecisao = async ({ parecer, rejeicao, aprovacao }: DecisaoConfirmada) => {
     const alvo = feedbackAlvo
     if (!alvo) return
-    if (alvo.decisao === "aprovado") await handleAprovar(alvo.documentId)
+    if (alvo.decisao === "aprovado") await handleAprovar(alvo.documentId, aprovacao?.motivo)
     else await handleRejeitar(alvo.documentId, rejeicao)
 
     // Decisão gravada: fecha o diálogo e o modal de detalhes que ficou atrás.
@@ -254,8 +254,8 @@ export default function Page() {
     }
   }
 
-  // `approvalReason` é opcional: o modal de decisão nunca pediu texto para
-  // aprovar. Continua no parâmetro porque outros caminhos ainda o enviam.
+  // `approvalReason` é opcional: o modal de decisão só manda texto quando o
+  // revisor libera o que a IA rejeitou por motivo externo.
   const handleAprovar = async (id: string, approvalReason?: string) => {
     const reviewTiming = reviewTimer.encerrar(id)
     const result = dbResults.find((r) => r.id === id)

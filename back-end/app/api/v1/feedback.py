@@ -88,6 +88,7 @@ def _auditar(
                         for item in payload.issue_items
                     ],
                     "document_issues": payload.document_issues,
+                    "motivo_externo": payload.motivo_externo,
                     # Marca quantos caracteres o revisor escreveu sem guardar o
                     # que ele escreveu: distingue "descreveu" de "deixou vazio".
                     "notes_len": len(payload.notes or ""),
@@ -131,13 +132,26 @@ def _validar_payload(payload: DocumentFeedbackInput) -> None:
     422 vai como literal, e não pela constante do `status`: o Starlette renomeou
     `HTTP_422_UNPROCESSABLE_ENTITY` para `..._CONTENT` e qualquer uma das duas
     quebra em metade das versões — o número não muda.
+
+    Motivo externo é um tipo de ACERTO: a IA leu o documento certo, e a decisão
+    mudou por algo que não estava nele. Por isso só cabe com IA_CORRETA — num
+    parecer negativo seria uma contradição — e é o único caso em que um acerto
+    pode trazer texto: o "Outro" precisa dizer qual foi o motivo.
     """
+    if payload.motivo_externo and payload.status != "IA_CORRETA":
+        raise HTTPException(
+            422,
+            "Motivo externo só cabe quando a IA acertou a leitura do documento.",
+        )
     if payload.status not in STATUS_COM_DETALHES:
-        if payload.tem_problema() or payload.notes:
+        notas_permitidas = payload.motivo_externo == "OUTRO"
+        if payload.tem_problema() or (payload.notes and not notas_permitidas):
             raise HTTPException(
                 422,
                 "Um parecer de acerto não pode vir com problema apontado.",
             )
+        if notas_permitidas and not payload.notes:
+            raise HTTPException(422, "Conte qual foi o motivo externo.")
         return
     if not payload.tem_problema():
         raise HTTPException(
@@ -209,6 +223,7 @@ async def put_document_feedback(
             issue_items=[item.model_dump() for item in payload.issue_items],
             document_issues=payload.document_issues,
             notes=payload.notes,
+            motivo_externo=payload.motivo_externo,
             reviewed_by_id=current_user.id,
             reviewed_by_email=current_user.email,
         )

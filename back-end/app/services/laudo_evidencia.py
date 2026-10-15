@@ -7,7 +7,8 @@ lendo o markdown do OCR já normalizado. Não chama API e não envia dado a ning
   1. Recuperar faltante pelo conteúdo. O exame foi pedido com um nome e o laudo
      traz outro formato: lipidograma em laudos separados por componente, triagem
      toxicológica com um laudo por droga, glicemia de jejum como "Glicose … mg/dL",
-     etanol identificado pelo material, RX com a conclusão do laudo. Se o conteúdo
+     etanol identificado pelo material, RX com a conclusão do laudo, acuidade com a
+     fração de Snellen anotada nos dois olhos (ficha manuscrita). Se o conteúdo
      prova o exame, ele deixa de ser faltante. Só tira pendência; nunca cria.
 
   2. Exigir laudo. Para seis tipos de exame com laudo de formato estável, o exame
@@ -41,6 +42,13 @@ _RX_COM_CONCLUSAO = re.compile(
     r"(RAIO X|RADIOGRAFIA|\bRX\b).{0,300}"
     r"(CONCLUS|IMPRESSAO|CORPOS VERTEBRAIS|ESPACOS INTERVERTEBRAIS|CAMPOS PULMONARES|SEIOS COSTOFRENICOS)"
 )
+# Acuidade: "Snellen" está IMPRESSO no formulário da BR MED, preenchido ou em branco
+# (2.570 ocorrências desde ago/26), então a palavra não prova nada. O que prova é a
+# fração de Snellen anotada nos DOIS olhos; na ficha em branco "OLHO DIREITO" vem
+# colado em "OLHO ESQUERDO".
+_ACUIDADE_OD = re.compile(r"OLHO DIREITO (?:COM CORRECAO |SEM CORRECAO )?20 \d{2,3}\b")
+_ACUIDADE_OE = re.compile(r"OLHO ESQUERDO (?:COM CORRECAO |SEM CORRECAO )?20 \d{2,3}\b")
+_SENSO_CROMATICO = re.compile(r"ISHIHARA|CROMATIC")
 
 
 def evidencia_de_faltante(exame_norm: str, markdown_norm: str) -> Optional[str]:
@@ -63,6 +71,9 @@ def evidencia_de_faltante(exame_norm: str, markdown_norm: str) -> Optional[str]:
             return "laudo de etanol em sangue/soro"
     if re.search(r"RADIOGRAF|RAIO X|\bRX\b", exame_norm) and _RX_COM_CONCLUSAO.search(markdown_norm):
         return "laudo radiológico com conclusão"
+    if "ACUIDADE" in exame_norm and _ACUIDADE_OD.search(markdown_norm) and _ACUIDADE_OE.search(markdown_norm):
+        if "CROMATIC" not in exame_norm or _SENSO_CROMATICO.search(markdown_norm):
+            return "tabela de Snellen com resultado nos dois olhos"
     return None
 
 

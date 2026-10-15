@@ -359,6 +359,10 @@ class DocumentFeedbackModel(Base):
     document_issues = Column(ARRAY(String), nullable=False, default=list)
     # Texto livre do revisor: pode conter nome/CPF de paciente. Não logar.
     notes = Column(Text, nullable=True)
+    # A IA leu certo e a decisão mudou por algo fora do documento (migration
+    # 010). Só num parecer IA_CORRETA; é o que o painel de acurácia lê para
+    # contar a divergência como acerto. Códigos em `app.models.feedback`.
+    motivo_externo = Column(String, nullable=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 

@@ -121,7 +121,7 @@ export const AJUDA_ACURACIA = [
   {
     titulo: "A exceção: motivo externo",
     texto:
-      "Nem toda divergência é erro da IA. Às vezes o revisor contraria a IA por uma razão que estava fora do documento — o exame chegou por outro canal, o paciente já tinha o resultado no sistema, a clínica confirmou por fora. Nesses casos a leitura da IA estava certa para o que ela tinha em mãos, e o caso conta como acerto.",
+      "Nem toda divergência é erro da IA. Às vezes o revisor contraria a IA por uma razão que estava fora do documento — o exame chegou por outro canal, o paciente já tinha o resultado no sistema, a clínica confirmou por fora. Nesses casos a leitura da IA estava certa para o que ela tinha em mãos, e o caso conta como acerto. Quem diz isso é o revisor: ao liberar o que a IA rejeitou, ele marca no parecer que ela acertou e escolhe o motivo. Antes do parecer, o motivo era reconhecido pelo texto da justificativa.",
   },
   {
     titulo: "Onde mora o risco",

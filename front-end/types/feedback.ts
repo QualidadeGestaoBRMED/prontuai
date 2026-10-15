@@ -198,6 +198,39 @@ export const OPCOES_EXAME: Record<
   ],
 };
 
+/**
+ * Motivo externo: a IA leu o documento certo, e o revisor decidiu diferente por
+ * uma razão que não estava nele. É um ACERTO da IA — o painel de acurácia lê
+ * este campo do parecer para não contar a divergência como erro.
+ *
+ * Aparece quando o revisor libera o que a IA rejeitou e responde "Acertou". As
+ * opções saíram do que os revisores escreviam na justificativa da aprovação
+ * (medido no dev, em ordem de frequência — ver `app/models/feedback.py`).
+ *
+ * `frase` vai para `approval_reason`, a justificativa da aprovação — que a
+ * clínica lê na notificação, por isso sem jargão. Mantém as palavras que a regex
+ * antiga do painel conhece ("por fora", "não anexou a guia", "outro ticket",
+ * "sem o exame"...): o parecer decide primeiro, mas o detalhe por exame ainda
+ * classifica pelo texto. Em "Outro" a justificativa é o que o revisor escreveu.
+ *
+ * A chave é `codigo`, e não `valor`, porque o teste de contrato de
+ * `CATEGORIAS_DOCUMENTO` lê todo `valor:` que vem depois dela neste arquivo.
+ */
+export const MOTIVOS_EXTERNOS: Array<{ codigo: MotivoExterno; rotulo: string; frase: string }> = [
+  { codigo: "EXAME_POR_FORA", rotulo: "Exame feito por fora", frase: "Exame feito por fora, em parceiro ou outro sistema." },
+  { codigo: "GUIA_NAO_ANEXADA", rotulo: "Só faltou a guia", frase: "A clínica não anexou a guia, mas os exames estão no anexo." },
+  { codigo: "OUTRO_TICKET", rotulo: "De outro ticket ou duplicado", frase: "Os exames apontados são de outro ticket ou foram lançados duas vezes." },
+  { codigo: "CLIENTE_AUTORIZOU", rotulo: "Cliente autorizou sem o exame", frase: "Liberado sem o exame, autorizado pelo cliente." },
+  { codigo: "OUTRO", rotulo: "Outro", frase: "" },
+];
+
+export type MotivoExterno =
+  | "EXAME_POR_FORA"
+  | "GUIA_NAO_ANEXADA"
+  | "OUTRO_TICKET"
+  | "CLIENTE_AUTORIZOU"
+  | "OUTRO";
+
 /** Um par (motivo, exame) — o que a IA errou e onde. */
 export type FeedbackIssueItem = {
   categoria: string;
@@ -217,6 +250,7 @@ export type DocumentFeedback = {
   issue_items: FeedbackIssueItem[];
   document_issues: string[];
   notes: string | null;
+  motivo_externo: MotivoExterno | null;
   reviewed_by_email: string | null;
   reviewed_by_id: string | null;
   created_at: string | null;
@@ -229,4 +263,6 @@ export type DocumentFeedbackInput = {
   issue_items: FeedbackIssueItem[];
   document_issues: string[];
   notes: string | null;
+  /** Só com `IA_CORRETA`; com "OUTRO", `notes` é obrigatório. */
+  motivo_externo?: MotivoExterno | null;
 };

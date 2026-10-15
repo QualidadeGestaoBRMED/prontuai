@@ -78,6 +78,37 @@ def test_rx_reconhecido_pela_conclusao_do_laudo():
     assert status["RADIOGRAFIA DE COLUNA LOMBO SACRA AP/PERFIL"] == "encontrado"
 
 
+FICHA_ACUIDADE = ("ACUIDADE VISUAL Método de avaliação: Escala optométrica de Snellen "
+                  "Com correção ( ) Sem correção (X) Olho direito {od} Olho esquerdo {oe} "
+                  "Teste de Ishihara: normal")
+
+
+def test_acuidade_reconhecida_pelos_valores_de_snellen():
+    texto = FICHA_ACUIDADE.format(od="20/25", oe="20/25")
+    status, mud = ajusta([("ACUIDADE VISUAL", "faltante")], texto)
+    assert status["ACUIDADE VISUAL"] == "encontrado"
+    assert mud[0]["regra"] == "conteudo_do_laudo"
+
+
+def test_ficha_de_acuidade_em_branco_continua_faltante():
+    # "Snellen" vem impresso no formulário; sem a fração anotada não é laudo.
+    texto = FICHA_ACUIDADE.format(od="", oe="")
+    status, _ = ajusta([("ACUIDADE VISUAL", "faltante")], texto)
+    assert status["ACUIDADE VISUAL"] == "faltante"
+
+
+def test_acuidade_com_um_olho_so_continua_faltante():
+    texto = FICHA_ACUIDADE.format(od="20/25", oe="")
+    status, _ = ajusta([("ACUIDADE VISUAL", "faltante")], texto)
+    assert status["ACUIDADE VISUAL"] == "faltante"
+
+
+def test_senso_cromatico_exige_o_teste_de_cores():
+    texto = FICHA_ACUIDADE.format(od="20/20", oe="20/20").replace("Teste de Ishihara: normal", "")
+    status, _ = ajusta([("ACUIDADE VISUAL COM SENSO CROMÁTICO", "faltante")], texto)
+    assert status["ACUIDADE VISUAL COM SENSO CROMÁTICO"] == "faltante"
+
+
 def test_recuperar_desligado_nao_mexe():
     status, mud = ajusta([("GLICEMIA DE JEJUM", "faltante")], "DOSAGEM DE GLICOSE 93 mg/dL", recuperar=False)
     assert status["GLICEMIA DE JEJUM"] == "faltante" and not mud

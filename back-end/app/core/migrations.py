@@ -123,6 +123,16 @@ def check_if_migration_needed() -> tuple[bool, list[str]]:
             logger.warning("⚠️  Migration 010 necessária: coluna rejection_codes não existe")
             migrations_needed.append("010_add_rejection_codes.sql")
 
+        # Verificar migration 011: motivo externo no parecer da checagem
+        cursor.execute("""
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_name='document_feedbacks' AND column_name='motivo_externo'
+        """)
+        if not cursor.fetchone():
+            logger.warning("⚠️  Migration 011 necessária: coluna motivo_externo não existe")
+            migrations_needed.append("011_add_feedback_motivo_externo.sql")
+
         cursor.close()
         conn.close()
 
