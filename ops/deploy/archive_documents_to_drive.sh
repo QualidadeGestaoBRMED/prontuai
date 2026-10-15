@@ -67,40 +67,8 @@ source "$SCRIPT_DIR/lib.sh"
 
 DB_DEPLOY_DIR="${DB_DEPLOY_DIR:-/home/ec2-user/prontuai-db}"
 
-# Carrega o .env do banco SEM sobrescrever o que ja veio do ambiente.
-#
-# Duas regras, e as duas ja custaram caro:
-#
-# 1. Tem que rodar ANTES de resolver REMOTE, DIAS, GATE etc. Com o `.` do
-#    arquivo la embaixo, junto do POSTGRES_USER, uma ARCHIVE_RCLONE_REMOTE
-#    definida so no .env fazia o script morrer em "nao definida" na execucao
-#    manual. O systemd nao denunciava: o unit carrega o mesmo arquivo por
-#    EnvironmentFile, entao pelo timer a variavel ja chegava pelo ambiente.
-#
-# 2. So preenche o que esta vazio. Um `set -a; . .env` sobrescreve o ambiente,
-#    e entao um ARCHIVE_GATE gravado no .env venceria o
-#    `ARCHIVE_GATE=aprovado ./script.sh` de quem esta rodando. Num script que
-#    apaga prontuario, a intencao de quem digitou o comando tem que vencer.
-carregar_env_do_banco() {
-  local arquivo="$1" linha nome valor
-  [ -f "$arquivo" ] || return 0
-  while IFS= read -r linha || [ -n "$linha" ]; do
-    linha="${linha#"${linha%%[![:space:]]*}"}"          # tira espaco a esquerda
-    case "$linha" in ''|'#'*) continue ;; esac          # vazia ou comentario
-    linha="${linha#export }"
-    case "$linha" in *=*) ;; *) continue ;; esac
-    nome="${linha%%=*}"
-    case "$nome" in ''|*[!A-Za-z0-9_]*) continue ;; esac
-    if [ -n "${!nome:-}" ]; then continue; fi           # ambiente vence
-    valor="${linha#*=}"
-    valor="${valor%"${valor##*[![:space:]]}"}"          # tira espaco a direita
-    case "$valor" in
-      \"*\") valor="${valor#\"}"; valor="${valor%\"}" ;;
-      \'*\') valor="${valor#\'}"; valor="${valor%\'}" ;;
-    esac
-    export "$nome=$valor"
-  done < "$arquivo"
-}
+# Carrega o .env do banco sem sobrescrever o ambiente. Tem que vir ANTES de
+# resolver REMOTE, DIAS, GATE etc. — ver carregar_env_do_banco em lib.sh.
 carregar_env_do_banco "$DB_DEPLOY_DIR/.env"
 
 SRC="${ARCHIVE_SOURCE_DIR:-/home/ec2-user/prontuai/data/uploads}"

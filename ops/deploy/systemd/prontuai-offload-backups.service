@@ -1,0 +1,16 @@
+[Unit]
+Description=Move ao Google Drive os dumps mais antigos quando o bucket de backup passa do teto
+Wants=network-online.target
+After=network-online.target
+# A serializacao com backup, purga e arquivamento e feita por flock dentro dos
+# scripts (db_maintenance_lock em lib.sh), nao com Conflicts= aqui — ver o README.
+
+[Service]
+Type=oneshot
+# BACKUP_S3_* (origem) e OFFLOAD_* (destino, gatilho) vem do .env do banco.
+EnvironmentFile=/home/ec2-user/prontuai-db/.env
+ExecStart=/home/ec2-user/prontuai-db/script/offload_backups_to_drive.sh
+User=ec2-user
+# Envia e depois rele cada dump para verificar: com alguns GB e banda de VPS,
+# leva dezenas de minutos no pior caso.
+TimeoutStartSec=3h
