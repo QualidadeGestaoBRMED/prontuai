@@ -127,8 +127,14 @@ clin AS (
     GROUP BY 1, 2, 3
 ),
 -- base de acuracia: IA x humano, com classificacao do "jeitinho"
+--
+-- `DISTINCT ON (content_hash)` tira o reenvio: o mesmo arquivo mandado duas
+-- vezes pela mesma clinica vira duas divergencias com a mesma causa, e a
+-- segunda nao e um erro novo da IA. Mede-se pouco -- 1 caso em 50 na semana de
+-- 05/10, zero em quatro das seis semanas olhadas --, mas o que entra e ruido
+-- puro. Documento sem content_hash cai no proprio id e segue contando.
 julgamento AS (
-    SELECT
+    SELECT DISTINCT ON (COALESCE(d.content_hash, d.id))
         d.created_at,
         ia.ia_status,
         h.humano_status,
@@ -154,7 +160,9 @@ julgamento AS (
                 THEN true
             ELSE false
         END AS jeitinho,
-        motivo
+        motivo,
+        ex.falta_exame_nomeado,
+        ex.cita_exame_brnet
     FROM ia
     JOIN humano h ON h.document_id = ia.document_id AND h.humano_em >= ia.ia_em
     JOIN documents d ON d.id = ia.document_id
@@ -164,8 +172,64 @@ julgamento AS (
                                 ELSE d.rejection_reason END, '')),
             'ÁÀÂÃÉÊÍÓÔÕÚÜÇáàâãéêíóôõúüç', 'AAAAEEIOOOUUCaaaaeeiooouuc')) AS motivo
     ) mm
+    -- O revisor citou, pelo nome, um exame que o BRNET pediu?
+    --
+    -- Palavra-chave sozinha nao separa as duas coisas, porque "falta" quase
+    -- sempre se refere a carimbo ou marcacao: medido no historico, reordenar o
+    -- CASE por palavra-chave movia 69 linhas de regra_formal para exame
+    -- faltante e 61 delas eram "falta marcacao de aptidao", "falta carimbo".
+    -- O que separa e a PROXIMIDADE: a palavra de falta tem de vir nos 45
+    -- caracteres anteriores ao nome do exame, e o trecho entre as duas nao pode
+    -- trazer substantivo formal. Com isso migram 8 linhas, todas conferidas.
+    CROSS JOIN LATERAL (
+        SELECT
+            EXISTS (
+                SELECT 1 FROM unnest(d.exams_brnet) AS e
+                CROSS JOIN LATERAL (
+                    SELECT lower(translate(e,
+                        'ÁÀÂÃÉÊÍÓÔÕÚÜÇáàâãéêíóôõúüç',
+                        'AAAAEEIOOOUUCaaaaeeiooouuc')) AS en
+                ) x
+                CROSS JOIN LATERAL (
+                    SELECT substring(mm.motivo
+                                     from greatest(1, strpos(mm.motivo, x.en) - 45)
+                                     for least(45, strpos(mm.motivo, x.en) - 1)) AS trecho
+                ) w
+                -- 6 caracteres descartam sigla curta, que casaria em qualquer lugar
+                WHERE length(x.en) >= 6 AND strpos(mm.motivo, x.en) > 0
+                  AND w.trecho ~ ('falta|faltand|faltou|ausente|nao consta|nao anexad'
+                               || '|nao enviou|enviar|pendente')
+                  AND regexp_replace(w.trecho,
+                        '^.*(falta|faltand|faltou|ausente|nao consta|nao anexad'
+                        || '|nao enviou|enviar|pendente)', '')
+                      !~ '(carimbo|assinatu|assinal|marcac|aptid|rubrica|data)'
+            ) AS falta_exame_nomeado,
+            -- Nome de exame citado sem palavra de falta por perto. Sozinho nao
+            -- decide nada; serve para a lista nua ("ggt (gama-gt) / glicemia de
+            -- jejum"), que e justificativa de exame faltante escrita sem verbo.
+            EXISTS (
+                SELECT 1 FROM unnest(d.exams_brnet) AS e
+                WHERE length(e) >= 6
+                  AND mm.motivo LIKE '%' || lower(translate(e,
+                        'ÁÀÂÃÉÊÍÓÔÕÚÜÇáàâãéêíóôõúüç',
+                        'AAAAEEIOOOUUCaaaaeeiooouuc')) || '%'
+            ) AS cita_exame_brnet
+    ) ex
+    -- Entre reenvios do mesmo arquivo fica o PRIMEIRO: e nele que a IA decidiu
+    -- sem saber de nada, e e essa decisao que a acuracia mede.
+    ORDER BY COALESCE(d.content_hash, d.id), d.created_at, d.id
 ),
 -- Por que a divergencia aconteceu. So classifica o que conta contra a acuracia.
+--
+-- A classificacao explica a divergencia; nao decide se houve. Mexer aqui NAO
+-- move a acuracia -- medido no historico inteiro, 90,75% antes e depois --, so
+-- a distribuicao do grafico de causas.
+--
+-- "ok" NAO e matching_ia. O regex antigo tinha `^ok` e `completo`, e com isso
+-- toda aprovacao escrita so como "ok" virava "IA nao reconheceu exame que
+-- estava no PDF" -- uma causa que o revisor nunca afirmou. Sao 79 linhas no
+-- historico, 8 das 10 da semana de 05/10. A divergencia e real; o que nao se
+-- sabe e o motivo, e e isso que a linha passa a dizer.
 motivado AS (
     SELECT
         j.*,
@@ -175,24 +239,45 @@ motivado AS (
             -- IA aprovou e o revisor derrubou
             WHEN j.ia_status = 'validated' AND j.humano_status = 'rejected' THEN
                 CASE
-                    WHEN j.motivo = '' THEN 'sem_justificativa'
+                    WHEN j.motivo = '' OR j.motivo ~ ('^(ok|okay|okei|correto|certo|tudo ok'
+                                                   || '|tudo certo|prontuario (correto|ok|certo))[ .!]*$')
+                        THEN 'sem_justificativa'
+                    -- Antes de regra_formal: aqui o exame faltante foi dito com
+                    -- todas as letras, e e o sinal mais acionavel dos dois.
+                    WHEN j.falta_exame_nomeado THEN 'exame_nao_detectado'
                     WHEN j.motivo ~ ('cortad|ilegiv|carimbo|assinatura|assinal|aptid|marcac'
+                                  || '|\minapto|\mapto\M'
                                   || '|invertid|ano errado|duas (pagina|via)|reaproveitament'
-                                  || '|antigo|outro colaborador|sexo|observacao|incorret|data ')
+                                  || '|antigo|outr[oa] colaborador|outra pessoa|prontuario err'
+                                  || '|sexo|observacao|incorret|rasurad|apagad|em branco'
+                                  || '|incomplet|data ')
                         THEN 'regra_formal'
+                    -- Parecer medico e documento exigido, nao exame; sem esta
+                    -- linha "nao enviou o parecer" vira exame faltante.
+                    WHEN j.motivo ~ 'parecer' THEN 'regra_formal'
                     WHEN j.motivo ~ ('falta|faltand|faltou|nao consta|ausente|nao anexad'
-                                  || '|somente|apenas|nao enviou')
+                                  || '|somente|apenas|nao enviou|enviar os exames')
+                        THEN 'exame_nao_detectado'
+                    -- Lista nua de exame, sem verbo. O teto de 80 caracteres e a
+                    -- exclusao de duvida evitam pegar "acuidade visual para perto:
+                    -- gostaria de uma verificacao, nao entendi o resultado".
+                    WHEN j.cita_exame_brnet AND length(j.motivo) <= 80
+                         AND j.motivo !~ 'duvida|nao entendi|verificacao|gostaria'
                         THEN 'exame_nao_detectado'
                     ELSE 'outro'
                 END
             -- IA apontou falta e o revisor liberou
             WHEN j.ia_status = 'pending' AND j.humano_status = 'validated' THEN
                 CASE
-                    WHEN j.motivo = '' THEN 'sem_justificativa'
-                    WHEN j.motivo ~ ('nao (reconheceu|identificou|leu|le |encontrou|lê)|nomenclatura'
+                    WHEN j.motivo = '' OR j.motivo ~ ('^(ok|okay|okei|correto|certo|tudo ok'
+                                                   || '|tudo certo|prontuario (correto|ok|certo))[ .!]*$')
+                        THEN 'sem_justificativa'
+                    -- Radical, nao forma flexionada: o revisor escreve "nao
+                    -- reconhece", "nao reconheu", "nao identifou", "nomeclatura".
+                    WHEN j.motivo ~ ('nao (reconhe|identif|leu|le |encontr|lê)|nomencla|nomecla'
                                   || '|consta|esta no|estao no|no pdf|no anexo|em anexo|anexado'
-                                  || '|inclus|incluid|prontuario (completo|esta)|tudo ok|tudo cert'
-                                  || '|todos os exames|todos exames|^ok|completo')
+                                  || '|inclus|incluid|prontuario (completo|esta)|no prontuario'
+                                  || '|est(a|ao) aqui|todos os exames|todos exames')
                         THEN 'matching_ia'
                     ELSE 'outro'
                 END
