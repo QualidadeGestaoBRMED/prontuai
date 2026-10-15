@@ -1,5 +1,6 @@
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from app.api import api_router
 from app.core.logging import (
     setup_logging,
@@ -248,7 +249,7 @@ async def request_logging_middleware(request: Request, call_next):
                 "path": request.url.path,
                 "status_code": status_code,
                 "duration_ms": round(elapsed_ms, 2),
-                "ip": request.client.host if request.client else None,
+                "ip": _get_client_ip(request),
                 "user_agent": request.headers.get("user-agent"),
             },
         )
@@ -262,7 +263,7 @@ async def request_logging_middleware(request: Request, call_next):
                 "path": request.url.path,
                 "status_code": status_code,
                 "duration_ms": round(elapsed_ms, 2),
-                "ip": request.client.host if request.client else None,
+                "ip": _get_client_ip(request),
                 "user_agent": request.headers.get("user-agent"),
             },
         )
@@ -319,7 +320,7 @@ async def request_logging_middleware(request: Request, call_next):
                     method=request.method,
                     path=request.url.path,
                     status_code=status_code,
-                    ip=request.client.host if request.client else None,
+                    ip=_get_client_ip(request),
                     user_agent=request.headers.get("user-agent"),
                     request_id=get_request_id(),
                     metadata=audit_context.get("metadata"),
@@ -390,6 +391,19 @@ async def startup_event():
 async def shutdown_event():
     """Descarrega métricas/spans pendentes para não perder o último intervalo."""
     shutdown_telemetry()
+
+# Compressão das respostas. O gargalo das telas de lista não é o banco, é o
+# tamanho do JSON atravessando back-end → proxy do Next → browser: medido no dev,
+# `/v1/dashboard/indicadores` devolve 414 KB e uma página de 10 documentos, 53 KB.
+# JSON comprime ~10x, e o custo de CPU é irrelevante perto da latência do salto.
+#
+# `minimum_size` evita gastar CPU com resposta pequena (health, 204, erro curto),
+# onde o cabeçalho do gzip chega a ser maior que o corpo.
+#
+# Entra ANTES do CORS de propósito: `add_middleware` empilha de fora para dentro
+# na ordem inversa da adição, então o CORS continua sendo a camada mais externa e
+# segue respondendo preflight sem passar pela compressão.
+app.add_middleware(GZipMiddleware, minimum_size=1024)
 
 # Configuração de CORS usando variáveis de ambiente
 # Permite configurar origens dinamicamente para diferentes ambientes (dev, staging, prod)

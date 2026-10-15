@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { AppSidebar } from "@/components/app-sidebar"
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
 import UserDropdown from "@/components/user-dropdown"
@@ -25,7 +25,6 @@ import { Loader2 } from "lucide-react"
 import { authFetch } from "@/lib/auth-fetch"
 
 export default function Page() {
-  const [documentos, setDocumentos] = useState<DocumentoChecagem[]>([])
   const [selectedResult, setSelectedResult] = useState<ProcessResult | null>(null)
   const [documentPreviewUrl, setDocumentPreviewUrl] = useState<string | null>(null)
   const [documentPreviewLoading, setDocumentPreviewLoading] = useState(false)
@@ -80,35 +79,52 @@ export default function Page() {
   }, [loading])
   const dbResults = useMemo(() => documents.map(documentToProcessResult), [documents])
 
-  useEffect(() => {
-    const pendingDocs: DocumentoChecagem[] = dbResults.map((result) => ({
-      id: result.id,
-      clinicName: result.clinicName,
-      cpf: result.cpf,
-      paciente: result.patientName,
-      dataUpload: new Date(result.uploadedAt).toISOString(),
-      dataPrevisaoLiberacao: result.result.brmed_result?.data_previsao_liberacao || undefined,
-      status:
-        result.status === "pending_review"
-          ? ("pendente" as const)
-          : result.status === "rejected"
-            ? ("rejeitado" as const)
-            : ("aprovado" as const),
-      dataProcessamento: result.reviewedAt ? new Date(result.reviewedAt).toISOString() : undefined,
-      motivoRejeicao: result.rejectionReason,
-      examesFaltantes: result.examesFaltantes,
-      examesExtras: result.examesExtras,
-      decisaoIA:
-        result.reviewedBy
-          ? undefined
-          : (result.status as "approved" | "rejected" | "pending_review") === "pending_review"
-            ? "rejected"
-            : (result.status as "approved" | "rejected"),
-      submittedBy: result.submittedBy,
-    }))
+  /**
+   * As linhas da tabela derivam de `dbResults` por `useMemo`, não por um
+   * `useState` preenchido num `useEffect`.
+   *
+   * Com o estado intermediário, a tabela ficava um commit ATRÁS: logo depois de
+   * um fetch havia um render pintado com as linhas antigas enquanto
+   * `dbResults` já tinha as novas. Clicar nessa janela mandava um id que o
+   * `find` abaixo não achava, e a tela simplesmente não abria — sem erro, sem
+   * log. É a causa do "nem sempre abre" (STC-712). De quebra, some um render
+   * inteiro da tabela a cada atualização.
+   */
+  const documentos = useMemo<DocumentoChecagem[]>(
+    () =>
+      dbResults.map((result) => ({
+        id: result.id,
+        clinicName: result.clinicName,
+        cpf: result.cpf,
+        paciente: result.patientName,
+        dataUpload: new Date(result.uploadedAt).toISOString(),
+        dataPrevisaoLiberacao: result.result.brmed_result?.data_previsao_liberacao || undefined,
+        status:
+          result.status === "pending_review"
+            ? ("pendente" as const)
+            : result.status === "rejected"
+              ? ("rejeitado" as const)
+              : ("aprovado" as const),
+        dataProcessamento: result.reviewedAt ? new Date(result.reviewedAt).toISOString() : undefined,
+        motivoRejeicao: result.rejectionReason,
+        examesFaltantes: result.examesFaltantes,
+        examesExtras: result.examesExtras,
+        decisaoIA:
+          result.reviewedBy
+            ? undefined
+            : (result.status as "approved" | "rejected" | "pending_review") === "pending_review"
+              ? "rejected"
+              : (result.status as "approved" | "rejected"),
+        submittedBy: result.submittedBy,
+      })),
+    [dbResults],
+  )
 
-    setDocumentos(pendingDocs)
-  }, [dbResults])
+  // Espelho de `dbResults` para os handlers lerem sem entrar na lista de
+  // dependências deles. É o que mantém `handleViewDetails` com identidade
+  // estável mesmo quando a lista é recarregada — ver o comentário lá embaixo.
+  const dbResultsRef = useRef(dbResults)
+  dbResultsRef.current = dbResults
 
   const handleViewDocument = async (result: ProcessResult) => {
     if (documentPreviewLoading) return
@@ -240,17 +256,37 @@ export default function Page() {
     toast.error("Documento rejeitado")
   }
 
-  const handleViewDetails = (id: string) => {
-    const result = dbResults.find((r) => r.id === id)
-    if (result) {
-      setDocumentPreviewUrl((prev) => {
-        if (prev) URL.revokeObjectURL(prev)
-        return null
-      })
-      setSelectedResult(result)
-      reviewTimer.abrir(id)
+  /**
+   * Abre o prontuário clicado.
+   *
+   * `useCallback` com dependências vazias não é microotimização: a tabela monta
+   * as colunas num `useMemo` que depende desta função
+   * (`components/checagem-table.tsx`). Enquanto ela nascia nova a cada render,
+   * as colunas eram refeitas a cada render e o TanStack recriava as células —
+   * ou seja, o `<tr>` sob o cursor podia ser trocado ENTRE o `mousedown` e o
+   * `mouseup`. O browser só emite `click` quando os dois caem no mesmo
+   * elemento, então o clique sumia. (É a mesma falha que o botão "Ver" já
+   * contornava usando `onPointerDown`.)
+   *
+   * Por isso a lista é lida de um ref: a função precisa enxergar sempre a
+   * versão atual sem mudar de identidade quando a lista muda.
+   */
+  const handleViewDetails = useCallback((id: string) => {
+    const result = dbResultsRef.current.find((r) => r.id === id)
+    if (!result) {
+      // Antes este caminho era um `return` mudo, e era ele que fazia a tela
+      // "não abrir" sem deixar rastro. Se voltar a acontecer, agora aparece.
+      console.warn("[CHECAGEM] Documento clicado não está mais na lista", { id })
+      toast.error("Este documento saiu da lista. Atualize a página e tente de novo.")
+      return
     }
-  }
+    setDocumentPreviewUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev)
+      return null
+    })
+    setSelectedResult(result)
+    reviewTimer.abrir(id)
+  }, [reviewTimer])
 
   return (
     <RequireRole allowedRoles={["ADMIN", "MANAGER", "CHECKER", "CURATOR"]}>

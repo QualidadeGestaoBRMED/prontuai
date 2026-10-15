@@ -12,7 +12,7 @@ import UserDropdown from "@/components/user-dropdown"
 import { NotificationBell } from "@/components/notification-bell"
 import { NotificationCenter } from "@/components/notification-center"
 import { useNotifications } from "@/hooks/use-notifications"
-import { useDocuments } from "@/hooks/use-documents"
+import { useDocumentsPaged } from "@/hooks/use-documents-paged"
 import { useClinicOptions } from "@/hooks/use-clinic-options"
 import { documentToProcessResult } from "@/lib/document-mapper"
 import { ProcessProgressBar } from "@/components/process-progress-bar"
@@ -28,32 +28,59 @@ function HistoricoContent() {
   const searchParams = useSearchParams()
   const [selectedResult, setSelectedResult] = useState<ProcessResult | null>(null)
   const [detailsModalOpen, setDetailsModalOpen] = useState(false)
-  const { unreadCount, activeProcess, setNotificationCenterOpen, processResults } = useNotifications()
-  const { documents, loading, refreshing, hasLoaded, lastUpdatedAt } = useDocuments()
+  const { unreadCount, activeProcess, setNotificationCenterOpen } = useNotifications()
+  // Paginação server-side, como Pendentes e Checagem já fazem.
+  //
+  // Antes esta tela usava `useDocuments()`, que baixa a coleção INTEIRA: medido
+  // no dev com 11.188 documentos, `GET /v1/documents?compact=true` devolve
+  // 69 MB em 7,2s — e o hook repetia isso a cada 30s e a cada foco da janela,
+  // atravessando o proxy do Next nas duas pontas. A ordenação, a busca, o
+  // filtro de status e o de clínica passam todos a rodar no banco, que é onde
+  // eles enxergam todas as páginas e não só a que está na tela.
+  const {
+    documents,
+    loading,
+    refreshing,
+    page,
+    setPage,
+    totalPages,
+    totalItems,
+    search,
+    setSearch,
+    statusFilter,
+    setStatusFilter,
+    clinicFilter,
+    setClinicFilter,
+  } = useDocumentsPaged({
+    queue: "historico",
+    pageSize: 10,
+    refreshIntervalMs: 0,
+  })
   const {
     options: clinicOptions,
     loading: clinicOptionsLoading,
     enabled: canFilterByClinic,
   } = useClinicOptions()
-  // Precisa ser memoizado: sem isso o array nasce novo a cada render, o `useMemo`
-  // abaixo recalcula sempre, e o efeito do `viewId` — que depende dele — dispara
-  // em todo render. Como `setSelectedResult` recebia um objeto novo toda vez, o
-  // React não conseguia descartar a atualização e a página entrava em loop
-  // infinito (React #185). É o mesmo cuidado que `pendentes/page.tsx` já tinha.
-  const dbResults = useMemo(() => documents.map(documentToProcessResult), [documents])
-  const sortedResults = useMemo(() => {
-    const baseResults = hasLoaded ? dbResults : (loading ? [] : processResults)
-    const list = [...baseResults]
-    const toTime = (value: unknown) => {
-      if (!value) return 0
-      if (value instanceof Date) return value.getTime()
-      const parsed = new Date(String(value))
-      return Number.isNaN(parsed.getTime()) ? 0 : parsed.getTime()
-    }
-    list.sort((a, b) => toTime(b.uploadedAt) - toTime(a.uploadedAt))
-    return list
-  }, [hasLoaded, dbResults, loading, processResults])
-  const showRefreshing = refreshing && hasLoaded
+  // Precisa ser memoizado: sem isso o array nasce novo a cada render, o efeito
+  // do `viewId` — que depende dele — dispara em todo render. Como
+  // `setSelectedResult` recebia um objeto novo toda vez, o React não conseguia
+  // descartar a atualização e a página entrava em loop infinito (React #185).
+  // É o mesmo cuidado que `pendentes/page.tsx` já tinha.
+  const sortedResults = useMemo(() => documents.map(documentToProcessResult), [documents])
+  const showRefreshing = refreshing
+
+  // Spinner só no PRIMEIRO carregamento, como a Checagem já fazia. Condicionar
+  // à lista vazia (`sortedResults.length === 0`) parecia equivalente e não é:
+  // toda busca sem resultado troca a tabela pelo spinner, desmontando o campo
+  // de busca junto — o foco e o texto digitado se perdem no meio da digitação.
+  const [carregouUmaVez, setCarregouUmaVez] = useState(false)
+  useEffect(() => {
+    if (!loading) setCarregouUmaVez(true)
+  }, [loading])
+
+  useEffect(() => {
+    if (!canFilterByClinic) setClinicFilter("all")
+  }, [canFilterByClinic, setClinicFilter])
 
   // Auto-abre modal se viewId for fornecido na URL
   useEffect(() => {
@@ -123,15 +150,10 @@ function HistoricoContent() {
                 <div className="border rounded-lg bg-white p-3 flex items-center gap-2 text-muted-foreground">
                   <Loader2 className="size-4 animate-spin" />
                   <span>Atualizando documentos do banco...</span>
-                  {lastUpdatedAt && (
-                    <span className="text-xs text-muted-foreground/70">
-                      Última atualização: {lastUpdatedAt.toLocaleTimeString("pt-BR")}
-                    </span>
-                  )}
                 </div>
               )}
 
-              {loading && !hasLoaded ? (
+              {loading && !carregouUmaVez ? (
                 <div className="border rounded-lg bg-white p-6 flex items-center gap-3 text-muted-foreground">
                   <Loader2 className="size-4 animate-spin" />
                   <span>Sincronizando documentos com o banco...</span>
@@ -139,15 +161,24 @@ function HistoricoContent() {
                 ) : (
                   <ResultsTable
                     results={sortedResults}
+                    serverMode
+                    searchQuery={search}
+                    onSearchQueryChange={setSearch}
+                    statusFilter={statusFilter}
+                    onStatusFilterChange={setStatusFilter}
+                    clinicFilter={clinicFilter}
+                    onClinicFilterChange={setClinicFilter}
                     clinicOptions={clinicOptions}
                     clinicOptionsLoading={clinicOptionsLoading}
                     showClinicFilter={canFilterByClinic}
-                  onViewDetails={(result) => {
-                    console.log('[DEBUG] Opening modal for result:', result)
-                    console.log('[DEBUG] Result exists?', !!result)
-                    setSelectedResult(result)
-                    setDetailsModalOpen(true)
-                    console.log('[DEBUG] Modal state set to open')
+                    currentPage={page}
+                    totalPages={totalPages}
+                    totalItems={totalItems}
+                    pageSize={10}
+                    onPageChange={setPage}
+                    onViewDetails={(result) => {
+                      setSelectedResult(result)
+                      setDetailsModalOpen(true)
                     }}
                     onDownloadPDF={(result) => {
                       handleDownloadPDF(result)
