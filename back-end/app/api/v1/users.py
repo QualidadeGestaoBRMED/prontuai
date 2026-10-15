@@ -209,9 +209,16 @@ async def delete_user(
             detail="Você não pode desativar sua própria conta"
         )
 
+    # Lido antes da desativação: criar e atualizar registram o e-mail, só o
+    # DELETE registrava o id cru — justamente a ação que bloqueia alguém.
+    alvo = user_db.get_user_by_id(user_id)
+
     try:
         user_db.delete_user(user_id)
-        logger.info(f"Admin {admin.email} desativou usuário {user_id}")
+        logger.info(
+            f"Admin {admin.email} desativou usuário "
+            f"{alvo.email if alvo else user_id}"
+        )
         return None
 
     except ValueError as e:
