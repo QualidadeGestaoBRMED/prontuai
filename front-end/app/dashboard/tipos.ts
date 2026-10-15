@@ -76,21 +76,59 @@ export interface PrevisaoDia {
   pedidos: number;
 }
 
-/** Credenciado com previsão de liberação a partir de hoje que não usa o ProntuAI. */
-export interface ClinicaSemProntuai {
+/**
+ * Credenciado com pedidos de previsão de liberação a partir de hoje. O mesmo
+ * formato serve aos dois lados do corte — `clinicas_com_prontuai` e
+ * `clinicas_sem_prontuai` —, que são complementares: todo pedido previsto está
+ * em exatamente um deles.
+ *
+ * São sempre pedidos **ainda não liberados**. Previsto e realizado nunca se
+ * somam: realizado vive em `expedicoes_prontuai_dia`, que é outra grandeza.
+ */
+export interface CredenciadoPrevisto {
   /** Rótulo do BRNET, "CIDADE - UF - NOME". */
   credenciado: string;
   nome: string;
   cidade: string | null;
   uf: string | null;
+  /**
+   * Nome do cadastro no ProntuAI que mais documentos ligou a este credenciado —
+   * a chave que casa as duas pontas do cruzamento. null quando o credenciado
+   * nunca enviou documento, que é a regra do lado sem ProntuAI.
+   */
+  clinica: string | null;
   /** Pedidos ainda não liberados com previsão a partir de hoje. */
   pedidos_previstos: number;
   /** Os mesmos pedidos, quebrados por data e em ordem crescente. */
   previsoes: PrevisaoDia[];
   /** Pendentes cuja previsão já passou — não têm data futura, só contagem. */
   vencidos: number;
-  /** Documentos ligados no ProntuAI em todo o histórico — abaixo de 3. */
+  /** Documentos processados pelo ProntuAI em todo o histórico. */
   documentos: number;
+  /**
+   * Reconciliação previsto × expedido, por semana de PREVISÃO (chave = segunda
+   * da semana ISO): `[via_prontuai, liberado_fora, nao_liberado]`.
+   *
+   * Os três são exclusivos e somam os previstos daquela semana — é o que faz a
+   * barra empilhada fechar em 100% sem fatia de resto. Datado pelo dia da
+   * promessa, não pelo da liberação: pedido previsto para sexta e liberado na
+   * segunda conta na semana em que foi prometido.
+   *
+   * Decompõe o buraco entre previsto e expedido em dois donos: "liberou por
+   * fora" é adesão, "não liberou" é atraso do credenciado. Só do lado
+   * habilitado — fora do ProntuAI o primeiro desfecho seria sempre zero.
+   */
+  desfecho_previsao_semana?: Record<string, [number, number, number]>;
+  /**
+   * Liberações do credenciado por semana ISO, em todo o histórico buscado no
+   * BRNET (~7 meses). Só do lado **sem** cadastro: dentro, quem responde pela
+   * adesão é `desfecho_previsao_semana`.
+   *
+   * É o que permite ranquear a inclusão por volume recorrente — mediana das
+   * semanas — em vez de pelo previsto da janela, que premia o pico isolado e o
+   * credenciado lento.
+   */
+  liberacoes_semana?: Record<string, number>;
 }
 
 export interface DadosDashboard {
@@ -106,7 +144,7 @@ export interface DadosDashboard {
   acuracia: Record<SerieKey, PontoAcuracia[]>;
   clinicas: ClinicaDados[];
   /**
-   * Pedidos atendidos em clínicas credenciadas, por dia de atendimento —
+   * Pedidos liberados em clínicas credenciadas, por dia de liberação —
    * denominador de "Expedições via ProntuAI". Vem da API de monitoramento de
    * credenciados do BRNET (ver `dashboard_service._cruzar_expedicoes`). Vazio
    * quando algum mês não pôde ser buscado — aí o KPI mostra o total absoluto em
@@ -114,9 +152,11 @@ export interface DadosDashboard {
    */
   expedicoes_dia: Record<string, number>;
   /**
-   * Numerador: dos mesmos pedidos, os que têm documento liberado no ProntuAI,
-   * ligados pelo `pedido_exame_id`. Conta pedido, não documento — reenvio não
-   * infla a cobertura.
+   * Numerador: dos mesmos pedidos, os que tiveram documento **processado** pelo
+   * ProntuAI, ligados pelo `pedido_exame_id`. Processado, não liberado: um
+   * prontuário rejeitado ou pendente passou pela plataforma do mesmo jeito, e
+   * medir só o liberado confundiria adoção com desfecho da revisão. Conta
+   * pedido, não documento — reenvio não infla a cobertura.
    */
   expedicoes_prontuai_dia: Record<string, number>;
   /**
@@ -124,8 +164,19 @@ export interface DadosDashboard {
    * como medir cobertura, e o painel não mostra.
    */
   expedicoes_desde: string | null;
-  /** null quando o BRNET não pôde ser consultado. */
-  clinicas_sem_prontuai: ClinicaSemProntuai[] | null;
+  /**
+   * Credenciados **sem cadastro habilitado** — a tabela de prioridade de
+   * inclusão. null quando o BRNET não pôde ser consultado.
+   */
+  clinicas_sem_prontuai: CredenciadoPrevisto[] | null;
+  /**
+   * Clínicas com **cadastro habilitado** (`clinics.is_active`), agregadas pelo
+   * cadastro — dois credenciados do BRNET que apontam para a mesma clínica são
+   * uma linha só. Complementar da lista acima; null junto com ela. Entra aqui
+   * também o cadastro que nunca mandou documento: a adesão dele é baixa, não
+   * inexistente, e é justamente o que a tabela revela.
+   */
+  clinicas_com_prontuai: CredenciadoPrevisto[] | null;
   /** Quando a consulta rodou (ISO com fuso) — origem do "hoje" dos rótulos. */
   gerado_em?: string;
   /**

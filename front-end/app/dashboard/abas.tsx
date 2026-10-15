@@ -5,13 +5,17 @@
  * aqui só tem layout. As medidas (tamanhos de fonte quebrados, alturas de
  * barra) vêm do protótipo aprovado e são intencionais.
  */
-import { useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 
 import type {
   BarraPercentual,
+  BarraSemana,
   GraficoPrazo,
   Kpi,
-  LinhaSemProntuai,
+  LinhaForaProntuai,
+  UsoSemanal,
   VisaoDashboard,
 } from "./metricas";
 import styles from "./dashboard.module.css";
@@ -21,57 +25,1111 @@ const TITULO = "text-[16.5px] font-semibold text-[#193B4F]";
 const SUB = "mt-[5px] text-[13px] text-[#767A7B]";
 const CABECALHO_TABELA =
   "text-[11.5px] font-medium uppercase tracking-[0.06em] text-[#767A7B]";
-const COLUNAS_SEM_PRONTUAI = "grid-cols-[2fr_1.3fr_0.9fr_1.3fr]";
 
 /**
- * Linha da lista de credenciados fora do ProntuAI, com as datas previstas num
- * painel que abre. A quebra por dia já esteve num balão de hover: com meia
- * dúzia de datas virava um parágrafo, ilegível. Aqui cada data é uma linha.
+ * Ordenação e busca das tabelas de previsão. As duas (adesão e prioridade de
+ * inclusão) ordenam por qualquer coluna, então a mecânica mora aqui uma vez só.
+ *
+ * `null` desce sempre para o fim, nas duas direções: adesão não medida não é
+ * "pior que 0%" nem "melhor que 100%", é ausência de dado, e deixá-la flutuar
+ * com o sinal da ordenação faria a primeira linha da tabela mentir.
  */
-function LinhaClinica({ c }: { c: LinhaSemProntuai }) {
-  const [aberta, setAberta] = useState(false);
-  return (
-    <div className="border-b border-[#F3F3F3]">
-      <button
-        type="button"
-        onClick={() => setAberta((v) => !v)}
-        aria-expanded={aberta}
-        className={`grid w-full ${COLUNAS_SEM_PRONTUAI} items-center gap-x-[18px] rounded-[6px] px-1 py-3 text-left text-[13.5px] text-[#193B4F] transition-colors hover:bg-[#F7F9FA]`}
-      >
-        <div className="flex min-w-0 items-center gap-2">
-          <svg
-            viewBox="0 0 16 16"
-            aria-hidden="true"
-            className={`size-3.5 flex-none text-[#767A7B] transition-transform ${aberta ? "rotate-90" : ""}`}
-          >
-            <path d="M6 4l4 4-4 4" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-          <span className="truncate">{c.name}</span>
-        </div>
-        <div className="min-w-0 truncate text-[#767A7B]">{c.local}</div>
-        <div className="font-medium tabular-nums">{c.pedidos}</div>
-        <div className="tabular-nums">{c.proxima}</div>
-      </button>
+type Dir = "asc" | "desc";
+interface Ordem {
+  col: string;
+  dir: Dir;
+}
 
-      {aberta && (
-        <div className="mb-3 ml-[26px] mr-1 rounded-[10px] border border-[#DFE0E2] bg-[#FAFBFC] px-4 py-3">
-          <div className={CABECALHO_TABELA}>Datas das previsões</div>
-          <div className="mt-2.5 flex flex-col">
-            {c.datas.map((d) => (
-              <div
-                key={d.label}
-                className="flex items-baseline justify-between gap-6 border-b border-[#EDEFF0] py-[7px] text-[13px] last:border-b-0"
-              >
-                <span className="text-[#5F6B72]">{d.label}</span>
-                <span className="font-medium tabular-nums text-[#193B4F]">{d.pedidos}</span>
-              </div>
-            ))}
+const semAcento = (v: string) =>
+  v.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+
+function ordenar<T>(linhas: T[], ordem: Ordem, valor: (l: T, col: string) => number | string | null) {
+  const sinal = ordem.dir === "asc" ? 1 : -1;
+  return [...linhas].sort((a, b) => {
+    const x = valor(a, ordem.col);
+    const y = valor(b, ordem.col);
+    if (x === null || x === "") return y === null || y === "" ? 0 : 1;
+    if (y === null || y === "") return -1;
+    if (typeof x === "string" || typeof y === "string") {
+      return sinal * String(x).localeCompare(String(y), "pt-BR");
+    }
+    return sinal * (x - y);
+  });
+}
+
+/** Cabeçalho clicável. O padrão de cada coluna é o que menos surpreende: texto sobe, número desce. */
+function Th({
+  label,
+  sub,
+  col,
+  ordem,
+  onOrdenar,
+  numerica,
+}: {
+  label: string;
+  /**
+   * Segunda linha do cabeçalho, para a coluna dizer a unidade e a janela do
+   * próprio número. Sem isso, "16,3" com uma barra ao lado não informa se é por
+   * semana ou por mês, nem de quantas semanas — e o rodapé, que explicava,
+   * estava longe demais de quem lê a linha.
+   */
+  sub?: string;
+  col: string;
+  ordem: Ordem;
+  onOrdenar: (col: string, padrao: Dir) => void;
+  numerica?: boolean;
+}) {
+  const ativa = ordem.col === col;
+  return (
+    <button
+      type="button"
+      onClick={() => onOrdenar(col, numerica ? "desc" : "asc")}
+      aria-label={`Ordenar por ${label}`}
+      className={`flex flex-col gap-[3px] text-left transition-colors hover:text-[#193B4F] ${
+        ativa ? "text-[#193B4F]" : ""
+      }`}
+    >
+      <span className={`${CABECALHO_TABELA} flex items-center gap-1 ${ativa ? "text-[#193B4F]" : ""}`}>
+        {label}
+        <span aria-hidden="true" className={`text-[8px] leading-none ${ativa ? "opacity-70" : "opacity-0"}`}>
+          {ativa && ordem.dir === "asc" ? "▲" : "▼"}
+        </span>
+      </span>
+      {sub && (
+        <span className="text-[10px] font-normal normal-case tracking-normal text-[#9AA3A8]">{sub}</span>
+      )}
+    </button>
+  );
+}
+
+function CampoBusca({
+  valor,
+  onChange,
+  placeholder,
+}: {
+  valor: string;
+  onChange: (v: string) => void;
+  placeholder: string;
+}) {
+  return (
+    <input
+      type="search"
+      value={valor}
+      onChange={(e) => onChange(e.target.value)}
+      placeholder={placeholder}
+      className="h-[34px] w-[210px] rounded-[9px] border border-[#DFE0E2] bg-white px-3 text-[13px] text-[#193B4F] outline-none placeholder:text-[#9AA3A8] focus:border-[#7EBFCC]"
+    />
+  );
+}
+
+/** Estado de ordenação com o toque de inverter ao reclicar a mesma coluna. */
+function useOrdem(inicial: Ordem) {
+  const [ordem, setOrdem] = useState<Ordem>(inicial);
+  const ordenarPor = (col: string, padrao: Dir) =>
+    setOrdem((o) => (o.col === col ? { col, dir: o.dir === "asc" ? "desc" : "asc" } : { col, dir: padrao }));
+  return { ordem, ordenarPor };
+}
+
+// Os três desfechos, na ordem em que entram na barra. Fora da função porque a
+// legenda, a barra do topo e a barra de cada linha precisam pintar a mesma
+// coisa da mesma cor — foi assim que os cards antigos acabaram com duas
+// verdades sobre o mesmo número.
+const DESFECHOS = [
+  { chave: "viaProntuai", rotulo: "Via ProntuAI", cor: "#007891" },
+  { chave: "fora", rotulo: "Liberado por fora", cor: "#CC851E" },
+  { chave: "naoLiberado", rotulo: "Não liberado", cor: "#C6CBCE" },
+] as const;
+
+const COLUNAS_USO = "grid-cols-[1.75fr_1.15fr_0.8fr_2.4fr_0.85fr]";
+
+/**
+ * "Quem está usando pouco": de tudo o que estava previsto para uma semana
+ * fechada, quanto saiu por onde.
+ *
+ * A barra existe porque a leitura é de proporção, não de valor: o olho tem que
+ * achar a clínica com muito laranja antes de ler número nenhum. Os três
+ * segmentos somam os previstos da semana, então a barra ocupa a linha inteira
+ * sempre — largura igual, composição diferente.
+ *
+ * Ordem padrão pela ADESÃO, da menor para a maior: a lista existe para apontar
+ * quem está usando pouco, e é assim que ela abre já apontando. A coluna "Por
+ * fora" fica clicável para quem quiser o outro olhar — o do volume absoluto que
+ * escapou, onde 15% de 400 pesa mais que 30% de 10.
+ */
+function TabelaUsoSemana({ uso }: { uso: UsoSemanal }) {
+  // A semana vive aqui, não no filtro de período da tela: o filtro governa os
+  // indicadores retroativos, e este indicador anda sozinho, semana a semana.
+  const [i, setI] = useState(0);
+  const [busca, setBusca] = useState("");
+  const { ordem, ordenarPor } = useOrdem({ col: "adesao", dir: "asc" });
+  const semana = uso.semanas[Math.min(i, uso.semanas.length - 1)];
+
+  const termo = semAcento(busca.trim());
+  const filtradas = semana.linhas.filter(
+    (l) => !termo || semAcento(l.clinica).includes(termo) || semAcento(l.local).includes(termo),
+  );
+  const visiveis = ordenar(filtradas, ordem, (l, col) =>
+    col === "clinica" ? l.clinica
+    : col === "local" ? l.local
+    : col === "previstos" ? l.previstos
+    : col === "adesao" ? l.adesao
+    : l.fora,
+  );
+
+  return (
+    <div className={`${CARTAO} px-[22px] pt-5 pb-5`}>
+      <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
+        <div>
+          <div className={TITULO}>Quem está usando pouco</div>
+          <div className={SUB}>
+            Do que estava previsto para a semana, quanto passou pela plataforma · semana fechada
           </div>
-          <div className="mt-2.5 text-[12.5px] text-[#767A7B]">{c.resumo}</div>
-          <div className="mt-1 text-[12px] text-[#9AA3A8]">{c.credenciado}</div>
+        </div>
+
+        {/* Navegação por semana. Para trás é o passado, e o passado acaba: os
+            botões travam nas pontas em vez de rodarem em círculo. */}
+        <div className="flex items-center gap-1.5 rounded-[10px] border border-[#DFE0E2] bg-white p-1">
+          <button
+            type="button"
+            onClick={() => setI((v) => Math.min(v + 1, uso.semanas.length - 1))}
+            disabled={i >= uso.semanas.length - 1}
+            aria-label="Semana anterior"
+            className="size-[26px] rounded-[7px] text-[13px] text-[#193B4F] transition-colors hover:bg-[#F3F3F3] disabled:text-[#C6CBCE] disabled:hover:bg-transparent"
+          >
+            ‹
+          </button>
+          <div className="min-w-[108px] text-center text-[13px] font-medium tabular-nums text-[#193B4F]">
+            {semana.label}
+          </div>
+          <button
+            type="button"
+            onClick={() => setI((v) => Math.max(v - 1, 0))}
+            disabled={i === 0}
+            aria-label="Semana seguinte"
+            className="size-[26px] rounded-[7px] text-[13px] text-[#193B4F] transition-colors hover:bg-[#F3F3F3] disabled:text-[#C6CBCE] disabled:hover:bg-transparent"
+          >
+            ›
+          </button>
+        </div>
+      </div>
+
+      {/* Total da semana: o mesmo desenho da linha, em escala maior. Quem
+          entende a barra de cima já entende as 118 de baixo. */}
+      <div className="mt-[18px] flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
+        <div className="flex flex-wrap items-baseline gap-x-6 gap-y-2">
+          {[
+            { r: "Previstos na semana", v: semana.previstos, cor: "#193B4F" },
+            { r: "Via ProntuAI", v: semana.viaProntuai, cor: "#007891" },
+            { r: "Liberado por fora", v: semana.fora, cor: "#CC851E" },
+            { r: "Não liberado", v: semana.naoLiberado, cor: "#767A7B" },
+          ].map((x) => (
+            <div key={x.r} className="flex flex-col gap-1">
+              <div className={CABECALHO_TABELA}>{x.r}</div>
+              <div className="text-[19px] font-medium leading-none tabular-nums" style={{ color: x.cor }}>
+                {x.v.toLocaleString("pt-BR")}
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="text-right">
+          <div
+            className="text-[30px] font-medium leading-none tracking-[-0.025em] tabular-nums"
+            style={{ color: semana.adesao >= 90 ? "#2CAD6E" : semana.adesao >= 75 ? "#CC851E" : "#B4453A" }}
+          >
+            {semana.adesaoLabel}
+          </div>
+          <div className="mt-1.5 text-[12.5px] text-[#767A7B]">adesão da semana</div>
+        </div>
+      </div>
+
+      {semana.previstos > 0 && (
+        <div className="mt-3 flex h-[10px] w-full overflow-hidden rounded-[5px] bg-[#F3F3F3]">
+          {DESFECHOS.map((d) => (
+            <div
+              key={d.chave}
+              style={{ width: `${(semana[d.chave] / semana.previstos) * 100}%`, background: d.cor }}
+            />
+          ))}
         </div>
       )}
+
+      <div className="mt-3.5 flex flex-wrap items-center gap-x-5 gap-y-2">
+        {DESFECHOS.map((d) => (
+          <div key={d.chave} className="flex items-center gap-1.5 text-[12.5px] text-[#767A7B]">
+            <div className="size-2.5 flex-none rounded-[2px]" style={{ background: d.cor }} />
+            {d.rotulo}
+          </div>
+        ))}
+        <div className="ml-auto">
+          <CampoBusca valor={busca} onChange={setBusca} placeholder="Buscar clínica ou cidade" />
+        </div>
+      </div>
+
+      <div className="mt-3 max-h-[460px] overflow-auto">
+        <div className="min-w-[780px]">
+          <div
+            className={`sticky top-0 z-10 grid ${COLUNAS_USO} gap-x-[18px] border-b border-[#DFE0E2] bg-white px-1 pb-2.5`}
+          >
+            <Th label="Clínica" col="clinica" ordem={ordem} onOrdenar={ordenarPor} />
+            <Th label="Cidade" col="local" ordem={ordem} onOrdenar={ordenarPor} />
+            <Th label="Previstos" col="previstos" ordem={ordem} onOrdenar={ordenarPor} numerica />
+            <Th label="Por fora" col="fora" ordem={ordem} onOrdenar={ordenarPor} numerica />
+            <Th label="Adesão" col="adesao" ordem={ordem} onOrdenar={ordenarPor} numerica />
+          </div>
+          {visiveis.map((l) => (
+            <div
+              key={l.clinica}
+              className={`${styles.linhaTip} grid ${COLUNAS_USO} items-center gap-x-[18px] border-b border-[#F3F3F3] px-1 py-3 text-[13.5px] text-[#193B4F]`}
+            >
+              {/* O nome vem dentro de um invólucro por um motivo de CSS, não
+                  de estilo: `.tipNome` é `inline-block` para encolher
+                  até o tamanho do texto e a seta do balão apontar para o nome.
+                  Como filho direto do grid ele é blocado, estica pela coluna
+                  inteira e a seta passa a apontar para a coluna seguinte — que é
+                  exatamente o que o comentário do CSS manda evitar. O nome
+                  precisa ser um `span` dentro de um invólucro. */}
+              <div className="flex min-w-0 items-center gap-2.5">
+                <div
+                  className="size-2 flex-shrink-0 rounded-full"
+                  style={{ background: l.adesaoColor }}
+                  aria-hidden="true"
+                />
+                <span className={`${styles.tip} ${styles.tipNome} min-w-0`} data-tip={l.tip}>
+                  <span className="block truncate">{l.clinica}</span>
+                </span>
+              </div>
+              <div className="min-w-0 truncate text-[#767A7B]">{l.local}</div>
+              <div className="tabular-nums">{l.previstos}</div>
+              {/* A barra é a coluna "por fora": o laranja é o que se procura, e
+                  o número ao lado dele é o volume absoluto que decide a visita. */}
+              <div className="flex items-center gap-2.5">
+                <div className="flex h-[9px] flex-1 overflow-hidden rounded-[4px] bg-[#F3F3F3]">
+                  <div className="h-full" style={{ width: `${l.pctVia}%`, background: "#007891" }} />
+                  <div className="h-full" style={{ width: `${l.pctFora}%`, background: "#CC851E" }} />
+                  <div className="h-full" style={{ width: `${l.pctNao}%`, background: "#C6CBCE" }} />
+                </div>
+                <div className="w-[34px] text-right font-medium tabular-nums text-[#A05E1E]">{l.fora}</div>
+              </div>
+              <div className="font-medium tabular-nums" style={{ color: l.adesaoColor }}>
+                {l.adesaoLabel}
+              </div>
+            </div>
+          ))}
+          {!visiveis.length && (
+            <div className="px-1 py-6 text-[13px] text-[#767A7B]">
+              {termo ? "Nenhuma clínica com esse termo." : "Nenhuma clínica tinha previsão nesta semana."}
+            </div>
+          )}
+        </div>
+      </div>
+
     </div>
+  );
+}
+
+/**
+ * Simulador de inclusão. Fala em pedidos POR SEMANA, não em previstos da
+ * janela: incluir uma clínica não é capturar um pico, é capturar o ritmo dela.
+ *
+ * A premissa é a adesão medida no indicador de cima — nada é estimado aqui. Ela
+ * vem rotulada com a semana de origem, para ninguém usar o número sem saber de
+ * quando ele é.
+ */
+function Simulador({
+  linhas,
+  selecionadas,
+  viaProntuaiSemana,
+  adesao,
+  semana,
+  onAtalho,
+}: {
+  linhas: LinhaForaProntuai[];
+  selecionadas: Set<string>;
+  /** Pedidos que passaram pela plataforma na última semana fechada. */
+  viaProntuaiSemana: number;
+  /** Adesão daquela mesma semana, em %. */
+  adesao: number;
+  semana: string;
+  onAtalho: (quantas: number | "limpar") => void;
+}) {
+  const mediaSel = linhas
+    .filter((l) => selecionadas.has(l.credenciado))
+    .reduce((a, l) => a + l.media, 0);
+  const ganho = (mediaSel * adesao) / 100;
+  const aumento = viaProntuaiSemana ? (ganho / viaProntuaiSemana) * 100 : null;
+  const p1 = (v: number) => v.toLocaleString("pt-BR", { maximumFractionDigits: 1, minimumFractionDigits: 1 });
+  const n0 = (v: number) => Math.round(v).toLocaleString("pt-BR");
+
+  return (
+    <div className="mt-4 rounded-[12px] border border-[#DFE0E2] bg-[#FAFBFC] px-[18px] py-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="mr-auto text-[14px] font-semibold text-[#193B4F]">Simular inclusão</div>
+        {([["Top 5", 5], ["Top 10", 10], ["Top 20", 20]] as [string, number][]).map(([r, q]) => (
+          <button key={r} type="button" onClick={() => onAtalho(q)}
+                  className="rounded-[8px] border border-[#DFE0E2] bg-white px-3 py-1.5 text-[12.5px] text-[#193B4F] hover:border-[#7EBFCC]">
+            {r}
+          </button>
+        ))}
+        <button type="button" onClick={() => onAtalho("limpar")}
+                className="rounded-[8px] border border-[#DFE0E2] bg-white px-3 py-1.5 text-[12.5px] text-[#767A7B] hover:border-[#7EBFCC]">
+          Limpar
+        </button>
+      </div>
+
+      {/* Cada número diz de que semana ele é. "Hoje, por semana" não dizia, e
+          "hoje" num painel que fala de semana fechada se lê como o dia de hoje —
+          que é justamente o que o número não é. */}
+      <div className="mt-4 grid grid-cols-2 gap-x-5 gap-y-3.5 lg:grid-cols-4">
+        {[
+          {
+            r: "Passam hoje pela plataforma",
+            v: n0(viaProntuaiSemana),
+            sub: `pedidos na semana de ${semana}`,
+          },
+          {
+            r: "Somando as marcadas",
+            v: n0(viaProntuaiSemana + ganho),
+            sub: "pedidos por semana, estimados",
+          },
+          {
+            r: "Aumento no volume semanal",
+            v: aumento === null ? "—" : `+${p1(aumento)}%`,
+            sub: "sobre o que passa hoje",
+            destaque: true,
+          },
+          {
+            r: "Média somada das marcadas",
+            v: `${n0(mediaSel)}/sem`,
+            sub: "liberações, antes da adesão",
+          },
+        ].map((x) => (
+          <div key={x.r} className="flex flex-col gap-1">
+            <div className={CABECALHO_TABELA}>{x.r}</div>
+            <div className={`tabular-nums leading-none ${x.destaque ? "text-[24px] font-medium text-[#00AFAA]" : "text-[17px] text-[#193B4F]"}`}>
+              {x.v}
+            </div>
+            <div className="text-[11px] text-[#9AA3A8]">{x.sub}</div>
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-3.5 text-[12.5px] leading-[1.5] text-[#767A7B]">
+        {selecionadas.size === 0
+          ? `Marque clínicas na lista para simular. A premissa é a adesão de ${p1(adesao)}% medida em ${semana}. Nada é gravado.`
+          : `${selecionadas.size} clínica${selecionadas.size > 1 ? "s" : ""} marcada${selecionadas.size > 1 ? "s" : ""} · ${n0(mediaSel)} liberações/semana × ${p1(adesao)}% de adesão = +${n0(ganho)} pedidos por semana na plataforma. Simulação: nada é gravado.`}
+      </div>
+    </div>
+  );
+}
+
+// As duas precisam ser literais: o Tailwind compila só as classes que encontra
+// no código-fonte. Montar a segunda com `.replace()` sobre a primeira gerava uma
+// classe em runtime que nunca foi compilada, e a linha inteira perdia o grid.
+const COLUNAS_FORA = "grid-cols-[28px_1.7fr_1fr_2fr_1.05fr_1.05fr]";
+const COLUNAS_FORA_LINHA = "grid-cols-[1.7fr_1fr_2fr_1.05fr_1.05fr]";
+
+/**
+ * "Quem vale a pena incluir": credenciados fora do ProntuAI, ranqueados pelos
+ * pedidos PREVISTOS na janela.
+ *
+ * Este é o indicador do futuro, e o de cima é o do passado — a divisão é do
+ * pedido, não uma escolha de implementação. Por isso a ordem é pelo previsto: a
+ * pergunta que abre a lista é "quais têm previsão de liberação maior".
+ *
+ * A média semanal não ordena, ela confere. O previsto é a foto de um instante e
+ * pode ser um pico; quem diz se aquele volume é o ritmo da clínica é a coluna da
+ * média, a marca de PICO e o gráfico que abre no modal. Ranquear pelo futuro,
+ * desconfiar, clicar, conferir no passado.
+ *
+ * Nenhuma métrica de adesão aqui. Adesão é sobre quem já está dentro, e mora no
+ * indicador de cima.
+ */
+function TabelaForaProntuai({
+  linhas,
+  janelaMedia,
+  janelaPrevistos,
+  simulador,
+}: {
+  linhas: LinhaForaProntuai[];
+  /** Intervalo das 12 semanas que entram na média: "27/07 a 05/10". */
+  janelaMedia: string;
+  /** Janela dos previstos: "de hoje a 12/11 · 30 dias". */
+  janelaPrevistos: string;
+  simulador: { viaProntuaiSemana: number; adesao: number; semana: string } | null;
+}) {
+  const { ordem, ordenarPor } = useOrdem({ col: "previstos", dir: "desc" });
+  const [busca, setBusca] = useState("");
+  const [marcadas, setMarcadas] = useState<Set<string>>(new Set());
+  // Quem está aberto e se o modal está aberto são estados separados: ao
+  // fechar, a clínica continua montada durante a animação de saída, em vez de
+  // o conteúdo sumir antes do modal.
+  const [aberta, setAberta] = useState<string | null>(null);
+  const [modalAberto, setModalAberto] = useState(false);
+  const abrir = (credenciado: string) => {
+    setAberta(credenciado);
+    setModalAberto(true);
+  };
+
+  const termo = semAcento(busca.trim());
+  const filtradas = linhas.filter(
+    (l) => !termo || semAcento(l.name).includes(termo) || semAcento(l.local).includes(termo),
+  );
+  const visiveis = ordenar(filtradas, ordem, (l, col) =>
+    col === "name" ? l.name
+    : col === "local" ? l.local
+    : col === "previstos" ? l.previstos
+    : col === "regularidade" ? l.regularidade
+    : l.media,
+  );
+
+  const aplicarAtalho = (quantas: number | "limpar") =>
+    setMarcadas(
+      quantas === "limpar"
+        ? new Set()
+        : new Set(visiveis.slice(0, quantas).map((l) => l.credenciado)),
+    );
+  const alternar = (credenciado: string) =>
+    setMarcadas((atual) => {
+      const proximo = new Set(atual);
+      if (!proximo.delete(credenciado)) proximo.add(credenciado);
+      return proximo;
+    });
+
+  return (
+    <>
+      <div className="mt-4 flex flex-wrap items-center gap-2.5">
+        <CampoBusca valor={busca} onChange={setBusca} placeholder="Buscar clínica ou cidade" />
+        {termo && (
+          <div className="text-[12.5px] text-[#767A7B]">
+            {visiveis.length} de {linhas.length} credenciadas
+          </div>
+        )}
+      </div>
+
+      {simulador && (
+        <Simulador
+          linhas={linhas}
+          selecionadas={marcadas}
+          viaProntuaiSemana={simulador.viaProntuaiSemana}
+          adesao={simulador.adesao}
+          semana={simulador.semana}
+          onAtalho={aplicarAtalho}
+        />
+      )}
+
+      <div className="mt-3 max-h-[460px] overflow-auto">
+        <div className="min-w-[920px]">
+          <div
+            className={`sticky top-0 z-10 grid ${COLUNAS_FORA} items-end gap-x-[18px] border-b border-[#DFE0E2] bg-white px-1 pb-2.5`}
+          >
+            <span aria-hidden="true" />
+            <Th label="Clínica" col="name" ordem={ordem} onOrdenar={ordenarPor} />
+            <Th label="Cidade" col="local" ordem={ordem} onOrdenar={ordenarPor} />
+            <Th
+              label="Média por semana"
+              sub={`liberações · ${janelaMedia}`}
+              col="media"
+              ordem={ordem}
+              onOrdenar={ordenarPor}
+              numerica
+            />
+            <Th
+              label="Semanas com liberação"
+              sub="das 12 semanas"
+              col="regularidade"
+              ordem={ordem}
+              onOrdenar={ordenarPor}
+              numerica
+            />
+            <Th
+              label="Previstos"
+              sub="a liberar na janela"
+              col="previstos"
+              ordem={ordem}
+              onOrdenar={ordenarPor}
+              numerica
+            />
+          </div>
+          {visiveis.map((c) => (
+            <LinhaFora
+              key={c.credenciado}
+              c={c}
+              marcada={marcadas.has(c.credenciado)}
+              onMarcar={alternar}
+              onAbrir={abrir}
+            />
+          ))}
+          {!visiveis.length && (
+            <div className="px-1 py-6 text-[13px] text-[#767A7B]">Nenhuma clínica com esses filtros.</div>
+          )}
+        </div>
+      </div>
+
+      <ModalHistoricoFora
+        linhas={visiveis}
+        credenciado={aberta}
+        aberto={modalAberto}
+        onFechar={() => setModalAberto(false)}
+        onIr={setAberta}
+        janelaMedia={janelaMedia}
+        janelaPrevistos={janelaPrevistos}
+        marcadas={marcadas}
+        onMarcar={alternar}
+      />
+    </>
+  );
+}
+
+/**
+ * Linha do ranking. Clicar abre o histórico da clínica no modal; a marcação do
+ * simulador fica fora do botão — aninhar input em button é inválido, e o
+ * clique de um roubaria o do outro.
+ */
+function LinhaFora({
+  c,
+  marcada,
+  onMarcar,
+  onAbrir,
+}: {
+  c: LinhaForaProntuai;
+  marcada: boolean;
+  onMarcar: (credenciado: string) => void;
+  onAbrir: (credenciado: string) => void;
+}) {
+  return (
+    <div className={`border-b border-[#F3F3F3] ${marcada ? "bg-[#E6EDF4]" : ""}`}>
+      <div className={`grid ${COLUNAS_FORA} items-center gap-x-[18px] px-1`}>
+        <label className="flex cursor-pointer items-center justify-center py-3">
+          <input
+            type="checkbox"
+            checked={marcada}
+            onChange={() => onMarcar(c.credenciado)}
+            aria-label={`Incluir ${c.name} na simulação`}
+            className="size-4 cursor-pointer accent-[#00AFAA]"
+          />
+        </label>
+        <button
+          type="button"
+          onClick={() => onAbrir(c.credenciado)}
+          aria-haspopup="dialog"
+          className={`group col-span-5 grid ${COLUNAS_FORA_LINHA} cursor-pointer items-center gap-x-[18px] rounded-[6px] py-3 text-left text-[13.5px] text-[#193B4F] transition-colors hover:bg-[#F7F9FA]`}
+        >
+          {/* O nome tem cara de link porque é o que abre o modal — a linha
+              inteira abre, para o alvo ser grande, mas é no nome que o olho
+              procura. A seta que vinha antes dele é o símbolo de "expandir aqui
+              embaixo", que era o comportamento antigo: com o modal, prometia
+              outra coisa. */}
+          <span className="min-w-0 truncate text-[#007891] decoration-[#7EBFCC] underline-offset-[3px] group-hover:underline">
+            {c.name}
+          </span>
+          <div className="min-w-0 truncate text-[#767A7B]">{c.local}</div>
+          <div className="flex items-center gap-2.5">
+            <div className="h-1.5 flex-1 overflow-hidden rounded-[3px] bg-[#F3F3F3]">
+              <div className="h-full rounded-[3px] bg-[#007891]" style={{ width: `${c.pct}%` }} />
+            </div>
+            <div className="flex w-[74px] items-baseline justify-end gap-1">
+              <span className="font-medium tabular-nums">{c.mediaLabel}</span>
+              <span className="text-[11px] text-[#9AA3A8]">/sem</span>
+            </div>
+          </div>
+          <div className="tabular-nums text-[#767A7B]">{c.regularidadeLabel}</div>
+          <div className="flex items-center gap-1.5">
+            <span className="tabular-nums">{c.previstos}</span>
+            {/* O aviso de pico mora na coluna de previstos porque é dela que o
+                engano nasce: o número grande da janela que não se repete. */}
+            {c.picoPrevisto && <MarcaPico />}
+          </div>
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function MarcaPico() {
+  return (
+    <span className="rounded-[5px] bg-[#F7EDDC] px-1.5 py-0.5 text-[10px] font-medium tracking-[0.04em] text-[#A05E1E]">
+      PICO
+    </span>
+  );
+}
+
+const MESES = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+
+/**
+ * Topo e passo "redondos" para o eixo Y — 0, 20, 40, 60, e não 0, 15, 30, 45.
+ * A folga de 12% acima da maior coluna é o espaço do número que vai em cima
+ * dela; sem isso a coluna mais alta encostava no teto e o rótulo sumia.
+ */
+function escalaY(maximo: number) {
+  const alvo = Math.max(1, maximo * 1.12);
+  if (alvo <= 4) return { topo: 4, passo: 1 };
+  const bruto = alvo / 4;
+  const potencia = 10 ** Math.floor(Math.log10(bruto));
+  const passo = [1, 2, 5, 10].map((m) => m * potencia).find((p) => p >= bruto) ?? 10 * potencia;
+  return { topo: passo * Math.ceil(alvo / passo), passo };
+}
+
+/**
+ * Listra da semana corrente: ainda está acontecendo, e o número só pode subir.
+ * Uma por cor, porque a semana corrente também pode já ter estourado o ritmo —
+ * e aí as duas coisas precisam aparecer.
+ */
+const LISTRA_PARCIAL = "repeating-linear-gradient(135deg, #7EBFCC 0 4px, #C9E5EB 4px 8px)";
+const LISTRA_PARCIAL_PICO = "repeating-linear-gradient(135deg, #CC851E 0 4px, #EBC48C 4px 8px)";
+
+function ItemLegenda({ amostra, rotulo }: { amostra: ReactNode; rotulo: string }) {
+  return (
+    <span className="flex items-center gap-1.5 whitespace-nowrap">
+      {amostra}
+      {rotulo}
+    </span>
+  );
+}
+
+/**
+ * Colunas por semana com a média tracejada — o pedido literal: "pra eu entender
+ * se aquilo é um outlier, uma anomalia".
+ *
+ * As colunas não têm espaçamento entre si (o respiro é padding de cada uma):
+ * assim cada coluna ocupa exatamente 1/n da largura, e a faixa das 12 semanas
+ * da média, posicionada por porcentagem, cai alinhada com elas.
+ */
+function GraficoSemanas({
+  serie,
+  media,
+  mediaLabel,
+}: {
+  serie: BarraSemana[];
+  media: number;
+  mediaLabel: string;
+}) {
+  const maior = serie.reduce((m, s) => Math.max(m, s.liberacoes), 0);
+  const { topo, passo } = escalaY(Math.max(maior, media));
+  const ticks = Array.from({ length: Math.round(topo / passo) + 1 }, (_, k) => k * passo);
+  const altura = (v: number) => `${(v / topo) * 100}%`;
+  const n = serie.length;
+  const inicioMedia = serie.findIndex((s) => s.naMedia);
+  const semanasMedia = serie.filter((s) => s.naMedia).length;
+
+  const mes = (iso: string, primeiro: boolean) => {
+    const m = Number(iso.slice(5, 7));
+    // O ano só onde ele muda a leitura: no começo do eixo e na virada.
+    return primeiro || m === 1 ? `${MESES[m - 1]}/${iso.slice(2, 4)}` : MESES[m - 1];
+  };
+
+  if (!maior) {
+    return (
+      <div className="flex h-full min-h-[240px] flex-col items-center justify-center rounded-[12px] border border-dashed border-[#DFE0E2] px-6 text-center">
+        <div className="text-[14px] font-medium text-[#193B4F]">Nenhuma liberação no histórico do BRNET</div>
+        <div className="mt-1.5 max-w-[420px] text-[13px] text-[#767A7B]">
+          {n ? `De ${serie[0].label} até hoje esta clínica não liberou nenhum pedido` : "Sem histórico buscado"} — o
+          que ela tem é só previsão futura, sem passado que a confirme.
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex h-full min-h-[300px] flex-col">
+      <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-2">
+        <div>
+          <div className="text-[14px] font-semibold text-[#193B4F]">Liberações por semana</div>
+          <div className="mt-0.5 text-[12px] text-[#9AA3A8]">
+            uma coluna = uma semana · passe o mouse numa coluna para ver as datas
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[11.5px] text-[#767A7B]">
+          <ItemLegenda amostra={<span className="h-0 w-4 border-t-[1.5px] border-dashed border-[#B4453A]" />} rotulo="média das 12 semanas" />
+          <ItemLegenda amostra={<span className="h-2.5 w-3 rounded-[2px] bg-[#E3F1F4]" />} rotulo="semanas da média" />
+          <ItemLegenda amostra={<span className="size-2.5 rounded-[2px] bg-[#CC851E]" />} rotulo="fora do ritmo dela" />
+          <ItemLegenda amostra={<span className="size-2.5 rounded-[2px]" style={{ background: LISTRA_PARCIAL }} />} rotulo="semana em andamento" />
+        </div>
+      </div>
+
+      <div className="mt-9 flex min-h-0 flex-1">
+        <div className="relative w-9 flex-none" aria-hidden="true">
+          {ticks.map((t) => (
+            <div
+              key={t}
+              className="absolute right-2.5 translate-y-1/2 text-[10.5px] tabular-nums text-[#9AA3A8]"
+              style={{ bottom: altura(t) }}
+            >
+              {t}
+            </div>
+          ))}
+        </div>
+
+        <div className="relative flex-1">
+          {ticks.map((t) => (
+            <div
+              key={t}
+              className={`absolute inset-x-0 border-t ${t === 0 ? "border-[#C6CBCE]" : "border-[#F0F1F2]"}`}
+              style={{ bottom: altura(t) }}
+            />
+          ))}
+
+          {semanasMedia > 0 && (
+            <div
+              className="absolute inset-y-0 rounded-[6px] bg-[#E3F1F4]/70"
+              style={{ left: `${(inicioMedia / n) * 100}%`, width: `${(semanasMedia / n) * 100}%` }}
+            >
+              <div className="absolute inset-x-0 -top-6 truncate text-center text-[10.5px] font-medium text-[#4F8A99]">
+                12 semanas da média
+              </div>
+            </div>
+          )}
+
+          <div className="absolute inset-0 flex">
+            {serie.map((s, i) => {
+              // Nas bordas, o balão centralizado vazaria para fora do modal e
+              // seria cortado; ali ele se alinha pela borda da coluna.
+              const borda = i / n < 0.15 ? styles.tipInicio : i / n > 0.85 ? styles.tipFim : "";
+              return (
+                <div
+                  key={s.iso}
+                  className={`${styles.tip} ${borda} group relative flex h-full flex-1 flex-col justify-end px-[1.5px]`}
+                  data-tip={s.tip}
+                >
+                  <div className="pointer-events-none absolute inset-0 rounded-[3px] transition-colors group-hover:bg-[#193B4F]/[0.05]" />
+                  {/* A semana corrente aparece mesmo zerada: sem o fundo, uma
+                      coluna vazia no fim do eixo se lia como "parou de liberar". */}
+                  {s.parcial && (
+                    <div
+                      className="pointer-events-none absolute inset-0 rounded-[3px]"
+                      style={{ background: "repeating-linear-gradient(135deg, #193B4F0D 0 4px, transparent 4px 8px)" }}
+                    />
+                  )}
+                  {s.liberacoes > 0 && (
+                    <div
+                      className={`relative mb-1 hidden text-center text-[10px] leading-none tabular-nums lg:block ${
+                        s.pico ? "font-semibold text-[#A05E1E]" : "text-[#5F6B72]"
+                      }`}
+                    >
+                      {s.liberacoes}
+                    </div>
+                  )}
+                  <div
+                    className="relative w-full rounded-t-[3px] transition-[height] duration-300 ease-out"
+                    style={{
+                      height: altura(s.liberacoes),
+                      minHeight: s.liberacoes ? 2 : 0,
+                      background: s.parcial
+                        ? s.pico
+                          ? LISTRA_PARCIAL_PICO
+                          : LISTRA_PARCIAL
+                        : s.pico
+                          ? "#CC851E"
+                          : "#7EBFCC",
+                    }}
+                  />
+                </div>
+              );
+            })}
+          </div>
+
+          {/* A tracejada é a média. Fica por cima das colunas, não atrás: o que
+              se quer ver é quais delas a ultrapassam. */}
+          <div
+            className="pointer-events-none absolute inset-x-0 z-10 border-t-[1.5px] border-dashed border-[#B4453A] transition-[bottom] duration-300 ease-out"
+            style={{ bottom: altura(media) }}
+          />
+        </div>
+
+        <div className="relative w-[78px] flex-none" aria-hidden="true">
+          <div
+            className="absolute left-2 translate-y-1/2 whitespace-nowrap text-[11px] font-medium text-[#B4453A] transition-[bottom] duration-300 ease-out"
+            style={{ bottom: altura(media) }}
+          >
+            média {mediaLabel}
+          </div>
+        </div>
+      </div>
+
+      <div className="ml-9 mr-[78px] mt-2 flex" aria-hidden="true">
+        {serie.map((s, i) => {
+          const novoMes = i === 0 || serie[i - 1].iso.slice(5, 7) !== s.iso.slice(5, 7);
+          return (
+            <div key={s.iso} className="relative h-4 flex-1">
+              {novoMes && (
+                <span className="absolute left-[1.5px] whitespace-nowrap border-l border-[#DFE0E2] pl-1 text-[11px] leading-4 text-[#767A7B]">
+                  {mes(s.iso, i === 0)}
+                </span>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function NumeroModal({
+  rotulo,
+  valor,
+  unidade,
+  sub,
+  destaque,
+  extra,
+}: {
+  rotulo: string;
+  valor: string;
+  unidade?: string;
+  sub: string;
+  destaque?: boolean;
+  extra?: ReactNode;
+}) {
+  return (
+    <div className="flex min-w-0 flex-col gap-1.5">
+      <div className={CABECALHO_TABELA}>{rotulo}</div>
+      <div className="flex items-baseline gap-1.5">
+        <span
+          className={`leading-none tabular-nums ${
+            destaque ? "text-[28px] font-medium text-[#007891]" : "text-[22px] text-[#193B4F]"
+          }`}
+        >
+          {valor}
+        </span>
+        {unidade && <span className="text-[12px] text-[#9AA3A8]">{unidade}</span>}
+        {extra}
+      </div>
+      <div className="text-[11.5px] leading-snug text-[#9AA3A8]">{sub}</div>
+    </div>
+  );
+}
+
+/**
+ * O histórico de uma clínica de "Quem vale a pena incluir", em tela quase cheia.
+ *
+ * É aqui que o fluxo do indicador se completa — ranquear pelo futuro, desconfiar,
+ * abrir, conferir no passado. Por isso o modal anda pela lista (setas da tela ou
+ * do teclado) na ordem em que ela está: numa reunião, quem apresenta passa de uma
+ * clínica para a seguinte sem fechar e reabrir. E dá para marcar a clínica para o
+ * simulador daqui mesmo, que é onde a decisão é tomada.
+ */
+function ModalHistoricoFora({
+  linhas,
+  credenciado,
+  aberto,
+  onFechar,
+  onIr,
+  janelaMedia,
+  janelaPrevistos,
+  marcadas,
+  onMarcar,
+}: {
+  /** A lista como está na tela: mesma busca e mesma ordem. */
+  linhas: LinhaForaProntuai[];
+  credenciado: string | null;
+  aberto: boolean;
+  onFechar: () => void;
+  onIr: (credenciado: string) => void;
+  janelaMedia: string;
+  janelaPrevistos: string;
+  marcadas: Set<string>;
+  onMarcar: (credenciado: string) => void;
+}) {
+  const i = credenciado === null ? -1 : linhas.findIndex((l) => l.credenciado === credenciado);
+  const c = i >= 0 ? linhas[i] : null;
+  // A série é montada só aqui, para a clínica aberta (ver `LinhaForaProntuai.serie`).
+  const serie = useMemo(() => (c ? c.serie() : []), [c]);
+  const anterior = i > 0 ? linhas[i - 1].credenciado : null;
+  const proxima = i >= 0 && i < linhas.length - 1 ? linhas[i + 1].credenciado : null;
+
+  // No window, e não no onKeyDown do conteúdo: o foco pode estar em qualquer
+  // lugar — inclusive ainda na linha que abriu o modal —, e a seta tem de andar
+  // do mesmo jeito.
+  useEffect(() => {
+    if (!aberto) return;
+    const aoTeclar = (e: KeyboardEvent) => {
+      if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+      const alvo = e.key === "ArrowLeft" ? anterior : e.key === "ArrowRight" ? proxima : null;
+      if (!alvo) return;
+      e.preventDefault();
+      onIr(alvo);
+    };
+    window.addEventListener("keydown", aoTeclar);
+    return () => window.removeEventListener("keydown", aoTeclar);
+  }, [aberto, anterior, proxima, onIr]);
+
+  const picosHistorico = serie.filter((s) => s.pico).length;
+  const ultimaLiberacao = [...serie].reverse().find((s) => s.liberacoes > 0);
+  const marcada = c ? marcadas.has(c.credenciado) : false;
+
+  // A leitura do que o gráfico mostra, em uma frase, só quando há algo a
+  // conferir. Previsto ABAIXO da média não é aviso: a janela só conta o que já
+  // está agendado, e a agenda vai enchendo até o dia chegar.
+  const leitura = !c
+    ? null
+    : c.previstos > 0 && c.media === 0
+      ? `Nenhuma liberação nas 12 semanas da média: ${
+          c.previstos === 1
+            ? "o pedido previsto não tem histórico recente que o confirme"
+            : `os ${c.previstos} previstos não têm histórico recente que os confirme`
+        }. ` +
+        (ultimaLiberacao
+          ? `A última liberação foi na semana de ${ultimaLiberacao.label}.`
+          : "Não há liberação em todo o histórico buscado.")
+      : c.picoPrevisto
+        ? `Mesmo contando só o que já está agendado, os ${c.previstos} previstos passam do dobro do que a média dela ` +
+          `faria esperar na janela (${c.esperadoLabel}). ` +
+          (picosHistorico
+            ? `No histórico, ${picosHistorico} semana${picosHistorico > 1 ? "s ficaram" : " ficou"} fora do ritmo dela — em laranja no gráfico.`
+            : "Nenhuma semana do histórico ficou fora do ritmo dela: um volume assim não tem precedente.")
+        : null;
+
+  const botaoNav =
+    "flex size-[34px] cursor-pointer items-center justify-center text-[#193B4F] transition-colors hover:bg-[#F3F6F8] disabled:cursor-default disabled:text-[#C6CBCE] disabled:hover:bg-transparent";
+
+  return (
+    <Dialog open={aberto && !!c} onOpenChange={(v) => !v && onFechar()}>
+      {c && (
+        <DialogContent className="flex h-[calc(100dvh-2rem)] w-[calc(100vw-2rem)] max-w-[1600px] flex-col gap-0 overflow-hidden rounded-[16px] border-[#DFE0E2] bg-white p-0 sm:h-[calc(100dvh-3rem)] sm:w-[calc(100vw-3rem)] sm:max-w-[1600px]">
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-3 border-b border-[#EDEFF0] py-4 pr-14 pl-6">
+            <div className="min-w-0 flex-1">
+              <div className="flex min-w-0 items-center gap-2.5">
+                <DialogTitle className="truncate text-[20px] leading-tight font-semibold text-[#193B4F]">
+                  {c.name}
+                </DialogTitle>
+                {c.picoPrevisto && <MarcaPico />}
+              </div>
+              <DialogDescription className="mt-1 text-[13px] text-[#767A7B]">
+                {c.local} · sem cadastro no ProntuAI
+              </DialogDescription>
+            </div>
+
+            <div className="flex items-center gap-2.5">
+              <label
+                className={`flex h-[34px] cursor-pointer items-center gap-2 rounded-[9px] border px-3 text-[13px] transition-colors ${
+                  marcada
+                    ? "border-[#7EBFCC] bg-[#E6F4F4] text-[#007891]"
+                    : "border-[#DFE0E2] text-[#193B4F] hover:border-[#7EBFCC]"
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  checked={marcada}
+                  onChange={() => onMarcar(c.credenciado)}
+                  className="size-4 cursor-pointer accent-[#00AFAA]"
+                />
+                Incluir na simulação
+              </label>
+
+              <div className="flex items-center overflow-hidden rounded-[9px] border border-[#DFE0E2]">
+                <button
+                  type="button"
+                  disabled={!anterior}
+                  onClick={() => anterior && onIr(anterior)}
+                  aria-label="Clínica anterior"
+                  title="Clínica anterior (←)"
+                  className={botaoNav}
+                >
+                  <svg viewBox="0 0 16 16" aria-hidden="true" className="size-4">
+                    <path d="M10 4L6 8l4 4" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </button>
+                <span className="min-w-[78px] border-x border-[#DFE0E2] px-2 text-center text-[12.5px] leading-[34px] tabular-nums text-[#767A7B]">
+                  {i + 1} de {linhas.length}
+                </span>
+                <button
+                  type="button"
+                  disabled={!proxima}
+                  onClick={() => proxima && onIr(proxima)}
+                  aria-label="Próxima clínica"
+                  title="Próxima clínica (→)"
+                  className={botaoNav}
+                >
+                  <svg viewBox="0 0 16 16" aria-hidden="true" className="size-4">
+                    <path d="M6 4l4 4-4 4" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div className="min-h-0 flex-1 overflow-y-auto lg:grid lg:grid-cols-[minmax(0,1fr)_320px] lg:overflow-hidden">
+            <div className="flex min-h-0 flex-col px-6 pt-5 pb-6">
+              <div className="grid grid-cols-2 gap-x-6 gap-y-4 lg:grid-cols-4">
+                <NumeroModal
+                  rotulo="Média por semana"
+                  valor={c.mediaLabel}
+                  unidade="/sem"
+                  sub={`liberações · ${janelaMedia}`}
+                  destaque
+                />
+                <NumeroModal rotulo="Semanas com liberação" valor={c.regularidadeLabel} sub="das 12 semanas da média" />
+                <NumeroModal
+                  rotulo="Liberações nas 12 semanas"
+                  valor={c.total.toLocaleString("pt-BR")}
+                  sub="soma da janela da média"
+                />
+                <NumeroModal
+                  rotulo="Previstos"
+                  valor={c.previstos.toLocaleString("pt-BR")}
+                  sub={`a liberar ${janelaPrevistos}`}
+                  extra={c.picoPrevisto ? <MarcaPico /> : undefined}
+                />
+              </div>
+
+              {leitura && (
+                <div className="mt-4 rounded-[10px] border border-[#F0DDBF] bg-[#FBF5EA] px-4 py-2.5 text-[13px] leading-[1.5] text-[#7A4A17]">
+                  {leitura}
+                </div>
+              )}
+
+              <div className="mt-6 min-h-0 flex-1">
+                <GraficoSemanas serie={serie} media={c.media} mediaLabel={c.mediaLabel} />
+              </div>
+            </div>
+
+            <aside className="flex flex-col gap-6 border-t border-[#EDEFF0] bg-[#FAFBFC] px-6 py-5 lg:overflow-y-auto lg:border-t-0 lg:border-l">
+              <div>
+                <div className={CABECALHO_TABELA}>Previstos por dia</div>
+                <div className="mt-1 text-[11.5px] text-[#9AA3A8]">{janelaPrevistos}</div>
+                {c.datas.length > 0 ? (
+                  <div className="mt-3.5 flex flex-col gap-2.5">
+                    {c.datas.map((d) => (
+                      <div key={d.label} className="grid grid-cols-[96px_1fr_34px] items-center gap-3 text-[13px]">
+                        <span className="truncate text-[#5F6B72]">{d.label}</span>
+                        <div className="h-1.5 overflow-hidden rounded-[3px] bg-[#EDEFF0]">
+                          <div
+                            className="h-full rounded-[3px] bg-[#007891]"
+                            style={{ width: `${(d.n / Math.max(1, ...c.datas.map((x) => x.n))) * 100}%` }}
+                          />
+                        </div>
+                        <span className="text-right font-medium tabular-nums text-[#193B4F]">{d.pedidos}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="mt-3.5 text-[13px] text-[#767A7B]">Nenhum pedido com previsão na janela.</div>
+                )}
+              </div>
+
+              <div className="border-t border-[#EDEFF0] pt-5">
+                <div className={CABECALHO_TABELA}>Fora da janela</div>
+                <dl className="mt-3 flex flex-col gap-2.5 text-[13px]">
+                  {[
+                    ["Com a previsão já vencida", c.vencidos],
+                    ["Previstos depois da janela", c.depoisDaJanela],
+                    ["Documentos já enviados ao ProntuAI", c.documentos],
+                  ].map(([rotulo, valor]) => (
+                    <div key={rotulo} className="flex items-baseline justify-between gap-4">
+                      <dt className="text-[#5F6B72]">{rotulo}</dt>
+                      <dd className="font-medium tabular-nums text-[#193B4F]">{Number(valor).toLocaleString("pt-BR")}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </div>
+
+              <div className="mt-auto border-t border-[#EDEFF0] pt-4 text-[11.5px] leading-snug text-[#9AA3A8]">
+                <div>No BRNET: {c.credenciado}</div>
+                <div className="mt-2">← → passam para a clínica anterior ou a seguinte · Esc fecha</div>
+              </div>
+            </aside>
+          </div>
+        </DialogContent>
+      )}
+    </Dialog>
   );
 }
 
@@ -304,78 +1362,25 @@ export function AbaUtilizacao({
         <BarrasPercentuais series={visao.coberturaSeries} cor="#00AFAA" />
       </div>
 
-      <div className={`${CARTAO} px-[22px] pt-5 pb-2`}>
-        <div className={TITULO}>Adoção por clínica</div>
-        {/* O rótulo acompanha o "ver todas" do ranking: as duas tabelas leem a
-            mesma lista, então dizer "top 6" com 43 linhas na tela seria mentira. */}
-        <div className={SUB}>
-          {visao.adocao.length === visao.totalClinicas
-            ? `Todas as ${visao.totalClinicas} clínicas`
-            : `Top ${visao.adocao.length} por volume`}{" "}
-          · documentos enviados, revisados e liberados
-        </div>
-        <div className="mt-4 overflow-x-auto">
-          <div className="min-w-[720px]">
-            <div
-              className={`${CABECALHO_TABELA} grid grid-cols-[2fr_1fr_1fr_1fr_1fr_1.2fr] gap-x-[18px] border-b border-[#DFE0E2] px-1 pb-2.5`}
-            >
-              <div>Clínica</div>
-              <div>Usuários</div>
-              <div>Docs</div>
-              <div>Revisados</div>
-              <div>Liberados</div>
-              <div>% liberados</div>
-            </div>
-            {visao.adocao.map((a) => (
-              <div
-                key={a.name}
-                className={`${styles.linhaTip} grid grid-cols-[2fr_1fr_1fr_1fr_1fr_1.2fr] items-center gap-x-[18px] border-b border-[#F3F3F3] px-1 py-3 text-[13.5px] text-[#193B4F]`}
-              >
-                <div className="flex min-w-0 items-center gap-2.5">
-                  <div className="size-2 flex-shrink-0 rounded-full" style={{ background: a.statusColor }} />
-                  <span className={`${styles.tip} ${styles.tipNome} min-w-0`} data-tip={a.tip}>
-                    <span className="block truncate">{a.name}</span>
-                  </span>
-                </div>
-                <div>{a.users}</div>
-                <div>{a.docs}</div>
-                <div>{a.reviewed}</div>
-                <div>{a.exped}</div>
-                <div className="flex items-center gap-2.5">
-                  <div className="h-1.5 flex-1 overflow-hidden rounded-[3px] bg-[#F3F3F3]">
-                    <div className="h-full rounded-[3px] bg-[#007891]" style={{ width: `${a.pct}%` }} />
-                  </div>
-                  <div className="w-[42px] text-right font-medium">{a.pctLabel}</div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
+      {/* Bloco de previsão. Duas perguntas, nesta ordem: quem já está dentro e
+          usa pouco (adesão, semana fechada), e quem ainda está fora e vale a
+          pena incluir. Nenhum número se repete entre os dois. */}
+      {visao.usoSemanal && <TabelaUsoSemana uso={visao.usoSemanal} />}
 
-      <div className={`${CARTAO} px-[22px] pt-5 pb-2`}>
-        <div className={TITULO}>Clínicas com expedições previstas fora do ProntuAI</div>
+      <div className={`${CARTAO} px-[22px] pt-5 pb-5`}>
+        <div className={TITULO}>Quem vale a pena incluir</div>
         <div className={SUB}>
-          {visao.semProntuai === null
+          {visao.foraProntuai === null
             ? "Lista indisponível: não foi possível consultar o BRNET na última atualização"
-            : `${visao.semProntuai.length} credenciadas · ${visao.pedidosSemProntuai} pedidos com previsão de liberação a partir de hoje · menos de 3 documentos no ProntuAI`}
+            : `${visao.foraProntuai.length} credenciadas sem cadastro habilitado · ranqueadas pelos pedidos previstos ${visao.janelaPrevistos} · PICO marca previsto muito acima do ritmo da clínica`}
         </div>
-        {visao.semProntuai && visao.semProntuai.length > 0 && (
-          <div className="mt-4 max-h-[420px] overflow-auto">
-            <div className="min-w-[640px]">
-              <div
-                className={`${CABECALHO_TABELA} sticky top-0 z-10 grid ${COLUNAS_SEM_PRONTUAI} gap-x-[18px] border-b border-[#DFE0E2] bg-white px-1 pb-2.5`}
-              >
-                <div>Clínica</div>
-                <div>Cidade</div>
-                <div>Previstos</div>
-                <div>Próxima previsão</div>
-              </div>
-              {visao.semProntuai.map((c) => (
-                <LinhaClinica key={`${c.name}-${c.local}`} c={c} />
-              ))}
-            </div>
-          </div>
+        {visao.foraProntuai && visao.foraProntuai.length > 0 && (
+          <TabelaForaProntuai
+            linhas={visao.foraProntuai}
+            janelaMedia={visao.janelaMedia}
+            janelaPrevistos={visao.janelaPrevistos}
+            simulador={visao.simulador}
+          />
         )}
       </div>
     </div>

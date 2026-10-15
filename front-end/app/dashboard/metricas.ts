@@ -8,7 +8,9 @@
  */
 import type {
   ClinicaDados,
+  CredenciadoPrevisto,
   DadosDashboard,
+  PrevisaoDia,
   PontoAcuracia,
   PontoSerie,
   Prazos,
@@ -54,6 +56,24 @@ const PERIODOS: Record<
   Tudo: { label: "Tudo", periodo: { serie: "mensal", n: 0 }, grafico: { serie: "mensal", n: 0 } },
 };
 
+/**
+ * Janela do card "Pedidos previstos", em dias contados a partir de hoje.
+ *
+ * Os gráficos e KPIs olham para TRÁS; previsão de liberação olha para frente, e
+ * as duas janelas não podem ser a mesma. O card reaproveita o filtro já
+ * escolhido na tela — não há seletor nem período próprio — e a duração dele vira
+ * o alcance para frente, com teto de um mês: previsão do BRNET a mais de 30 dias
+ * é rara e instável (o prazo do credenciado é de 1 a 3 dias úteis após o
+ * atendimento), então "3 meses" e "Tudo" mostrariam uma cauda sem uso
+ * operacional. Por isso os dois caem no mesmo teto.
+ */
+const JANELA_PREVISTOS: Record<FiltroPeriodo, number> = {
+  Semanal: 7,
+  Mensal: 30,
+  Trimestral: 30,
+  Tudo: 30,
+};
+
 export const ORDEM_FILTROS: FiltroPeriodo[] = ["Semanal", "Mensal", "Trimestral", "Tudo"];
 
 export const ROTULO_FILTRO = (f: FiltroPeriodo) => PERIODOS[f].label;
@@ -68,7 +88,7 @@ const TIPS_KPI: Record<string, string> = {
   "Documentos enviados": "Prontuários recebidos pela plataforma no período.",
   "Documentos revisados": "Já com decisão humana: aprovados ou rejeitados por um revisor.",
   "Expedições via ProntuAI":
-    "Pedidos atendidos nas credenciadas que tiveram o prontuário liberado no ProntuAI, ligados pelo número do pedido no BRNET. Meta: 100%.",
+    "Pedidos atendidos nas credenciadas que tiveram o prontuário processado pelo ProntuAI, ligados pelo número do pedido no BRNET. Meta: 100%.",
 };
 
 const TIPS_ACC: Record<string, string> = {
@@ -115,14 +135,53 @@ const MESES_ABBR = ["JAN", "FEV", "MAR", "ABR", "MAI", "JUN", "JUL", "AGO", "SET
 
 const pad = (n: number) => String(n).padStart(2, "0");
 
-const partes = (chave: string) => {
-  const [y, m, d] = chave.split("-").map(Number);
-  return { y, m, d };
+// Sem `split`/`map`: a chave é sempre ISO com zero à esquerda, e esta função é
+// chamada dezenas de milhares de vezes por recálculo — o array intermediário
+// custava mais que a conta.
+const partes = (chave: string) => ({
+  y: Number(chave.slice(0, 4)),
+  m: Number(chave.slice(5, 7)),
+  d: Number(chave.slice(8, 10)),
+});
+
+// "2026-09-29" -> "29/09", recortando a string. A chave ISO já vem com dois
+// dígitos em cada campo, então não há o que formatar.
+const rotuloSemana = (chave: string) => `${chave.slice(8, 10)}/${chave.slice(5, 7)}`;
+
+const isoUTC = (d: Date) =>
+  `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`;
+
+/** Dia ISO deslocado em `dias`. */
+const maisDias = (iso: string, dias: number) => {
+  const { y, m, d } = partes(iso);
+  return isoUTC(new Date(Date.UTC(y, m - 1, d + dias)));
 };
 
-const rotuloSemana = (chave: string) => {
-  const { m, d } = partes(chave);
-  return `${pad(d)}/${pad(m)}`;
+/**
+ * Segunda-feira da semana ISO de uma data. A mesma chave que o back-end usa em
+ * `desfecho_previsao_semana` e `liberacoes_semana` — as duas pontas precisam
+ * concordar sobre onde a semana começa, ou a tela soma caixas diferentes.
+ */
+const semanaDe = (iso: string) => {
+  const { y, m, d } = partes(iso);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  return isoUTC(new Date(Date.UTC(y, m - 1, d - ((dt.getUTCDay() + 6) % 7))));
+};
+
+/**
+ * "29/09 a 05/10" — a semana inteira, não só o dia em que ela começa.
+ *
+ * Memoizado: existem algumas dezenas de semanas distintas, e o rótulo de cada
+ * uma era refeito uma vez por clínica — centenas de vezes a mesma string, cada
+ * uma com uma data nova por trás.
+ */
+const _intervalos = new Map<string, string>();
+const intervaloSemana = (inicioISO: string) => {
+  const pronto = _intervalos.get(inicioISO);
+  if (pronto !== undefined) return pronto;
+  const rotulo = `${rotuloSemana(inicioISO)} a ${rotuloSemana(maisDias(inicioISO, 6))}`;
+  _intervalos.set(inicioISO, rotulo);
+  return rotulo;
 };
 
 const rotuloMes = (chave: string) => {
@@ -130,7 +189,20 @@ const rotuloMes = (chave: string) => {
   return `${MESES_ABBR[m - 1]}/${String(y).slice(2)}`;
 };
 
-const fmt = (v: number) => v.toLocaleString("pt-BR");
+// Os formatadores são instanciados UMA vez, não a cada número.
+// `v.toLocaleString("pt-BR", {...})` constrói um `Intl.NumberFormat` por
+// chamada, e isso domina o custo de recalcular a visão: medido em 30% do tempo
+// total, só nestas duas funções. Com a instância reaproveitada, a troca de
+// período deixa de travar a tela.
+const NUM_INTEIRO = new Intl.NumberFormat("pt-BR");
+const NUM_UMA_CASA = new Intl.NumberFormat("pt-BR", {
+  minimumFractionDigits: 1,
+  maximumFractionDigits: 1,
+});
+
+const fmt = (v: number) => NUM_INTEIRO.format(v);
+/** Uma casa decimal. A média semanal quase nunca é inteira, e "16,333" polui. */
+const umDecimal = (v: number) => NUM_UMA_CASA.format(v);
 const num = (v: number) => `${v.toFixed(1).replace(".", ",")}%`;
 const pct = (a: number, b: number) => (b ? (a / b) * 100 : 0);
 
@@ -259,35 +331,159 @@ export interface LinhaRanking {
   tip: string;
 }
 
-export interface LinhaAdocao {
-  name: string;
-  users: number;
-  docs: number;
-  reviewed: number;
-  exped: number;
-  pct: number;
-  pctLabel: string;
-  statusColor: string;
+/**
+ * Uma linha de "Quem está usando pouco": uma clínica habilitada numa semana
+ * fechada. Os três desfechos somam `previstos`, então a barra fecha em 100%.
+ *
+ * Aqui previsto e realizado se encontram — e só aqui. Não é agregado dividido
+ * por agregado: o back-end acompanha o MESMO pedido, pelo id, da previsão até o
+ * desfecho. É o que a `LinhaAdesao` não conseguia fazer, e é por isso que ela
+ * misturava uma janela para frente com outra para trás na mesma linha.
+ */
+export interface LinhaUsoSemana {
+  clinica: string;
+  local: string;
+  /** Pedidos com previsão de liberação nesta semana. É o denominador. */
+  previstos: number;
+  /** Liberados e com documento no ProntuAI. */
+  viaProntuai: number;
+  /** Liberados sem passar pela plataforma — o buraco que é com quem cuida de adesão. */
+  fora: number;
+  /** Nem liberados até agora — o buraco que é atraso do credenciado. */
+  naoLiberado: number;
+  /** viaProntuai ÷ previstos, em %. */
+  adesao: number;
+  adesaoLabel: string;
+  adesaoColor: string;
+  /** Larguras da barra empilhada, em % dos previstos. */
+  pctVia: number;
+  pctFora: number;
+  pctNao: number;
   tip: string;
 }
 
-/** Uma linha do painel "Datas das previsões". */
+/** Uma semana fechada, com as clínicas que tinham previsão nela. */
+export interface SemanaUso {
+  /** Segunda-feira da semana ISO. */
+  iso: string;
+  /** "29/09 a 05/10". */
+  label: string;
+  linhas: LinhaUsoSemana[];
+  previstos: number;
+  viaProntuai: number;
+  fora: number;
+  naoLiberado: number;
+  /** Ponderada: viaProntuai ÷ previstos da semana inteira. */
+  adesao: number;
+  adesaoLabel: string;
+}
+
+/**
+ * Indicador "Quem está usando pouco". Só semanas FECHADAS: a adesão precisa do
+ * desfecho para existir, e semana em curso ainda tem pedido no prazo.
+ *
+ * Só semanas a partir de `expedicoes_desde`, também: antes dela o documento não
+ * guardava `pedido_exame_id`, então "passou pelo ProntuAI" daria zero para todo
+ * mundo e a tela acusaria uma debandada que nunca houve.
+ */
+export interface UsoSemanal {
+  /** Da mais recente para a mais antiga. */
+  semanas: SemanaUso[];
+}
+
+/** Um dia da lista de previsões do modal. */
 export interface DataPrevista {
   label: string;
   pedidos: string;
+  /** O mesmo `pedidos`, numérico, para a barra da lista. */
+  n: number;
 }
 
-export interface LinhaSemProntuai {
+/** Uma coluna do histórico semanal do modal. */
+export interface BarraSemana {
+  /** Segunda-feira da semana, ISO. */
+  iso: string;
+  /** "29/09". */
+  label: string;
+  liberacoes: number;
+  /**
+   * Semana que destoa do comportamento dela: mais que o dobro da média e pelo
+   * menos 3 liberações acima. As duas condições juntas porque só a razão marca
+   * ruído (1 → 3 é "três vezes mais" e não quer dizer nada) e só a diferença
+   * marca a clínica grande, onde oscilar 5 é rotina.
+   */
+  pico: boolean;
+  /** Uma das semanas fechadas que entram na média. */
+  naMedia: boolean;
+  /** Semana corrente: ainda não acabou, e o número só pode subir. */
+  parcial: boolean;
+  tip: string;
+}
+
+/**
+ * Uma linha de "Quem vale a pena incluir": um credenciado SEM cadastro no
+ * ProntuAI. Nenhuma métrica de adesão entra aqui — adesão é sobre quem já está
+ * dentro, e misturar as duas foi o que fez quatro indicadores contarem a mesma
+ * história.
+ *
+ * O ranking é pela MÉDIA semanal de liberações. Previsto da janela não serve de
+ * ordem: é uma foto do instante e premia duas coisas erradas — o pico isolado
+ * ("mil na semana que vem") e o credenciado lento, único que tem pedido pendente
+ * na hora do cálculo.
+ *
+ * Média, e não mediana, por decisão de produto (14/10/2026). A mediana derruba
+ * sozinha a clínica de pico único; a média não, então quem denuncia o pico é o
+ * gráfico do modal e a marca de PICO — que é exatamente o fluxo pedido:
+ * ranquear, desconfiar, clicar e conferir.
+ */
+export interface LinhaForaProntuai {
   /** Rótulo completo do BRNET, mostrado ao expandir. */
   credenciado: string;
   name: string;
   local: string;
-  pedidos: number;
-  /** Primeira data prevista; a quebra por dia fica no painel expansível. */
+  /** Média de liberações por semana nas últimas semanas fechadas. */
+  media: number;
+  mediaLabel: string;
+  /** Liberações somadas na mesma janela da média. */
+  total: number;
+  /** Semanas com ao menos uma liberação, na janela da média. */
+  semanasAtivas: number;
+  /** semanasAtivas ÷ semanas da janela, em %. */
+  regularidade: number;
+  regularidadeLabel: string;
+  /** Largura da barra do ranking, em % da maior média da lista. */
+  pct: number;
+  /** Pedidos previstos na janela para frente — coluna de contexto, não de ordem. */
+  previstos: number;
+  /**
+   * Os previstos da janela destoam do ritmo dela: mais que o dobro do que a
+   * média faria esperar no mesmo número de dias. É o "boom momentâneo".
+   */
+  picoPrevisto: boolean;
+  /** O que a média faria esperar nos mesmos dias da janela de previstos. */
+  esperado: number;
+  esperadoLabel: string;
+  /**
+   * Histórico semanal inteiro, para o modal. Uma coluna por semana, inclusive
+   * as zeradas, e o mesmo intervalo para todo credenciado.
+   *
+   * Função, e não lista, porque só o modal lê — uma clínica por vez. Montar as
+   * ~350 × 46 colunas a cada troca de filtro dobrava o custo do recálculo
+   * (medido: 15 → 29 ms), e era exatamente o travamento recém-corrigido.
+   */
+  serie: () => BarraSemana[];
+  /** Primeira data prevista, "—" quando não há nenhuma. */
   proxima: string;
+  /** ISO da próxima previsão, para ordenar por data e não por texto. */
+  proximaISO: string;
   datas: DataPrevista[];
-  /** Vencidos e documentos, no rodapé do painel. */
-  resumo: string;
+  /** Pendentes com a previsão já vencida. */
+  vencidos: number;
+  /** Previstos para depois do fim da janela. */
+  depoisDaJanela: number;
+  /** Documentos que o credenciado já mandou pelo ProntuAI, em todo o histórico. */
+  documentos: number;
+  tip: string;
 }
 
 export interface LinhaMatriz {
@@ -321,10 +517,31 @@ export interface VisaoDashboard {
   prazoTecnico: GraficoPrazo;
   ranking: LinhaRanking[];
   totalClinicas: number;
-  adocao: LinhaAdocao[];
-  /** null quando o BRNET não pôde ser consultado. */
-  semProntuai: LinhaSemProntuai[] | null;
-  pedidosSemProntuai: number;
+  /**
+   * "Quem está usando pouco": adesão por clínica habilitada, semana a semana.
+   * Substituiu a tabela de adesão, o card de projeção e a tabela de
+   * oportunidade — as três liam os mesmos previstos e contavam pedaços da mesma
+   * história, cada uma com uma janela diferente.
+   */
+  usoSemanal: UsoSemanal | null;
+  /**
+   * "Quem vale a pena incluir": credenciados fora do ProntuAI, ranqueados pela
+   * média semanal. Substituiu o card de previstos, a comparação dentro × fora
+   * e a lista de prioridade ordenada por previstos. null sem o BRNET.
+   */
+  foraProntuai: LinhaForaProntuai[] | null;
+  /** Janela para frente dos previstos: "de hoje a 12/11 · 30 dias". */
+  janelaPrevistos: string;
+  /** Intervalo das semanas da média: "27/07 a 05/10". */
+  janelaMedia: string;
+  /**
+   * Insumos do simulador. Ele não recalcula nada do painel: parte do volume
+   * semanal que hoje passa pela plataforma e aplica, sobre a média das
+   * clínicas marcadas, a adesão medida na última semana fechada.
+   */
+  simulador: { viaProntuaiSemana: number; adesao: number; semana: string } | null;
+  /** Rótulo do filtro de período, para os blocos retroativos se situarem. */
+  periodoLabel: string;
 
   kpisAcuracia: Kpi[];
   acuraciaSeries: BarraPercentual[];
@@ -448,7 +665,8 @@ export function calcularVisao({ dados, filtro, comparar, verTodasClinicas }: Opc
   };
 
   // ---- cobertura: pedidos do BRNET com documento liberado no ProntuAI --------
-  // Numerador e denominador contam pedidos, pelo dia de atendimento.
+  // Numerador e denominador contam pedidos, pelo dia de LIBERAÇÃO — realizado
+  // é pedido expedido, não atendido (definição da 1.2).
   const porDia = dados.expedicoes_dia || {};
   const viaPorDia = dados.expedicoes_prontuai_dia || {};
   const dataDe = (iso?: string) => {
@@ -524,6 +742,21 @@ export function calcularVisao({ dados, filtro, comparar, verTodasClinicas }: Opc
     const d = new Date(Date.UTC(q.y, q.m - 1, q.d + 1));
     return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`;
   })();
+  // Janela para frente do card de previstos: de hoje até hoje + (dias - 1), com
+  // o dia de hoje incluído. Sem `gerado_em` não há "hoje" confiável — o relógio
+  // do browser não serve, porque o painel é calculado uma vez por dia no fuso do
+  // servidor —, então o recorte é desligado em vez de sair errado.
+  const diasJanela = JANELA_PREVISTOS[filtro] ?? JANELA_PREVISTOS.Mensal;
+  const fimJanelaISO = (() => {
+    if (!hojeISO) return "";
+    const q = partes(hojeISO);
+    const d = new Date(Date.UTC(q.y, q.m - 1, q.d + diasJanela - 1));
+    return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`;
+  })();
+  const temJanela = !!hojeISO;
+
+  const dataCurta = rotuloSemana;
+
   // No painel expandido o dia da semana importa: é o que responde "isso é pra
   // semana que vem?" sem a pessoa ter que consultar o calendário.
   const rotuloPrevisao = (iso: string) => {
@@ -547,6 +780,244 @@ export function calcularVisao({ dados, filtro, comparar, verTodasClinicas }: Opc
 
   const clinicas = verTodasClinicas ? todas : todas.slice(0, 6);
   const maxClin = Math.max(1, ...clinicas.map((c) => c.docs));
+
+  // ---- previstos, adesão e projeção ----------------------------------------
+  const comProntuai = dados.clinicas_com_prontuai ?? [];
+  const semProntuaiBruto = dados.clinicas_sem_prontuai ?? [];
+  // Os dois vêm null juntos do back-end. Checar os dois mesmo assim: um back-end
+  // anterior a `clinicas_com_prontuai` devolveria só a lista antiga, e aí a
+  // tabela de adesão sairia vazia com a projeção dizendo base zero — pior que
+  // não mostrar nada.
+  const temBrnet = dados.clinicas_sem_prontuai !== null && dados.clinicas_com_prontuai !== null;
+
+  /** Previsões de um credenciado que caem na janela para frente. */
+  // Sem `gerado_em` não há "hoje" confiável, e sem ele o teto de um mês que a
+  // issue exige não pode ser aplicado. Antes esta função deixava passar TODA
+  // previsão nesse caso — o oposto do critério. Agora não passa nenhuma: não
+  // mostrar previsto é seguro, mostrar previsto sem recorte não é.
+  const diasNaJanela = (c: CredenciadoPrevisto) =>
+    temJanela ? c.previsoes.filter((x) => x.data >= hojeISO && x.data <= fimJanelaISO) : [];
+  const somaDias = (dias: PrevisaoDia[]) => dias.reduce((a, x) => a + x.pedidos, 0);
+
+  // ---- "Quem vale a pena incluir": ranking por média semanal --------------
+  // Média das últimas SEMANAS_MEDIA semanas fechadas, com os zeros contados —
+  // sem os zeros, a clínica que liberou 400 numa semana e nada nas outras onze
+  // apareceria com 400 por semana.
+  //
+  // Média e não mediana: decisão de produto (14/10/2026), para a tela falar a
+  // mesma língua de quem a lê. A mediana foi medida e descartada; ela derrubaria
+  // sozinha a clínica de pico único, mas o fluxo pedido é outro — ranquear,
+  // desconfiar, clicar e conferir no gráfico. Quem denuncia o pico, então, é a
+  // marca de PICO e as colunas fora do ritmo, não a ordem da lista.
+  //
+  // Janela fixa para todo mundo — comparar clínicas exige o mesmo denominador.
+  const SEMANAS_MEDIA = 12;
+  const semanaAtualISO = temJanela ? semanaDe(hojeISO) : "";
+  const semanasRecentes = temJanela
+    ? Array.from({ length: SEMANAS_MEDIA }, (_, k) => maisDias(semanaAtualISO, -7 * (k + 1))).reverse()
+    : [];
+
+  const media = (valores: number[]) =>
+    valores.length ? valores.reduce((a, n) => a + n, 0) / valores.length : 0;
+
+  const linhasForaBruto = semProntuaiBruto.map((c) => {
+    const semanal = c.liberacoes_semana ?? {};
+    const recentes = semanasRecentes.map((w) => semanal[w] ?? 0);
+    const med = media(recentes);
+    const dias = diasNaJanela(c);
+    const previstos = somaDias(dias);
+    // Quanto a média faria esperar no mesmo número de dias da janela. Mais
+    // que o dobro disso é o "boom" — e o painel que abre mostra se ele é
+    // mesmo um evento isolado.
+    const esperado = (med * diasJanela) / 7;
+    return {
+      c,
+      dias,
+      previstos,
+      media: med,
+      recentes,
+      semanal,
+      total: recentes.reduce((a, n) => a + n, 0),
+      semanasAtivas: recentes.filter((n) => n > 0).length,
+      esperado,
+      picoPrevisto: previstos >= 5 && previstos > 2 * esperado,
+    };
+  });
+
+  // Entra quem tem histórico OU previsto: sem nenhum dos dois não há o que
+  // ranquear nem o que incluir.
+  const linhasSemProntuai = linhasForaBruto.filter((l) => l.total > 0 || l.previstos > 0);
+  const maiorMedia = Math.max(1, ...linhasSemProntuai.map((l) => l.media));
+
+  // Eixo do histórico no modal: toda semana da primeira liberação buscada até a
+  // semana corrente, contínuo e igual para todo credenciado. O back-end só manda
+  // as semanas com liberação; desenhar só elas encostava três semanas soltas
+  // como se fossem seguidas, e o pico isolado — justamente o que o gráfico
+  // existe para denunciar — parecia ritmo.
+  const semanasHistorico = (() => {
+    let inicio = "";
+    let fim = semanaAtualISO;
+    for (const c of semProntuaiBruto) {
+      for (const w in c.liberacoes_semana ?? {}) {
+        if (!inicio || w < inicio) inicio = w;
+        if (!fim || w > fim) fim = w;
+      }
+    }
+    const semanas: string[] = [];
+    if (!inicio) return semanas;
+    for (let w = inicio; w <= fim; w = maisDias(w, 7)) semanas.push(w);
+    return semanas;
+  })();
+  const naJanelaMedia = new Set(semanasRecentes);
+
+  // ---- "Quem está usando pouco": previsto × expedido, por semana fechada ---
+  // O indicador que a tabela de adesão tentava ser. A diferença é a janela:
+  // aqui a linha inteira fala de UMA semana — o que foi prometido nela e o que
+  // aconteceu com cada um daqueles pedidos. A tabela antiga punha previsto do
+  // futuro ao lado de realizado do passado, e quem batia o olho lia a divisão
+  // de um pelo outro, que não existia.
+  //
+  // Toda a conta vem de `desfecho_previsao_semana`, montada no back-end pedido
+  // a pedido. Aqui só se agrupa e ordena: nenhuma razão nova é inventada.
+  const usoSemanal: UsoSemanal | null = (() => {
+    if (!temBrnet || !temJanela) return null;
+    // Sem a data em que a ligação por pedido começou não dá para saber em que
+    // semana "passou pelo ProntuAI" vira medida confiável — e o indicador
+    // inteiro é sobre isso.
+    const desde = dados.expedicoes_desde;
+    if (!desde) return null;
+
+    const semanaAtual = semanaDe(hojeISO);
+    const chaves = new Set<string>();
+    comProntuai.forEach((c) =>
+      Object.keys(c.desfecho_previsao_semana ?? {}).forEach((s) => {
+        // Fechada e inteiramente dentro do período com ligação por pedido.
+        if (s < semanaAtual && s >= desde) chaves.add(s);
+      }),
+    );
+    if (!chaves.size) return null;
+
+    const semanas = [...chaves]
+      .sort()
+      .reverse()
+      .map((iso) => {
+        const linhas: LinhaUsoSemana[] = [];
+        comProntuai.forEach((c) => {
+          const t = c.desfecho_previsao_semana?.[iso];
+          if (!t) return;
+          const [viaProntuai, fora, naoLiberado] = t;
+          const previstos = viaProntuai + fora + naoLiberado;
+          // Clínica sem previsão naquela semana não tem o que reconciliar —
+          // fica fora da lista em vez de entrar como uma linha de zeros.
+          if (!previstos) return;
+          const adesao = (viaProntuai / previstos) * 100;
+          const clinica = c.clinica ?? c.nome;
+          linhas.push({
+            clinica,
+            local: c.cidade && c.uf ? `${c.cidade}/${c.uf}` : "—",
+            previstos,
+            viaProntuai,
+            fora,
+            naoLiberado,
+            adesao,
+            adesaoLabel: num(adesao),
+            adesaoColor: adesao >= 90 ? POS : adesao >= 75 ? CORES.alerta : NEG,
+            pctVia: pct(viaProntuai, previstos),
+            pctFora: pct(fora, previstos),
+            pctNao: pct(naoLiberado, previstos),
+            tip:
+              `${clinica} — ${fmt(previstos)} previstos na semana: ${fmt(viaProntuai)} pela plataforma, ` +
+              `${fmt(fora)} liberados por fora, ${fmt(naoLiberado)} ainda não liberados`,
+          });
+        });
+        // Ordem padrão: pelo volume ABSOLUTO que escapou da plataforma, não
+        // pela taxa. 30% de 10 pedidos não é alvo de visita; 15% de 400 é.
+        linhas.sort((a, b) => b.fora - a.fora || b.previstos - a.previstos);
+
+        const soma = (f: (l: LinhaUsoSemana) => number) => linhas.reduce((a, l) => a + f(l), 0);
+        const previstos = soma((l) => l.previstos);
+        const viaProntuai = soma((l) => l.viaProntuai);
+        const adesao = pct(viaProntuai, previstos);
+        return {
+          iso,
+          label: intervaloSemana(iso),
+          linhas,
+          previstos,
+          viaProntuai,
+          fora: soma((l) => l.fora),
+          naoLiberado: soma((l) => l.naoLiberado),
+          adesao,
+          adesaoLabel: num(adesao),
+        };
+      });
+
+    // Nada de projeção aqui: este indicador é do passado inteiro. O futuro é o
+    // outro, e misturar os dois foi o que fez a projeção virar um card.
+    return { semanas };
+  })();
+
+  // Ordem padrão: média desc, desempatando pelo volume total da janela. As
+  // duas colunas são do mesmo histórico, então o desempate não troca de
+  // grandeza no meio do ranking.
+  const linhasForaRanqueadas: LinhaForaProntuai[] = linhasSemProntuai
+    .slice()
+    .sort((a, b) => b.media - a.media || b.total - a.total)
+    .map((l) => {
+      const { c, dias } = l;
+      const foraDaJanela = c.pedidos_previstos - l.previstos;
+      // A série do modal mostra o histórico INTEIRO, não só as 12 semanas da
+      // média: a pergunta que ele responde é "isso é comportamento ou foi
+      // uma semana?", e cortar o histórico esconderia justamente a resposta.
+      const porSemana = c.liberacoes_semana ?? {};
+      const serie = () => semanasHistorico.map((w) => {
+        const liberacoes = porSemana[w] ?? 0;
+        const pico = liberacoes > 2 * l.media && liberacoes >= l.media + 3;
+        const parcial = w === semanaAtualISO;
+        return {
+          iso: w,
+          label: rotuloSemana(w),
+          liberacoes,
+          pico,
+          naMedia: naJanelaMedia.has(w),
+          parcial,
+          tip:
+            `${intervaloSemana(w)} — ${fmt(liberacoes)} ${liberacoes === 1 ? "liberação" : "liberações"}` +
+            (parcial ? " até agora, semana em andamento" : "") +
+            (pico ? ` · acima do ritmo dela (média ${umDecimal(l.media)})` : ""),
+        };
+      });
+      return {
+        credenciado: c.credenciado,
+        name: c.nome,
+        local: c.cidade && c.uf ? `${c.cidade}/${c.uf}` : "—",
+        media: l.media,
+        mediaLabel: umDecimal(l.media),
+        total: l.total,
+        semanasAtivas: l.semanasAtivas,
+        regularidade: pct(l.semanasAtivas, SEMANAS_MEDIA),
+        regularidadeLabel: `${l.semanasAtivas}/${SEMANAS_MEDIA}`,
+        pct: pct(l.media, maiorMedia),
+        previstos: l.previstos,
+        picoPrevisto: l.picoPrevisto,
+        esperado: l.esperado,
+        esperadoLabel: umDecimal(l.esperado),
+        serie,
+        proxima: dias.length ? dataCurta(dias[0].data) : "—",
+        proximaISO: dias.length ? dias[0].data : "",
+        datas: dias.map((x) => ({ label: rotuloPrevisao(x.data), pedidos: fmt(x.pedidos), n: x.pedidos })),
+        vencidos: c.vencidos,
+        depoisDaJanela: foraDaJanela,
+        documentos: c.documentos,
+        tip:
+          `${c.nome} — média de ${umDecimal(l.media)} liberações por semana em ` +
+          `${l.semanasAtivas} das últimas ${SEMANAS_MEDIA} semanas (${fmt(l.total)} no total)`,
+      };
+    });
+
+  // A semana que serve de premissa ao simulador: a última fechada medida no
+  // indicador de cima. O simulador não inventa adesão nenhuma — usa a que
+  // acabou de ser mostrada na tela, e diz de qual semana ela veio.
+  const ultimaSemana = usoSemanal?.semanas[0] ?? null;
 
   // ---- acurácia: mesma janela de período e de gráfico da utilização --------
   const accP = dados.acuracia?.[cfg.periodo.serie] ?? [];
@@ -608,7 +1079,10 @@ export function calcularVisao({ dados, filtro, comparar, verTodasClinicas }: Opc
       ["Exame faltante que a IA não detectou", soma(accAtual, "mot_exame_nao_detectado"), CORES.negativo],
       ["IA não reconheceu exame que estava no PDF", soma(accAtual, "mot_matching_ia"), CORES.alerta],
       ["Regra formal que a IA ainda não verifica", soma(accAtual, "mot_regra_formal"), CORES.agua],
-      ["Revisor não registrou o motivo", soma(accAtual, "mot_sem_justificativa"), "#9AA9B3"],
+      // Inclui o campo em branco e o motivo sem conteúdo de causa ("ok",
+      // "prontuário correto"). Os dois dizem a mesma coisa: houve divergência e
+      // não se sabe por quê. Ver `dashboard_indicadores.sql`.
+      ["Revisor não informou a causa", soma(accAtual, "mot_sem_justificativa"), "#9AA9B3"],
       ["Outros motivos", soma(accAtual, "mot_outro"), "#BFC3C6"],
     ] as [string, number, string][]
   )
@@ -718,38 +1192,27 @@ export function calcularVisao({ dados, filtro, comparar, verTodasClinicas }: Opc
 
     totalClinicas: todas.length,
 
-    adocao: clinicas.map((c) => {
-      const p = Math.round(pct(c.validados, c.docs));
-      return {
-        name: c.nome,
-        users: c.usuarios,
-        docs: c.docs,
-        reviewed: c.revisados,
-        exped: c.validados,
-        pct: p,
-        pctLabel: `${p}%`,
-        statusColor: p >= 90 ? POS : p >= 75 ? CORES.alerta : NEG,
-        tip: `${c.nome} — ${fmt(c.docs - c.revisados)} aguardando revisão de ${fmt(c.docs)} enviados`,
-      };
-    }),
+    foraProntuai: temBrnet
+      ? linhasForaRanqueadas
+      : null,
+    janelaPrevistos: temJanela
+      ? `de hoje a ${dataCurta(fimJanelaISO)} · ${diasJanela} dias`
+      : "sem data de referência do back-end — previstos indisponíveis",
+    janelaMedia: semanasRecentes.length
+      ? `${dataCurta(semanasRecentes[0])} a ${dataCurta(maisDias(semanasRecentes[semanasRecentes.length - 1], 6))}`
+      : "—",
 
-    semProntuai:
-      dados.clinicas_sem_prontuai?.map((c) => {
-        const q = partes(c.previsoes[0].data);
-        const docs = c.documentos
-          ? `${c.documentos} documento${c.documentos > 1 ? "s" : ""} no ProntuAI`
-          : "nenhum documento no ProntuAI";
-        return {
-          credenciado: c.credenciado,
-          name: c.nome,
-          local: c.cidade && c.uf ? `${c.cidade}/${c.uf}` : "—",
-          pedidos: c.pedidos_previstos,
-          proxima: `${pad(q.d)}/${pad(q.m)}`,
-          datas: c.previsoes.map((p) => ({ label: rotuloPrevisao(p.data), pedidos: fmt(p.pedidos) })),
-          resumo: (c.vencidos ? `${fmt(c.vencidos)} com previsão vencida · ` : "") + docs,
-        };
-      }) ?? null,
-    pedidosSemProntuai: (dados.clinicas_sem_prontuai ?? []).reduce((a, c) => a + c.pedidos_previstos, 0),
+    periodoLabel: nomePeriodo(cfg.periodo.serie, atual),
+
+    usoSemanal,
+
+    simulador: ultimaSemana
+      ? {
+          viaProntuaiSemana: ultimaSemana.viaProntuai,
+          adesao: ultimaSemana.adesao,
+          semana: ultimaSemana.label,
+        }
+      : null,
 
     kpisAcuracia: [
       kpiAcc(
