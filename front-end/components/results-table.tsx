@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import {
@@ -110,6 +110,46 @@ export function ResultsTable({
   }, [initialSearch, serverMode])
 
   const effectiveSearch = serverMode ? (controlledSearchQuery ?? "") : searchQuery
+
+  /**
+   * Busca com debounce no modo servidor.
+   *
+   * O que o usuário digita vive em `rascunhoBusca` e só vira consulta depois de
+   * uma pausa. Sem isto era uma requisição POR TECLA — medido no Histórico,
+   * digitar "SILVA" disparava 5 idas ao servidor. Não dava para perceber
+   * enquanto a tela filtrava no cliente (ela baixava a coleção inteira e
+   * filtrava em memória); passou a importar quando a busca foi para o banco.
+   *
+   * 400ms é o mesmo valor que `checagem-table.tsx` já usa, para as duas telas
+   * se comportarem igual.
+   */
+  const [rascunhoBusca, setRascunhoBusca] = useState(effectiveSearch)
+  // O último valor que NÓS empurramos. Serve para distinguir "o pai mudou a
+  // busca" de "o pai está só ecoando o que acabamos de mandar" — sem isso, o
+  // eco chegaria no meio da digitação e apagaria as letras seguintes.
+  const ultimoEnviadoRef = useRef(effectiveSearch)
+
+  useEffect(() => {
+    if (effectiveSearch === ultimoEnviadoRef.current) return
+    ultimoEnviadoRef.current = effectiveSearch
+    setRascunhoBusca(effectiveSearch)
+  }, [effectiveSearch])
+
+  useEffect(() => {
+    if (!serverMode) return
+    if (rascunhoBusca === effectiveSearch) return
+    const timer = window.setTimeout(() => {
+      ultimoEnviadoRef.current = rascunhoBusca
+      onSearchQueryChange?.(rascunhoBusca)
+      onPageChange?.(1)
+    }, 400)
+    return () => window.clearTimeout(timer)
+    // `onSearchQueryChange`/`onPageChange` ficam de fora de propósito: elas
+    // mudam de identidade a cada render do pai e reiniciariam o timer sempre,
+    // fazendo a busca nunca disparar enquanto a tela renderizasse.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rascunhoBusca, effectiveSearch, serverMode])
+
   const effectiveStatusFilter = serverMode ? (controlledStatusFilter ?? "all") : statusFilter
   const effectiveClinicFilter = serverMode ? (controlledClinicFilter ?? "all") : clinicFilter
   const effectiveCurrentPage = serverMode ? (controlledCurrentPage ?? 1) : currentPage
@@ -182,11 +222,11 @@ export function ResultsTable({
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
           <Input
             placeholder="Buscar por CPF ou nome do documento..."
-            value={effectiveSearch}
+            value={serverMode ? rascunhoBusca : searchQuery}
             onChange={(e) => {
               if (serverMode) {
-                onSearchQueryChange?.(e.target.value)
-                onPageChange?.(1)
+                // Só o rascunho: quem consulta o servidor é o debounce acima.
+                setRascunhoBusca(e.target.value)
               } else {
                 setSearchQuery(e.target.value)
                 setCurrentPage(1)

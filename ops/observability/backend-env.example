@@ -40,7 +40,7 @@ OTEL_RESOURCE_ATTRIBUTES=deployment.environment.name=production,service.version=
 # O token é o mesmo OTEL_AUTH_TOKEN configurado no coletor de lá; note o %20,
 # que é o espaco depois de "Bearer" — sem o URL-encoding o header sai quebrado
 # e o coletor responde 401.
-OTEL_EXPORTER_OTLP_ENDPOINT=https://obs.exemplo.com:4317
+OTEL_EXPORTER_OTLP_ENDPOINT=https://brmed-otel-collector.duckdns.org
 # Endpoint http:// para host remoto e RECUSADO pelo backend (a telemetria
 # nao sobe, a aplicacao sim). Em rede privada, reconheca com:
 # OTEL_ALLOW_INSECURE_ENDPOINT=true
@@ -53,6 +53,9 @@ OTEL_EXPORTER_OTLP_TIMEOUT=10000
 # Os tres sinais ligados: Tempo, Prometheus e Loki existem na Oracle.
 OTEL_METRICS_EXPORTER=otlp
 OTEL_TRACES_EXPORTER=otlp
+# ATENCAO: so ligue os logs depois de a imagem em producao incluir o
+# mascaramento de CPF/CNPJ (commits e315560 e 658e6a0). Antes disso, use
+# none: o Loki da Oracle e compartilhado entre projetos.
 OTEL_LOGS_EXPORTER=otlp
 
 # Sampling das traces (metricas e logs nunca sao amostrados). always_on é a

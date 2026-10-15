@@ -38,9 +38,18 @@ export function useDocumentsPaged(options: UseDocumentsPagedOptions) {
   const documentsSignatureRef = useRef<string>("")
   const paginationSignatureRef = useRef<string>("")
   const summarySignatureRef = useRef<string>("")
+  // Aborta a requisição anterior quando os parâmetros mudam. Sem isto, digitar
+  // na busca deixa várias chamadas em voo e quem responder por último vence —
+  // que não é necessariamente a última digitada. O efeito na tela é a lista
+  // "voltar" para um resultado antigo sozinha.
+  const abortRef = useRef<AbortController | null>(null)
 
   const fetchPage = useCallback(
     async (silent = false) => {
+      abortRef.current?.abort()
+      const controller = new AbortController()
+      abortRef.current = controller
+
       if (!silent) setLoading(true)
       setError(null)
 
@@ -56,7 +65,10 @@ export function useDocumentsPaged(options: UseDocumentsPagedOptions) {
         if (statusFilter !== "all") url.searchParams.set("status_filter", statusFilter)
         if (clinicFilter !== "all") url.searchParams.set("clinic_id", clinicFilter)
 
-        const response = await authFetch(url.toString(), { cache: "no-store" })
+        const response = await authFetch(url.toString(), {
+          cache: "no-store",
+          signal: controller.signal,
+        })
         if (!response.ok) {
           const detail = await response.text().catch(() => "Erro ao carregar documentos paginados")
           throw new Error(detail)
@@ -90,11 +102,18 @@ export function useDocumentsPaged(options: UseDocumentsPagedOptions) {
           setSummaryCounts(nextSummary)
         }
       } catch (err) {
+        // Aborto é o fluxo normal de "os parâmetros mudaram": mostrar erro aqui
+        // faria a tela piscar uma mensagem vermelha a cada tecla digitada.
+        if (controller.signal.aborted) return
         const message = err instanceof Error ? err.message : "Erro ao carregar documentos paginados"
         setError(message)
       } finally {
-        setLoading(false)
-        if (!silent) setRefreshing(false)
+        // A chamada que já foi substituída não mexe mais no estado de
+        // carregamento: quem manda é a que está em voo.
+        if (abortRef.current === controller) {
+          setLoading(false)
+          if (!silent) setRefreshing(false)
+        }
       }
     },
     [session?.user?.email, queue, page, pageSize, compact, search, statusFilter, clinicFilter],
@@ -104,15 +123,55 @@ export function useDocumentsPaged(options: UseDocumentsPagedOptions) {
     fetchPage(false)
   }, [fetchPage])
 
+  useEffect(() => () => abortRef.current?.abort(), [])
+
   const refreshSilently = useCallback(() => {
     fetchPage(true)
   }, [fetchPage])
 
   useVisibleInterval(refreshSilently, refreshIntervalMs)
 
+  // Clicar no item já ativo da sidebar recarrega a lista (`app-sidebar.tsx`).
+  // O listener morava no hook legado `useDocuments`, que só o Histórico usava —
+  // em Pendentes e Checagem o evento era disparado e ninguém ouvia. Aqui ele
+  // vale para as três telas.
+  useEffect(() => {
+    const aoPedirRefresh = () => refreshSilently()
+    window.addEventListener("documents:refresh", aoPedirRefresh)
+    return () => window.removeEventListener("documents:refresh", aoPedirRefresh)
+  }, [refreshSilently])
+
+  // Trocar de filtro volta para a página 1 — senão a página 4 de um filtro vira
+  // a página 4 (quase sempre vazia) do filtro novo.
+  //
+  // O reset vai JUNTO com o filtro, no mesmo setter, e não num `useEffect`
+  // separado: no efeito, o React já teria renderizado com {filtro novo, página
+  // antiga} e disparado uma busca que seria descartada no render seguinte. Aqui
+  // os dois `set` entram no mesmo lote e sai uma requisição só.
+  // `setSearch`/`setStatusFilter`/`setClinicFilter`/`setPage` vêm do `useState`
+  // e são estáveis, então `[]` como dependência está correto.
+  const aplicarSearch = useCallback((valor: string) => {
+    setSearch(valor)
+    setPage(1)
+  }, [])
+
+  const aplicarStatusFilter = useCallback(
+    (valor: "all" | "approved" | "rejected" | "pending_review") => {
+      setStatusFilter(valor)
+      setPage(1)
+    },
+    [],
+  )
+
+  const aplicarClinicFilter = useCallback((valor: string) => {
+    setClinicFilter(valor)
+    setPage(1)
+  }, [])
+
+  // `queue` e `pageSize` vêm das opções do hook, não de um setter daqui.
   useEffect(() => {
     setPage(1)
-  }, [queue, search, statusFilter, clinicFilter, pageSize])
+  }, [queue, pageSize])
 
   return {
     documents,
@@ -125,11 +184,11 @@ export function useDocumentsPaged(options: UseDocumentsPagedOptions) {
     totalItems,
     hasNext,
     search,
-    setSearch,
+    setSearch: aplicarSearch,
     statusFilter,
-    setStatusFilter,
+    setStatusFilter: aplicarStatusFilter,
     clinicFilter,
-    setClinicFilter,
+    setClinicFilter: aplicarClinicFilter,
     summaryCounts,
     refresh: fetchPage,
   }

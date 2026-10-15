@@ -55,6 +55,15 @@ function PendentesContent() {
   const displayResults = useMemo(() => documents.map(documentToProcessResult), [documents])
   const pendingResults = displayResults
   const showRefreshing = refreshing
+
+  // Spinner só no PRIMEIRO carregamento. Trocar a tabela pelo spinner a cada
+  // `loading` desmontava o campo de busca junto: medido, o input virava outro
+  // nó do DOM a cada consulta e o foco se perdia no meio da digitação. É a
+  // mesma trava que a Checagem já tinha e que o Histórico passou a ter.
+  const [carregouUmaVez, setCarregouUmaVez] = useState(false)
+  useEffect(() => {
+    if (!loading) setCarregouUmaVez(true)
+  }, [loading])
   const totalPendentes = summaryCounts.pending_review
   const totalAprovados = summaryCounts.approved
   const totalRejeitados = summaryCounts.rejected
@@ -169,7 +178,7 @@ function PendentesContent() {
               )}
 
               <div className="flex-1 min-h-0 bg-white rounded-lg p-6 shadow-sm overflow-hidden flex flex-col">
-                {loading ? (
+                {loading && !carregouUmaVez ? (
                   <div className="flex-1 flex items-center justify-center text-muted-foreground gap-3">
                     <Loader2 className="size-4 animate-spin" />
                     <span>Sincronizando documentos com o banco...</span>

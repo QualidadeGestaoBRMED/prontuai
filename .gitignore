@@ -105,3 +105,8 @@ back-end/logs_teste_pii/
 # Dado do Postgres (bind mount de docker-compose.db.yml) nunca deve ser versionado
 /pgdata/
 **/pgdata/
+
+# Confs de nginx de host dinâmico (duckdns), usadas em ambiente de observabilidade
+# fora de produção. A de produção — api.prontuai.grupobrmed.com.br.conf — continua
+# versionada: estas são por máquina e não descrevem o deploy oficial.
+ops/deploy/nginx/*.duckdns.org.conf

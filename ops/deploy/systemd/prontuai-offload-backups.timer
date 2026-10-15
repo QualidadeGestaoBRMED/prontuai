@@ -1,0 +1,15 @@
+[Unit]
+Description=Confere diariamente o tamanho do bucket de backup (ver prontuai-offload-backups.service)
+
+[Timer]
+# Diario, e nao semanal: o backup sobe um dump por dia, e um teto checado so
+# uma vez por semana pode ser furado entre duas execucoes. Quando o bucket esta
+# abaixo do gatilho, a execucao e um `rclone size` e nada mais.
+#
+# 05:00 — depois do backup das 03:15 e do arquivamento de segunda 04:30.
+OnCalendar=*-*-* 05:00:00
+Persistent=true
+RandomizedDelaySec=600
+
+[Install]
+WantedBy=timers.target

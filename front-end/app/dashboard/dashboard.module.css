@@ -129,3 +129,30 @@
   visibility: visible;
   transform: translateY(-50%) rotate(45deg) scale(1);
 }
+
+/*
+ * Colunas das bordas do gráfico do modal. Centralizado, o balão da primeira e
+ * da última semana vazaria para fora do modal — que corta o que passa da borda
+ * — e o texto sumia pela metade. Ali ele se alinha pela borda da coluna; a
+ * seta continua no centro dela.
+ */
+.tipInicio::after {
+  left: 0;
+  transform: scale(0.95);
+  transform-origin: bottom left;
+}
+
+.tipInicio:hover::after {
+  transform: scale(1);
+}
+
+.tipFim::after {
+  left: auto;
+  right: 0;
+  transform: scale(0.95);
+  transform-origin: bottom right;
+}
+
+.tipFim:hover::after {
+  transform: scale(1);
+}

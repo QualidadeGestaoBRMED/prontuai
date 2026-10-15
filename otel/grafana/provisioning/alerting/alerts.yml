@@ -260,6 +260,47 @@ groups:
         labels:
           severity: warning
 
+      - uid: prontuai-job-offload-backups-atrasado
+        title: Offload dos backups para o Drive sem sucesso ha mais de 3 dias
+        condition: C
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            relativeTimeRange:
+              from: 600
+              to: 0
+            model:
+              datasource:
+                type: prometheus
+                uid: prometheus
+              expr: "time() - max(job_last_success_timestamp_seconds{task=\"offload-backups-drive\"})"
+              refId: A
+              queryType: range
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              type: classic_conditions
+              conditions:
+                - evaluator:
+                    type: gt
+                    params:
+                      - 259200
+                  operator:
+                    type: and
+                  reducer:
+                    type: last
+                  query:
+                    params:
+                      - A
+        for: 30m
+        noDataState: Alerting
+        execErrState: Error
+        annotations:
+          summary: "O controle de tamanho do bucket de backup nao conclui ha mais de 3 dias"
+          description: "O job e diario e sai com sucesso tambem quando o bucket esta abaixo do teto; 3 dias toleram execucoes puladas pelo lock. Sem ele o bucket passa do teto de 4 GB. Veja: journalctl -u prontuai-offload-backups.service -n 50."
+        labels:
+          severity: warning
+
       - uid: prontuai-job-com-falha
         title: Job de manutencao terminou com erro
         condition: C
