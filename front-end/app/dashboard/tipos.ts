@@ -93,8 +93,8 @@ export interface CredenciadoPrevisto {
   uf: string | null;
   /**
    * Nome do cadastro no ProntuAI que mais documentos ligou a este credenciado —
-   * a chave que casa com a tabela "Adoção por clínica". null quando o
-   * credenciado nunca enviou documento, que é a regra do lado sem ProntuAI.
+   * a chave que casa as duas pontas do cruzamento. null quando o credenciado
+   * nunca enviou documento, que é a regra do lado sem ProntuAI.
    */
   clinica: string | null;
   /** Pedidos ainda não liberados com previsão a partir de hoje. */
