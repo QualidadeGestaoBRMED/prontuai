@@ -612,18 +612,16 @@ function LinhaFora({
           type="button"
           onClick={() => onAbrir(c.credenciado)}
           aria-haspopup="dialog"
-          className={`group col-span-5 grid ${COLUNAS_FORA_LINHA} items-center gap-x-[18px] rounded-[6px] py-3 text-left text-[13.5px] text-[#193B4F] transition-colors hover:bg-[#F7F9FA]`}
+          className={`group col-span-5 grid ${COLUNAS_FORA_LINHA} cursor-pointer items-center gap-x-[18px] rounded-[6px] py-3 text-left text-[13.5px] text-[#193B4F] transition-colors hover:bg-[#F7F9FA]`}
         >
-          <div className="flex min-w-0 items-center gap-2">
-            <svg
-              viewBox="0 0 16 16"
-              aria-hidden="true"
-              className="size-3.5 flex-none text-[#9AA3A8] transition-colors group-hover:text-[#007891]"
-            >
-              <path d="M6 4l4 4-4 4" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-            <span className="truncate">{c.name}</span>
-          </div>
+          {/* O nome tem cara de link porque é o que abre o modal — a linha
+              inteira abre, para o alvo ser grande, mas é no nome que o olho
+              procura. A seta que vinha antes dele é o símbolo de "expandir aqui
+              embaixo", que era o comportamento antigo: com o modal, prometia
+              outra coisa. */}
+          <span className="min-w-0 truncate text-[#007891] decoration-[#7EBFCC] underline-offset-[3px] group-hover:underline">
+            {c.name}
+          </span>
           <div className="min-w-0 truncate text-[#767A7B]">{c.local}</div>
           <div className="flex items-center gap-2.5">
             <div className="h-1.5 flex-1 overflow-hidden rounded-[3px] bg-[#F3F3F3]">
@@ -980,7 +978,7 @@ function ModalHistoricoFora({
         : null;
 
   const botaoNav =
-    "flex size-[34px] items-center justify-center text-[#193B4F] transition-colors hover:bg-[#F3F6F8] disabled:cursor-default disabled:text-[#C6CBCE] disabled:hover:bg-transparent";
+    "flex size-[34px] cursor-pointer items-center justify-center text-[#193B4F] transition-colors hover:bg-[#F3F6F8] disabled:cursor-default disabled:text-[#C6CBCE] disabled:hover:bg-transparent";
 
   return (
     <Dialog open={aberto && !!c} onOpenChange={(v) => !v && onFechar()}>
