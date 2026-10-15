@@ -1827,6 +1827,7 @@ class PostgresUserDatabase:
             issue_items=list(model.issue_items or []),
             document_issues=list(model.document_issues or []),
             notes=model.notes,
+            motivo_externo=model.motivo_externo,
             reviewed_by_email=model.reviewed_by_email,
             reviewed_by_id=model.reviewed_by_id,
             created_at=model.created_at,
@@ -1856,6 +1857,7 @@ class PostgresUserDatabase:
         notes: Optional[str],
         reviewed_by_id: Optional[str] = None,
         reviewed_by_email: Optional[str] = None,
+        motivo_externo: Optional[str] = None,
     ) -> DocumentFeedback:
         """
         Cria ou substitui o parecer do documento.
@@ -1894,6 +1896,9 @@ class PostgresUserDatabase:
             model.issue_items = list(issue_items or [])
             model.document_issues = list(document_issues or [])
             model.notes = notes
+            # Sempre escrito, inclusive como None: reavaliar de "motivo externo"
+            # para "a IA errou" tem de apagar o motivo da versão anterior.
+            model.motivo_externo = motivo_externo
             model.reviewed_by_id = reviewed_by_id
             model.reviewed_by_email = reviewed_by_email
             session.commit()

@@ -17,6 +17,7 @@ from starlette.requests import Request
 from app.models.feedback import (
     CATEGORIAS_DOCUMENTO,
     CATEGORIAS_EXAME,
+    MOTIVOS_EXTERNOS,
     DocumentFeedback,
     DocumentFeedbackInput,
 )
@@ -89,7 +90,8 @@ class BancoFalso:
 
     def upsert_document_feedback(self, document_id, status, issue_categories, issue_items,
                                  document_issues, notes,
-                                 reviewed_by_id=None, reviewed_by_email=None):
+                                 reviewed_by_id=None, reviewed_by_email=None,
+                                 motivo_externo=None):
         # Guarda os dicts crus: é isso que vai para a coluna JSONB. O
         # DocumentFeedback abaixo reconverte para modelo, então assertar nele
         # testaria o Pydantic, não a fronteira handler → banco.
@@ -102,6 +104,7 @@ class BancoFalso:
             issue_items=issue_items,
             document_issues=document_issues,
             notes=notes,
+            motivo_externo=motivo_externo,
             reviewed_by_id=reviewed_by_id,
             reviewed_by_email=reviewed_by_email,
         )
@@ -463,6 +466,101 @@ def test_falha_da_auditoria_nao_derruba_o_parecer(monkeypatch):
     assert salvo.status == "IA_CORRETA"
 
 
+# ── motivo externo ───────────────────────────────────────────────────────────
+#
+# A IA leu certo e a decisão mudou por algo fora do documento. É um ACERTO: o
+# painel de acurácia lê este campo para não contar a divergência como erro. Sem
+# ele, o modal — que não pede texto para aprovar — apagava o sinal que o painel
+# antes tirava do texto livre da aprovação.
+
+@pytest.mark.parametrize("motivo", sorted(MOTIVOS_EXTERNOS - {"OUTRO"}))
+def test_acerto_com_motivo_externo_grava_o_motivo(monkeypatch, motivo):
+    banco = BancoFalso([documento()])
+    mod = carregar(monkeypatch, banco)
+    salvo = salvar(mod, banco, DocumentFeedbackInput(status="IA_CORRETA", motivo_externo=motivo))
+    assert salvo.status == "IA_CORRETA"
+    assert banco.gravados[-1].motivo_externo == motivo
+    # Não é erro da IA: não pode aparecer como categoria de problema.
+    assert salvo.issue_categories == []
+
+
+@pytest.mark.parametrize("status", ["IA_CORRETA_COM_AJUSTES", "IA_INCORRETA"])
+def test_motivo_externo_em_parecer_negativo_da_422(monkeypatch, status):
+    """"A IA errou" e "a IA leu certo, decidi por outro motivo" não convivem."""
+    banco = BancoFalso([documento()])
+    mod = carregar(monkeypatch, banco)
+    payload = entrada(status=status)
+    payload.motivo_externo = "EXAME_POR_FORA"
+    with pytest.raises(HTTPException) as exc:
+        salvar(mod, banco, payload)
+    assert exc.value.status_code == 422
+    assert banco.gravados == []
+
+
+def test_motivo_externo_desconhecido_e_recusado():
+    with pytest.raises(ValidationError):
+        DocumentFeedbackInput(status="IA_CORRETA", motivo_externo="QUALQUER_COISA")
+
+
+def test_motivo_externo_outro_exige_texto(monkeypatch):
+    banco = BancoFalso([documento()])
+    mod = carregar(monkeypatch, banco)
+    with pytest.raises(HTTPException) as exc:
+        salvar(mod, banco, DocumentFeedbackInput(status="IA_CORRETA", motivo_externo="OUTRO"))
+    assert exc.value.status_code == 422
+
+
+def test_motivo_externo_outro_com_texto_e_valido(monkeypatch):
+    banco = BancoFalso([documento()])
+    mod = carregar(monkeypatch, banco)
+    salvo = salvar(mod, banco, DocumentFeedbackInput(
+        status="IA_CORRETA", motivo_externo="OUTRO", notes="Homologação do cliente."))
+    assert salvo.motivo_externo == "OUTRO"
+    assert salvo.notes == "Homologação do cliente."
+
+
+def test_acerto_continua_sem_texto_fora_do_outro(monkeypatch):
+    """O texto num acerto só existe para explicar o "Outro". Com motivo
+    codificado, ou sem motivo nenhum, segue proibido como antes."""
+    banco = BancoFalso([documento()])
+    mod = carregar(monkeypatch, banco)
+    for motivo in ("EXAME_POR_FORA", None):
+        with pytest.raises(HTTPException) as exc:
+            salvar(mod, banco, DocumentFeedbackInput(
+                status="IA_CORRETA", motivo_externo=motivo, notes="texto solto"))
+        assert exc.value.status_code == 422
+
+
+def test_motivo_externo_nao_aceita_problema_apontado(monkeypatch):
+    banco = BancoFalso([documento()])
+    mod = carregar(monkeypatch, banco)
+    with pytest.raises(HTTPException) as exc:
+        salvar(mod, banco, DocumentFeedbackInput(
+            status="IA_CORRETA", motivo_externo="GUIA_NAO_ANEXADA", document_issues=["OCR_NOME"]))
+    assert exc.value.status_code == 422
+
+
+def test_reavaliar_sem_motivo_apaga_o_motivo_anterior(monkeypatch):
+    """O upsert reescreve o parecer inteiro: trocar para "a IA errou" não pode
+    deixar o motivo externo da versão anterior grudado."""
+    banco = BancoFalso([documento()])
+    mod = carregar(monkeypatch, banco)
+    salvar(mod, banco, DocumentFeedbackInput(status="IA_CORRETA", motivo_externo="EXAME_POR_FORA"))
+    salvar(mod, banco, entrada())
+    assert banco.gravados[-1].motivo_externo is None
+
+
+def test_auditoria_registra_o_motivo_externo(monkeypatch):
+    banco = BancoFalso([documento()])
+    mod = carregar(monkeypatch, banco)
+    salvar(mod, banco, DocumentFeedbackInput(
+        status="IA_CORRETA", motivo_externo="OUTRO", notes="CPF 123.456.789-09 no texto"))
+    meta = banco.auditorias[-1].metadata
+    assert meta["motivo_externo"] == "OUTRO"
+    # O texto do "Outro" é livre como qualquer `notes`: fora da trilha.
+    assert "123.456.789-09" not in str(meta)
+
+
 # ── contrato com o front ─────────────────────────────────────────────────────
 
 def test_categorias_do_back_batem_com_as_do_front():
@@ -513,3 +611,20 @@ def test_problemas_de_documento_cobrem_o_que_os_revisores_escreviam():
     from app.models.feedback import CATEGORIAS_EXAME
 
     assert not (conteudo & CATEGORIAS_EXAME)
+
+
+def test_motivos_externos_do_back_batem_com_os_do_front():
+    """O catálogo usa a chave `codigo:` de propósito: `valor:` seria lido pelo
+    teste acima como categoria de documento."""
+    import pathlib
+    import re
+
+    arquivo = (
+        pathlib.Path(__file__).resolve().parents[2]
+        / "front-end" / "types" / "feedback.ts"
+    )
+    if not arquivo.exists():  # pragma: no cover - back-end publicado sozinho
+        pytest.skip("front-end não está neste checkout")
+    texto = arquivo.read_text(encoding="utf-8")
+    bloco = texto.split("export const MOTIVOS_EXTERNOS")[1].split("];")[0]
+    assert set(re.findall(r'codigo:\s*"([A-Z_]+)"', bloco)) == set(MOTIVOS_EXTERNOS)

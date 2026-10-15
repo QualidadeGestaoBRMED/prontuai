@@ -140,6 +140,13 @@ julgamento AS (
         h.humano_status,
         (motivo = '') AS sem_motivo,
         CASE
+            -- Marcado no parecer do modal de feedback: a IA leu certo e a
+            -- decisao mudou por algo fora do documento. Vem antes das
+            -- palavras-chave e e a fonte daqui para a frente: o modal nao pede
+            -- justificativa para aprovar, entao o `motivo` abaixo fica vazio
+            -- justamente no lado onde o motivo externo e mais comum. As
+            -- palavras-chave seguem valendo para o historico anterior ao modal.
+            WHEN fb.motivo_externo IS NOT NULL THEN true
             -- humano aprovou apesar do apontamento da IA, por razao externa
             WHEN h.humano_status = 'validated' AND motivo ~ (
                     'outro sistema|outro lugar|outra plataforma|outro site|por fora|caepetox'
@@ -166,6 +173,9 @@ julgamento AS (
     FROM ia
     JOIN humano h ON h.document_id = ia.document_id AND h.humano_em >= ia.ia_em
     JOIN documents d ON d.id = ia.document_id
+    -- Parecer do modal de feedback, quando houver: no maximo um por documento
+    -- (unique em document_id), entao o LEFT JOIN nao duplica linha.
+    LEFT JOIN document_feedbacks fb ON fb.document_id = d.id
     CROSS JOIN LATERAL (
         SELECT lower(translate(
             btrim(COALESCE(CASE WHEN h.humano_status = 'validated' THEN d.approval_reason

@@ -124,3 +124,23 @@ def test_classificacao_nao_altera_a_acuracia(sql: str):
     for linha in bloco_acc.splitlines():
         if "categoria" in linha:
             assert "AS mot_" in linha, f"categoria fora de um contador mot_: {linha.strip()}"
+
+
+def test_motivo_externo_do_parecer_decide_antes_das_palavras_chave(sql: str):
+    """O parecer do modal é a fonte do motivo externo; o texto é o histórico.
+
+    O modal de feedback não pede justificativa para aprovar, então o `motivo`
+    lido de `approval_reason` fica vazio justamente no lado em que o motivo
+    externo é mais comum (IA rejeita, humano libera — um terço das vezes). Sem a
+    leitura do parecer, essas divergências passariam a contar como erro da IA.
+    """
+    inicio = sql.index("julgamento AS (")
+    fim = sql.index("motivado AS (", inicio)
+    bloco = sql[inicio:fim]
+    caso = bloco[bloco.index("CASE"):bloco.index("END AS jeitinho")]
+    parecer = caso.index("WHEN fb.motivo_externo IS NOT NULL THEN true")
+    assert parecer < caso.index("WHEN h.humano_status = 'validated' AND motivo ~"), (
+        "o parecer tem de vir antes das palavras-chave"
+    )
+    # LEFT, e não INNER: documento sem parecer continua no julgamento.
+    assert "LEFT JOIN document_feedbacks fb ON fb.document_id = d.id" in bloco
