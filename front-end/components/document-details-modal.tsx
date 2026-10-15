@@ -15,7 +15,7 @@ import { Separator } from "@/components/ui/separator"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { ProcessResult } from "@/types/process"
 import ExamesComparativoTable from "@/components/exames-comparativo-table"
-import { Download } from "lucide-react"
+import { Archive, Download } from "lucide-react"
 import { useRouter } from "next/navigation"
 
 interface DocumentDetailsModalProps {
@@ -155,17 +155,18 @@ export function DocumentDetailsModal({
                 <p className="text-sm">{result.submittedBy}</p>
               </div>
               {result.archivedAt && (
-                <div className="col-span-2 rounded-md border border-amber-200 bg-amber-50 p-3">
-                  <p className="text-sm font-medium text-amber-900">
+                <div className="col-span-2 rounded-lg border bg-muted/30 p-3">
+                  <p className="flex items-center gap-2 text-sm font-medium text-foreground">
+                    <Archive className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
                     Arquivado no Drive em{" "}
                     {format(result.archivedAt, "dd/MM/yyyy", { locale: ptBR })}
                   </p>
-                  <p className="mt-1 text-xs text-amber-800">
+                  <p className="mt-1 text-xs text-foreground/80">
                     O PDF não está mais no servidor. Para recuperá-lo, peça ao setor de
                     Qualidade e Gestão o arquivo abaixo:
                   </p>
                   {result.storageFilename && (
-                    <p className="mt-2 break-all rounded bg-white/70 px-2 py-1 font-mono text-xs text-amber-900">
+                    <p className="mt-2 break-all rounded border bg-background px-2 py-1 font-mono text-xs text-foreground">
                       {result.storageFilename}
                     </p>
                   )}
