@@ -1,0 +1,78 @@
+name: prontuai-stg-local
+
+# Staging local para testar análise de documentos com banco isolado
+#
+# Uso:
+#   docker compose -f docker-compose.stg.local.yml up --build
+#
+# - API em http://localhost:${STG_BACKEND_PORT:-8020}
+# - Postgres isolado em localhost:${STG_POSTGRES_PORT:-5434} (não é dev nem produção)
+# - Segredos (OPENAI_API_KEY etc.) vêm do .env; DATABASE_URL é forçado para o
+#   Postgres deste compose para nunca apontar para produção ou dev por engano.
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: prontuai-db-stg-local
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: prontuai
+      POSTGRES_PASSWORD: prontuai
+      POSTGRES_DB: prontuai
+    ports:
+      - "127.0.0.1:${STG_POSTGRES_PORT:-5434}:5432"
+    volumes:
+      - pgdata-stg-local:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U prontuai -d prontuai"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: prontuai-redis-stg-local
+    restart: unless-stopped
+    command: redis-server --maxmemory 64mb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: prontuai-backend-stg-local
+    restart: unless-stopped
+    env_file: .env
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    ports:
+      - "127.0.0.1:${STG_BACKEND_PORT:-8020}:80"
+    environment:
+      # Sobrescreve o .env: nunca aponta para produção ou dev.
+      - DATABASE_URL=postgresql://prontuai:prontuai@db:5432/prontuai
+      - APP_ENV=test
+      - WORKERS=1
+      - REDIS_URL=redis://redis:6379/0
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:3000,http://localhost}
+    volumes:
+      - ./logs-stg-local:/app/logs
+      - ./resultados-stg-local:/app/resultados
+      - ./ocr_resultados-stg-local:/app/ocr_resultados
+      - ./auditoria_validacao-stg-local:/app/auditoria_validacao
+      - ./data:/app/data:ro
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+volumes:
+  pgdata-stg-local:
