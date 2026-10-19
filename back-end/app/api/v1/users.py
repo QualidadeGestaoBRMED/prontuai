@@ -4,7 +4,8 @@ Endpoints de gerenciamento de usuários (ADMIN e MANAGER).
 Um usuário pode ter mais de um cargo (`roles`). MANAGER pode listar usuários e
 criar/editar só quem tem apenas CHECKER e/ou SENDER — inclusive os dois juntos.
 Não ativa nem desativa ninguém (nem pelo DELETE, nem pelo PATCH de
-`is_active`) e não mexe em ADMIN, MANAGER ou CURATOR.
+`is_active`) e não mexe em ADMIN, MANAGER, CURATOR ou VIEWER (o Visualizador
+do dashboard é atribuído só pelo ADMIN, por decisão de produto).
 
 Clínica: obrigatória quando um dos cargos é SENDER, que é o cargo preso a uma
 clínica. Os demais enxergam todas.

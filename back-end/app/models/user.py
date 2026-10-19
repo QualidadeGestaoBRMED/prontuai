@@ -11,6 +11,7 @@ class UserRole(str, Enum):
     CURATOR = "CURATOR"  # Curadoria do catálogo de exames + Menu Principal em somente leitura
     CHECKER = "CHECKER"  # Apenas checagem de exames
     SENDER = "SENDER"    # Apenas enviar documentos (pendentes)
+    VIEWER = "VIEWER"    # Visualizador: só o dashboard de indicadores, sem acesso a documentos
 
 
 # Papéis sem clinic_id, que leem documentos de TODAS as clínicas. O SENDER é o
@@ -28,14 +29,22 @@ GLOBAL_READ_ROLES = frozenset({
 # O principal não é cosmético. É ele que vai para `audit_logs.user_role`, e a
 # consulta do dashboard só reconhece revisão humana quando ele é ADMIN, CHECKER
 # ou MANAGER — por isso CHECKER vem antes de CURATOR: quem acumula os dois
-# continua tendo a revisão contada. E SENDER fica por último, de modo que o
-# principal só é SENDER quando ele é o ÚNICO cargo; todo `role == SENDER` que
-# recorta dado por clínica continua certo sem mudar uma linha.
+# continua tendo a revisão contada. E SENDER vem depois de todo cargo que lê
+# documentos, de modo que o principal só é SENDER quando nenhum outro cargo
+# dá leitura de documento; todo `role == SENDER` que recorta dado por clínica
+# continua certo sem mudar uma linha.
+#
+# VIEWER fica DEPOIS do SENDER, e não por ser "menor": se viesse antes, o
+# Enviador + Visualizador teria principal VIEWER e escaparia de todo recorte
+# `role == SENDER` (ler documento de outra clínica, por exemplo). Como o VIEWER
+# não dá acesso a documento nenhum, deixá-lo por último não tira nada de
+# ninguém — o principal só é VIEWER quando ele é o único cargo.
 #
 # Permissão é outra coisa: para PODER algo, basta ter o cargo em qualquer
 # posição da lista (ver `User.tem_papel` e `_exigir_papel` em core/auth.py).
 PRECEDENCIA_PAPEIS = (
     UserRole.ADMIN, UserRole.MANAGER, UserRole.CHECKER, UserRole.CURATOR, UserRole.SENDER,
+    UserRole.VIEWER,
 )
 
 

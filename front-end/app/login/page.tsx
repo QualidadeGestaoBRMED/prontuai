@@ -25,6 +25,9 @@ export default function LoginPage() {
       router.replace("/checagem");
     } else if (role === "CURATOR") {
       router.replace("/admin/exames");
+    } else if (role === "VIEWER") {
+      // Principal VIEWER = só o Visualizador: a única tela dele é o dashboard.
+      router.replace("/dashboard");
     } else {
       router.replace("/anexar-prontuario");
     }

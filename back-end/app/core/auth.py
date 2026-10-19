@@ -590,7 +590,9 @@ async def require_document_reader(
 
 # Quem vê o dashboard de indicadores. Lista única: o front espelha esta mesma
 # regra em `usePermissions.canViewDashboard`, e as duas precisam andar juntas.
-DASHBOARD_ROLES = (UserRole.ADMIN, UserRole.MANAGER)
+# VIEWER é o cargo que existe só para isto — somado a outro (ex.: CHECKER +
+# VIEWER), dá os indicadores sem dar a gestão.
+DASHBOARD_ROLES = (UserRole.ADMIN, UserRole.MANAGER, UserRole.VIEWER)
 
 
 async def require_dashboard(
@@ -600,10 +602,10 @@ async def require_dashboard(
     """
     Requer um papel com acesso ao dashboard de indicadores.
 
-    Hoje a lista é a mesma de `require_management` (ADMIN e MANAGER), mas a
-    guarda é própria de propósito: quem vê os indicadores já mudou duas vezes
-    sem que a gestão administrativa mudasse junto, e com esta separação a troca
-    é uma linha em `DASHBOARD_ROLES`.
+    A guarda é própria, e não `require_management`, de propósito: quem vê os
+    indicadores já mudou três vezes sem que a gestão administrativa mudasse
+    junto (a última trouxe de volta o VIEWER), e com esta separação a troca é
+    uma linha em `DASHBOARD_ROLES`.
     """
     return _exigir_papel(
         request, current_user, DASHBOARD_ROLES,

@@ -206,6 +206,9 @@ class PostgresUserDatabase:
             if type_exists:
                 autocommit.execute(text("ALTER TYPE userrole ADD VALUE IF NOT EXISTS 'MANAGER'"))
                 autocommit.execute(text("ALTER TYPE userrole ADD VALUE IF NOT EXISTS 'CURATOR'"))
+                # Visualizador só do dashboard: a coluna `role` (papel principal)
+                # é o enum, e o principal de quem só tem VIEWER é VIEWER.
+                autocommit.execute(text("ALTER TYPE userrole ADD VALUE IF NOT EXISTS 'VIEWER'"))
 
     def _ensure_user_columns(self) -> None:
         """Garante a coluna `roles` (migration 012) antes de qualquer consulta a users.

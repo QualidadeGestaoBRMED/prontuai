@@ -73,6 +73,9 @@ export function RequireRole({
     if (papeis.includes("SENDER")) {
       redirect("/anexar-prontuario");
     }
+    if (papeis.includes("VIEWER")) {
+      redirect("/dashboard");
+    }
     if (fallback) {
       return <>{fallback}</>;
     }

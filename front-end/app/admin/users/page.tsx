@@ -68,6 +68,7 @@ const roleLabels: Record<UserRole, string> = {
   CURATOR: "Saúde",
   CHECKER: "Checador",
   SENDER: "Enviador",
+  VIEWER: "Visualizador",
 };
 
 // Sem o "Apenas" de antes: com cargos somados, cada linha diz o que o cargo
@@ -78,6 +79,7 @@ const roleDescriptions: Record<UserRole, string> = {
   CURATOR: "Catálogo de exames",
   CHECKER: "Checagem de documentos",
   SENDER: "Envio de documentos de uma clínica",
+  VIEWER: "Dashboard de indicadores",
 };
 
 const roleBadges: Record<UserRole, string> = {
@@ -86,6 +88,7 @@ const roleBadges: Record<UserRole, string> = {
   CURATOR: "bg-teal-100 text-teal-800",
   CHECKER: "bg-blue-100 text-blue-800",
   SENDER: "bg-green-100 text-green-800",
+  VIEWER: "bg-slate-100 text-slate-800",
 };
 
 // Espelho de `PAPEIS_DO_GESTOR` em back-end/app/api/v1/users.py: o que o

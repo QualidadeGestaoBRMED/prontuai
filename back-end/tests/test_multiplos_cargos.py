@@ -28,7 +28,8 @@ from fastapi import HTTPException
 
 from app.models.user import User, UserCreate, UserRole, UserUpdate
 
-A, M, CH, CU, S = UserRole.ADMIN, UserRole.MANAGER, UserRole.CHECKER, UserRole.CURATOR, UserRole.SENDER
+A, M, CH, CU, S, V = (UserRole.ADMIN, UserRole.MANAGER, UserRole.CHECKER, UserRole.CURATOR,
+                      UserRole.SENDER, UserRole.VIEWER)
 
 
 def usuario(uid, *papeis, clinic=None, ativo=True):
@@ -84,7 +85,10 @@ def carregar(monkeypatch, banco, modulo):
     ([S, CU], CU),
     ([CU, M], M),
     ([S, A, CH], A),
-    ([S], S),           # SENDER só é principal quando está sozinho
+    ([S], S),           # SENDER só é principal quando está sozinho...
+    ([V, S], S),        # ...ou com o Visualizador, que não lê documento: o recorte por clínica fica
+    ([CH, V], CH),
+    ([V], V),           # VIEWER só é principal quando está sozinho
 ])
 def test_principal_segue_a_precedencia(papeis, principal):
     u = usuario("u", *papeis)
@@ -121,6 +125,14 @@ def test_qualquer_cargo_da_lista_libera(monkeypatch):
     assert _passa(auth, usuario("u", CH, S), (S, A, M))
 
 
+def test_visualizador_ve_o_dashboard_e_nada_de_documento(monkeypatch):
+    auth = carregar(monkeypatch, BancoFalso(), "app.core.auth")
+    so_visualizador = usuario("u", V)
+    assert _passa(auth, so_visualizador, auth.DASHBOARD_ROLES)
+    assert not _passa(auth, so_visualizador, auth.DOCUMENT_ROLES)
+    assert not _passa(auth, so_visualizador, (A, M))  # não vira gestão
+
+
 def test_somar_cargos_nao_soma_o_que_nenhum_da(monkeypatch):
     auth = carregar(monkeypatch, BancoFalso(), "app.core.auth")
     # Aprovar/rejeitar é CHECKER, ADMIN ou MANAGER: nem CURATOR nem SENDER.
@@ -145,6 +157,14 @@ def test_gestor_nao_esconde_admin_no_meio_da_lista(monkeypatch):
     users = carregar(monkeypatch, BancoFalso(), "app.api.v1.users")
     with pytest.raises(HTTPException) as exc:
         criar(users, {"email": "n@grupobrmed.com.br", "name": "n", "roles": ["CHECKER", "ADMIN"]}, GESTOR)
+    assert exc.value.status_code == 403
+
+
+def test_gestor_nao_atribui_visualizador(monkeypatch):
+    """Decisão de produto: o Visualizador do dashboard é atribuído só pelo ADMIN."""
+    users = carregar(monkeypatch, BancoFalso(), "app.api.v1.users")
+    with pytest.raises(HTTPException) as exc:
+        criar(users, {"email": "n@grupobrmed.com.br", "name": "n", "roles": ["CHECKER", "VIEWER"]}, GESTOR)
     assert exc.value.status_code == 403
 
 

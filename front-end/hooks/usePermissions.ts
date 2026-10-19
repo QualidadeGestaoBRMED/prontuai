@@ -2,14 +2,14 @@
 
 import { useSession } from "next-auth/react";
 
-export type UserRole = "ADMIN" | "MANAGER" | "CURATOR" | "CHECKER" | "SENDER";
+export type UserRole = "ADMIN" | "MANAGER" | "CURATOR" | "CHECKER" | "SENDER" | "VIEWER";
 
 /**
  * Um usuário pode ter mais de um cargo. Esta é a ordem do back-end
  * (`PRECEDENCIA_PAPEIS` em back-end/app/models/user.py): o primeiro da lista é
  * o papel principal, o que vai para a auditoria. Mude as duas juntas.
  */
-export const PRECEDENCIA_PAPEIS: UserRole[] = ["ADMIN", "MANAGER", "CHECKER", "CURATOR", "SENDER"];
+export const PRECEDENCIA_PAPEIS: UserRole[] = ["ADMIN", "MANAGER", "CHECKER", "CURATOR", "SENDER", "VIEWER"];
 
 /**
  * Os cargos do usuário, na ordem de precedência. Sessão aberta antes do deploy
@@ -31,7 +31,9 @@ export function temAlgumPapel(papeis: UserRole[], permitidos: UserRole[]): boole
  * back-end/app/core/auth.py — é o back-end que protege o dado; esta lista só
  * decide o que aparece na tela. Mude as duas juntas.
  */
-export const DASHBOARD_ROLES: UserRole[] = ["ADMIN", "MANAGER"];
+// VIEWER (Visualizador) existe só para isto: somado a outro cargo, dá os
+// indicadores sem dar a gestão.
+export const DASHBOARD_ROLES: UserRole[] = ["ADMIN", "MANAGER", "VIEWER"];
 
 export interface PermissionsHook {
   user: any;

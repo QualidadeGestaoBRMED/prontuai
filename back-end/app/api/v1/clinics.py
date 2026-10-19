@@ -84,7 +84,7 @@ async def list_clinic_options(current_user: User = Depends(get_current_user)):
         # Mesma regra de quem vê documentos de todas as clínicas: as opções servem
         # justamente ao filtro por clínica dessas telas. O SENDER fica de fora
         # porque só enxerga a própria.
-        if current_user.role not in GLOBAL_READ_ROLES:
+        if not current_user.tem_papel(*GLOBAL_READ_ROLES):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Sem permissão para listar opções de clínicas",

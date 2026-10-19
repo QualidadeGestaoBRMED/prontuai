@@ -8,9 +8,9 @@ declare module "next-auth" {
       name: string;
       email: string;
       image?: string;
-      role: "ADMIN" | "MANAGER" | "CURATOR" | "CHECKER" | "SENDER";
+      role: "ADMIN" | "MANAGER" | "CURATOR" | "CHECKER" | "SENDER" | "VIEWER";
       /** Todos os cargos; `role` é o principal. Sessão anterior aos cargos múltiplos não tem. */
-      roles?: ("ADMIN" | "MANAGER" | "CURATOR" | "CHECKER" | "SENDER")[];
+      roles?: ("ADMIN" | "MANAGER" | "CURATOR" | "CHECKER" | "SENDER" | "VIEWER")[];
       is_active: boolean;
     };
   }
@@ -21,9 +21,9 @@ declare module "next-auth" {
       id: string;
       email: string;
       name: string;
-      role: "ADMIN" | "MANAGER" | "CURATOR" | "CHECKER" | "SENDER";
+      role: "ADMIN" | "MANAGER" | "CURATOR" | "CHECKER" | "SENDER" | "VIEWER";
       /** Todos os cargos; `role` é o principal. Sessão anterior aos cargos múltiplos não tem. */
-      roles?: ("ADMIN" | "MANAGER" | "CURATOR" | "CHECKER" | "SENDER")[];
+      roles?: ("ADMIN" | "MANAGER" | "CURATOR" | "CHECKER" | "SENDER" | "VIEWER")[];
       is_active: boolean;
     };
   }
@@ -38,9 +38,9 @@ declare module "next-auth/jwt" {
       email: string;
       name: string;
       image?: string;
-      role: "ADMIN" | "MANAGER" | "CURATOR" | "CHECKER" | "SENDER";
+      role: "ADMIN" | "MANAGER" | "CURATOR" | "CHECKER" | "SENDER" | "VIEWER";
       /** Todos os cargos; `role` é o principal. Sessão anterior aos cargos múltiplos não tem. */
-      roles?: ("ADMIN" | "MANAGER" | "CURATOR" | "CHECKER" | "SENDER")[];
+      roles?: ("ADMIN" | "MANAGER" | "CURATOR" | "CHECKER" | "SENDER" | "VIEWER")[];
       is_active: boolean;
     };
   }
