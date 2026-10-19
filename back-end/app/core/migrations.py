@@ -90,6 +90,16 @@ def check_if_migration_needed() -> tuple[bool, list[str]]:
             logger.warning("⚠️  Migration 007 necessária: coluna archived_at não existe")
             migrations_needed.append("007_add_archived_at.sql")
 
+        # Verificar migration 008: tabela de feedback da checagem
+        cursor.execute("""
+            SELECT table_name
+            FROM information_schema.tables
+            WHERE table_name='document_feedbacks'
+        """)
+        if not cursor.fetchone():
+            logger.warning("⚠️  Migration 008 necessária: tabela document_feedbacks não existe")
+            migrations_needed.append("008_add_document_feedback.sql")
+
         # Verificar migration 009: índices das listagens paginadas de documentos.
         # Única checagem que olha pg_indexes e não information_schema.columns:
         # a migration não cria coluna nenhuma, só índice. Basta conferir um dos
@@ -102,6 +112,26 @@ def check_if_migration_needed() -> tuple[bool, list[str]]:
         if not cursor.fetchone():
             logger.warning("⚠️  Migration 009 necessária: índice idx_documents_uploaded_at não existe")
             migrations_needed.append("009_add_documents_list_indexes.sql")
+
+        # Verificar migration 010: motivos estruturados da rejeição
+        cursor.execute("""
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_name='documents' AND column_name='rejection_codes'
+        """)
+        if not cursor.fetchone():
+            logger.warning("⚠️  Migration 010 necessária: coluna rejection_codes não existe")
+            migrations_needed.append("010_add_rejection_codes.sql")
+
+        # Verificar migration 011: motivo externo no parecer da checagem
+        cursor.execute("""
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_name='document_feedbacks' AND column_name='motivo_externo'
+        """)
+        if not cursor.fetchone():
+            logger.warning("⚠️  Migration 011 necessária: coluna motivo_externo não existe")
+            migrations_needed.append("011_add_feedback_motivo_externo.sql")
 
         cursor.close()
         conn.close()

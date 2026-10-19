@@ -26,6 +26,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.declarative import declarative_base
 
 from app.models.user import UserRole
@@ -90,6 +91,10 @@ class DocumentModel(Base):
     reviewed_at = Column(DateTime, nullable=True)
     approval_reason = Column(Text, nullable=True)
     rejection_reason = Column(Text, nullable=True)
+    # Motivos estruturados da rejeição (migration 010): [{codigo, exame?}].
+    # `rejection_reason` continua sendo o texto que a clínica lê; isto é o
+    # que permite contar. NULL em tudo que foi rejeitado antes da migration.
+    rejection_codes = Column(JSONB, nullable=True)
     confidence_score = Column(Float, nullable=True)
     quality_score = Column(Float, nullable=True)
     mandatory_coverage = Column(Float, nullable=True)
@@ -313,5 +318,57 @@ class ExamVariationConflictModel(Base):
         CheckConstraint(
             "resolution IS NULL OR resolution IN ('atribuida', 'descartada')",
             name="ck_exam_variation_conflicts_resolution",
+        ),
+    )
+
+
+class DocumentFeedbackModel(Base):
+    """
+    Parecer humano sobre o resultado da IA em um documento (migration 008).
+
+    Um parecer por documento — daí o unique em `document_id`: reabrir a
+    checagem e responder de novo atualiza a linha, não empilha versões. O
+    histórico de quem mudou o quê fica no `audit_logs`, escrito pelo
+    middleware de logging, e não em uma tabela de eventos própria.
+
+    A ausência de linha é o estado "não avaliado". Diferente da Triagem BR NET,
+    que tem o status explícito `NAO_AVALIADO`, aqui o parecer é opcional: a
+    maioria dos documentos legitimamente nunca terá feedback, e inventar uma
+    linha vazia para cada um só inflaria a tabela e a consulta de acurácia.
+    """
+    __tablename__ = "document_feedbacks"
+
+    id = Column(String, primary_key=True)
+    document_id = Column(
+        String, ForeignKey("documents.id", ondelete="CASCADE"), nullable=False, unique=True, index=True
+    )
+    reviewed_by_id = Column(String, ForeignKey("users.id"), nullable=True)
+    reviewed_by_email = Column(String, nullable=True, index=True)
+    status = Column(String, nullable=False, index=True)
+    # Categorias distintas de `issue_items`, derivadas no servidor. Redundante de
+    # propósito: responde "quais motivos aparecem" sem desmontar o JSONB, e o
+    # índice GIN abaixo torna o filtro por categoria barato.
+    issue_categories = Column(ARRAY(String), nullable=False, default=list)
+    # Pares (categoria, exame): o motivo e o exame em que ele aconteceu. Lista
+    # plana, e não agrupada por categoria, porque a pergunta do painel é "quais
+    # exames a IA mais erra" — com `jsonb_array_elements` isso vira um GROUP BY.
+    issue_items = Column(JSONB, nullable=False, default=list)
+    # Problemas do documento inteiro (nome, CPF, data, ilegibilidade): não há
+    # exame a que amarrar, então ficam fora do `issue_items` — lá `exame` é
+    # obrigatório justamente para não voltar a existir motivo solto.
+    document_issues = Column(ARRAY(String), nullable=False, default=list)
+    # Texto livre do revisor: pode conter nome/CPF de paciente. Não logar.
+    notes = Column(Text, nullable=True)
+    # A IA leu certo e a decisão mudou por algo fora do documento (migration
+    # 010). Só num parecer IA_CORRETA; é o que o painel de acurácia lê para
+    # contar a divergência como acerto. Códigos em `app.models.feedback`.
+    motivo_externo = Column(String, nullable=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('IA_CORRETA', 'IA_CORRETA_COM_AJUSTES', 'IA_INCORRETA')",
+            name="ck_document_feedbacks_status",
         ),
     )
