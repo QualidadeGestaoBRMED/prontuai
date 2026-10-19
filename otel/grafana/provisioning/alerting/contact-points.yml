@@ -1,0 +1,28 @@
+apiVersion: 1
+
+# Destino dos alertas do ProntuAI.
+#
+# O Grafana da VPS Oracle é compartilhado entre projetos, então o ProntuAI tem
+# contact point próprio e as regras de `alerts.yml` apontam para ele uma a uma
+# (`notification_settings.receiver`). A árvore de notification policies NÃO é
+# provisionada aqui de propósito: provisionar `policies` substitui a árvore
+# inteira da org e apagaria o roteamento dos outros projetos.
+#
+# Os destinatários vêm de PRONTUAI_ALERT_EMAILS, no ambiente do container do
+# Grafana (`.env` do compose da Oracle), separados por ponto e vírgula. Ficam
+# fora do git pelo mesmo motivo que o resto dos dados pessoais deste repo.
+# O envio depende do SMTP do Grafana (GF_SMTP_*) no mesmo compose.
+
+contactPoints:
+  - orgId: 1
+    name: prontuai-email
+    receivers:
+      - uid: prontuai-email
+        type: email
+        settings:
+          addresses: ${PRONTUAI_ALERT_EMAILS}
+          # Um e-mail para todos os destinatários, e não um por pessoa.
+          singleEmail: true
+        # Avisa também quando o alerta se resolve: sem isso, quem recebeu
+        # "backend fora do ar" não sabe se ainda está fora.
+        disableResolveMessage: false

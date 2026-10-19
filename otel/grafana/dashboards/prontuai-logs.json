@@ -141,7 +141,7 @@
     },
     {
       "type": "stat",
-      "title": "Errors (req/s - 5m)",
+      "title": "Erros (5 min)",
       "datasource": {
         "type": "loki",
         "uid": "loki"
@@ -155,7 +155,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum(rate({job=\"prontuai-backend\", level=\"ERROR\"}[5m]))"
+          "expr": "sum(count_over_time({job=\"prontuai-backend\", level=\"ERROR\"} != `Signature has expired` [5m]))"
         }
       ],
       "options": {
@@ -164,7 +164,33 @@
             "lastNotNull"
           ],
           "fields": ""
-        }
+        },
+        "textMode": "auto"
+      },
+      "description": "Linhas de ERROR nos ultimos 5 minutos, na mesma conta do alerta \"Pico de erros no backend\" -- numero inteiro, nao erros por segundo, e sem sessao expirada (\"Signature has expired\"), que e fluxo normal de renovacao de token e respondia por 91% das linhas de erro. Vermelho a partir de 6, o limiar do alerta.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 4
+              },
+              {
+                "color": "red",
+                "value": 6
+              }
+            ]
+          }
+        },
+        "overrides": []
       }
     },
     {
