@@ -1,0 +1,176 @@
+name: Observability Deploy (Oracle VPS)
+
+# Implanta o lado Oracle da observabilidade: config do coletor, Prometheus,
+# Tempo, provisionamento do Grafana, dashboards e alertas. Substitui o scp
+# manual que era o unico caminho para esses arquivos ate aqui.
+#
+# NAO confundir com observability-deploy.yml, que implanta o otel-agent na EC2
+# (secrets AWS_VPS_*). Sao maquinas diferentes: o agente precisa ficar na EC2
+# para alcancar node_exporter, cAdvisor e o prontuai-db-exporter.
+
+on:
+  push:
+    branches:
+      - v1
+    paths:
+      - "otel/**"
+      - ".github/workflows/otel-oracle-deploy.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  # Diretorio da stack na Oracle: o que contem o docker-compose.yml e o .env
+  # de la. Os arquivos deste repo vao para <path>/otel/, que é o caminho que o
+  # compose monta nos containers -- o compose e o .env ficam um nivel acima e
+  # nao sao tocados por este workflow.
+  OTEL_DEPLOY_PATH: ${{ vars.ORACLE_VPS_OTEL_PATH || '/home/ubuntu/observability-oracle' }}
+  # Nomes dos servicos no compose de la. Ficam em vars porque o compose nao
+  # esta neste repo e pode nomea-los de outro jeito.
+  COLLECTOR_SERVICE: ${{ vars.ORACLE_VPS_COLLECTOR_SERVICE || 'otel-collector' }}
+  GRAFANA_SERVICE: ${{ vars.ORACLE_VPS_GRAFANA_SERVICE || 'grafana' }}
+
+jobs:
+  deploy:
+    name: Sync otel/ and reload the Oracle stack
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Validate deployment secrets
+        env:
+          ORACLE_VPS_HOST: ${{ secrets.ORACLE_VPS_HOST }}
+          ORACLE_VPS_USER: ${{ secrets.ORACLE_VPS_USER }}
+          ORACLE_VPS_SSH_KEY: ${{ secrets.ORACLE_VPS_SSH_KEY }}
+          ORACLE_VPS_PORT: ${{ vars.ORACLE_VPS_PORT }}
+        run: |
+          set -euo pipefail
+
+          echo "Deploy context:"
+          echo "- repository: ${{ github.repository }}"
+          echo "- actor: ${{ github.actor }}"
+          echo "- event: ${{ github.event_name }}"
+          echo "- ref: ${{ github.ref }}"
+          echo "- target path: $OTEL_DEPLOY_PATH"
+
+          missing=0
+          for nome in ORACLE_VPS_HOST ORACLE_VPS_USER ORACLE_VPS_SSH_KEY; do
+            if [ -z "${!nome}" ]; then
+              echo "Missing secret $nome" >&2
+              missing=1
+            else
+              echo "$nome: present"
+            fi
+          done
+
+          if [ -n "${ORACLE_VPS_PORT:-}" ]; then
+            echo "ORACLE_VPS_PORT: present"
+          else
+            echo "ORACLE_VPS_PORT: not set, defaulting to 22"
+          fi
+
+          if [ "$missing" -ne 0 ]; then
+            echo "One or more required deploy secrets are unavailable to this run." >&2
+            echo "Define them under repository Actions secrets (not Variables, not Environment-only)." >&2
+            exit 1
+          fi
+
+      - name: Prepare SSH key
+        env:
+          ORACLE_VPS_SSH_KEY: ${{ secrets.ORACLE_VPS_SSH_KEY }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$ORACLE_VPS_SSH_KEY" > ~/.ssh/oracle_vps_key
+          chmod 600 ~/.ssh/oracle_vps_key
+
+      - name: Upload otel/ to the Oracle VPS
+        env:
+          ORACLE_VPS_HOST: ${{ secrets.ORACLE_VPS_HOST }}
+          ORACLE_VPS_USER: ${{ secrets.ORACLE_VPS_USER }}
+          ORACLE_VPS_PORT: ${{ vars.ORACLE_VPS_PORT || '22' }}
+        run: |
+          set -euo pipefail
+
+          ssh -i ~/.ssh/oracle_vps_key -p "$ORACLE_VPS_PORT" -o StrictHostKeyChecking=accept-new \
+            "$ORACLE_VPS_USER@$ORACLE_VPS_HOST" \
+            "OTEL_DEPLOY_PATH='$OTEL_DEPLOY_PATH' bash -s" <<'REMOTE'
+          set -euo pipefail
+          cd "$OTEL_DEPLOY_PATH"
+
+          # Trava contra implantar no diretorio errado. O caminho vem de uma
+          # var do repo e um engano aqui escreveria em cima da stack de outro
+          # projeto -- barato conferir que a stack é mesmo esta.
+          if [ ! -f docker-compose.yml ] && [ ! -f compose.yaml ]; then
+            echo "Sem docker-compose.yml em $OTEL_DEPLOY_PATH; ORACLE_VPS_OTEL_PATH aponta para o lugar errado?" >&2
+            exit 1
+          fi
+
+          # Backup de uma geracao, para rollback sem depender do git da VPS.
+          if [ -d otel ]; then
+            rm -rf otel.anterior
+            cp -a otel otel.anterior
+            echo "Backup em $OTEL_DEPLOY_PATH/otel.anterior"
+          fi
+          mkdir -p otel
+          REMOTE
+
+          # Sobrescreve sem --delete / rm -rf. Conferido em 19/10/2026: o
+          # <path>/otel/ da VPS é espelho exato deste repo, sem nenhum arquivo
+          # de fora -- entao nao ha o que limpar hoje. Nao apagar e a escolha
+          # conservadora porque o Grafana é compartilhado com outros projetos e
+          # nada impede que um deles passe a provisionar daqui. O preco: um
+          # dashboard removido deste repo continua aparecendo no Grafana ate
+          # alguem apagar o arquivo la.
+          tar -C otel -czf - . |
+            ssh -i ~/.ssh/oracle_vps_key -p "$ORACLE_VPS_PORT" -o StrictHostKeyChecking=accept-new \
+              "$ORACLE_VPS_USER@$ORACLE_VPS_HOST" \
+              "tar -C '$OTEL_DEPLOY_PATH/otel' -xzf -"
+
+      - name: Reload the collector and Grafana
+        env:
+          ORACLE_VPS_HOST: ${{ secrets.ORACLE_VPS_HOST }}
+          ORACLE_VPS_USER: ${{ secrets.ORACLE_VPS_USER }}
+          ORACLE_VPS_PORT: ${{ vars.ORACLE_VPS_PORT || '22' }}
+        run: |
+          set -euo pipefail
+
+          ssh -i ~/.ssh/oracle_vps_key -p "$ORACLE_VPS_PORT" -o StrictHostKeyChecking=accept-new \
+            "$ORACLE_VPS_USER@$ORACLE_VPS_HOST" \
+            "OTEL_DEPLOY_PATH='$OTEL_DEPLOY_PATH' COLLECTOR_SERVICE='$COLLECTOR_SERVICE' GRAFANA_SERVICE='$GRAFANA_SERVICE' bash -s" <<'REMOTE'
+          set -euo pipefail
+          cd "$OTEL_DEPLOY_PATH"
+
+          # As configs sao montadas como arquivo e so sao lidas na
+          # inicializacao: `up -d` nao recria o container quando muda apenas o
+          # conteudo do que esta montado. Dai o restart explicito.
+          #
+          # O Grafana entra junto porque alerting e datasources so sao lidos no
+          # boot. Os DASHBOARDS nao precisariam -- o provider de
+          # provisioning/dashboards/dashboards.yaml tem updateIntervalSeconds:
+          # 30 e os recarrega do disco sozinho --, mas alterar alerts.yml sem
+          # reiniciar nao muda nada no Grafana. Sao alguns segundos de janela,
+          # e ela atinge os outros projetos desta VPS.
+          docker compose restart "$COLLECTOR_SERVICE" "$GRAFANA_SERVICE"
+
+          # Config invalida derruba o coletor em crash-loop, e sem esta espera
+          # o job terminaria verde com a ingestao de TODOS os projetos parada.
+          for tentativa in $(seq 1 10); do
+            estado="$(docker compose ps --format '{{.Service}} {{.State}}' | awk -v s="$COLLECTOR_SERVICE" '$1 == s {print $2}')"
+            echo "[$tentativa/10] $COLLECTOR_SERVICE: ${estado:-ausente}"
+            if [ "$estado" = "running" ]; then
+              break
+            fi
+            if [ "$tentativa" -eq 10 ]; then
+              echo "Coletor nao estabilizou. Ultimas linhas:" >&2
+              docker compose logs --tail 40 "$COLLECTOR_SERVICE" >&2
+              echo "Rollback: mv otel otel.falhou && mv otel.anterior otel && docker compose restart $COLLECTOR_SERVICE $GRAFANA_SERVICE" >&2
+              exit 1
+            fi
+            sleep 3
+          done
+
+          docker compose ps
+          echo "Oracle observability deploy OK"
+          REMOTE

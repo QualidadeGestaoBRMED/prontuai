@@ -28,9 +28,9 @@ Grafana, dashboards e alertas).
 
 > **O compose da VPS Oracle não está neste repo** — ele é compartilhado entre os
 > projetos e vive no repo de infraestrutura. Este repo contribui os arquivos de
-> `otel/`, e **nenhum workflow os implanta**: hoje alguém precisa copiá-los para a
-> VPS junto do compose. Enquanto isso não existir, o backend manda telemetria e
-> ela chega, mas sem painel para mostrá-la.
+> `otel/`, implantados pelo workflow `otel-oracle-deploy.yml` (ver *Deploy*).
+> Esse workflow **sobrescreve e nunca apaga**: arquivo removido deste repo sobra
+> na VPS até alguém limpar à mão.
 
 ## Por que ainda existe um agente aqui
 
@@ -183,9 +183,48 @@ filtráveis, mas **nunca** labels: viraria um stream por requisição.
 
 ## Deploy
 
-Automático: o workflow `observability-deploy.yml` roda a cada push na `v1` que
-toque `ops/observability/**`, sincroniza para `/home/ec2-user/prontuai-observability`
-e recarrega. Só criar o `.env` no servidor é manual (uma vez).
+São dois workflows, um por máquina — não confunda, os destinos são diferentes:
+
+| Workflow | Caminho | Máquina | Credenciais |
+|---|---|---|---|
+| `observability-deploy.yml` | `ops/observability/**` | EC2 (o agente) | `AWS_VPS_*` |
+| `otel-oracle-deploy.yml` | `otel/**` | VPS Oracle (coletor, Grafana) | `ORACLE_VPS_*` |
+
+Os dois rodam a cada push na `v1` que toque o respectivo caminho, e aceitam
+disparo manual (`workflow_dispatch`).
+
+**EC2** — sincroniza para `/home/ec2-user/prontuai-observability` e recarrega.
+Só criar o `.env` no servidor é manual (uma vez).
+
+**Oracle** — copia `otel/` para `$ORACLE_VPS_OTEL_PATH/otel/` (padrão
+`/home/ubuntu/observability-oracle`) e reinicia o coletor e o Grafana. O
+`docker-compose.yml` e o `.env` de lá ficam um nível acima e não são tocados.
+Substitui o
+`scp` manual que era o único caminho desses arquivos. Detalhes do desenho:
+
+- Aborta se não achar um `docker-compose.yml` no diretório de destino — é a
+  trava contra uma `ORACLE_VPS_OTEL_PATH` errada escrever na stack de outro
+  projeto.
+- Não apaga nada: conferido em 19/10/2026, o `otel/` da VPS é espelho exato
+  deste repo, sem arquivo de fora. Não usar `--delete` é a escolha conservadora
+  porque o Grafana é compartilhado — o preço é que um dashboard removido do repo
+  continua aparecendo até alguém apagar o arquivo lá.
+- Guarda uma geração de backup em `otel.anterior` antes de sobrescrever.
+  Rollback: `mv otel otel.falhou && mv otel.anterior otel` e reinicie os dois
+  serviços.
+- Reinicia o Grafana porque alerting e datasources só são lidos no boot. Os
+  dashboards nem precisariam (o provider recarrega do disco a cada 30s), mas
+  mudar `alerts.yml` sem reiniciar não muda nada. São alguns segundos de janela,
+  e ela atinge os outros projetos da VPS.
+- Espera o coletor voltar a `running` antes de terminar: config inválida o
+  derruba em crash-loop, e sem essa checagem o job terminaria verde com a
+  ingestão de **todos** os projetos parada.
+
+Variáveis do workflow da Oracle, todas com padrão (`ORACLE_VPS_OTEL_PATH`,
+`ORACLE_VPS_PORT`, `ORACLE_VPS_COLLECTOR_SERVICE`, `ORACLE_VPS_GRAFANA_SERVICE`)
+— os nomes de serviço são `vars` porque o compose de lá não está neste repo e
+pode nomeá-los de outro jeito. Secrets obrigatórios: `ORACLE_VPS_HOST`,
+`ORACLE_VPS_USER`, `ORACLE_VPS_SSH_KEY`.
 
 O `--remove-orphans` do workflow derruba os containers da stack antiga
 (`grafana`, `loki`, `prometheus`, `promtail`) na primeira execução após esta
