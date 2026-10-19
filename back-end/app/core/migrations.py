@@ -133,6 +133,16 @@ def check_if_migration_needed() -> tuple[bool, list[str]]:
             logger.warning("⚠️  Migration 011 necessária: coluna motivo_externo não existe")
             migrations_needed.append("011_add_feedback_motivo_externo.sql")
 
+        # Verificar migration 012: mais de um cargo por usuário
+        cursor.execute("""
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_name='users' AND column_name='roles'
+        """)
+        if not cursor.fetchone():
+            logger.warning("⚠️  Migration 012 necessária: coluna roles não existe")
+            migrations_needed.append("012_add_user_roles.sql")
+
         cursor.close()
         conn.close()
 
@@ -259,7 +269,7 @@ def run_data_migration() -> bool:
                 continue
 
             # Associar SENDER à clínica padrão
-            if user.role == UserRole.SENDER:
+            if user.tem_papel(UserRole.SENDER):
                 user_db.update_user(
                     user_id=user.id,
                     clinic_id=default_clinic_id

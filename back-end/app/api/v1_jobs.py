@@ -20,20 +20,22 @@ def _job_metadata(job_payload: dict[str, Any]) -> dict[str, Any]:
 
 
 def _can_access_job(current_user: User, job_payload: dict[str, Any]) -> bool:
-    if current_user.role == UserRole.ADMIN:
+    # Cada cargo concede um recorte, e quem acumula cargos soma os recortes: o
+    # CHECKER + SENDER vê os próprios envios E os da própria clínica.
+    if current_user.tem_papel(UserRole.ADMIN):
         return True
 
     metadata = _job_metadata(job_payload)
     job_user_id = metadata.get("uploaded_by_user_id")
     job_clinic_id = metadata.get("clinic_id")
 
-    if current_user.role in (UserRole.SENDER, UserRole.MANAGER):
-        # MANAGER só enxerga/cancela os próprios jobs (não é role destrutiva)
-        return bool(job_user_id and job_user_id == current_user.id)
+    # MANAGER só enxerga/cancela os próprios jobs (não é role destrutiva)
+    if current_user.tem_papel(UserRole.SENDER, UserRole.MANAGER) and job_user_id and job_user_id == current_user.id:
+        return True
 
-    if current_user.role == UserRole.CHECKER:
-        # Política mínima: checker só enxerga jobs da própria clínica quando clinic_id existe.
-        return bool(current_user.clinic_id and job_clinic_id == current_user.clinic_id)
+    # Política mínima: checker só enxerga jobs da própria clínica quando clinic_id existe.
+    if current_user.tem_papel(UserRole.CHECKER) and current_user.clinic_id and job_clinic_id == current_user.clinic_id:
+        return True
 
     return False
 
@@ -59,7 +61,7 @@ async def get_job_status(job_id: str, current_user: User = Depends(get_current_u
         try:
             job_status = user_db.get_job_record_scoped(
                 job_id,
-                role=current_user.role,
+                papeis=current_user.roles,
                 user_id=current_user.id,
                 clinic_id=current_user.clinic_id,
             )
@@ -113,7 +115,7 @@ async def list_jobs(
     if hasattr(user_db, "list_job_records_scoped"):
         try:
             filtered_jobs = user_db.list_job_records_scoped(
-                role=current_user.role,
+                papeis=current_user.roles,
                 status=job_status.value if isinstance(job_status, JobStatus) else None,
                 limit=limit,
                 user_id=current_user.id,

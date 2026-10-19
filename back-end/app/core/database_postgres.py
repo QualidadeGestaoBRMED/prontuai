@@ -15,7 +15,7 @@ from typing import List, Optional
 from datetime import datetime, timezone
 from sqlalchemy import String, cast, create_engine, text, func, or_, and_, case
 from sqlalchemy.orm import sessionmaker, Session, defer
-from app.models.user import User, UserCreate, UserUpdate, UserRole, GLOBAL_READ_ROLES
+from app.models.user import User, UserCreate, UserUpdate, UserRole, GLOBAL_READ_ROLES, normalizar_papeis
 from app.models.clinic import Clinic, ClinicCreate, ClinicUpdate
 from app.models.document import Document, DocumentCreate, DocumentUpdate
 from app.models.feedback import DocumentFeedback
@@ -123,6 +123,7 @@ class PostgresUserDatabase:
 
         # Cria tabelas se não existirem
         Base.metadata.create_all(self.engine)
+        self._ensure_user_columns()
         self._ensure_document_columns()
         self._ensure_notification_columns()
         self._ensure_audit_log_table()
@@ -205,6 +206,22 @@ class PostgresUserDatabase:
             if type_exists:
                 autocommit.execute(text("ALTER TYPE userrole ADD VALUE IF NOT EXISTS 'MANAGER'"))
                 autocommit.execute(text("ALTER TYPE userrole ADD VALUE IF NOT EXISTS 'CURATOR'"))
+
+    def _ensure_user_columns(self) -> None:
+        """Garante a coluna `roles` (migration 012) antes de qualquer consulta a users.
+
+        Não basta a migration: o `auto_migrate` roda no evento de startup, DEPOIS
+        deste construtor, e o `_ensure_default_admin` logo abaixo já faz um
+        `query(UserModel).count()` — que seleciona todas as colunas mapeadas e
+        quebraria o startup inteiro com "column users.roles does not exist".
+        Mesmo SQL da migration, idempotente.
+        """
+        with self.engine.begin() as connection:
+            connection.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS roles VARCHAR[]"))
+            connection.execute(text(
+                "UPDATE users SET roles = ARRAY[role::text] "
+                "WHERE roles IS NULL OR cardinality(roles) = 0"
+            ))
 
     def _ensure_document_columns(self) -> None:
         """Garante que colunas novas existam para documentos."""
@@ -643,25 +660,29 @@ class PostgresUserDatabase:
         self,
         job_id: str,
         *,
-        role: UserRole,
+        papeis: List[UserRole],
         user_id: Optional[str] = None,
         clinic_id: Optional[str] = None,
     ) -> Optional[dict]:
         job = self.get_job_record(job_id)
         if not job:
             return None
+        return job if self._job_visivel(job, papeis, user_id, clinic_id) else None
+
+    @staticmethod
+    def _job_visivel(
+        job: dict, papeis: List[UserRole], user_id: Optional[str], clinic_id: Optional[str]
+    ) -> bool:
+        """Mesma regra de `v1_jobs._can_access_job`: cada cargo soma um recorte."""
         metadata = job.get("metadata") if isinstance(job.get("metadata"), dict) else {}
-        if role == UserRole.ADMIN:
-            return job
-        if role in (UserRole.SENDER, UserRole.MANAGER):
-            if user_id and metadata.get("uploaded_by_user_id") == user_id:
-                return job
-            return None
-        if role == UserRole.CHECKER:
-            if clinic_id and metadata.get("clinic_id") == clinic_id:
-                return job
-            return None
-        return None
+        if UserRole.ADMIN in papeis:
+            return True
+        if (UserRole.SENDER in papeis or UserRole.MANAGER in papeis) and user_id \
+                and metadata.get("uploaded_by_user_id") == user_id:
+            return True
+        if UserRole.CHECKER in papeis and clinic_id and metadata.get("clinic_id") == clinic_id:
+            return True
+        return False
 
     def list_job_records(self, status: Optional[str] = None, limit: int = 50) -> list[dict]:
         session = self._get_session()
@@ -696,23 +717,15 @@ class PostgresUserDatabase:
     def list_job_records_scoped(
         self,
         *,
-        role: UserRole,
+        papeis: List[UserRole],
         status: Optional[str] = None,
         limit: int = 50,
         user_id: Optional[str] = None,
         clinic_id: Optional[str] = None,
     ) -> list[dict]:
         records = self.list_job_records(status=status, limit=limit)
-        if role == UserRole.ADMIN:
-            return records
-        filtered = []
-        for job in records:
-            metadata = job.get("metadata") if isinstance(job.get("metadata"), dict) else {}
-            if role in (UserRole.SENDER, UserRole.MANAGER) and user_id and metadata.get("uploaded_by_user_id") == user_id:
-                filtered.append(job)
-            if role == UserRole.CHECKER and clinic_id and metadata.get("clinic_id") == clinic_id:
-                filtered.append(job)
-        return filtered
+        # Um job só uma vez, mesmo que dois cargos o liberem.
+        return [job for job in records if self._job_visivel(job, papeis, user_id, clinic_id)]
 
     def list_notifications(self, clinic_id: Optional[str] = None, user_id: Optional[str] = None, limit: int = 100, include_read: bool = True) -> List[Notification]:
         session = self._get_session()
@@ -785,6 +798,7 @@ class PostgresUserDatabase:
                     email="gabriel.rodrigues@grupobrmed.com.br",
                     name="Gabriel Rodrigues",
                     role=UserRole.ADMIN,
+                    roles=[UserRole.ADMIN.value],
                     is_active=True,
                     created_at=datetime.utcnow(),
                     updated_at=datetime.utcnow()
@@ -802,6 +816,7 @@ class PostgresUserDatabase:
             email=model.email,
             name=model.name,
             role=model.role,
+            roles=model.roles or [],
             is_active=model.is_active,
             clinic_id=model.clinic_id,
             # `User` aceita os dois como None. Chamar .isoformat() sem checar
@@ -879,6 +894,7 @@ class PostgresUserDatabase:
                 UserModel.email,
                 UserModel.name,
                 cast(UserModel.role, String).label("role"),
+                UserModel.roles,
                 UserModel.is_active,
                 UserModel.clinic_id,
                 UserModel.created_at,
@@ -898,6 +914,7 @@ class PostgresUserDatabase:
                         email=linha.email,
                         name=linha.name,
                         role=linha.role,
+                        roles=linha.roles or [],
                         is_active=linha.is_active,
                         clinic_id=linha.clinic_id,
                         created_at=linha.created_at.isoformat() if linha.created_at else None,
@@ -1029,8 +1046,21 @@ class PostgresUserDatabase:
         finally:
             session.close()
 
-    def create_user(self, email: str, name: str, role: UserRole = UserRole.CHECKER, clinic_id: Optional[str] = None) -> User:
-        """Cria um novo usuário."""
+    def create_user(
+        self,
+        email: str,
+        name: str,
+        role: UserRole = UserRole.CHECKER,
+        clinic_id: Optional[str] = None,
+        roles: Optional[List[UserRole]] = None,
+    ) -> User:
+        """Cria um novo usuário.
+
+        `roles` é a lista de cargos; sem ela, vale `[role]`. A coluna `role`
+        recebe sempre o principal da lista (ver `PRECEDENCIA_PAPEIS`).
+        """
+        papeis = normalizar_papeis(roles or [role])
+        role = papeis[0]
         session = self._get_session()
         try:
             # Verifica se usuário já existe
@@ -1041,6 +1071,7 @@ class PostgresUserDatabase:
                 # Reativa usuário inativo
                 existing.name = name
                 existing.role = role
+                existing.roles = [p.value for p in papeis]
                 existing.is_active = True
                 existing.clinic_id = clinic_id
                 existing.updated_at = datetime.utcnow()
@@ -1055,6 +1086,7 @@ class PostgresUserDatabase:
                 email=email,
                 name=name,
                 role=role,
+                roles=[p.value for p in papeis],
                 is_active=True,
                 clinic_id=clinic_id,
                 created_at=datetime.utcnow(),
@@ -1075,9 +1107,15 @@ class PostgresUserDatabase:
         name: Optional[str] = None,
         role: Optional[UserRole] = None,
         is_active: Optional[bool] = None,
-        clinic_id: Optional[str] = None
+        clinic_id: Optional[str] = None,
+        roles: Optional[List[UserRole]] = None,
+        limpar_clinica: bool = False,
     ) -> User:
-        """Atualiza usuário."""
+        """Atualiza usuário.
+
+        `clinic_id=None` quer dizer "não mexer"; para tirar a clínica (o usuário
+        deixou de ser SENDER) use `limpar_clinica=True`.
+        """
         session = self._get_session()
         try:
             user_model = session.query(UserModel).filter(UserModel.id == user_id).first()
@@ -1087,11 +1125,17 @@ class PostgresUserDatabase:
             # Atualiza campos
             if name is not None:
                 user_model.name = name
-            if role is not None:
-                user_model.role = role
+            if roles is not None or role is not None:
+                papeis = normalizar_papeis(roles if roles is not None else [role])
+                if not papeis:
+                    raise ValueError("O usuário precisa ter pelo menos um cargo")
+                user_model.role = papeis[0]
+                user_model.roles = [p.value for p in papeis]
             if is_active is not None:
                 user_model.is_active = is_active
-            if clinic_id is not None:
+            if limpar_clinica:
+                user_model.clinic_id = None
+            elif clinic_id is not None:
                 user_model.clinic_id = clinic_id
 
             user_model.updated_at = datetime.utcnow()

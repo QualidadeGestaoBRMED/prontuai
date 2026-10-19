@@ -1,6 +1,6 @@
 from enum import Enum
-from pydantic import BaseModel, EmailStr, Field
-from typing import Optional
+from pydantic import BaseModel, EmailStr, Field, model_validator
+from typing import Iterable, List, Optional
 from datetime import datetime
 
 
@@ -22,16 +22,60 @@ GLOBAL_READ_ROLES = frozenset({
 })
 
 
+# Um usuário pode ter mais de um cargo (`roles`), e `role` continua existindo
+# como o PAPEL PRINCIPAL: o mais forte da lista, nesta ordem.
+#
+# O principal não é cosmético. É ele que vai para `audit_logs.user_role`, e a
+# consulta do dashboard só reconhece revisão humana quando ele é ADMIN, CHECKER
+# ou MANAGER — por isso CHECKER vem antes de CURATOR: quem acumula os dois
+# continua tendo a revisão contada. E SENDER fica por último, de modo que o
+# principal só é SENDER quando ele é o ÚNICO cargo; todo `role == SENDER` que
+# recorta dado por clínica continua certo sem mudar uma linha.
+#
+# Permissão é outra coisa: para PODER algo, basta ter o cargo em qualquer
+# posição da lista (ver `User.tem_papel` e `_exigir_papel` em core/auth.py).
+PRECEDENCIA_PAPEIS = (
+    UserRole.ADMIN, UserRole.MANAGER, UserRole.CHECKER, UserRole.CURATOR, UserRole.SENDER,
+)
+
+
+def normalizar_papeis(papeis: Iterable[UserRole | str]) -> List[UserRole]:
+    """Sem repetição e na ordem de `PRECEDENCIA_PAPEIS`: o primeiro é o principal."""
+    conjunto = {UserRole(p) for p in papeis}
+    return [p for p in PRECEDENCIA_PAPEIS if p in conjunto]
+
+
+def papel_principal(papeis: Iterable[UserRole | str]) -> UserRole:
+    normalizados = normalizar_papeis(papeis)
+    if not normalizados:
+        raise ValueError("O usuário precisa ter pelo menos um cargo")
+    return normalizados[0]
+
+
 class User(BaseModel):
     """Modelo de usuário do sistema"""
     id: Optional[str] = None
     email: EmailStr
     name: str
+    # Papel principal, derivado de `roles` (ver PRECEDENCIA_PAPEIS). Quem só
+    # informa `role` — linha anterior à migração 012, teste, token antigo —
+    # ganha `roles = [role]`.
     role: UserRole = UserRole.CHECKER
+    roles: List[UserRole] = Field(default_factory=list)
     is_active: bool = True
-    clinic_id: Optional[str] = None  # Chave estrangeira para Clinic (NULL para CHECKER/ADMIN)
+    clinic_id: Optional[str] = None  # Obrigatório quando um dos cargos é SENDER; NULL nos demais casos
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
+
+    @model_validator(mode="after")
+    def _alinhar_papeis(self) -> "User":
+        self.roles = normalizar_papeis(self.roles or [self.role])
+        self.role = self.roles[0]
+        return self
+
+    def tem_papel(self, *papeis: UserRole) -> bool:
+        """Tem pelo menos um dos cargos, em qualquer posição da lista."""
+        return any(p in self.roles for p in papeis)
 
     class Config:
         json_schema_extra = {
@@ -39,39 +83,58 @@ class User(BaseModel):
                 "email": "usuario@grupobrmed.com.br",
                 "name": "João Silva",
                 "role": "CHECKER",
+                "roles": ["CHECKER", "CURATOR"],
                 "is_active": True
             }
         }
 
 
 class UserCreate(BaseModel):
-    """Schema para criação de usuário"""
+    """Schema para criação de usuário.
+
+    `roles` é a forma nova; `role` sozinho continua aceito para quem ainda
+    manda um cargo só. Com os dois, vale `roles`.
+    """
     email: EmailStr
     name: str
-    role: UserRole = UserRole.CHECKER
-    clinic_id: Optional[str] = None  # Obrigatório para SENDER, NULL para CHECKER/ADMIN
+    role: Optional[UserRole] = None
+    roles: Optional[List[UserRole]] = None
+    clinic_id: Optional[str] = None  # Obrigatório quando um dos cargos é SENDER
+
+    def papeis(self) -> List[UserRole]:
+        return normalizar_papeis(self.roles or [self.role or UserRole.CHECKER])
 
     class Config:
         json_schema_extra = {
             "example": {
                 "email": "novo@grupobrmed.com.br",
                 "name": "Novo Usuário",
-                "role": "CHECKER"
+                "roles": ["CHECKER", "SENDER"],
+                "clinic_id": "id-da-clinica"
             }
         }
 
 
 class UserUpdate(BaseModel):
-    """Schema para atualização de usuário"""
+    """Schema para atualização de usuário. Cargos: ver `UserCreate`."""
     name: Optional[str] = None
     role: Optional[UserRole] = None
+    roles: Optional[List[UserRole]] = None
     is_active: Optional[bool] = None
     clinic_id: Optional[str] = None
+
+    def papeis(self) -> Optional[List[UserRole]]:
+        """Os cargos pedidos, ou None quando a edição não mexe neles."""
+        if self.roles is not None:
+            return normalizar_papeis(self.roles)
+        if self.role is not None:
+            return [self.role]
+        return None
 
     class Config:
         json_schema_extra = {
             "example": {
-                "role": "ADMIN",
+                "roles": ["MANAGER", "CURATOR"],
                 "is_active": True
             }
         }

@@ -412,8 +412,12 @@ def _exigir_papel(
 
     Centraliza o que estava repetido em nove guardas `require_*`, todas
     levantando 403 em silêncio. Ver `_registrar_recusa`.
+
+    Basta UM dos cargos do usuário estar entre os permitidos. Olhar só o papel
+    principal barraria quem acumula: o MANAGER + CURATOR no catálogo (o
+    principal é MANAGER, que não entra lá) e o CHECKER + SENDER no envio.
     """
-    if current_user.role in permitidos:
+    if current_user.tem_papel(*permitidos):
         return current_user
     _registrar_recusa(
         request,
@@ -421,6 +425,7 @@ def _exigir_papel(
         "papel_sem_permissao",
         email=current_user.email,
         papel=current_user.role.value,
+        papeis=[p.value for p in current_user.roles],
         papeis_exigidos=[p.value for p in permitidos],
         rota=request.url.path if request is not None else None,
     )

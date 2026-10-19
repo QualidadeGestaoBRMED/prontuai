@@ -37,8 +37,18 @@ class UserDatabaseProtocol(Protocol):
         name: str,
         role: UserRole = UserRole.CHECKER,
         clinic_id: Optional[str] = None,
+        roles: Optional[List[UserRole]] = None,
     ) -> User: ...
-    def update_user(self, user_id: str, update: UserUpdate) -> User: ...
+    def update_user(
+        self,
+        user_id: str,
+        name: Optional[str] = None,
+        role: Optional[UserRole] = None,
+        is_active: Optional[bool] = None,
+        clinic_id: Optional[str] = None,
+        roles: Optional[List[UserRole]] = None,
+        limpar_clinica: bool = False,
+    ) -> User: ...
     def delete_user(self, user_id: str) -> bool: ...
     def create_notification(self, data: NotificationCreate) -> Notification: ...
     def list_notifications(
