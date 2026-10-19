@@ -133,16 +133,13 @@ export type IdIndicador =
   | "derrubadas"
   | "falhas"
   | "motivos"
-  | "matriz"
-  | "acuraciaExame";
+  | "matriz";
 
 export interface ComoCalculamos {
   titulo: string;
   /** A pergunta que o indicador responde, em uma linha. */
   pergunta: string;
   blocos: { titulo: string; texto: string }[];
-  /** Substitui `RODAPE_COMO_CALCULAMOS`, para o card que não segue a regra geral. */
-  rodape?: string;
 }
 
 export const RODAPE_COMO_CALCULAMOS =
@@ -455,39 +452,6 @@ export const COMO_CALCULAMOS: Record<IdIndicador, ComoCalculamos> = {
         titulo: "O percentual",
         texto:
           "Cada linha sobre a base da acurácia, então as cinco somam 100% e as três de acerto somam a acurácia do período. Falhas técnicas ficam fora da matriz.",
-      },
-    ],
-  },
-  acuraciaExame: {
-    titulo: "Acurácia por exame",
-    pergunta: "Em quais exames da grade a IA mais erra.",
-    rodape:
-      "Este card é a exceção do painel: não é recalculado às 7h nem pelo Atualizar. Os valores ficam fixos até o parecer do modal de feedback passar a alimentá-lo.",
-    blocos: [
-      {
-        titulo: "Valor fixo, por enquanto",
-        texto:
-          "Os números foram calculados uma vez sobre a cópia de produção de 18/10 e não mudam com o filtro de período nem com o Atualizar. A janela vai desde a adoção do catálogo de exames: documentos enviados de 12/09, primeiro dia inteiro com o catálogo em produção, a 17/10. A versão definitiva vai sair do parecer do revisor no modal de feedback, que diz exame a exame se a IA acertou.",
-      },
-      {
-        titulo: "A carga de 06/10 no meio da janela",
-        texto:
-          "Em 06/10 o catálogo recebeu uma carga grande de nomes, e o que veio antes dela ainda pesa na lista. TGO e TGP, por exemplo, aparecem com 82% na janela inteira, mas com 98% contando só de 07/10 em diante. O total quase não muda: 98,0% antes da carga e 98,3% depois.",
-      },
-      {
-        titulo: "A conta",
-        texto:
-          "Cada exame exigido de cada documento é uma avaliação. Como ainda não há parecer por exame, o exame herda a decisão do revisor sobre o documento. Falta indevida: a IA marcou o exame como faltante e o revisor liberou o documento sem motivo externo. Presença indevida: a IA deu o exame como presente, aprovou, e o revisor rejeitou citando esse exame. O resto conta como acerto. Acurácia = acertos ÷ avaliações.",
-      },
-      {
-        titulo: "O que fica de fora",
-        texto:
-          "As mesmas exclusões da acurácia geral: falha técnica, reenvio do mesmo arquivo e documento sem decisão do time BR MED. Exames com menos de 20 avaliações na janela entram no total, mas não na lista — com tão poucos casos, um erro sozinho derruba o percentual.",
-      },
-      {
-        titulo: "Cuidado ao ler",
-        texto:
-          "Quando a IA aponta falta e o revisor libera sem escrever motivo, conta como erro da IA — mas às vezes o exame realmente não estava no documento e o revisor liberou por outra razão. Em agosto, conferindo o PDF, perto de metade desses casos era assim. É essa dúvida que o parecer do modal vai resolver.",
       },
     ],
   },

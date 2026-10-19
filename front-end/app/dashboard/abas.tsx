@@ -19,12 +19,6 @@ import type {
   UsoSemanal,
   VisaoDashboard,
 } from "./metricas";
-import {
-  ACURACIA_EXAME_FIXA,
-  ACURACIA_EXAME_TOTAL,
-  KPI_ACURACIA_EXAME,
-  LINHAS_ACURACIA_EXAME,
-} from "./acuracia-por-exame-fixa";
 import styles from "./dashboard.module.css";
 
 const CARTAO ="rounded-[14px] border border-[#DFE0E2] bg-white";
@@ -1185,29 +1179,8 @@ function ModalHistoricoFora({
   );
 }
 
-function CartaoKpi({
-  kpi,
-  onAjuda,
-  onValor,
-  selo,
-}: {
-  kpi: Kpi;
-  onAjuda: AbrirAjuda;
-  /** Torna o número clicável — abre o detalhe por trás dele. */
-  onValor?: () => void;
-  /** Selo no cabeçalho, depois do "?" (ex.: "EM BREVE"). */
-  selo?: ReactNode;
-}) {
+function CartaoKpi({ kpi, onAjuda }: { kpi: Kpi; onAjuda: AbrirAjuda }) {
   const ajuda = kpi.ajuda;
-  const valor = (
-    <div
-      className={`whitespace-nowrap text-[36px] font-medium leading-none tracking-[-0.025em] text-[#193B4F] tabular-nums ${
-        onValor ? "transition-colors group-hover:text-[#007891]" : ""
-      }`}
-    >
-      {kpi.value}
-    </div>
-  );
   return (
     <div
       className={`${styles.tip} ${styles.tipBaixo} flex flex-col gap-4 rounded-xl border border-[#DFE0E2] bg-white px-[22px] pt-5 pb-[22px]`}
@@ -1216,29 +1189,15 @@ function CartaoKpi({
       <div className="flex items-center gap-2">
         <div className="text-[13px] text-[#767A7B]">{kpi.label}</div>
         {ajuda && <BotaoAjuda rotulo={kpi.label} onClick={() => onAjuda(ajuda)} />}
-        {selo}
       </div>
       <div className="flex flex-col items-start gap-2">
-        {onValor ? (
-          <button
-            type="button"
-            onClick={onValor}
-            aria-haspopup="dialog"
-            aria-label={`Ver ${kpi.label.toLowerCase()}`}
-            title="Ver por exame"
-            className="group cursor-pointer rounded-[6px] text-left"
-          >
-            {valor}
-          </button>
-        ) : (
-          valor
-        )}
-        {kpi.delta && (
-          <div className="whitespace-nowrap text-[13px] font-medium" style={{ color: kpi.deltaColor }}>
-            {kpi.delta}
-          </div>
-        )}
-        {kpi.sub && <div className="text-[12.5px] text-[#767A7B]">{kpi.sub}</div>}
+        <div className="whitespace-nowrap text-[36px] font-medium leading-none tracking-[-0.025em] text-[#193B4F] tabular-nums">
+          {kpi.value}
+        </div>
+        <div className="whitespace-nowrap text-[13px] font-medium" style={{ color: kpi.deltaColor }}>
+          {kpi.delta}
+        </div>
+        <div className="text-[12.5px] text-[#767A7B]">{kpi.sub}</div>
       </div>
     </div>
   );
@@ -1486,147 +1445,21 @@ export function AbaUtilizacao({
   );
 }
 
-// Literal pelo mesmo motivo de COLUNAS_FORA: o Tailwind só compila a classe que
-// encontra escrita no código.
-const COLUNAS_EXAME = "grid-cols-[2fr_0.75fr_2fr_0.8fr]";
-
-// As duas formas de errar, na ordem em que entram na barra.
-const ERROS_EXAME = [
-  {
-    chave: "pctFalta",
-    titulo: "Falta indevida",
-    explicacao: "a IA apontou, o revisor liberou",
-    cor: "#CC851E",
-    total: ACURACIA_EXAME_FIXA.faltaIndevida,
-  },
-  {
-    chave: "pctPresenca",
-    titulo: "Presença indevida",
-    explicacao: "a IA aprovou, o revisor cobrou o exame",
-    cor: "#B4453A",
-    total: ACURACIA_EXAME_FIXA.presencaIndevida,
-  },
-] as const;
-
 /**
- * A lista de "Acurácia por exame", aberta pelo botão do KPI. Valores FIXOS
- * (`acuracia-por-exame-fixa.ts`) até o parecer do modal de feedback alimentar
- * o indicador.
- *
- * O selo e a descrição dizem que o número é fixo e de qual janela: o resto da
- * aba muda com o filtro de período, e esta lista não — sem o aviso, quem troca
- * de "Mês" para "Semana" lê uma lista parada como dado da semana.
- *
- * A barra é a taxa de ERRO, dividida nas duas formas de errar: a pergunta é
- * "onde a IA erra", e as duas costumam pedir correções diferentes — falta
- * indevida tende a ser nome que o catálogo não reconhece; presença indevida,
- * exame só listado no ASO.
+ * Lugar reservado para "Acurácia por exame", ao lado de "Acurácia" e no mesmo
+ * tamanho dos KPIs. Sem número até o parecer do revisor no modal de feedback,
+ * que diz exame a exame se a IA acertou, passar a alimentar o indicador.
  */
-function ModalAcuraciaExame({ aberto, onFechar }: { aberto: boolean; onFechar: () => void }) {
-  const { ordem, ordenarPor } = useOrdem({ col: "acuracia", dir: "asc" });
-  const fixo = ACURACIA_EXAME_FIXA;
-  const visiveis = ordenar(LINHAS_ACURACIA_EXAME, ordem, (l, col) =>
-    col === "exame" ? l.exame
-    : col === "avaliacoes" ? l.avaliacoes
-    : col === "erros" ? l.erros / l.avaliacoes
-    : l.acuracia,
-  );
-
+function CartaoEmBreve({ label }: { label: string }) {
   return (
-    <Dialog open={aberto} onOpenChange={(v) => !v && onFechar()}>
-      <DialogContent className="flex max-h-[calc(100dvh-3rem)] flex-col gap-0 overflow-hidden rounded-[16px] border-[#DFE0E2] bg-white p-0 sm:max-w-[980px]">
-        {/* Título e descrição ocupam a largura toda, e os números descem para
-            uma fileira própria. Com o total à direita da descrição, os dois
-            disputavam a mesma linha: o texto quebrava no meio da frase e o
-            número ficava espremido contra o X. */}
-        <div className="border-b border-[#EDEFF0] py-4 pr-14 pl-6">
-          <DialogTitle className="text-[20px] leading-tight font-semibold text-[#193B4F]">
-            Acurácia por exame
-          </DialogTitle>
-          <DialogDescription className="mt-1 text-[13px] leading-[1.5] text-[#767A7B]">
-            Desde a adoção do catálogo de exames: documentos enviados de {fixo.janela}.
-            <span className="block">Não acompanha o filtro de período e vai passar a vir do parecer do revisor.</span>
-          </DialogDescription>
-
-          {/* Os dois tipos de erro entram como números, com a cor da barra ao
-              lado: a fileira faz também o papel de legenda. */}
-          <div className="mt-4 flex flex-wrap items-start gap-x-8 gap-y-3">
-            {[
-              { r: "Acurácia", v: ACURACIA_EXAME_TOTAL.acuraciaLabel, cor: "#007891" },
-              { r: "Exames avaliados", v: fixo.avaliacoes.toLocaleString("pt-BR") },
-              { r: "Documentos", v: fixo.documentos.toLocaleString("pt-BR") },
-              ...ERROS_EXAME.map((e) => ({
-                r: e.titulo,
-                v: e.total.toLocaleString("pt-BR"),
-                amostra: e.cor,
-                sub: e.explicacao,
-              })),
-            ].map((x: { r: string; v: string; cor?: string; amostra?: string; sub?: string }) => (
-              <div key={x.r} className="flex flex-col gap-1">
-                <div className={`${CABECALHO_TABELA} flex items-center gap-1.5`}>
-                  {x.amostra && <span className="size-2.5 flex-none rounded-[2px]" style={{ background: x.amostra }} />}
-                  {x.r}
-                </div>
-                <div
-                  className="text-[19px] font-medium leading-none tabular-nums"
-                  style={{ color: x.cor ?? "#193B4F" }}
-                >
-                  {x.v}
-                </div>
-                {x.sub && <div className="text-[11px] text-[#9AA3A8]">{x.sub}</div>}
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="min-h-0 flex-1 overflow-auto px-6">
-          <div className="min-w-[720px]">
-            <div
-              className={`sticky top-0 z-10 grid ${COLUNAS_EXAME} items-end gap-x-[18px] border-b border-[#DFE0E2] bg-white px-1 pt-3.5 pb-2.5`}
-            >
-              <Th label="Exame" col="exame" ordem={ordem} onOrdenar={ordenarPor} />
-              <Th label="Avaliados" col="avaliacoes" ordem={ordem} onOrdenar={ordenarPor} numerica />
-              <Th label="Erros" sub="barra = taxa · número = casos" col="erros" ordem={ordem} onOrdenar={ordenarPor} numerica />
-              <Th label="Acurácia" col="acuracia" ordem={ordem} onOrdenar={ordenarPor} numerica />
-            </div>
-            {visiveis.map((l) => (
-              <div
-                key={l.exame}
-                className={`${styles.linhaTip} grid ${COLUNAS_EXAME} items-center gap-x-[18px] border-b border-[#F3F3F3] px-1 py-3 text-[13.5px] text-[#193B4F]`}
-              >
-                {/* Mesmo invólucro de "Quem está usando pouco": a seta do balão
-                    aponta para o nome só se ele encolher até o texto. */}
-                <div className="min-w-0">
-                  <span className={`${styles.tip} ${styles.tipNome} min-w-0`} data-tip={l.tip}>
-                    <span className="block truncate">{l.exame}</span>
-                  </span>
-                </div>
-                <div className="tabular-nums text-[#767A7B]">{l.avaliacoes.toLocaleString("pt-BR")}</div>
-                <div className="flex items-center gap-2.5">
-                  <div className="flex h-[9px] flex-1 overflow-hidden rounded-[4px] bg-[#F3F3F3]">
-                    {ERROS_EXAME.map((e) => (
-                      <div key={e.chave} className="h-full" style={{ width: `${l[e.chave]}%`, background: e.cor }} />
-                    ))}
-                  </div>
-                  <div className="w-[26px] text-right font-medium tabular-nums">{l.erros || "—"}</div>
-                </div>
-                <div className="font-medium tabular-nums">{l.acuraciaLabel}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="border-t border-[#EDEFF0] px-6 py-3 text-[12px] text-[#9AA3A8]">
-          Exames com menos de {fixo.minimoAvaliacoes} avaliações na janela entram no total, mas não na lista. Fonte:{" "}
-          {fixo.fonte}.
-        </div>
-      </DialogContent>
-    </Dialog>
+    <div className="flex flex-col gap-4 rounded-xl border border-[#DFE0E2] bg-white px-[22px] pt-5 pb-[22px]">
+      <div className="text-[13px] text-[#767A7B]">{label}</div>
+      <div className="text-[30px] font-medium leading-none tracking-[-0.02em] text-[#9AA3A8]">Em breve</div>
+    </div>
   );
 }
 
 export function AbaAcuracia({ visao, onAjuda }: { visao: VisaoDashboard; onAjuda: AbrirAjuda }) {
-  const [examesAberto, setExamesAberto] = useState(false);
   // "Acurácia por exame" entra logo depois de "Acurácia": é o mesmo número
   // aberto por exame, e quem lê um procura o outro do lado.
   const [acuracia, ...demais] = visao.kpisAcuracia;
@@ -1635,23 +1468,11 @@ export function AbaAcuracia({ visao, onAjuda }: { visao: VisaoDashboard; onAjuda
     <div className="flex flex-col gap-5 px-[34px] pt-[26px] pb-10">
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
         <CartaoKpi kpi={acuracia} onAjuda={onAjuda} />
-        <CartaoKpi
-          kpi={KPI_ACURACIA_EXAME}
-          onAjuda={onAjuda}
-          onValor={() => setExamesAberto(true)}
-          selo={
-            // Mais compacto que os selos dos títulos de card: aqui ele divide a
-            // linha com o rótulo e o "?" num card de um quinto da largura.
-            <span className="whitespace-nowrap rounded-[5px] bg-[#E8F2F4] px-1.5 py-0.5 text-[10px] font-medium tracking-[0.06em] text-[#007891]">
-              EM BREVE
-            </span>
-          }
-        />
+        <CartaoEmBreve label="Acurácia por exame" />
         {demais.map((k) => (
           <CartaoKpi key={k.label} kpi={k} onAjuda={onAjuda} />
         ))}
       </div>
-      <ModalAcuraciaExame aberto={examesAberto} onFechar={() => setExamesAberto(false)} />
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
         <div className={`${CARTAO} px-[22px] pt-5 pb-[18px]`}>

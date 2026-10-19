@@ -255,7 +255,7 @@ export default function DashboardPage() {
             ))}
           </div>
           <div className="rounded-[10px] bg-[#F3F3F3] px-3.5 py-3 text-[12.5px] leading-[1.5] text-[#767A7B]">
-            {comoCalculamos.rodape ?? RODAPE_COMO_CALCULAMOS}
+            {RODAPE_COMO_CALCULAMOS}
           </div>
         </DialogContent>
       </Dialog>
