@@ -8,6 +8,7 @@ import { RiGoogleFill } from "@remixicon/react";
 import Link from "next/link";
 import { Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { papeisDoUsuario } from "@/hooks/usePermissions";
 
 export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
@@ -16,7 +17,10 @@ export default function LoginPage() {
 
   useEffect(() => {
     if (status !== "authenticated") return;
-    const role = session?.user?.role;
+    // Mesma ordem do papel principal (ADMIN > MANAGER > CHECKER > CURATOR >
+    // SENDER): quem tem ADMIN ou MANAGER cai no envio, como antes, e o
+    // CHECKER + SENDER cai na checagem.
+    const role = papeisDoUsuario(session?.user)[0];
     if (role === "CHECKER") {
       router.replace("/checagem");
     } else if (role === "CURATOR") {

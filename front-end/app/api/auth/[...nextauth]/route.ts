@@ -11,6 +11,7 @@ interface BackendAuthData {
     email: string;
     name: string;
     role: "ADMIN" | "MANAGER" | "CURATOR" | "CHECKER" | "SENDER";
+    roles?: ("ADMIN" | "MANAGER" | "CURATOR" | "CHECKER" | "SENDER")[];
     is_active: boolean;
   };
 }

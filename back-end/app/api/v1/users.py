@@ -1,12 +1,16 @@
 """
 Endpoints de gerenciamento de usuários (ADMIN e MANAGER).
 
-MANAGER pode listar usuários e criar/editar só CHECKER e SENDER. Não ativa nem
-desativa ninguém (nem pelo DELETE, nem pelo PATCH de `is_active`) e não mexe em
-ADMIN, MANAGER ou CURATOR.
+Um usuário pode ter mais de um cargo (`roles`). MANAGER pode listar usuários e
+criar/editar só quem tem apenas CHECKER e/ou SENDER — inclusive os dois juntos.
+Não ativa nem desativa ninguém (nem pelo DELETE, nem pelo PATCH de
+`is_active`) e não mexe em ADMIN, MANAGER ou CURATOR.
+
+Clínica: obrigatória quando um dos cargos é SENDER, que é o cargo preso a uma
+clínica. Os demais enxergam todas.
 """
 from fastapi import APIRouter, HTTPException, status, Depends
-from typing import List
+from typing import List, Optional
 from app.core.auth import require_admin, require_management
 from app.core.database import user_db
 from app.core import metrics
@@ -17,21 +21,55 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/users", tags=["Usuários"])
 
+# O que o MANAGER pode atribuir, em qualquer combinação.
+PAPEIS_DO_GESTOR = frozenset({UserRole.CHECKER, UserRole.SENDER})
 
-def _assert_manager_cannot_touch_admin(actor: User, target_role: UserRole | None):
+
+def _gestor_sem_admin(actor: User) -> bool:
+    """MANAGER que não é também ADMIN — é a ele que as travas abaixo se aplicam."""
+    return actor.tem_papel(UserRole.MANAGER) and not actor.tem_papel(UserRole.ADMIN)
+
+
+def _exigir_algum_cargo(papeis: Optional[List[UserRole]]) -> None:
+    if papeis is not None and not papeis:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Selecione pelo menos um cargo",
+        )
+
+
+def _assert_manager_cannot_touch_admin(actor: User, target_roles: Optional[List[UserRole]]):
     """
-    Impede escalada de privilégio: MANAGER só atribui roles CHECKER/SENDER.
+    Impede escalada de privilégio: MANAGER só atribui CHECKER e SENDER.
 
     CURATOR entra nesta lista porque o MANAGER não acessa o catálogo de exames
     — se pudesse atribuir o papel, bastaria criar um usuário para contornar isso.
+    Com vários cargos, a checagem é por CADA cargo pedido: senão bastaria
+    esconder um ADMIN no meio de [CHECKER, ADMIN].
     """
-    if actor.role == UserRole.MANAGER and target_role in (
-        UserRole.ADMIN, UserRole.MANAGER, UserRole.CURATOR
-    ):
+    if not target_roles or not _gestor_sem_admin(actor):
+        return
+    if not set(target_roles) <= PAPEIS_DO_GESTOR:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Gestores só podem atribuir as roles CHECKER e SENDER"
         )
+
+
+def _validar_clinica(clinic_id: Optional[str]):
+    """Clínica obrigatória para quem tem SENDER, e precisa existir."""
+    if not clinic_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Usuários com o cargo SENDER precisam de uma clínica. Crie uma clínica primeiro.",
+        )
+    clinic = user_db.get_clinic_by_id(clinic_id)
+    if not clinic:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Clínica com ID {clinic_id} não encontrada",
+        )
+    return clinic
 
 
 def _assert_manager_can_edit(actor: User, target_id: str, user_update: UserUpdate) -> None:
@@ -51,7 +89,9 @@ def _assert_manager_can_edit(actor: User, target_id: str, user_update: UserUpdat
     target = user_db.get_user_by_id(target_id)
     if target is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuário não encontrado")
-    if target.role not in (UserRole.CHECKER, UserRole.SENDER):
+    # Todos os cargos do alvo, não só o principal: um CHECKER + CURATOR tem
+    # principal CHECKER e mesmo assim está fora do alcance do gestor.
+    if not set(target.roles) <= PAPEIS_DO_GESTOR:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Gestores só podem alterar usuários CHECKER e SENDER"
@@ -84,42 +124,36 @@ async def create_user(
     admin: User = Depends(require_management)
 ):
     """
-    Cria um novo usuário (ADMIN/MANAGER; MANAGER só cria CHECKER/SENDER).
+    Cria um novo usuário (ADMIN/MANAGER; MANAGER só atribui CHECKER e SENDER).
 
-    - Para role SENDER: clinic_id é OBRIGATÓRIO (deve escolher de uma clínica existente)
-    - Para role CHECKER/ADMIN/MANAGER: clinic_id deve ser NULL
+    - **roles**: um ou mais cargos (`role` sozinho ainda é aceito)
+    - Com SENDER entre os cargos: clinic_id é OBRIGATÓRIO (clínica existente)
+    - Sem SENDER: clinic_id é ignorado e fica NULL
     """
-    _assert_manager_cannot_touch_admin(admin, user_create.role)
+    if user_create.roles is not None:
+        _exigir_algum_cargo(user_create.roles)
+    papeis = user_create.papeis()
+    _assert_manager_cannot_touch_admin(admin, papeis)
     try:
-        clinic_id = user_create.clinic_id
+        clinic_id = None
         clinic_name = None
 
-        # Validar clinic_id para SENDER
-        if user_create.role == UserRole.SENDER:
-            if not clinic_id:
-                raise ValueError("clinic_id é obrigatório para usuários SENDER. Crie uma clínica primeiro.")
-
-            # Verificar se clínica existe
-            clinic = user_db.get_clinic_by_id(clinic_id)
-            if not clinic:
-                raise ValueError(f"Clínica com ID {clinic_id} não encontrada")
-            clinic_name = clinic.name
-
+        if UserRole.SENDER in papeis:
+            clinic = _validar_clinica(user_create.clinic_id)
+            clinic_id, clinic_name = clinic.id, clinic.name
             logger.info(f"Criando usuário SENDER {user_create.email} para clínica {clinic.name} ({clinic_id})")
-
-        # CHECKER, ADMIN, MANAGER e CURATOR não devem ter clinic_id
-        if user_create.role in [
-            UserRole.CHECKER, UserRole.ADMIN, UserRole.MANAGER, UserRole.CURATOR,
-        ]:
-            clinic_id = None
 
         user = user_db.create_user(
             email=user_create.email,
             name=user_create.name,
-            role=user_create.role,
+            role=papeis[0],
+            roles=papeis,
             clinic_id=clinic_id
         )
-        logger.info(f"Admin {admin.email} criou usuário {user.email} com role {user.role.value} (clinic_id: {clinic_id})")
+        logger.info(
+            f"Admin {admin.email} criou usuário {user.email} com cargos "
+            f"{[p.value for p in user.roles]} (clinic_id: {clinic_id})"
+        )
         metrics.USUARIOS_CRIADOS.add(
             1,
             {
@@ -167,21 +201,44 @@ async def update_user(
 
     Pode atualizar:
     - **name**: Nome do usuário
-    - **role**: Role (ADMIN, MANAGER, CHECKER, SENDER)
+    - **roles**: Cargos (`role` sozinho ainda é aceito)
     - **is_active**: Status ativo/inativo
-    - **clinic_id**: Clínica associada (apenas para SENDER)
+    - **clinic_id**: Clínica associada (obrigatória enquanto houver SENDER)
+
+    Tirar o SENDER de alguém tira também a clínica. Fora disso a clínica fica
+    como está: o envio usa a clínica do próprio usuário, e há ADMIN que envia
+    por uma.
     """
-    _assert_manager_cannot_touch_admin(admin, user_update.role)
-    if admin.role == UserRole.MANAGER:
+    if user_update.roles is not None:
+        _exigir_algum_cargo(user_update.roles)
+    papeis = user_update.papeis()
+    _assert_manager_cannot_touch_admin(admin, papeis)
+    if _gestor_sem_admin(admin):
         _assert_manager_can_edit(admin, user_id, user_update)
+
+    alvo = user_db.get_user_by_id(user_id)
+    if alvo is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuário não encontrado")
+
+    papeis_finais = papeis if papeis is not None else alvo.roles
+    clinic_id = user_update.clinic_id
+    limpar_clinica = False
+    if UserRole.SENDER in papeis_finais:
+        clinic_id = _validar_clinica(clinic_id or alvo.clinic_id).id
+    elif alvo.tem_papel(UserRole.SENDER):
+        # Deixou de ser SENDER: a clínica era dele por causa desse cargo.
+        clinic_id, limpar_clinica = None, True
+    else:
+        clinic_id = None  # não muda a clínica de quem nunca foi SENDER
 
     try:
         user = user_db.update_user(
             user_id=user_id,
             name=user_update.name,
-            role=user_update.role,
+            roles=papeis,
             is_active=user_update.is_active,
-            clinic_id=user_update.clinic_id
+            clinic_id=clinic_id,
+            limpar_clinica=limpar_clinica,
         )
         logger.info(f"Admin {admin.email} atualizou usuário {user.email}")
         return user

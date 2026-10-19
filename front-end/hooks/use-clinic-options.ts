@@ -11,8 +11,9 @@ export type ClinicOption = {
 }
 
 export function useClinicOptions() {
-  const { role } = usePermissions()
-  const enabled = Boolean(role && role !== "SENDER")
+  const { roles } = usePermissions()
+  // O filtro de clínica é para quem enxerga todas: qualquer cargo além do SENDER.
+  const enabled = roles.some((r) => r !== "SENDER")
   const [options, setOptions] = useState<ClinicOption[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
