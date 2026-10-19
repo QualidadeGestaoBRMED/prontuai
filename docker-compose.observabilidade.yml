@@ -1,0 +1,86 @@
+# Simula a VPS Oracle: um coletor OTel + backends (Tempo/Prometheus/Loki) +
+# Grafana, compartilhados entre vários projetos -- infraestrutura separada
+# do app (docker-compose.yml, que simula o Render). De propósito num
+# arquivo/rede Docker à parte, sem nenhum serviço em comum com o app: o
+# único jeito do app alcançar o otel-collector é pela porta publicada no
+# host (4317), com o token de autenticação certo -- igual seria pela
+# internet entre Render e a VPS de verdade.
+#
+# Subir/derrubar como um "servidor" próprio:
+#   docker compose -p observabilidade -f docker-compose.observabilidade.yml up -d
+#   docker compose -p observabilidade -f docker-compose.observabilidade.yml down
+
+services:
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.112.0
+    restart: unless-stopped
+    command: ["--config=/etc/otel-collector-config.yaml"]
+    volumes:
+      - ./otel/otel-collector-config.yaml:/etc/otel-collector-config.yaml
+    environment:
+      OTEL_AUTH_TOKEN: "${OTEL_AUTH_TOKEN}"
+    ports:
+      - "127.0.0.1:4317:4317" # OTLP gRPC — so o nginx alcanca
+      - "127.0.0.1:4318:4318" # OTLP HTTP — so o nginx alcanca
+    depends_on:
+      - tempo
+      - prometheus
+      - loki
+
+  tempo:
+    image: grafana/tempo:2.6.0
+    restart: unless-stopped
+    command: ["-config.file=/etc/tempo.yaml"]
+    volumes:
+      - ./otel/tempo.yaml:/etc/tempo.yaml
+      - tempo_data:/var/tempo
+    ports:
+      - "127.0.0.1:3200:3200" # debug local; sem auth propria, nunca publico
+
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    restart: unless-stopped
+    volumes:
+      - ./otel/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    ports:
+      - "127.0.0.1:9090:9090" # debug local; sem auth propria, nunca publico
+
+  loki:
+    image: grafana/loki:3.1.0
+    restart: unless-stopped
+    command: ["-config.file=/etc/loki/local-config.yaml"]
+    volumes:
+      - loki_data:/loki
+    ports:
+      - "127.0.0.1:3100:3100" # debug local; sem auth propria, nunca publico
+
+  grafana:
+    image: grafana/grafana:11.2.0
+    restart: unless-stopped
+    environment:
+      # Anonimo DESLIGADO: com o Grafana atras de um dominio publico, anonimo
+      # com papel Admin daria administracao total a quem descobrisse a URL — e
+      # os paineis mostram metrica por clinica e log com e-mail de usuario.
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_SECURITY_ADMIN_USER: "${GRAFANA_ADMIN_USER:-admin}"
+      GF_SECURITY_ADMIN_PASSWORD: "${GRAFANA_ADMIN_PASSWORD:?defina GRAFANA_ADMIN_PASSWORD}"
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      # Sem isto o Grafana monta links/redirects com o host interno.
+      GF_SERVER_ROOT_URL: "https://brmed-observability.duckdns.org"
+    volumes:
+      - ./otel/grafana/provisioning:/etc/grafana/provisioning
+      - ./otel/grafana/dashboards:/etc/grafana/dashboards
+      - grafana_data:/var/lib/grafana
+    ports:
+      - "127.0.0.1:3001:3000"   # so o nginx alcanca
+    depends_on:
+      - prometheus
+      - tempo
+      - loki
+
+volumes:
+  tempo_data:
+  prometheus_data:
+  loki_data:
+  grafana_data:
