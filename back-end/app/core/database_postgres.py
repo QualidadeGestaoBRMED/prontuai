@@ -1415,9 +1415,16 @@ class PostgresUserDatabase:
         sort_by: str = "uploaded_at",
         sort_dir: str = "desc",
         filter_clinic_id: Optional[str] = None,
+        uploaded_from: Optional[datetime] = None,
+        uploaded_to: Optional[datetime] = None,
     ) -> dict:
         """
         Lista documentos paginados com escopo por role e filtros de fila.
+
+        `uploaded_from`/`uploaded_to` recortam pela data de envio num intervalo
+        semiaberto [de, até), em UTC sem fuso — o mesmo formato de
+        `uploaded_at`. Quem converte o dia local em instante é o chamador: o
+        "dia 15" do revisor começa às 03:00 UTC, e só o browser sabe disso.
         """
         session = self._get_session()
         try:
@@ -1442,6 +1449,16 @@ class PostgresUserDatabase:
             normalized_search = (search or "").strip()
             if normalized_search:
                 scoped_query = scoped_query.filter(_filtro_busca_documento(normalized_search))
+
+            # Data de envio vale também para os cards de contagem, como a busca
+            # e a clínica: "pendentes de ontem" tem de bater com a lista.
+            filtros_envio = []
+            if uploaded_from:
+                filtros_envio.append(DocumentModel.uploaded_at >= uploaded_from)
+            if uploaded_to:
+                filtros_envio.append(DocumentModel.uploaded_at < uploaded_to)
+            if filtros_envio:
+                scoped_query = scoped_query.filter(*filtros_envio)
 
             if queue == "pendentes":
                 scoped_query = scoped_query.filter(
@@ -1513,6 +1530,9 @@ class PostgresUserDatabase:
                 scoped_summary_query = scoped_summary_query.filter(
                     _filtro_busca_documento(normalized_search)
                 )
+
+            if filtros_envio:
+                scoped_summary_query = scoped_summary_query.filter(*filtros_envio)
 
             summary_row = scoped_summary_query.one()
             summary_map = summary_row._mapping if hasattr(summary_row, "_mapping") else {}

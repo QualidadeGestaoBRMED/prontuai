@@ -27,7 +27,7 @@ import os
 import re
 import unicodedata
 from urllib.parse import quote
-from datetime import datetime
+from datetime import datetime, timezone
 
 logger = logging.getLogger(__name__)
 
@@ -156,6 +156,17 @@ def _status_from_validation(doc: Document) -> str:
     return "pending_review"
 
 
+def _utc_sem_fuso(valor: datetime) -> datetime:
+    """Instante em UTC sem tzinfo, o formato em que `uploaded_at` é gravado.
+
+    O filtro de data chega com o fuso do browser ("2026-10-15T03:00:00.000Z"),
+    e comparar datetime com e sem fuso levanta TypeError no Python.
+    """
+    if valor.tzinfo is None:
+        return valor
+    return valor.astimezone(timezone.utc).replace(tzinfo=None)
+
+
 def _in_memory_paged_documents(
     docs: List[Document],
     *,
@@ -167,6 +178,8 @@ def _in_memory_paged_documents(
     sort_by: str,
     sort_dir: str,
     filter_clinic_id: str | None = None,
+    uploaded_from: datetime | None = None,
+    uploaded_to: datetime | None = None,
 ) -> dict[str, Any]:
     normalized_search = (search or "").strip().lower()
 
@@ -186,8 +199,15 @@ def _in_memory_paged_documents(
             or normalized_search in (d.uploaded_by_user_email or "").lower()
             or normalized_search in _patient_name(d).lower()
         ]
+    if uploaded_from or uploaded_to:
+        filtered = [
+            d for d in filtered
+            if d.uploaded_at
+            and (not uploaded_from or _utc_sem_fuso(d.uploaded_at) >= uploaded_from)
+            and (not uploaded_to or _utc_sem_fuso(d.uploaded_at) < uploaded_to)
+        ]
 
-    summary_counts = {"approved": 0, "rejected": 0, "pending_review": 0, "total": len(filtered)}
+    summary_counts ={"approved": 0, "rejected": 0, "pending_review": 0, "total": len(filtered)}
     for doc in filtered:
         summary_counts[_status_from_validation(doc)] += 1
 
@@ -272,10 +292,20 @@ async def list_documents_paged(
     sort_by: str = Query("uploaded_at", pattern="^(uploaded_at|updated_at|filename|cpf|status)$"),
     sort_dir: str = Query("desc", pattern="^(asc|desc)$"),
     filter_clinic_id: str | None = Query(None, alias="clinic_id", description="Filtra documentos de uma clínica específica"),
+    uploaded_from: datetime | None = Query(None, description="Enviados a partir deste instante (inclusive), ISO 8601"),
+    uploaded_to: datetime | None = Query(None, description="Enviados antes deste instante (exclusive), ISO 8601"),
 ):
     """
     Lista documentos com paginação e filtros server-side.
     """
+    uploaded_from = _utc_sem_fuso(uploaded_from) if uploaded_from else None
+    uploaded_to = _utc_sem_fuso(uploaded_to) if uploaded_to else None
+    if uploaded_from and uploaded_to and uploaded_from >= uploaded_to:
+        raise HTTPException(
+            status_code=422,  # literal: o nome da constante mudou entre versões do Starlette
+            detail="uploaded_from deve ser anterior a uploaded_to.",
+        )
+
     try:
         role = current_user.role
         user_id = current_user.id if role == UserRole.SENDER else None
@@ -299,6 +329,8 @@ async def list_documents_paged(
                 sort_by=sort_by,
                 sort_dir=sort_dir,
                 filter_clinic_id=filter_clinic_id,
+                uploaded_from=uploaded_from,
+                uploaded_to=uploaded_to,
             )
         else:
             docs = _load_documents(
@@ -317,6 +349,8 @@ async def list_documents_paged(
                 sort_by=sort_by,
                 sort_dir=sort_dir,
                 filter_clinic_id=filter_clinic_id,
+                uploaded_from=uploaded_from,
+                uploaded_to=uploaded_to,
             )
 
         items = payload.get("items", [])

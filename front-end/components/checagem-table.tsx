@@ -46,7 +46,9 @@ import {
 } from "@/components/ui/table";
 import type { DocumentoChecagem, StatusDocumento } from "@/types/checagem";
 import { ClinicFilter } from "@/components/clinic-filter";
+import { UploadDateFilter } from "@/components/upload-date-filter";
 import type { ClinicOption } from "@/hooks/use-clinic-options";
+import type { UploadDateFilter as UploadDateFilterValue } from "@/hooks/use-documents-paged";
 
 declare module "@tanstack/react-table" {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -86,6 +88,14 @@ type CheckagemTableProps = {
     onChange: (value: string) => void;
     options: ClinicOption[];
     loading?: boolean;
+  };
+  /**
+   * Período de envio server-side. Precisa ir ao banco: filtrar no cliente só
+   * enxergaria os 10 documentos da página atual.
+   */
+  serverDate?: {
+    value: UploadDateFilterValue;
+    onChange: (value: UploadDateFilterValue) => void;
   };
 };
 
@@ -152,6 +162,7 @@ export function CheckagemTable({
   serverSearch,
   serverStatus,
   serverClinic,
+  serverDate,
 }: CheckagemTableProps) {
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [sorting, setSorting] = useState<SortingState>([]);
@@ -428,6 +439,9 @@ export function CheckagemTable({
             <Filter column={table.getColumn("status")!} />
           )}
         </div>
+        {serverDate ? (
+          <UploadDateFilter value={serverDate.value} onChange={serverDate.onChange} />
+        ) : null}
         {serverClinic ? (
           <ClinicFilter
             value={serverClinic.value}
@@ -538,7 +552,9 @@ export function CheckagemTable({
                 >
                   {serverClinic?.value && serverClinic.value !== "all"
                     ? `Nenhum atendimento da ${selectedClinicName || "clínica selecionada"} com os filtros atuais.`
-                    : "Nenhum documento encontrado."}
+                    : serverDate?.value
+                      ? "Nenhum documento enviado nesse período com os filtros atuais."
+                      : "Nenhum documento encontrado."}
                 </TableCell>
               </TableRow>
             )}
