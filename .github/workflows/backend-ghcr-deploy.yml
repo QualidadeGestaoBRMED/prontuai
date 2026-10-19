@@ -13,6 +13,14 @@ permissions:
   contents: read
   packages: write
 
+# Um deploy por vez. Dois merges seguidos disparavam dois pg_dump completos ao
+# mesmo tempo na EC2 (incidente de 15/10). O segundo espera o primeiro em vez
+# de cancelá-lo: cancelar no meio do "Deploy on VPS" deixaria o container pela
+# metade.
+concurrency:
+  group: backend-deploy-v1
+  cancel-in-progress: false
+
 env:
   DEPLOY_PATH: ${{ vars.AWS_VPS_DEPLOY_PATH || '/home/ec2-user/prontuai' }}
 
@@ -172,10 +180,12 @@ jobs:
           AWS_VPS_PORT: ${{ vars.AWS_VPS_PORT || '22' }}
         run: |
           ssh -i ~/.ssh/aws_vps_key -p "$AWS_VPS_PORT" -o StrictHostKeyChecking=accept-new \
+            -o ServerAliveInterval=30 -o ServerAliveCountMax=20 \
             "$AWS_VPS_USER@$AWS_VPS_HOST" \
             "mkdir -p '$DEPLOY_PATH' '$DEPLOY_PATH/logs' '$DEPLOY_PATH/resultados' '$DEPLOY_PATH/ocr_resultados' '$DEPLOY_PATH/auditoria_validacao' '$DEPLOY_PATH/data/uploads'"
 
           scp -i ~/.ssh/aws_vps_key -P "$AWS_VPS_PORT" -o StrictHostKeyChecking=accept-new \
+            -o ServerAliveInterval=30 -o ServerAliveCountMax=20 \
             back-end/docker-compose.aws.yml \
             "$AWS_VPS_USER@$AWS_VPS_HOST:$DEPLOY_PATH/docker-compose.yml"
 
@@ -187,10 +197,16 @@ jobs:
           DB_DEPLOY_DIR: ${{ vars.AWS_VPS_DB_DEPLOY_DIR || '/home/ec2-user/prontuai-db' }}
         run: |
           ssh -i ~/.ssh/aws_vps_key -p "$AWS_VPS_PORT" -o StrictHostKeyChecking=accept-new \
+            -o ServerAliveInterval=30 -o ServerAliveCountMax=20 \
             "$AWS_VPS_USER@$AWS_VPS_HOST" \
             "DEPLOY_PATH='$DEPLOY_PATH' DB_DEPLOY_DIR='$DB_DEPLOY_DIR' bash -s" <<'REMOTE'
           set -euo pipefail
 
+          # O backup nao imprime nada ate terminar, e o runner (Azure) derruba
+          # TCP ocioso por volta de 4 min: em 19/10 o backup passou disso e o
+          # ssh caiu com "Broken pipe" aos 4min32s, abortando o deploy. O
+          # ServerAliveInterval no ssh acima mantem a conexao com trafego.
+          #
           # auto_migrate() roda no startup do container e voltar a imagem NAO
           # desfaz mudanca de schema. Por isso o dump vem antes de subir e a
           # falha dele aborta o deploy — mesma trava do deploy_vps.sh manual,
@@ -238,6 +254,7 @@ jobs:
           BACKEND_IMAGE: ${{ steps.image.outputs.name }}:${{ steps.image.outputs.sha_tag }}
         run: |
           ssh -i ~/.ssh/aws_vps_key -p "$AWS_VPS_PORT" -o StrictHostKeyChecking=accept-new \
+            -o ServerAliveInterval=30 -o ServerAliveCountMax=20 \
             "$AWS_VPS_USER@$AWS_VPS_HOST" \
             "DEPLOY_PATH='$DEPLOY_PATH' BACKEND_IMAGE='$BACKEND_IMAGE' GHCR_DEPLOY_USERNAME='$GHCR_DEPLOY_USERNAME' GHCR_DEPLOY_TOKEN='$GHCR_DEPLOY_TOKEN' bash -s" <<'REMOTE'
           set -euo pipefail
