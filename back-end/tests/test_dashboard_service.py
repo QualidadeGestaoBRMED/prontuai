@@ -597,6 +597,19 @@ def test_parentese_do_rotulo_nao_impede_o_casamento():
     assert [c["clinica"] for c in r["clinicas_com_prontuai"]] == ["Cisviver"]
 
 
+def test_travessao_do_rotulo_casa_com_cadastro_digitado_com_hifen():
+    """28 dos 584 rótulos do BRNET usam "–"; o cadastro pode ter sido digitado com "-"."""
+    # Direto no _Pedido: o helper `pedido()` separa o rótulo por " - " e não
+    # aceita travessão. Cidade, UF e nome são o que o parser do BRNET extrai.
+    pedidos = {1: ds._Pedido(None, "PIRAPORA – MG – TRINUS", "PIRAPORA", "MG", "TRINUS",
+                             "2026-09-25", False, None)}
+    # Cadastro com o rótulo inteiro, e não só "TRINUS": o nome curto já casava
+    # antes; o que falhava era o rótulo completo.
+    r = ds._cruzar_expedicoes(pedidos, {}, date(2026, 9, 22), {}, cadastros("PIRAPORA - MG - TRINUS"))
+    assert [c["clinica"] for c in r["clinicas_com_prontuai"]] == ["PIRAPORA - MG - TRINUS"]
+    assert ds._chave_nome("ARAPONGAS  – PR — INTEGRAL") == ds._chave_nome("Arapongas - PR - Integral")
+
+
 def test_documento_prova_o_cadastro_quando_o_nome_nao_casa():
     """Nome em ordem invertida não pode tirar do ProntuAI quem manda 500 documentos.
 

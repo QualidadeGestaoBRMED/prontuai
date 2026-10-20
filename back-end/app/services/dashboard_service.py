@@ -306,10 +306,21 @@ def _chave_nome(valor: Optional[str]) -> str:
     """
     texto = unicodedata.normalize("NFD", (valor or "").strip().lower())
     sem_acento = "".join(c for c in texto if unicodedata.category(c) != "Mn")
+    # Travessão, meia-risca e afins viram hífen. 28 dos 584 rótulos do BRNET
+    # (out/26) separam cidade, UF e nome com "–", e os cadastros misturam os
+    # dois: "PIRAPORA – MG – TRINUS" não casaria com um cadastro digitado com
+    # "-". Medido em out/26 nenhum cadastro estava nessa situação; o risco era
+    # do próximo cadastro.
+    sem_traco_variante = _TRACOS.sub("-", sem_acento)
     # O BRNET anexa qualificadores entre parênteses ao rótulo ("(CONDIÇÃO
     # ESPECIAL)") que o cadastro não tem. Sem tirá-los, CISVIVER e CLÍNICA SOMA
     # deixam de casar com o próprio cadastro.
-    return " ".join(re.sub(r"\([^)]*\)", " ", sem_acento).split())
+    return " ".join(re.sub(r"\([^)]*\)", " ", sem_traco_variante).split())
+
+
+# U+2010..U+2015 (hífen tipográfico, figura, meia-risca, travessão, barra
+# horizontal) e U+2212 (sinal de menos).
+_TRACOS = re.compile(r"[‐-―−]")
 
 
 def _indexar_cadastros(nomes: list[str]) -> dict[str, str]:
