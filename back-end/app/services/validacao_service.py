@@ -249,6 +249,45 @@ def _match_exame_local(exame_brnet: str, exames_ocr: List[str]) -> Optional[str]
 
     return None
 
+def _e_variacao_de(norm_exame: str, norm_outro: str) -> bool:
+    """
+    `norm_exame` é o mesmo exame que `norm_outro`, só com outro nome.
+
+    É o critério de "mesmo exame" para a lista que o revisor vê: o documento
+    traz o exame duas vezes, com nomes diferentes — o pai e uma variação do
+    catálogo, ou duas variações ("AUDIOMETRIA TONAL" e "AUDIOMETRIA TONAL
+    OCUPACIONAL"). Cada exame aparece uma vez só.
+
+    Só sinônimo (catálogo ou disco), nunca a aproximação por tokens: aquela
+    junta exames diferentes que só dividem palavras. E nome que é ele mesmo um
+    exame que o BRNET pede (pai ativo do catálogo) é outro exame, mesmo que um
+    sinônimo antigo o junte a este — GLICOSE e GLICEMIA DE JEJUM são pedidos
+    separadamente.
+    """
+    if not norm_exame or not norm_outro:
+        return False
+    if norm_exame == norm_outro:
+        return True
+    if norm_exame in exam_catalog_source.pais_ativos():
+        return False
+    return norm_exame in obter_sinonimos(norm_outro)
+
+
+def _pedido_equivalente(exame: str, brnet_norm_list: List[tuple]) -> Optional[str]:
+    """
+    O exame pedido pelo BRNET de que `exame` é só outro nome, ou None.
+
+    Existe para o extra duplicado: um nome casava com o pedido e saía
+    "encontrado", e o outro nome do mesmo exame sobrava como extra, porque
+    `_match_exame_local` devolve só o PRIMEIRO nome que casa — 352 dos 2.316
+    extras de 12/09 a 19/10, em 255 documentos.
+    """
+    normalizado = _normalizar_exame(exame)
+    for exame_brnet, norm_brnet in brnet_norm_list:
+        if _e_variacao_de(normalizado, norm_brnet):
+            return exame_brnet
+    return None
+
 async def comparar_exames_com_rag(exames_ocr: list[str], exames_brnet: list[str]) -> Dict[str, Any]:
     """
     Compara listas de exames usando o índice de similaridade e, se necessário, LLM para desempate.
@@ -440,6 +479,8 @@ async def validar_exames(cpf: str, exames_obrigatorios: List[str], exames_enviad
 
     comparacao_corrigida = []
     brnet_present_norms = set()
+    duplicatas = []
+    extras_mantidos: list[tuple[str, str]] = []
     for item in comparacao_list:
         status = item.get("status")
         exame = item.get("exame")
@@ -449,6 +490,21 @@ async def validar_exames(cpf: str, exames_obrigatorios: List[str], exames_enviad
         if status == "extra_no_ocr":
             if normalizado in extras_matched or normalizado in brnet_norm_set or normalizado in ocr_norm_to_brnet:
                 continue
+            # Mesmo exame que um pedido, com outro nome: não é extra.
+            pedido = _pedido_equivalente(exame, brnet_norm_list)
+            if pedido:
+                duplicatas.append({"exame": exame, "mesmo_que": pedido})
+                continue
+            # Extra de verdade que já está na lista com outro nome: fica uma vez só.
+            repetido = next(
+                (nome for nome, norm in extras_mantidos
+                 if _e_variacao_de(normalizado, norm) or _e_variacao_de(norm, normalizado)),
+                None,
+            )
+            if repetido:
+                duplicatas.append({"exame": exame, "mesmo_que": repetido})
+                continue
+            extras_mantidos.append((exame, normalizado))
         if normalizado and status != "extra_no_ocr":
             if normalizado in brnet_present_norms:
                 continue
@@ -486,6 +542,7 @@ async def validar_exames(cpf: str, exames_obrigatorios: List[str], exames_enviad
             status_counts=status_counts,
             comparacao_corrigida=comparacao_corrigida,
             comparacao_corrigida_count=len(comparacao_corrigida or []),
+            extras_duplicados_descartados=duplicatas,
         )
 
     # Processa o resultado da comparação para determinar o status final

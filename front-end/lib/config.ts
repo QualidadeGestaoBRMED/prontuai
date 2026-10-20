@@ -25,6 +25,7 @@ export const API_ENDPOINTS = {
   // Clinics
   CLINICS: `${API_PROXY_BASE}/v1/clinics`,
   CLINIC_OPTIONS: `${API_PROXY_BASE}/v1/clinics/options`,
+  CLINICS_CREDENCIADOS_BRNET: `${API_PROXY_BASE}/v1/clinics/credenciados-brnet`,
   CLINIC_BY_ID: (id: string) => `${API_PROXY_BASE}/v1/clinics/${id}`,
   /** Usuários vinculados à clínica. Só ADMIN — ver `clinics.py`. */
   CLINIC_USERS: (id: string) => `${API_PROXY_BASE}/v1/clinics/${id}/users`,

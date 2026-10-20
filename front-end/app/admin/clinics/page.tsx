@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { CredenciadoBrnetPicker, type CredenciadoBrnet } from "@/components/credenciado-brnet-picker";
 import { API_ENDPOINTS } from "@/lib/config";
 import { authFetch } from "@/lib/auth-fetch";
 
@@ -29,6 +30,10 @@ interface Clinic {
   id: string;
   email: string;
   name: string;
+  /** Credenciado do BRNET ("C25414"); null = sem vínculo. */
+  brnet_id?: string | null;
+  city?: string | null;
+  state?: string | null;
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -99,6 +104,16 @@ export default function ClinicsAdminPage() {
   const [formName, setFormName] = useState("");
   const [emailError, setEmailError] = useState("");
   const [creating, setCreating] = useState(false);
+
+  // Vínculo com o credenciado do BRNET. Na criação, o Gestor sempre escolhe da
+  // lista; "sem vínculo" é só do ADMIN (contas internas, credenciado fora da
+  // rede) — o back-end recusa o resto com 403.
+  const [credenciados, setCredenciados] = useState<CredenciadoBrnet[]>([]);
+  const [carregandoCredenciados, setCarregandoCredenciados] = useState(false);
+  const [erroCredenciados, setErroCredenciados] = useState<string | null>(null);
+  const [formBrnetId, setFormBrnetId] = useState<string | null>(null);
+  const [semVinculo, setSemVinculo] = useState(false);
+  const [removerVinculo, setRemoverVinculo] = useState(false);
 
   const validateEmail = (email: string) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -173,6 +188,25 @@ export default function ClinicsAdminPage() {
     }
   }, []);
 
+  /**
+   * Rede credenciada do BRNET, a cada abertura de modal: o back-end guarda a
+   * rede por uma hora, mas as clínicas já vinculadas a cada credenciado vêm do
+   * banco, e mudam a cada cadastro.
+   */
+  const carregarCredenciados = useCallback(async () => {
+    setCarregandoCredenciados(true);
+    setErroCredenciados(null);
+    try {
+      const resposta = await authFetch(API_ENDPOINTS.CLINICS_CREDENCIADOS_BRNET);
+      if (!resposta.ok) throw new Error(`HTTP ${resposta.status}`);
+      setCredenciados(await resposta.json());
+    } catch {
+      setErroCredenciados("Não foi possível carregar a rede credenciada do BRNET. Tente de novo em instantes.");
+    } finally {
+      setCarregandoCredenciados(false);
+    }
+  }, []);
+
   const fetchClinics = useCallback(async () => {
     if (!podeCarregar) return;
 
@@ -195,9 +229,28 @@ export default function ClinicsAdminPage() {
     fetchClinics();
   }, [fetchClinics]);
 
+  const abrirCriacao = () => {
+    setFormBrnetId(null);
+    setSemVinculo(false);
+    setFormName("");
+    setCreateModalOpen(true);
+    carregarCredenciados();
+  };
+
+  const escolherNaCriacao = (credenciado: CredenciadoBrnet) => {
+    setFormBrnetId(credenciado.identificador);
+    // O nome sugerido é o rótulo do BRNET; continua editável, porque o vínculo
+    // é pelo identificador e não pelo nome.
+    setFormName(credenciado.nome);
+  };
+
   const handleCreateClinic = async () => {
     if (!session?.user?.email || !formEmail || !formName) {
       toast.error("Preencha todos os campos");
+      return;
+    }
+    if (!semVinculo && !formBrnetId) {
+      toast.error("Escolha o credenciado do BRNET");
       return;
     }
 
@@ -218,6 +271,7 @@ export default function ClinicsAdminPage() {
         body: JSON.stringify({
           email: formEmail,
           name: formName,
+          ...(semVinculo ? {} : { brnet_id: formBrnetId }),
         }),
       });
 
@@ -247,6 +301,8 @@ export default function ClinicsAdminPage() {
       setFormEmail("");
       setFormName("");
       setEmailError("");
+      setFormBrnetId(null);
+      setSemVinculo(false);
       fetchClinics();
     } catch (error) {
       console.error("Erro completo:", error);
@@ -269,10 +325,26 @@ export default function ClinicsAdminPage() {
         body: JSON.stringify({
           name: formName,
           is_active: selectedClinic.is_active,
+          // Só manda o que mudou: o back-end confere o credenciado na rede do
+          // BRNET a cada `brnet_id` recebido.
+          ...(removerVinculo
+            ? { remover_vinculo_brnet: true }
+            : formBrnetId && formBrnetId !== (selectedClinic.brnet_id ?? null)
+              ? { brnet_id: formBrnetId }
+              : {}),
         }),
       });
 
-      if (!response.ok) throw new Error("Erro ao atualizar clínica");
+      if (!response.ok) {
+        let detalhe = "Erro ao atualizar clínica";
+        try {
+          const corpo = await response.json();
+          if (typeof corpo.detail === "string") detalhe = corpo.detail;
+        } catch {
+          // corpo não-JSON (500): fica a mensagem padrão
+        }
+        throw new Error(detalhe);
+      }
 
       toast.success("Clínica atualizada com sucesso!");
       setEditModalOpen(false);
@@ -280,7 +352,7 @@ export default function ClinicsAdminPage() {
       fetchClinics();
     } catch (error) {
       console.error("Erro:", error);
-      toast.error("Erro ao atualizar clínica");
+      toast.error(error instanceof Error ? error.message : "Erro ao atualizar clínica");
     }
   };
 
@@ -313,7 +385,10 @@ export default function ClinicsAdminPage() {
   const openEditModal = (clinic: Clinic) => {
     setSelectedClinic(clinic);
     setFormName(clinic.name);
+    setFormBrnetId(clinic.brnet_id ?? null);
+    setRemoverVinculo(false);
     setEditModalOpen(true);
+    carregarCredenciados();
     // Só para ADMIN: a seção nem é renderizada para MANAGER, e o back-end
     // responderia 403 (`require_admin`) — pedir à toa só geraria erro no log.
     if (ehAdmin) carregarUsuarios(clinic.id);
@@ -341,7 +416,7 @@ export default function ClinicsAdminPage() {
                 </p>
               </div>
               <Button
-                onClick={() => setCreateModalOpen(true)}
+                onClick={abrirCriacao}
                 className="hover:scale-105 transition-transform"
               >
                 + Nova Clínica
@@ -354,6 +429,9 @@ export default function ClinicsAdminPage() {
                   <tr>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                       Nome
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                      BRNET
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                       Email
@@ -378,6 +456,9 @@ export default function ClinicsAdminPage() {
                           <div className="h-4 bg-gray-200 rounded w-32"></div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="h-4 bg-gray-200 rounded w-16"></div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
                           <div className="h-4 bg-gray-200 rounded w-48"></div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
@@ -396,7 +477,7 @@ export default function ClinicsAdminPage() {
                     ))
                   ) : clinics.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="px-6 py-12 text-center text-gray-500">
+                      <td colSpan={6} className="px-6 py-12 text-center text-gray-500">
                         Nenhuma clínica encontrada
                       </td>
                     </tr>
@@ -405,6 +486,15 @@ export default function ClinicsAdminPage() {
                       <tr key={clinic.id}>
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                           {clinic.name}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm">
+                          {clinic.brnet_id ? (
+                            <span className="font-mono text-gray-700">{clinic.brnet_id}</span>
+                          ) : (
+                            <span className="rounded-full bg-amber-100 px-2 py-1 text-xs text-amber-800">
+                              Sem vínculo
+                            </span>
+                          )}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
                           {clinic.email}
@@ -459,6 +549,37 @@ export default function ClinicsAdminPage() {
             </DialogHeader>
 
             <div className="space-y-4">
+              <div className="space-y-2">
+                <Label>Credenciado no BRNET</Label>
+                {semVinculo ? (
+                  <p className="text-sm text-gray-500">
+                    Clínica sem credenciado no BRNET (conta interna ou credenciado fora da rede).
+                  </p>
+                ) : (
+                  <CredenciadoBrnetPicker
+                    opcoes={credenciados}
+                    carregando={carregandoCredenciados}
+                    erro={erroCredenciados}
+                    valor={formBrnetId}
+                    onEscolher={escolherNaCriacao}
+                  />
+                )}
+                {ehAdmin && (
+                  <label className="flex items-center gap-2 text-sm text-gray-600">
+                    <input
+                      type="checkbox"
+                      className="size-4"
+                      checked={semVinculo}
+                      onChange={(e) => {
+                        setSemVinculo(e.target.checked);
+                        setFormBrnetId(null);
+                      }}
+                    />
+                    Cadastrar sem vínculo com o BRNET
+                  </label>
+                )}
+              </div>
+
               <div>
                 <Label htmlFor="email">Email</Label>
                 <Input
@@ -502,7 +623,7 @@ export default function ClinicsAdminPage() {
               </Button>
               <Button
                 onClick={handleCreateClinic}
-                disabled={creating || !!emailError || !formEmail || !formName}
+                disabled={creating || !!emailError || !formEmail || !formName || (!semVinculo && !formBrnetId)}
               >
                 {creating ? "Criando..." : "Criar Clínica"}
               </Button>
@@ -538,6 +659,39 @@ export default function ClinicsAdminPage() {
                   value={formName}
                   onChange={(e) => setFormName(e.target.value)}
                 />
+              </div>
+
+              <div className="space-y-2">
+                <Label>Credenciado no BRNET</Label>
+                {removerVinculo ? (
+                  <p className="text-sm text-gray-500">
+                    O vínculo será removido ao salvar.{" "}
+                    <button type="button" className="underline" onClick={() => setRemoverVinculo(false)}>
+                      Desfazer
+                    </button>
+                  </p>
+                ) : (
+                  <>
+                    <CredenciadoBrnetPicker
+                      opcoes={credenciados}
+                      carregando={carregandoCredenciados}
+                      erro={erroCredenciados}
+                      valor={formBrnetId}
+                      onEscolher={(c) => setFormBrnetId(c.identificador)}
+                      clinicaAtualId={selectedClinic?.id}
+                    />
+                    {/* Tirar o vínculo é só do ADMIN; o Gestor pode vincular e trocar. */}
+                    {ehAdmin && selectedClinic?.brnet_id && (
+                      <button
+                        type="button"
+                        className="text-xs text-red-600 underline"
+                        onClick={() => setRemoverVinculo(true)}
+                      >
+                        Remover vínculo com o BRNET
+                      </button>
+                    )}
+                  </>
+                )}
               </div>
 
               {/* Usuários vinculados — só ADMIN. MANAGER edita a clínica sem

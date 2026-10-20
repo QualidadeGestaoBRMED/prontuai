@@ -34,14 +34,18 @@ logger = logging.getLogger(__name__)
 _lock = threading.Lock()
 _termos: set[str] | None = None
 _sinonimos: dict[str, set[str]] | None = None
+# Pais com status `ativo`: os nomes do BRNET (regra 1 do catálogo). Pai em
+# quarentena fica de fora — é vocabulário, não exame que o BRNET pede.
+_pais_ativos: set[str] | None = None
 
 
 def invalidar() -> None:
     """Descarta o cache. Chamado pelo painel depois de cada escrita."""
-    global _termos, _sinonimos
+    global _termos, _sinonimos, _pais_ativos
     with _lock:
         _termos = None
         _sinonimos = None
+        _pais_ativos = None
     logger.info("[EXAM_CATALOG] Cache de vocabulário invalidado")
 
 
@@ -54,10 +58,11 @@ def _carregar() -> None:
     o portão de extração — 58% dos termos do catálogo estão sob pai em
     quarentena, e descartá-los estreitaria justamente o gargalo.
     """
-    global _termos, _sinonimos
+    global _termos, _sinonimos, _pais_ativos
 
     termos: set[str] = set()
     grupos: dict[str, set[str]] = {}
+    pais_ativos: set[str] = set()
 
     try:
         from sqlalchemy import text  # import tardio de propósito
@@ -66,15 +71,16 @@ def _carregar() -> None:
 
         with user_db.engine.connect() as conexao:
             # Duas consultas, não uma por pai: o cache carrega inteiro de uma vez.
-            chave_do_pai = {
-                pid: chave
-                for pid, chave in conexao.execute(
-                    text(
-                        "SELECT id, name_normalized FROM exam_parents "
-                        "WHERE is_active AND name_normalized <> ''"
-                    )
+            chave_do_pai = {}
+            for pid, chave, situacao in conexao.execute(
+                text(
+                    "SELECT id, name_normalized, status FROM exam_parents "
+                    "WHERE is_active AND name_normalized <> ''"
                 )
-            }
+            ):
+                chave_do_pai[pid] = chave
+                if situacao == "ativo":
+                    pais_ativos.add(chave)
             grupo_do_pai: dict[str, set[str]] = {
                 pid: {chave} for pid, chave in chave_do_pai.items()
             }
@@ -106,10 +112,11 @@ def _carregar() -> None:
             f"[EXAM_CATALOG] Catálogo do banco indisponível, usando apenas artefatos "
             f"de disco: {type(e).__name__}: {e}"
         )
-        termos, grupos = set(), {}
+        termos, grupos, pais_ativos = set(), {}, set()
 
     _termos = termos
     _sinonimos = grupos
+    _pais_ativos = pais_ativos
 
 
 def _garantir_carregado() -> None:
@@ -136,6 +143,17 @@ def sinonimos_de(termo_normalizado: str) -> set[str]:
     if not _sinonimos:
         return set()
     return _sinonimos.get(termo_normalizado, set())
+
+
+def pais_ativos() -> set[str]:
+    """Nomes normalizados dos exames que o BRNET pede (pais com status `ativo`).
+
+    Dois pais são dois exames, mesmo que algum sinônimo antigo os junte: o
+    BRNET pede GLICOSE e GLICEMIA DE JEJUM separadamente (330 e 1.603 vezes até
+    set/2026).
+    """
+    _garantir_carregado()
+    return _pais_ativos or set()
 
 
 def estatisticas() -> dict:
