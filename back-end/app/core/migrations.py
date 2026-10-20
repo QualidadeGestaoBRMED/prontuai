@@ -143,6 +143,16 @@ def check_if_migration_needed() -> tuple[bool, list[str]]:
             logger.warning("⚠️  Migration 012 necessária: coluna roles não existe")
             migrations_needed.append("012_add_user_roles.sql")
 
+        # Verificar migration 013: previsão de liberação como coluna
+        cursor.execute("""
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_name='documents' AND column_name='data_previsao_liberacao'
+        """)
+        if not cursor.fetchone():
+            logger.warning("⚠️  Migration 013 necessária: coluna data_previsao_liberacao não existe")
+            migrations_needed.append("013_add_data_previsao_liberacao.sql")
+
         cursor.close()
         conn.close()
 
