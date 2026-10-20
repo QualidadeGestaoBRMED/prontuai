@@ -257,6 +257,14 @@ def _in_memory_paged_documents(
         filtered.sort(key=lambda d: (d.cpf or "").lower(), reverse=reverse)
     elif sort_by == "status":
         filtered.sort(key=lambda d: (d.validation_status or "").lower(), reverse=reverse)
+    elif sort_by == "previsao":
+        # O mesmo ORDER BY do banco: desempate pelo envio mais recente (o sort
+        # do Python é estável) e quem não tem previsão no fim.
+        filtered.sort(key=lambda d: _to_ts(d.uploaded_at), reverse=True)
+        com_previsao = [d for d in filtered if previsao_liberacao_do_payload(d.result_payload)]
+        sem_previsao = [d for d in filtered if not previsao_liberacao_do_payload(d.result_payload)]
+        com_previsao.sort(key=lambda d: previsao_liberacao_do_payload(d.result_payload), reverse=reverse)
+        filtered = com_previsao + sem_previsao
     else:
         filtered.sort(key=lambda d: _to_ts(d.uploaded_at), reverse=reverse)
 
@@ -302,7 +310,7 @@ async def list_documents_paged(
     page_size: int = Query(20, ge=1, le=100),
     search: str | None = Query(None, max_length=120),
     status_filter: str | None = Query(None, pattern="^(approved|rejected|pending_review)$"),
-    sort_by: str = Query("uploaded_at", pattern="^(uploaded_at|updated_at|filename|cpf|status)$"),
+    sort_by: str = Query("uploaded_at", pattern="^(uploaded_at|updated_at|filename|cpf|status|previsao)$"),
     sort_dir: str = Query("desc", pattern="^(asc|desc)$"),
     filter_clinic_id: str | None = Query(None, alias="clinic_id", description="Filtra documentos de uma clínica específica"),
     uploaded_from: datetime | None = Query(None, description="Enviados a partir deste instante (inclusive), ISO 8601"),

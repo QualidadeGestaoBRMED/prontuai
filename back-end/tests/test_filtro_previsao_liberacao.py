@@ -164,3 +164,34 @@ def test_caminho_em_memoria_so_com_o_fim_deixa_de_fora_quem_nao_tem_previsao(mon
 def test_sem_filtro_de_previsao_ninguem_sai(monkeypatch):
     mod = carregar(monkeypatch, BancoFalso())
     assert paginar(mod)["summary_counts"]["total"] == len(DOCS)
+
+
+# ── ordenação pela previsão ──────────────────────────────────────────────────
+
+def test_ordem_pela_previsao_desempata_pelo_envio_mais_recente(monkeypatch):
+    """Atrasado primeiro; no mesmo dia, o enviado por último; sem previsão no fim.
+
+    O desempate não é cosmético: com centenas de documentos no mesmo dia, a
+    paginação por OFFSET sem ele repete ou pula linhas.
+    """
+    mod = carregar(monkeypatch, BancoFalso())
+
+    def enviado(did, previsao, hora):
+        d = doc(did, previsao)
+        d.uploaded_at = d.updated_at = datetime(2026, 10, 19, hora, 0)
+        return d
+
+    docs = [
+        enviado("dia21_cedo", "21/10/2026", 8),
+        enviado("sem_previsao", None, 23),
+        enviado("dia20", "20/10/2026", 9),
+        enviado("dia21_tarde", "21/10/2026", 17),
+        enviado("atrasado", "15/10/2026", 10),
+    ]
+    pagina = mod._in_memory_paged_documents(
+        docs, page=1, page_size=10, queue=None, status_filter=None, search=None,
+        sort_by="previsao", sort_dir="asc",
+    )
+    assert [d.id for d in pagina["items"]] == [
+        "atrasado", "dia20", "dia21_tarde", "dia21_cedo", "sem_previsao",
+    ]

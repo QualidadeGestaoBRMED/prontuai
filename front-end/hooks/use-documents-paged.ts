@@ -83,8 +83,12 @@ export function useDocumentsPaged(options: UseDocumentsPagedOptions) {
         url.searchParams.set("page", String(page))
         url.searchParams.set("page_size", String(pageSize))
         url.searchParams.set("compact", String(compact))
-        url.searchParams.set("sort_by", "uploaded_at")
-        url.searchParams.set("sort_dir", "desc")
+        // Filtrando pela previsão, a lista vem na ordem dela — atrasados primeiro.
+        // Na ordem de envio, o topo da lista quase não mudava: os documentos mais
+        // recentes costumam vencer nos próximos dias e caíam em qualquer período.
+        const porPrevisao = dataFilter?.campo === "previsao"
+        url.searchParams.set("sort_by", porPrevisao ? "previsao" : "uploaded_at")
+        url.searchParams.set("sort_dir", porPrevisao ? "asc" : "desc")
         if (search.trim()) url.searchParams.set("search", search.trim())
         if (statusFilter !== "all") url.searchParams.set("status_filter", statusFilter)
         if (clinicFilter !== "all") url.searchParams.set("clinic_id", clinicFilter)
