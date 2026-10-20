@@ -169,7 +169,14 @@ julgamento AS (
         END AS jeitinho,
         motivo,
         ex.falta_exame_nomeado,
-        ex.cita_exame_brnet
+        ex.cita_exame_brnet,
+        pa.estava AS parecer_estava,
+        pa.nao_estava AS parecer_nao_estava,
+        (pa.formal OR COALESCE(fb.document_issues && ARRAY[
+            'ASO_INCOMPLETO', 'ASO_SEM_APTIDAO', 'ASO_DADO_ERRADO', 'ASO_SEM_REAPROVEITAMENTO',
+            'PRONTUARIO_INCOMPLETO', 'ANEXOS_SEPARADOS', 'PACIENTE_TROCADO', 'DOC_ILEGIVEL'
+        ]::varchar[], false)) AS parecer_formal,
+        (pa.brnet OR COALESCE('BRNET_EXIGENCIA' = ANY(fb.document_issues), false)) AS parecer_brnet
     FROM ia
     JOIN humano h ON h.document_id = ia.document_id AND h.humano_em >= ia.ia_em
     JOIN documents d ON d.id = ia.document_id
@@ -225,6 +232,21 @@ julgamento AS (
                         'AAAAEEIOOOUUCaaaaeeiooouuc')) || '%'
             ) AS cita_exame_brnet
     ) ex
+    -- O que o parecer do modal diz de cada exame. Na divergencia o revisor e
+    -- obrigado a responder onde a IA errou, mas no "Errou" de uma liberacao o
+    -- front nao grava texto: sem isto a linha caia em "sem_justificativa"
+    -- justamente quando a causa foi dita, exame por exame.
+    CROSS JOIN LATERAL (
+        SELECT
+            COALESCE(bool_or(i ->> 'categoria' IN ('FALTANTE_INCORRETO', 'SINONIMO_NAO_RECONHECIDO',
+                                                   'EXAME_NAO_RECONHECIDO')), false) AS estava,
+            COALESCE(bool_or(i ->> 'categoria' = 'ENCONTRADO_INCORRETO'), false) AS nao_estava,
+            COALESCE(bool_or(i ->> 'categoria' IN ('EXAME_OUTRA_DATA', 'EXAME_ILEGIVEL',
+                                                   'EXAME_SEM_ASSINATURA')), false) AS formal,
+            COALESCE(bool_or(i ->> 'categoria' = 'DADO_BRNET'), false) AS brnet
+        FROM jsonb_array_elements(CASE WHEN jsonb_typeof(fb.issue_items) = 'array'
+                                       THEN fb.issue_items ELSE '[]'::jsonb END) AS i
+    ) pa
     -- Entre reenvios do mesmo arquivo fica o PRIMEIRO: e nele que a IA decidiu
     -- sem saber de nada, e e essa decisao que a acuracia mede.
     ORDER BY COALESCE(d.content_hash, d.id), d.created_at, d.id
@@ -240,6 +262,11 @@ julgamento AS (
 -- estava no PDF" -- uma causa que o revisor nunca afirmou. Sao 79 linhas no
 -- historico, 8 das 10 da semana de 05/10. A divergencia e real; o que nao se
 -- sabe e o motivo, e e isso que a linha passa a dizer.
+--
+-- O parecer do modal vem ANTES do texto, nos dois ramos: e o revisor dizendo a
+-- causa exame por exame, e nao uma palavra-chave adivinhada. O texto segue
+-- valendo para o historico anterior ao modal (19/10/2026) e para o parecer que
+-- so marcou "outro problema".
 motivado AS (
     SELECT
         j.*,
@@ -249,6 +276,8 @@ motivado AS (
             -- IA aprovou e o revisor derrubou
             WHEN j.ia_status = 'validated' AND j.humano_status = 'rejected' THEN
                 CASE
+                    WHEN j.parecer_nao_estava THEN 'exame_nao_detectado'
+                    WHEN j.parecer_formal THEN 'regra_formal'
                     WHEN j.motivo = '' OR j.motivo ~ ('^(ok|okay|okei|correto|certo|tudo ok'
                                                    || '|tudo certo|prontuario (correto|ok|certo))[ .!]*$')
                         THEN 'sem_justificativa'
@@ -260,7 +289,12 @@ motivado AS (
                                   || '|invertid|ano errado|duas (pagina|via)|reaproveitament'
                                   || '|antigo|outr[oa] colaborador|outra pessoa|prontuario err'
                                   || '|sexo|observacao|incorret|rasurad|apagad|em branco'
-                                  || '|incomplet|data ')
+                                  || '|incomplet|data '
+                                  -- digitalizacao apagada, NR sem marcacao, duvida de
+                                  -- leitura e documento exigido pela empresa (kit, ASO
+                                  -- de outra empresa, enquadramento PCD no decreto)
+                                  || '|digitaliz|nao entendi|marcar|\mnrs?\M'
+                                  || '|\mkit\M|decreto|\maso (da|com)\M')
                         THEN 'regra_formal'
                     -- Parecer medico e documento exigido, nao exame; sem esta
                     -- linha "nao enviou o parecer" vira exame faltante.
@@ -279,12 +313,16 @@ motivado AS (
             -- IA apontou falta e o revisor liberou
             WHEN j.ia_status = 'pending' AND j.humano_status = 'validated' THEN
                 CASE
+                    WHEN j.parecer_estava THEN 'matching_ia'
+                    -- exigencia errada do BRNET: causa conhecida, fora das quatro
+                    WHEN j.parecer_brnet THEN 'outro'
                     WHEN j.motivo = '' OR j.motivo ~ ('^(ok|okay|okei|correto|certo|tudo ok'
                                                    || '|tudo certo|prontuario (correto|ok|certo))[ .!]*$')
                         THEN 'sem_justificativa'
                     -- Radical, nao forma flexionada: o revisor escreve "nao
-                    -- reconhece", "nao reconheu", "nao identifou", "nomeclatura".
-                    WHEN j.motivo ~ ('nao (reconhe|identif|leu|le |encontr|lê)|nomencla|nomecla'
+                    -- reconhece", "nao reconheu", "nao identifou", "nao identuificou",
+                    -- "nomeclatura".
+                    WHEN j.motivo ~ ('nao (reconhe|ident|leu|le |encontr|lê)|nomencla|nomecla'
                                   || '|consta|esta no|estao no|no pdf|no anexo|em anexo|anexado'
                                   || '|inclus|incluid|prontuario (completo|esta)|no prontuario'
                                   || '|est(a|ao) aqui|todos os exames|todos exames')

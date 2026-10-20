@@ -430,12 +430,12 @@ export const COMO_CALCULAMOS: Record<IdIndicador, ComoCalculamos> = {
       {
         titulo: "Como cada uma é classificada",
         texto:
-          "Pelo texto que o revisor escreveu ao decidir, por palavras-chave. Exame faltante que a IA não detectou: a IA aprovou e o revisor citou um exame que falta. IA não reconheceu exame que estava no PDF: a IA apontou falta e o revisor disse que o exame estava lá. Regra formal que a IA ainda não verifica: carimbo, assinatura, aptidão, data, legibilidade, documento de outra pessoa. Revisor não informou a causa: justificativa vazia ou só \"ok\". Outros motivos: o que sobra.",
+          "Pelo parecer do modal de feedback, quando há: o revisor diz, exame a exame, onde a IA errou. Sem parecer, como em todo o histórico anterior a 19/10, pelo texto que o revisor escreveu ao decidir, por palavras-chave. Exame faltante que a IA não detectou: a IA aprovou e o revisor apontou um exame que não estava. IA não reconheceu exame que estava no PDF: a IA apontou falta e o revisor disse que o exame estava lá. Regra formal que a IA ainda não verifica: carimbo, assinatura, aptidão, data, legibilidade, documento de outra pessoa ou exigido pela empresa. Revisor não informou a causa: sem parecer e com justificativa vazia ou só \"ok\". Outros motivos: o que sobra.",
       },
       {
         titulo: "Por que \"a confirmar\"",
         texto:
-          "A classificação lê texto livre, e parte dos casos cai na categoria errada. Ela explica a divergência, não decide se houve: mexer nela não move a acurácia.",
+          "Sem parecer, a classificação lê texto livre, e parte dos casos cai na categoria errada. Ela explica a divergência, não decide se houve: mexer nela não move a acurácia.",
       },
     ],
   },
