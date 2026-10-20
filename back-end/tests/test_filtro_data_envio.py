@@ -57,6 +57,7 @@ def listar(mod, uploaded_from=None, uploaded_to=None):
             current_user=checador, queue=None, compact=True, page=1, page_size=10,
             search=None, status_filter=None, sort_by="uploaded_at", sort_dir="desc",
             filter_clinic_id=None, uploaded_from=uploaded_from, uploaded_to=uploaded_to,
+            previsao_from=None, previsao_to=None,
         )
     )
 

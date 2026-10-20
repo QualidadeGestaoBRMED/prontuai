@@ -12,6 +12,7 @@ from app.models.document import (
     DocumentUpdate,
     DocumentQueue,
     PaginatedDocumentsResponse,
+    previsao_liberacao_do_payload,
 )
 from app.core.logging import set_audit_context
 from app.core.config import settings
@@ -27,7 +28,7 @@ import os
 import re
 import unicodedata
 from urllib.parse import quote
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 logger = logging.getLogger(__name__)
 
@@ -180,6 +181,8 @@ def _in_memory_paged_documents(
     filter_clinic_id: str | None = None,
     uploaded_from: datetime | None = None,
     uploaded_to: datetime | None = None,
+    previsao_from: date | None = None,
+    previsao_to: date | None = None,
 ) -> dict[str, Any]:
     normalized_search = (search or "").strip().lower()
 
@@ -206,6 +209,16 @@ def _in_memory_paged_documents(
             and (not uploaded_from or _utc_sem_fuso(d.uploaded_at) >= uploaded_from)
             and (not uploaded_to or _utc_sem_fuso(d.uploaded_at) < uploaded_to)
         ]
+    if previsao_from or previsao_to:
+        def _na_previsao(doc: Document) -> bool:
+            previsao = previsao_liberacao_do_payload(doc.result_payload)
+            return bool(
+                previsao
+                and (not previsao_from or previsao >= previsao_from)
+                and (not previsao_to or previsao <= previsao_to)
+            )
+
+        filtered = [d for d in filtered if _na_previsao(d)]
 
     summary_counts ={"approved": 0, "rejected": 0, "pending_review": 0, "total": len(filtered)}
     for doc in filtered:
@@ -294,6 +307,8 @@ async def list_documents_paged(
     filter_clinic_id: str | None = Query(None, alias="clinic_id", description="Filtra documentos de uma clínica específica"),
     uploaded_from: datetime | None = Query(None, description="Enviados a partir deste instante (inclusive), ISO 8601"),
     uploaded_to: datetime | None = Query(None, description="Enviados antes deste instante (exclusive), ISO 8601"),
+    previsao_from: date | None = Query(None, description="Previsão de liberação a partir deste dia (inclusive), AAAA-MM-DD"),
+    previsao_to: date | None = Query(None, description="Previsão de liberação até este dia (inclusive), AAAA-MM-DD"),
 ):
     """
     Lista documentos com paginação e filtros server-side.
@@ -304,6 +319,12 @@ async def list_documents_paged(
         raise HTTPException(
             status_code=422,  # literal: o nome da constante mudou entre versões do Starlette
             detail="uploaded_from deve ser anterior a uploaded_to.",
+        )
+    # Pontas inclusas: o mesmo dia nas duas é um dia só, e vale.
+    if previsao_from and previsao_to and previsao_from > previsao_to:
+        raise HTTPException(
+            status_code=422,
+            detail="previsao_from deve ser igual ou anterior a previsao_to.",
         )
 
     try:
@@ -331,6 +352,8 @@ async def list_documents_paged(
                 filter_clinic_id=filter_clinic_id,
                 uploaded_from=uploaded_from,
                 uploaded_to=uploaded_to,
+                previsao_from=previsao_from,
+                previsao_to=previsao_to,
             )
         else:
             docs = _load_documents(
@@ -351,6 +374,8 @@ async def list_documents_paged(
                 filter_clinic_id=filter_clinic_id,
                 uploaded_from=uploaded_from,
                 uploaded_to=uploaded_to,
+                previsao_from=previsao_from,
+                previsao_to=previsao_to,
             )
 
         items = payload.get("items", [])

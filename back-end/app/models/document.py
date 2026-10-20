@@ -1,7 +1,30 @@
 from pydantic import BaseModel, Field, field_validator, model_validator
 from typing import Optional, List, Dict, Any
-from datetime import datetime
+from datetime import date, datetime
 from enum import Enum
+
+
+def previsao_liberacao_do_payload(result_payload: Any) -> Optional[date]:
+    """
+    Previsão de liberação do pedido no BRNET, lida do resultado do processamento.
+
+    Vem em `brmed_result.data_previsao_liberacao` como "dd/mm/aaaa"; dois
+    documentos de 2025 a têm em ISO. Data inválida ou ausente vira None — a
+    coluna `documents.data_previsao_liberacao` é derivada daqui e a migration 013
+    segue a mesma regra para os documentos anteriores a ela.
+    """
+    if not isinstance(result_payload, dict):
+        return None
+    brmed = result_payload.get("brmed_result")
+    valor = brmed.get("data_previsao_liberacao") if isinstance(brmed, dict) else None
+    if not isinstance(valor, str):
+        return None
+    for formato in ("%d/%m/%Y", "%Y-%m-%d"):
+        try:
+            return datetime.strptime(valor.strip(), formato).date()
+        except ValueError:
+            continue
+    return None
 
 
 class DocumentQueue(str, Enum):
