@@ -424,7 +424,9 @@ export function CheckagemTable({
                   serverStatus.onChange(value as typeof serverStatus.value)
                 }
               >
-                <SelectTrigger id="server-status-select">
+                {/* w-full: o trigger do shadcn é w-fit e deixava ~55px vazios
+                    dentro da coluna de 144px, antes do filtro seguinte. */}
+                <SelectTrigger id="server-status-select" className="w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
