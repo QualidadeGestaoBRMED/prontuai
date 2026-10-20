@@ -143,6 +143,17 @@ def check_if_migration_needed() -> tuple[bool, list[str]]:
             logger.warning("⚠️  Migration 012 necessária: coluna roles não existe")
             migrations_needed.append("012_add_user_roles.sql")
 
+        # Verificar migration 014: vínculo da clínica com o credenciado do BRNET.
+        # (A 013 está na branch do filtro de previsão de liberação.)
+        cursor.execute("""
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_name='clinics' AND column_name='brnet_id'
+        """)
+        if not cursor.fetchone():
+            logger.warning("⚠️  Migration 014 necessária: coluna brnet_id não existe")
+            migrations_needed.append("014_add_clinic_brnet_id.sql")
+
         cursor.close()
         conn.close()
 
