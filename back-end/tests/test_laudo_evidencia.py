@@ -162,3 +162,76 @@ def test_markdown_vazio_nao_mexe_em_nada():
     comparativo = [{"exame": "AUDIOMETRIA TONAL", "status": "encontrado"}]
     assert le.ajustar_comparativo(comparativo, "  ", norm) == []
     assert comparativo[0]["status"] == "encontrado"
+
+
+# --- ajustes de 20/10/2026 -------------------------------------------------------
+
+def test_rx_oit_reconhece_a_ficha_da_cmtl():
+    # A ficha da CMTL não traz "leitura radiológica" nem "qualidade técnica".
+    texto = ("Radiografia do Tórax padrão OIT (Organização Internacional do Trabalho) "
+             "Qualidade da radiografia 1 2 3 4 Parênquima Pequenas opacidades Profusão 0/0 "
+             "Grandes opacidades 0 Espessamento pleural não")
+    status, mud = ajusta([("RADIOGRAFIA DE TÓRAX - PADRÃO OIT", "encontrado")], texto)
+    assert status["RADIOGRAFIA DE TÓRAX - PADRÃO OIT"] == "encontrado" and not mud
+
+
+def test_acuidade_em_tabela_de_oftalmologista():
+    texto = ("1. AV PARA LONGE OLHO DIREITO OLHO ESQUERDO S/C 20/50 20/40 C/C 20/20 20/20 "
+             "2. SENSO CROMÁTICO normal 5. OFTALMOSCOPIA")
+    status, mud = ajusta([("ACUIDADE VISUAL", "faltante")], texto)
+    assert status["ACUIDADE VISUAL"] == "encontrado"
+    assert mud[0]["regra"] == "conteudo_do_laudo"
+
+
+def test_acuidade_em_tabela_sem_fracao_continua_faltante():
+    texto = "AV PARA LONGE OLHO DIREITO OLHO ESQUERDO S/C C/C PARA PERTO"
+    status, _ = ajusta([("ACUIDADE VISUAL", "faltante")], texto)
+    assert status["ACUIDADE VISUAL"] == "faltante"
+
+
+ASO_LISTA_SOROLOGIA = ("4. Procedimentos Realizados / Performed Procedures: Exames complementares "
+                       "HBSAG 06/10/2026 ANTI-HBs 06/10/2026 ANTI-HCV 06/10/2026 "
+                       "Conclusão / Conclusion Apto")
+
+
+def test_resultado_de_outra_sorologia_nao_prova_o_analito_so_listado():
+    # O "NÃO REAGENTE" do HBsAg provava o anti-HCV, que só estava no ASO.
+    texto = ASO_LISTA_SOROLOGIA + " HEPATITE B HBsAg Resultado: Não Reagente Valor de referência"
+    itens = [("HBSAG", "encontrado"), ("ANTI-HCV", "encontrado")]
+    status, mud = ajusta(itens, texto)
+    assert status == {"HBSAG": "encontrado", "ANTI-HCV": "faltante"}
+    assert mud[0]["tipo"] == "SOROLOGIA"
+
+
+def test_sorologia_com_laudo_perto_do_analito_continua_encontrada():
+    texto = (ASO_LISTA_SOROLOGIA + " HEPATITE B HBsAg Resultado: Não Reagente "
+             "ANTI-HCV Leitura 0,05 Resultado: Não Reagente Índice inferior a 0,89")
+    status, mud = ajusta([("ANTI-HCV", "encontrado")], texto)
+    assert status["ANTI-HCV"] == "encontrado" and not mud
+
+
+def test_sorologia_aceita_as_grafias_dos_laudos():
+    # Colunas trocadas pelo OCR ("HBS ANTI"), hepatite C sem a sigla e "ANT HBS".
+    casos = [
+        ("ANTI-HBS", "HBS ANTI HEPATITE B Material soro Resultado 2,0 UI/L Não reagente"),
+        ("ANTI-HCV", "HEPATITE C ANTICORPO Leitura 0,05 Resultado Não reagente"),
+        ("ANTI-HBS", "ANT HBS Resultado 341 mUI/mL Reagente"),
+    ]
+    for exame, texto in casos:
+        status, mud = ajusta([(exame, "encontrado")], texto)
+        assert status[exame] == "encontrado" and not mud, texto
+
+
+def test_anti_hva_do_brnet_e_sorologia():
+    # O BRNET grafa "ANTI-HVA IGG"; antes o exame nem era classificado.
+    assert le.tipo_do_exame(norm("ANTI-HVA IGG")) == "SOROLOGIA"
+    texto = ASO_LISTA_SOROLOGIA.replace("ANTI-HCV", "ANTI-HVA IGG") + " HERPES SIMPLES I IGG Não reagente"
+    status, _ = ajusta([("ANTI-HVA IGG", "encontrado")], texto)
+    assert status["ANTI-HVA IGG"] == "faltante"
+
+
+def test_lista_sem_fechamento_fica_no_texto():
+    # Sem a conclusão do ASO o bloco não sai: é o lado seguro.
+    texto = md("Exames complementares ANTI-HCV 06/10/2026 Apto")
+    assert "ANTI HCV" in le.sem_listas(texto)
+    assert "ANTI HCV" not in le.sem_listas(md(ASO_LISTA_SOROLOGIA))
