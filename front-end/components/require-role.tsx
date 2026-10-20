@@ -4,7 +4,7 @@ import { useSession } from "next-auth/react";
 import { redirect } from "next/navigation";
 import { ReactNode } from "react";
 import Link from "next/link";
-import { UserRole } from "@/hooks/usePermissions";
+import { UserRole, papeisDoUsuario, temAlgumPapel } from "@/hooks/usePermissions";
 
 interface RequireRoleProps {
   children: ReactNode;
@@ -59,18 +59,22 @@ export function RequireRole({
     redirect(redirectTo);
   }
 
-  const userRole = session?.user?.role;
+  // Basta um dos cargos do usuário estar na lista (como no back-end).
+  const papeis = papeisDoUsuario(session?.user);
 
   // Not authorized
-  if (!userRole || !allowedRoles.includes(userRole)) {
-    if (userRole === "CURATOR") {
+  if (!temAlgumPapel(papeis, allowedRoles)) {
+    if (papeis.includes("CURATOR")) {
       redirect("/admin/exames");
     }
-    if (userRole === "CHECKER") {
+    if (papeis.includes("CHECKER")) {
       redirect("/checagem");
     }
-    if (userRole === "SENDER") {
+    if (papeis.includes("SENDER")) {
       redirect("/anexar-prontuario");
+    }
+    if (papeis.includes("VIEWER")) {
+      redirect("/dashboard");
     }
     if (fallback) {
       return <>{fallback}</>;
@@ -100,7 +104,7 @@ export function RequireRole({
           </p>
           <div className="space-y-2 text-sm text-gray-500">
             <p>
-              <strong>Sua role:</strong> {userRole || "Nenhuma"}
+              <strong>Seus cargos:</strong> {papeis.length ? papeis.join(", ") : "Nenhum"}
             </p>
             <p>
               <strong>Roles necessárias:</strong> {allowedRoles.join(", ")}

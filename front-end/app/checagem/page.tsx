@@ -54,6 +54,8 @@ export default function Page() {
     setStatusFilter,
     clinicFilter,
     setClinicFilter,
+    dateFilter,
+    setDateFilter,
     summaryCounts,
     refresh,
   } = useDocumentsPaged({
@@ -66,7 +68,10 @@ export default function Page() {
   // Cronometragem da revisão: sobe junto do PATCH da decisão, sem UI e sem
   // requisição extra. Ver docs/tempo-de-revisao-desenho.md.
   const reviewTimer = useReviewTimer()
-  const { isReadOnly } = usePermissions()
+  // Só lê quem não tem cargo que decide: o CURATOR, sozinho ou junto de um
+  // SENDER (que envia, mas não aprova). Com CHECKER na lista, decide.
+  const { canValidateExams } = usePermissions()
+  const isReadOnly = !canValidateExams
   const {
     options: clinicOptions,
     loading: clinicOptionsLoading,
@@ -499,6 +504,10 @@ export default function Page() {
                     serverStatus={{
                       value: statusFilter,
                       onChange: setStatusFilter,
+                    }}
+                    serverDate={{
+                      value: dateFilter,
+                      onChange: setDateFilter,
                     }}
                     serverClinic={
                       canFilterByClinic

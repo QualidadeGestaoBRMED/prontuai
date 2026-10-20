@@ -3,16 +3,21 @@
 import { useEffect, useState } from "react"
 import { API_ENDPOINTS } from "@/lib/config"
 import { authFetch } from "@/lib/auth-fetch"
-import { usePermissions } from "@/hooks/usePermissions"
+import { usePermissions, type UserRole } from "@/hooks/usePermissions"
 
 export type ClinicOption = {
   id: string
   name: string
 }
 
+const LEEM_TODAS_AS_CLINICAS: UserRole[] = ["ADMIN", "MANAGER", "CHECKER", "CURATOR"]
+
 export function useClinicOptions() {
-  const { role } = usePermissions()
-  const enabled = Boolean(role && role !== "SENDER")
+  const { roles } = usePermissions()
+  // O filtro de clínica é para quem enxerga todas — espelho de
+  // GLOBAL_READ_ROLES no back. Não basta "qualquer cargo além do SENDER": o
+  // Enviador + Visualizador não lê outras clínicas e levaria 403.
+  const enabled = roles.some((r) => LEEM_TODAS_AS_CLINICAS.includes(r))
   const [options, setOptions] = useState<ClinicOption[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)

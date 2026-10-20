@@ -57,9 +57,11 @@ class UserModel(Base):
     id = Column(String, primary_key=True)
     email = Column(String, unique=True, nullable=False, index=True)
     name = Column(String, nullable=False)
+    # Papel principal, derivado de `roles` (ver migrations/012_add_user_roles.sql).
     role = Column(SQLEnum(UserRole), nullable=False, default=UserRole.CHECKER)
+    roles = Column(ARRAY(String), nullable=True)
     is_active = Column(Boolean, nullable=False, default=True)
-    clinic_id = Column(String, ForeignKey('clinics.id'), nullable=True)  # NULL para CHECKER/ADMIN
+    clinic_id = Column(String, ForeignKey('clinics.id'), nullable=True)  # obrigatório só quando um dos cargos é SENDER
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 

@@ -20,12 +20,14 @@ import { AbaAcuracia, AbaUtilizacao } from "./abas";
 import { useDadosDashboard } from "./dados";
 import {
   ABAS,
-  AJUDA_ACURACIA,
+  COMO_CALCULAMOS,
   ORDEM_FILTROS,
+  RODAPE_COMO_CALCULAMOS,
   ROTULO_FILTRO,
   calcularVisao,
   type Aba,
   type FiltroPeriodo,
+  type IdIndicador,
 } from "./metricas";
 
 /**
@@ -54,7 +56,15 @@ export default function DashboardPage() {
   const [filtro, setFiltro] = useState<FiltroPeriodo>("Mensal");
   const [comparar, setComparar] = useState(true);
   const [verTodas, setVerTodas] = useState(false);
+  // Indicador aberto e modal aberto são estados separados: ao fechar, o texto
+  // continua montado durante a animação de saída, em vez de sumir antes do modal.
+  const [ajuda, setAjuda] = useState<IdIndicador>("acuracia");
   const [ajudaAberta, setAjudaAberta] = useState(false);
+  const abrirAjuda = (id: IdIndicador) => {
+    setAjuda(id);
+    setAjudaAberta(true);
+  };
+  const comoCalculamos = COMO_CALCULAMOS[ajuda];
 
   const {
     dados,
@@ -216,11 +226,10 @@ export default function DashboardPage() {
                       visao={visao}
                       verTodas={verTodas}
                       onVerTodas={() => setVerTodas((v) => !v)}
+                      onAjuda={abrirAjuda}
                     />
                   )}
-                  {aba === "acuracia" && (
-                    <AbaAcuracia visao={visao} onAjuda={() => setAjudaAberta(true)} />
-                  )}
+                  {aba === "acuracia" && <AbaAcuracia visao={visao} onAjuda={abrirAjuda} />}
                 </>
               )}
             </div>
@@ -231,18 +240,22 @@ export default function DashboardPage() {
       <Dialog open={ajudaAberta} onOpenChange={setAjudaAberta}>
         <DialogContent className="max-h-[82vh] overflow-y-auto sm:max-w-[620px]">
           <DialogHeader>
-            <DialogTitle>Como a acurácia é calculada</DialogTitle>
-            <DialogDescription>
-              Concordância entre a decisão da IA e a do revisor humano
-            </DialogDescription>
+            <div className="text-[11px] font-semibold tracking-[0.15em] text-[#767A7B]">
+              COMO É CALCULADO
+            </div>
+            <DialogTitle>{comoCalculamos.titulo}</DialogTitle>
+            <DialogDescription>{comoCalculamos.pergunta}</DialogDescription>
           </DialogHeader>
           <div className="flex flex-col">
-            {AJUDA_ACURACIA.map((b) => (
+            {comoCalculamos.blocos.map((b) => (
               <div key={b.titulo} className="border-b border-[#F3F3F3] py-4 last:border-b-0">
                 <div className="text-sm font-semibold text-[#193B4F]">{b.titulo}</div>
                 <div className="mt-1.5 text-[13.5px] leading-[1.6] text-[#4A5560]">{b.texto}</div>
               </div>
             ))}
+          </div>
+          <div className="rounded-[10px] bg-[#F3F3F3] px-3.5 py-3 text-[12.5px] leading-[1.5] text-[#767A7B]">
+            {RODAPE_COMO_CALCULAMOS}
           </div>
         </DialogContent>
       </Dialog>

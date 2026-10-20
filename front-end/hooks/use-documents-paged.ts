@@ -14,6 +14,23 @@ type UseDocumentsPagedOptions = {
   refreshIntervalMs?: number
 }
 
+/**
+ * Período de envio, em dias do calendário local ("2026-10-15"), com as duas
+ * pontas inclusas. Fica como texto, e não `Date`, para o estado não trocar de
+ * identidade sem que o dia tenha mudado.
+ */
+export type UploadDateFilter = { from: string; to: string } | null
+
+/**
+ * Meia-noite LOCAL do dia, deslocada em `dias`. O back-end guarda `uploaded_at`
+ * em UTC; quem sabe onde o dia do revisor começa é o browser — meia-noite em
+ * Brasília é 03:00 UTC, e mandar só a data faria o recorte deslizar três horas.
+ */
+function inicioDoDia(dia: string, dias = 0): Date {
+  const [y, m, d] = dia.split("-").map(Number)
+  return new Date(y, m - 1, d + dias)
+}
+
 export function useDocumentsPaged(options: UseDocumentsPagedOptions) {
   const { queue, pageSize = 10, compact = true, refreshIntervalMs = 7000 } = options
   const { data: session } = useSession()
@@ -29,6 +46,7 @@ export function useDocumentsPaged(options: UseDocumentsPagedOptions) {
   const [search, setSearch] = useState("")
   const [statusFilter, setStatusFilter] = useState<"all" | "approved" | "rejected" | "pending_review">("all")
   const [clinicFilter, setClinicFilter] = useState("all")
+  const [dateFilter, setDateFilter] = useState<UploadDateFilter>(null)
   const [summaryCounts, setSummaryCounts] = useState<DocumentSummaryCounts>({
     approved: 0,
     rejected: 0,
@@ -64,6 +82,12 @@ export function useDocumentsPaged(options: UseDocumentsPagedOptions) {
         if (search.trim()) url.searchParams.set("search", search.trim())
         if (statusFilter !== "all") url.searchParams.set("status_filter", statusFilter)
         if (clinicFilter !== "all") url.searchParams.set("clinic_id", clinicFilter)
+        if (dateFilter) {
+          // Intervalo semiaberto: o fim é a meia-noite do dia SEGUINTE ao último
+          // escolhido, para o envio das 23:59 desse dia entrar.
+          url.searchParams.set("uploaded_from", inicioDoDia(dateFilter.from).toISOString())
+          url.searchParams.set("uploaded_to", inicioDoDia(dateFilter.to, 1).toISOString())
+        }
 
         const response = await authFetch(url.toString(), {
           cache: "no-store",
@@ -116,7 +140,7 @@ export function useDocumentsPaged(options: UseDocumentsPagedOptions) {
         }
       }
     },
-    [session?.user?.email, queue, page, pageSize, compact, search, statusFilter, clinicFilter],
+    [session?.user?.email, queue, page, pageSize, compact, search, statusFilter, clinicFilter, dateFilter],
   )
 
   useEffect(() => {
@@ -168,6 +192,11 @@ export function useDocumentsPaged(options: UseDocumentsPagedOptions) {
     setPage(1)
   }, [])
 
+  const aplicarDateFilter = useCallback((valor: UploadDateFilter) => {
+    setDateFilter(valor)
+    setPage(1)
+  }, [])
+
   // `queue` e `pageSize` vêm das opções do hook, não de um setter daqui.
   useEffect(() => {
     setPage(1)
@@ -189,6 +218,8 @@ export function useDocumentsPaged(options: UseDocumentsPagedOptions) {
     setStatusFilter: aplicarStatusFilter,
     clinicFilter,
     setClinicFilter: aplicarClinicFilter,
+    dateFilter,
+    setDateFilter: aplicarDateFilter,
     summaryCounts,
     refresh: fetchPage,
   }

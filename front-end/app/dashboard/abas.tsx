@@ -10,9 +10,11 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 
 import type {
+  AcuraciaExameVisao,
   BarraPercentual,
   BarraSemana,
   GraficoPrazo,
+  IdIndicador,
   Kpi,
   LinhaForaProntuai,
   UsoSemanal,
@@ -20,11 +22,52 @@ import type {
 } from "./metricas";
 import styles from "./dashboard.module.css";
 
-const CARTAO = "rounded-[14px] border border-[#DFE0E2] bg-white";
+const CARTAO ="rounded-[14px] border border-[#DFE0E2] bg-white";
 const TITULO = "text-[16.5px] font-semibold text-[#193B4F]";
 const SUB = "mt-[5px] text-[13px] text-[#767A7B]";
 const CABECALHO_TABELA =
   "text-[11.5px] font-medium uppercase tracking-[0.06em] text-[#767A7B]";
+
+type AbrirAjuda = (id: IdIndicador) => void;
+
+/** O "?" que abre o processo por trás do número (`COMO_CALCULAMOS`). */
+function BotaoAjuda({ rotulo, onClick }: { rotulo: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={`Como "${rotulo}" é calculado`}
+      title="Como é calculado"
+      className="size-[17px] flex-none rounded-full border border-[#7EBFCC] bg-[#E8F2F4] text-[11px] font-semibold leading-[15px] text-[#007891] transition-colors hover:bg-[#D3E9EE]"
+    >
+      ?
+    </button>
+  );
+}
+
+/**
+ * Título de card com o "?" colado nele. `children` entra depois do "?" — é onde
+ * mora um selo como "A CONFIRMAR", que fala do card e não do título.
+ */
+function TituloCartao({
+  texto,
+  ajuda,
+  onAjuda,
+  children,
+}: {
+  texto: string;
+  ajuda: IdIndicador;
+  onAjuda: AbrirAjuda;
+  children?: ReactNode;
+}) {
+  return (
+    <div className="flex items-center gap-2.5">
+      <div className={TITULO}>{texto}</div>
+      <BotaoAjuda rotulo={texto} onClick={() => onAjuda(ajuda)} />
+      {children}
+    </div>
+  );
+}
 
 /**
  * Ordenação e busca das tabelas de previsão. As duas (adesão e prioridade de
@@ -156,7 +199,7 @@ const COLUNAS_USO = "grid-cols-[1.75fr_1.15fr_0.8fr_2.4fr_0.85fr]";
  * fora" fica clicável para quem quiser o outro olhar — o do volume absoluto que
  * escapou, onde 15% de 400 pesa mais que 30% de 10.
  */
-function TabelaUsoSemana({ uso }: { uso: UsoSemanal }) {
+function TabelaUsoSemana({ uso, onAjuda }: { uso: UsoSemanal; onAjuda: AbrirAjuda }) {
   // A semana vive aqui, não no filtro de período da tela: o filtro governa os
   // indicadores retroativos, e este indicador anda sozinho, semana a semana.
   const [i, setI] = useState(0);
@@ -180,7 +223,7 @@ function TabelaUsoSemana({ uso }: { uso: UsoSemanal }) {
     <div className={`${CARTAO} px-[22px] pt-5 pb-5`}>
       <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
         <div>
-          <div className={TITULO}>Quem está usando pouco</div>
+          <TituloCartao texto="Quem está usando pouco" ajuda="usandoPouco" onAjuda={onAjuda} />
           <div className={SUB}>
             Do que estava previsto para a semana, quanto passou pela plataforma · semana fechada
           </div>
@@ -198,8 +241,29 @@ function TabelaUsoSemana({ uso }: { uso: UsoSemanal }) {
           >
             ‹
           </button>
-          <div className="min-w-[108px] text-center text-[13px] font-medium tabular-nums text-[#193B4F]">
-            {semana.label}
+          {/* As setas andam uma semana; a lista pula direto para qualquer
+              semana fechada — para comparar com uma semana de três meses
+              atrás, eram doze cliques. */}
+          <div className="relative">
+            <select
+              id="uso-semana"
+              value={Math.min(i, uso.semanas.length - 1)}
+              onChange={(e) => setI(Number(e.target.value))}
+              aria-label="Escolher a semana"
+              className="h-[26px] min-w-[124px] cursor-pointer appearance-none rounded-[7px] bg-transparent pr-6 pl-2 text-center text-[13px] font-medium tabular-nums text-[#193B4F] outline-none transition-colors hover:bg-[#F3F3F3] focus-visible:ring-2 focus-visible:ring-[#7EBFCC]"
+            >
+              {uso.semanas.map((s, k) => (
+                <option key={s.iso} value={k}>
+                  {s.label}
+                </option>
+              ))}
+            </select>
+            <span
+              aria-hidden="true"
+              className="pointer-events-none absolute top-1/2 right-2 -translate-y-1/2 text-[8px] text-[#767A7B]"
+            >
+              ▼
+            </span>
           </div>
           <button
             type="button"
@@ -217,8 +281,11 @@ function TabelaUsoSemana({ uso }: { uso: UsoSemanal }) {
           entende a barra de cima já entende as 118 de baixo. */}
       <div className="mt-[18px] flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
         <div className="flex flex-wrap items-baseline gap-x-6 gap-y-2">
+          {/* O recorte vai colado no total, e não só no subtítulo do card: é
+              o número que vai para a reunião, e "previstos" sozinho se lê como
+              tudo o que o BRNET previu, inclusive de quem ainda não tem login. */}
           {[
-            { r: "Previstos na semana", v: semana.previstos, cor: "#193B4F" },
+            { r: "Previstos na semana", v: semana.previstos, cor: "#193B4F", sub: "só clínicas com login no ProntuAI" },
             { r: "Via ProntuAI", v: semana.viaProntuai, cor: "#007891" },
             { r: "Liberado por fora", v: semana.fora, cor: "#CC851E" },
             { r: "Não liberado", v: semana.naoLiberado, cor: "#767A7B" },
@@ -228,6 +295,7 @@ function TabelaUsoSemana({ uso }: { uso: UsoSemanal }) {
               <div className="text-[19px] font-medium leading-none tabular-nums" style={{ color: x.cor }}>
                 {x.v.toLocaleString("pt-BR")}
               </div>
+              {x.sub && <div className="text-[11px] text-[#9AA3A8]">{x.sub}</div>}
             </div>
           ))}
         </div>
@@ -1133,7 +1201,26 @@ function ModalHistoricoFora({
   );
 }
 
-function CartaoKpi({ kpi, onAjuda }: { kpi: Kpi; onAjuda?: () => void }) {
+function CartaoKpi({
+  kpi,
+  onAjuda,
+  onValor,
+}: {
+  kpi: Kpi;
+  onAjuda: AbrirAjuda;
+  /** Torna o número clicável — abre o detalhe por trás dele. */
+  onValor?: () => void;
+}) {
+  const ajuda = kpi.ajuda;
+  const valor = (
+    <div
+      className={`whitespace-nowrap text-[36px] font-medium leading-none tracking-[-0.025em] text-[#193B4F] tabular-nums ${
+        onValor ? "transition-colors group-hover:text-[#007891]" : ""
+      }`}
+    >
+      {kpi.value}
+    </div>
+  );
   return (
     <div
       className={`${styles.tip} ${styles.tipBaixo} flex flex-col gap-4 rounded-xl border border-[#DFE0E2] bg-white px-[22px] pt-5 pb-[22px]`}
@@ -1141,21 +1228,23 @@ function CartaoKpi({ kpi, onAjuda }: { kpi: Kpi; onAjuda?: () => void }) {
     >
       <div className="flex items-center gap-2">
         <div className="text-[13px] text-[#767A7B]">{kpi.label}</div>
-        {kpi.temAjuda && (
-          <button
-            type="button"
-            onClick={onAjuda}
-            aria-label="Como a acurácia é calculada"
-            className="size-[17px] flex-none rounded-full border border-[#7EBFCC] bg-[#E8F2F4] text-[11px] font-semibold leading-[15px] text-[#007891]"
-          >
-            ?
-          </button>
-        )}
+        {ajuda && <BotaoAjuda rotulo={kpi.label} onClick={() => onAjuda(ajuda)} />}
       </div>
       <div className="flex flex-col items-start gap-2">
-        <div className="whitespace-nowrap text-[36px] font-medium leading-none tracking-[-0.025em] text-[#193B4F] tabular-nums">
-          {kpi.value}
-        </div>
+        {onValor ? (
+          <button
+            type="button"
+            onClick={onValor}
+            aria-haspopup="dialog"
+            aria-label={`Ver ${kpi.label.toLowerCase()}`}
+            title="Ver por exame"
+            className="group cursor-pointer rounded-[6px] text-left"
+          >
+            {valor}
+          </button>
+        ) : (
+          valor
+        )}
         <div className="whitespace-nowrap text-[13px] font-medium" style={{ color: kpi.deltaColor }}>
           {kpi.delta}
         </div>
@@ -1170,12 +1259,24 @@ function CartaoKpi({ kpi, onAjuda }: { kpi: Kpi; onAjuda?: () => void }) {
  * clínica (envio) e o técnico de credenciados (liberação) são medidos à parte
  * para o atraso de um não cair na conta do outro.
  */
-function CartaoPrazo({ titulo, sub, grafico }: { titulo: string; sub: string; grafico: GraficoPrazo }) {
+function CartaoPrazo({
+  titulo,
+  sub,
+  grafico,
+  ajuda,
+  onAjuda,
+}: {
+  titulo: string;
+  sub: string;
+  grafico: GraficoPrazo;
+  ajuda: IdIndicador;
+  onAjuda: AbrirAjuda;
+}) {
   return (
     <div className={`${CARTAO} px-[22px] pt-5 pb-[18px]`}>
       <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
         <div>
-          <div className={TITULO}>{titulo}</div>
+          <TituloCartao texto={titulo} ajuda={ajuda} onAjuda={onAjuda} />
           <div className={SUB}>{sub}</div>
           {grafico.resumo && (
             <div className="mt-1.5 text-[13px] font-medium text-[#193B4F]">{grafico.resumo}</div>
@@ -1257,23 +1358,25 @@ export function AbaUtilizacao({
   visao,
   verTodas,
   onVerTodas,
+  onAjuda,
 }: {
   visao: VisaoDashboard;
   verTodas: boolean;
   onVerTodas: () => void;
+  onAjuda: AbrirAjuda;
 }) {
   return (
     <div className="flex flex-col gap-5 px-[34px] pt-[26px] pb-10">
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         {visao.kpiPrimary.map((k) => (
-          <CartaoKpi key={k.label} kpi={k} />
+          <CartaoKpi key={k.label} kpi={k} onAjuda={onAjuda} />
         ))}
       </div>
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.55fr)_minmax(0,1fr)]">
         {/* Documentos enviados: volume por período, em barra */}
         <div className={`${CARTAO} px-[22px] pt-5 pb-[18px]`}>
-          <div className={TITULO}>Documentos enviados</div>
+          <TituloCartao texto="Documentos enviados" ajuda="enviados" onAjuda={onAjuda} />
           <div className={SUB}>{visao.graficoLegenda} · volume · último ponto em andamento</div>
 
           <div className="relative mt-[22px] h-[268px]">
@@ -1308,7 +1411,7 @@ export function AbaUtilizacao({
         </div>
 
         <div className={`${CARTAO} flex flex-col px-[22px] pt-5 pb-[18px]`}>
-          <div className={TITULO}>Ranking de clínicas</div>
+          <TituloCartao texto="Ranking de clínicas" ajuda="ranking" onAjuda={onAjuda} />
           <div className={SUB}>Volume no período selecionado</div>
           <div className="mt-[18px] flex flex-col gap-[13px]">
             {visao.ranking.map((r) => (
@@ -1346,16 +1449,22 @@ export function AbaUtilizacao({
           titulo="Envio da clínica × prazo do credenciado"
           sub={`${visao.graficoLegenda} · prontuário enviado antes, no dia ou depois do prazo da clínica no BRNET`}
           grafico={visao.prazoClinica}
+          ajuda="prazoClinica"
+          onAjuda={onAjuda}
         />
         <CartaoPrazo
           titulo="Liberação do técnico de credenciados × prazo da BR MED"
           sub={`${visao.graficoLegenda} · prazo da BR MED = 1 dia útil após o da clínica · só aprovações do técnico`}
           grafico={visao.prazoTecnico}
+          ajuda="prazoTecnico"
+          onAjuda={onAjuda}
         />
       </div>
 
       <div className={`${CARTAO} px-[22px] pt-5 pb-[18px]`}>
-        <div className={TITULO}>Cobertura das expedições</div>
+        {/* Mesma conta do KPI "Expedições via ProntuAI", ponto a ponto: o "?"
+            abre a mesma explicação, para as duas não divergirem. */}
+        <TituloCartao texto="Cobertura das expedições" ajuda="expedicoes" onAjuda={onAjuda} />
         <div className={SUB}>
           % dos pedidos atendidos nas credenciadas que passaram pelo ProntuAI · meta 100%
         </div>
@@ -1365,10 +1474,10 @@ export function AbaUtilizacao({
       {/* Bloco de previsão. Duas perguntas, nesta ordem: quem já está dentro e
           usa pouco (adesão, semana fechada), e quem ainda está fora e vale a
           pena incluir. Nenhum número se repete entre os dois. */}
-      {visao.usoSemanal && <TabelaUsoSemana uso={visao.usoSemanal} />}
+      {visao.usoSemanal && <TabelaUsoSemana uso={visao.usoSemanal} onAjuda={onAjuda} />}
 
       <div className={`${CARTAO} px-[22px] pt-5 pb-5`}>
-        <div className={TITULO}>Quem vale a pena incluir</div>
+        <TituloCartao texto="Quem vale a pena incluir" ajuda="valeIncluir" onAjuda={onAjuda} />
         <div className={SUB}>
           {visao.foraProntuai === null
             ? "Lista indisponível: não foi possível consultar o BRNET na última atualização"
@@ -1387,18 +1496,210 @@ export function AbaUtilizacao({
   );
 }
 
-export function AbaAcuracia({ visao, onAjuda }: { visao: VisaoDashboard; onAjuda: () => void }) {
+/**
+ * Lugar reservado para "Acurácia por exame" quando o back-end não manda o
+ * indicador (versão anterior a ele, ou a consulta dos pareceres falhou). Mesmo
+ * tamanho dos KPIs, ao lado de "Acurácia".
+ */
+function CartaoEmBreve({ label }: { label: string }) {
+  return (
+    <div className="flex flex-col gap-4 rounded-xl border border-[#DFE0E2] bg-white px-[22px] pt-5 pb-[22px]">
+      <div className="text-[13px] text-[#767A7B]">{label}</div>
+      <div className="text-[30px] font-medium leading-none tracking-[-0.02em] text-[#9AA3A8]">Em breve</div>
+    </div>
+  );
+}
+
+// Literal pelo mesmo motivo de COLUNAS_FORA: o Tailwind só compila a classe que
+// encontra escrita no código.
+const COLUNAS_EXAME = "grid-cols-[2fr_0.75fr_2fr_0.8fr]";
+
+// As duas formas de errar, na ordem em que entram na barra. A chave aponta
+// para os campos da linha e do total.
+const ERROS_EXAME = [
+  {
+    chave: "pctFalta",
+    total: "faltaIndevida",
+    titulo: "Falta indevida",
+    explicacao: "a IA apontou falta, o exame estava",
+    cor: "#CC851E",
+  },
+  {
+    chave: "pctPresenca",
+    total: "presencaIndevida",
+    titulo: "Presença indevida",
+    explicacao: "a IA deu como presente, não estava",
+    cor: "#B4453A",
+  },
+] as const;
+
+/**
+ * A lista de "Acurácia por exame", aberta pelo número do card. Vem do parecer
+ * do revisor no modal de feedback e segue o filtro de período da tela.
+ *
+ * A adesão fica no cabeçalho, junto do número: a acurácia só enxerga os
+ * documentos com parecer, e com poucos pareceres ela pesa pouco.
+ *
+ * A barra é a taxa de ERRO, dividida nas duas formas de errar: a pergunta é
+ * "onde a IA erra", e as duas pedem correções diferentes — falta indevida é
+ * nome que o catálogo não reconhece; presença indevida, exame que a IA achou
+ * onde não havia.
+ */
+function ModalAcuraciaExame({
+  dados,
+  aberto,
+  onFechar,
+}: {
+  dados: AcuraciaExameVisao;
+  aberto: boolean;
+  onFechar: () => void;
+}) {
+  const { ordem, ordenarPor } = useOrdem({ col: "acuracia", dir: "asc" });
+  const visiveis = ordenar(dados.linhas, ordem, (l, col) =>
+    col === "exame" ? l.exame
+    : col === "avaliacoes" ? l.avaliacoes
+    : col === "erros" ? l.erros / l.avaliacoes
+    : l.acuracia,
+  );
+  const n = (v: number) => v.toLocaleString("pt-BR");
+
+  return (
+    <Dialog open={aberto} onOpenChange={(v) => !v && onFechar()}>
+      <DialogContent className="flex max-h-[calc(100dvh-3rem)] flex-col gap-0 overflow-hidden rounded-[16px] border-[#DFE0E2] bg-white p-0 sm:max-w-[980px]">
+        {/* Título e descrição ocupam a largura toda, e os números descem para
+            uma fileira própria: com o total à direita da descrição, os dois
+            disputavam a mesma linha e o número ficava espremido contra o X. */}
+        <div className="border-b border-[#EDEFF0] py-4 pr-14 pl-6">
+          <DialogTitle className="text-[20px] leading-tight font-semibold text-[#193B4F]">
+            Acurácia por exame
+          </DialogTitle>
+          <DialogDescription className="mt-1 text-[13px] leading-[1.5] text-[#767A7B]">
+            Pelo parecer do revisor no modal de feedback · documentos enviados em {dados.periodoLabel}.
+            <span className="block">
+              {dados.adesaoLabel
+                ? `${n(dados.pareceres)} pareceres em ${n(dados.decisoes)} decisões do time BR MED (adesão de ${dados.adesaoLabel}).`
+                : "Nenhuma decisão do time BR MED com parecer neste período."}
+            </span>
+          </DialogDescription>
+
+          {/* Os dois tipos de erro entram como números, com a cor da barra ao
+              lado: a fileira faz também o papel de legenda. */}
+          <div className="mt-4 flex flex-wrap items-start gap-x-8 gap-y-3">
+            {[
+              { r: "Acurácia", v: dados.acuraciaLabel, cor: "#007891" },
+              { r: "Exames avaliados", v: n(dados.avaliacoes) },
+              { r: "Pareceres", v: n(dados.pareceres) },
+              ...ERROS_EXAME.map((e) => ({
+                r: e.titulo,
+                v: n(dados[e.total]),
+                amostra: e.cor,
+                sub: e.explicacao,
+              })),
+            ].map((x: { r: string; v: string; cor?: string; amostra?: string; sub?: string }) => (
+              <div key={x.r} className="flex flex-col gap-1">
+                <div className={`${CABECALHO_TABELA} flex items-center gap-1.5`}>
+                  {x.amostra && <span className="size-2.5 flex-none rounded-[2px]" style={{ background: x.amostra }} />}
+                  {x.r}
+                </div>
+                <div
+                  className="text-[19px] font-medium leading-none tabular-nums"
+                  style={{ color: x.cor ?? "#193B4F" }}
+                >
+                  {x.v}
+                </div>
+                {x.sub && <div className="text-[11px] text-[#9AA3A8]">{x.sub}</div>}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-auto px-6">
+          {visiveis.length ? (
+            <div className="min-w-[720px]">
+              <div
+                className={`sticky top-0 z-10 grid ${COLUNAS_EXAME} items-end gap-x-[18px] border-b border-[#DFE0E2] bg-white px-1 pt-3.5 pb-2.5`}
+              >
+                <Th label="Exame" col="exame" ordem={ordem} onOrdenar={ordenarPor} />
+                <Th label="Avaliados" col="avaliacoes" ordem={ordem} onOrdenar={ordenarPor} numerica />
+                <Th label="Erros" sub="barra = taxa · número = casos" col="erros" ordem={ordem} onOrdenar={ordenarPor} numerica />
+                <Th label="Acurácia" col="acuracia" ordem={ordem} onOrdenar={ordenarPor} numerica />
+              </div>
+              {visiveis.map((l) => (
+                <div
+                  key={l.exame}
+                  className={`${styles.linhaTip} grid ${COLUNAS_EXAME} items-center gap-x-[18px] border-b border-[#F3F3F3] px-1 py-3 text-[13.5px] text-[#193B4F]`}
+                >
+                  {/* Mesmo invólucro de "Quem está usando pouco": a seta do balão
+                      aponta para o nome só se ele encolher até o texto. */}
+                  <div className="min-w-0">
+                    <span className={`${styles.tip} ${styles.tipNome} min-w-0`} data-tip={l.tip}>
+                      <span className="block truncate">{l.exame}</span>
+                    </span>
+                  </div>
+                  <div className="tabular-nums text-[#767A7B]">{n(l.avaliacoes)}</div>
+                  <div className="flex items-center gap-2.5">
+                    <div className="flex h-[9px] flex-1 overflow-hidden rounded-[4px] bg-[#F3F3F3]">
+                      {ERROS_EXAME.map((e) => (
+                        <div key={e.chave} className="h-full" style={{ width: `${l[e.chave]}%`, background: e.cor }} />
+                      ))}
+                    </div>
+                    <div className="w-[26px] text-right font-medium tabular-nums">{l.erros || "—"}</div>
+                  </div>
+                  <div className="font-medium tabular-nums">{l.acuraciaLabel}</div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="py-10 text-center text-[13px] text-[#767A7B]">
+              {dados.avaliacoes
+                ? `Nenhum exame chegou a ${dados.minimo} avaliações neste período. Escolha um período maior para ver a lista.`
+                : "Nenhum parecer neste período."}
+            </div>
+          )}
+        </div>
+
+        <div className="border-t border-[#EDEFF0] px-6 py-3 text-[12px] text-[#9AA3A8]">
+          Exames com menos de {dados.minimo} avaliações no período entram no total, mas não na lista
+          {dados.abaixoDoMinimo ? ` (${n(dados.abaixoDoMinimo)} exames neste período)` : ""}.
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+export function AbaAcuracia({ visao, onAjuda }: { visao: VisaoDashboard; onAjuda: AbrirAjuda }) {
+  const [examesAberto, setExamesAberto] = useState(false);
+  // "Acurácia por exame" entra logo depois de "Acurácia": é o mesmo número
+  // aberto por exame, e quem lê um procura o outro do lado.
+  const [acuracia, ...demais] = visao.kpisAcuracia;
+  const porExame = visao.acuraciaExame;
+
   return (
     <div className="flex flex-col gap-5 px-[34px] pt-[26px] pb-10">
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-        {visao.kpisAcuracia.map((k) => (
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
+        <CartaoKpi kpi={acuracia} onAjuda={onAjuda} />
+        {/* Sem o bloco no back-end (versão anterior ao indicador, ou a consulta
+            falhou), o lugar fica reservado em vez de mostrar um zero falso. */}
+        {porExame ? (
+          <CartaoKpi
+            kpi={porExame.kpi}
+            onAjuda={onAjuda}
+            onValor={porExame.avaliacoes ? () => setExamesAberto(true) : undefined}
+          />
+        ) : (
+          <CartaoEmBreve label="Acurácia por exame" />
+        )}
+        {demais.map((k) => (
           <CartaoKpi key={k.label} kpi={k} onAjuda={onAjuda} />
         ))}
       </div>
+      {porExame && (
+        <ModalAcuraciaExame dados={porExame} aberto={examesAberto} onFechar={() => setExamesAberto(false)} />
+      )}
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
         <div className={`${CARTAO} px-[22px] pt-5 pb-[18px]`}>
-          <div className={TITULO}>Acurácia por período</div>
+          <TituloCartao texto="Acurácia por período" ajuda="acuracia" onAjuda={onAjuda} />
           <div className={SUB}>
             {visao.graficoLegenda} · concordância entre IA e revisor · escala a partir de 70%
           </div>
@@ -1406,12 +1707,11 @@ export function AbaAcuracia({ visao, onAjuda }: { visao: VisaoDashboard; onAjuda
         </div>
 
         <div className={`${CARTAO} px-[22px] pt-5 pb-[18px]`}>
-          <div className="flex items-center gap-2.5">
-            <div className={TITULO}>Por que a acurácia não está maior</div>
+          <TituloCartao texto="Por que a acurácia não está maior" ajuda="motivos" onAjuda={onAjuda}>
             <div className="rounded-[5px] bg-[#F7EDDC] px-2 py-1 text-[10.5px] font-medium tracking-[0.08em] text-[#A05E1E]">
               A CONFIRMAR
             </div>
-          </div>
+          </TituloCartao>
           <div className={SUB}>{visao.fatorPrincipal}</div>
           <div className="mt-[18px] flex flex-col gap-[13px]">
             {visao.penteFino.map((p) => (
@@ -1433,7 +1733,7 @@ export function AbaAcuracia({ visao, onAjuda }: { visao: VisaoDashboard; onAjuda
       </div>
 
       <div className={`${CARTAO} px-[22px] pt-5 pb-2`}>
-        <div className={TITULO}>Matriz de decisão</div>
+        <TituloCartao texto="Matriz de decisão" ajuda="matriz" onAjuda={onAjuda} />
         <div className={SUB}>Todo desfecho possível entre IA e revisor, no período selecionado</div>
         <div className="mt-4 overflow-x-auto">
           <div className="min-w-[680px]">

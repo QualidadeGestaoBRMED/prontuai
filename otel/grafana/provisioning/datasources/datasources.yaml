@@ -30,5 +30,8 @@ datasources:
         - name: trace_id
           matcherRegex: '"traceid":"(\w+)"'
           datasourceUid: tempo
-          url: '${__value.raw}'
+          # `$$` e escape: o Grafana expande variavel de ambiente nos arquivos
+          # de provisionamento, e `${__value.raw}` sozinho virava texto vazio
+          # -- o link "Ver trace" saia sem o id.
+          url: '$${__value.raw}'
           urlDisplayLabel: "Ver trace"

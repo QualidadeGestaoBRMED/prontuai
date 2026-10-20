@@ -29,17 +29,24 @@ import {
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { API_ENDPOINTS } from "@/lib/config";
 import { authFetch } from "@/lib/auth-fetch";
-import { usePermissions } from "@/hooks/usePermissions";
-
-type UserRole = "ADMIN" | "MANAGER" | "CURATOR" | "CHECKER" | "SENDER";
+import {
+  PRECEDENCIA_PAPEIS,
+  papeisDoUsuario,
+  usePermissions,
+  type UserRole,
+} from "@/hooks/usePermissions";
 
 interface User {
   id: string;
   email: string;
   name: string;
+  /** Papel principal; os cargos todos estão em `roles`. */
   role: UserRole;
+  roles?: UserRole[];
+  clinic_id?: string | null;
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -61,15 +68,137 @@ const roleLabels: Record<UserRole, string> = {
   CURATOR: "Saúde",
   CHECKER: "Checador",
   SENDER: "Enviador",
+  VIEWER: "Visualizador",
 };
 
+// Sem o "Apenas" de antes: com cargos somados, cada linha diz o que o cargo
+// ACRESCENTA, e "apenas checagem" ao lado de "envio" marcado se contradizia.
 const roleDescriptions: Record<UserRole, string> = {
   ADMIN: "Acesso total + gerenciar usuários",
   MANAGER: "Gerencia clínicas e usuários",
-  CURATOR: "Apenas o catálogo de exames",
-  CHECKER: "Apenas checagem de exames",
-  SENDER: "Apenas enviar documentos",
+  CURATOR: "Catálogo de exames",
+  CHECKER: "Checagem de documentos",
+  SENDER: "Envio de documentos de uma clínica",
+  VIEWER: "Dashboard de indicadores",
 };
+
+const roleBadges: Record<UserRole, string> = {
+  ADMIN: "bg-purple-100 text-purple-800",
+  MANAGER: "bg-amber-100 text-amber-800",
+  CURATOR: "bg-teal-100 text-teal-800",
+  CHECKER: "bg-blue-100 text-blue-800",
+  SENDER: "bg-green-100 text-green-800",
+  VIEWER: "bg-slate-100 text-slate-800",
+};
+
+// Espelho de `PAPEIS_DO_GESTOR` em back-end/app/api/v1/users.py: o que o
+// MANAGER pode atribuir, em qualquer combinação, e quem ele pode editar.
+const PAPEIS_DO_GESTOR: UserRole[] = ["CHECKER", "SENDER"];
+
+/** O corpo de erro do back, que é JSON nos erros de negócio e texto num 500. */
+async function mensagemDeErro(response: Response, padrao: string) {
+  const corpo = await response.text();
+  try {
+    return JSON.parse(corpo).detail ?? corpo ?? padrao;
+  } catch {
+    return corpo || padrao;
+  }
+}
+
+/**
+ * Caixas de marcar dos cargos. O MANAGER só vê os que pode atribuir — os
+ * outros nem aparecem, porque o servidor recusaria.
+ */
+function SeletorCargos({
+  idPrefixo,
+  value,
+  onChange,
+  podeTodos,
+}: {
+  idPrefixo: string;
+  value: UserRole[];
+  onChange: (papeis: UserRole[]) => void;
+  podeTodos: boolean;
+}) {
+  const opcoes = podeTodos ? PRECEDENCIA_PAPEIS : PRECEDENCIA_PAPEIS.filter((p) => PAPEIS_DO_GESTOR.includes(p));
+  const alternar = (papel: UserRole, marcado: boolean) =>
+    onChange(marcado ? [...value.filter((p) => p !== papel), papel] : value.filter((p) => p !== papel));
+
+  return (
+    <div>
+      <Label>Cargos</Label>
+      <div className="mt-2 divide-y rounded-md border">
+        {opcoes.map((papel) => (
+          <label
+            key={papel}
+            htmlFor={`${idPrefixo}-${papel}`}
+            className="flex cursor-pointer items-start gap-3 px-3 py-2.5 hover:bg-gray-50"
+          >
+            <Checkbox
+              id={`${idPrefixo}-${papel}`}
+              checked={value.includes(papel)}
+              onCheckedChange={(v) => alternar(papel, v === true)}
+              className="mt-0.5"
+            />
+            <div>
+              <div className="text-sm font-medium">{roleLabels[papel]}</div>
+              <div className="text-xs text-gray-500">{roleDescriptions[papel]}</div>
+            </div>
+          </label>
+        ))}
+      </div>
+      <p className="mt-1 text-xs text-gray-500">
+        Marque um ou mais. O acesso do usuário é a soma dos cargos marcados.
+      </p>
+    </div>
+  );
+}
+
+function SeletorClinica({
+  value,
+  onChange,
+  clinics,
+  loading,
+}: {
+  value: string;
+  onChange: (id: string) => void;
+  clinics: Clinic[];
+  loading: boolean;
+}) {
+  return (
+    <div>
+      <Label htmlFor="clinic">Clínica *</Label>
+      <Select value={value} onValueChange={onChange} disabled={loading}>
+        <SelectTrigger>
+          <SelectValue placeholder={loading ? "Carregando..." : "Selecione uma clínica"} />
+        </SelectTrigger>
+        <SelectContent>
+          {clinics.length === 0 ? (
+            <div className="px-2 py-3 text-sm text-gray-500 text-center">
+              Nenhuma clínica disponível
+            </div>
+          ) : (
+            clinics.map((clinic) => (
+              <SelectItem key={clinic.id} value={clinic.id}>
+                <div>
+                  <div className="font-medium">{clinic.name}</div>
+                  {clinic.cnpj && (
+                    <div className="text-xs text-gray-500">
+                      CNPJ: {clinic.cnpj}
+                    </div>
+                  )}
+                </div>
+              </SelectItem>
+            ))
+          )}
+        </SelectContent>
+      </Select>
+      <p className="text-xs text-gray-500 mt-1">
+        Quem tem o cargo de Enviador precisa estar vinculado a uma clínica
+      </p>
+    </div>
+  );
+}
 
 export default function UsersAdminPage() {
   const { data: session } = useSession();
@@ -93,7 +222,7 @@ export default function UsersAdminPage() {
   // Estados do formulário
   const [formEmail, setFormEmail] = useState("");
   const [formName, setFormName] = useState("");
-  const [formRole, setFormRole] = useState<UserRole>("CHECKER");
+  const [formRoles, setFormRoles] = useState<UserRole[]>(["CHECKER"]);
   const [formClinicId, setFormClinicId] = useState("");
   const [emailError, setEmailError] = useState("");
   const [creating, setCreating] = useState(false);
@@ -164,10 +293,12 @@ export default function UsersAdminPage() {
   }, [fetchUsers]);
 
   useEffect(() => {
-    if (createModalOpen) {
+    if (createModalOpen || editModalOpen) {
       fetchClinics();
     }
-  }, [createModalOpen, fetchClinics]);
+  }, [createModalOpen, editModalOpen, fetchClinics]);
+
+  const temEnviador = formRoles.includes("SENDER");
 
   const handleCreateUser = async () => {
     if (!session?.user?.email || !formEmail || !formName) {
@@ -175,9 +306,14 @@ export default function UsersAdminPage() {
       return;
     }
 
-    // Validar clínica para SENDER
-    if (formRole === "SENDER" && !formClinicId) {
-      toast.error("Selecione uma clínica para usuários SENDER");
+    if (formRoles.length === 0) {
+      toast.error("Selecione pelo menos um cargo");
+      return;
+    }
+
+    // Validar clínica para quem tem SENDER
+    if (temEnviador && !formClinicId) {
+      toast.error("Selecione uma clínica para quem tem o cargo de Enviador");
       return;
     }
 
@@ -193,16 +329,16 @@ export default function UsersAdminPage() {
       const body: {
         email: string;
         name: string;
-        role: UserRole;
+        roles: UserRole[];
         clinic_id?: string;
       } = {
         email: formEmail,
         name: formName,
-        role: formRole,
+        roles: formRoles,
       };
 
-      // Adicionar clinic_id apenas para SENDER
-      if (formRole === "SENDER") {
+      // Adicionar clinic_id apenas para quem tem SENDER
+      if (temEnviador) {
         body.clinic_id = formClinicId;
       }
 
@@ -218,21 +354,14 @@ export default function UsersAdminPage() {
         // O back-end devolve JSON nos erros de negócio, mas um 500 vem como
         // texto puro ("Internal Server Error"). Fazer .json() direto estourava
         // no parse e o toast mostrava o erro do parse em vez da causa.
-        const corpo = await response.text();
-        let detalhe = corpo;
-        try {
-          detalhe = JSON.parse(corpo).detail ?? corpo;
-        } catch {
-          // corpo não é JSON: fica o texto como veio
-        }
-        throw new Error(detalhe || "Erro ao criar usuário");
+        throw new Error(await mensagemDeErro(response, "Erro ao criar usuário"));
       }
 
       toast.success("Usuário criado com sucesso!");
       setCreateModalOpen(false);
       setFormEmail("");
       setFormName("");
-      setFormRole("CHECKER");
+      setFormRoles(["CHECKER"]);
       setFormClinicId("");
       setEmailError("");
       fetchUsers();
@@ -248,6 +377,15 @@ export default function UsersAdminPage() {
   const handleUpdateUser = async () => {
     if (!session?.user?.email || !selectedUser) return;
 
+    if (formRoles.length === 0) {
+      toast.error("Selecione pelo menos um cargo");
+      return;
+    }
+    if (temEnviador && !formClinicId) {
+      toast.error("Selecione uma clínica para quem tem o cargo de Enviador");
+      return;
+    }
+
     try {
       const response = await authFetch(API_ENDPOINTS.USER_BY_ID(selectedUser.id), {
         method: "PATCH",
@@ -256,12 +394,15 @@ export default function UsersAdminPage() {
         },
         body: JSON.stringify({
           name: formName,
-          role: formRole,
+          roles: formRoles,
           is_active: selectedUser.is_active,
+          // Sem SENDER a clínica não vai: se ele tinha e perdeu o cargo, o
+          // back-end tira a clínica junto.
+          ...(temEnviador ? { clinic_id: formClinicId } : {}),
         }),
       });
 
-      if (!response.ok) throw new Error("Erro ao atualizar usuário");
+      if (!response.ok) throw new Error(await mensagemDeErro(response, "Erro ao atualizar usuário"));
 
       toast.success("Usuário atualizado com sucesso!");
       setEditModalOpen(false);
@@ -269,7 +410,7 @@ export default function UsersAdminPage() {
       fetchUsers();
     } catch (error) {
       console.error("Erro:", error);
-      toast.error("Erro ao atualizar usuário");
+      toast.error(error instanceof Error ? error.message : "Erro ao atualizar usuário");
     }
   };
 
@@ -337,7 +478,8 @@ export default function UsersAdminPage() {
   const openEditModal = (user: User) => {
     setSelectedUser(user);
     setFormName(user.name);
-    setFormRole(user.role);
+    setFormRoles(papeisDoUsuario(user));
+    setFormClinicId(user.clinic_id ?? "");
     setEditModalOpen(true);
   };
 
@@ -381,7 +523,7 @@ export default function UsersAdminPage() {
                       Email
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                      Role
+                      Cargos
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                       Status
@@ -431,22 +573,17 @@ export default function UsersAdminPage() {
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
                           {user.email}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <span
-                            className={`px-2 py-1 text-xs rounded-full ${
-                              user.role === "ADMIN"
-                                ? "bg-purple-100 text-purple-800"
-                                : user.role === "CURATOR"
-                                ? "bg-teal-100 text-teal-800"
-                                : user.role === "MANAGER"
-                                ? "bg-amber-100 text-amber-800"
-                                : user.role === "CHECKER"
-                                ? "bg-blue-100 text-blue-800"
-                                : "bg-green-100 text-green-800"
-                            }`}
-                          >
-                            {roleLabels[user.role]}
-                          </span>
+                        <td className="px-6 py-4">
+                          <div className="flex flex-wrap gap-1">
+                            {papeisDoUsuario(user).map((papel) => (
+                              <span
+                                key={papel}
+                                className={`whitespace-nowrap px-2 py-1 text-xs rounded-full ${roleBadges[papel]}`}
+                              >
+                                {roleLabels[papel]}
+                              </span>
+                            ))}
+                          </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <span
@@ -461,10 +598,11 @@ export default function UsersAdminPage() {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm space-x-2">
                           {/* Espelha `_assert_manager_can_edit` do back-end: o
-                              gestor só edita CHECKER/SENDER e nunca ativa ou
-                              desativa. Esconder aqui é só para não oferecer um
-                              botão que o servidor vai recusar. */}
-                          {(canAssignAdmin || user.role === "CHECKER" || user.role === "SENDER") && (
+                              gestor só edita quem tem apenas CHECKER/SENDER e
+                              nunca ativa ou desativa. Esconder aqui é só para
+                              não oferecer um botão que o servidor vai recusar. */}
+                          {(canAssignAdmin ||
+                            papeisDoUsuario(user).every((p) => PAPEIS_DO_GESTOR.includes(p))) && (
                             <Button
                               variant="outline"
                               size="sm"
@@ -528,99 +666,20 @@ export default function UsersAdminPage() {
                 />
               </div>
 
-              <div>
-                <Label htmlFor="role">Role</Label>
-                <Select value={formRole} onValueChange={(v) => setFormRole(v as UserRole)}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {canAssignAdmin && (
-                      <SelectItem value="ADMIN">
-                        <div>
-                          <div className="font-medium">{roleLabels.ADMIN}</div>
-                          <div className="text-xs text-gray-500 group-hover:text-white">
-                            {roleDescriptions.ADMIN}
-                          </div>
-                        </div>
-                      </SelectItem>
-                    )}
-                    {canAssignAdmin && (
-                      <SelectItem value="MANAGER">
-                        <div>
-                          <div className="font-medium">{roleLabels.MANAGER}</div>
-                          <div className="text-xs text-gray-500 group-hover:text-white">
-                            {roleDescriptions.MANAGER}
-                          </div>
-                        </div>
-                      </SelectItem>
-                    )}
-                    {canAssignAdmin && (
-                      <SelectItem value="CURATOR">
-                        <div>
-                          <div className="font-medium">{roleLabels.CURATOR}</div>
-                          <div className="text-xs text-gray-500 group-hover:text-white">
-                            {roleDescriptions.CURATOR}
-                          </div>
-                        </div>
-                      </SelectItem>
-                    )}
-                    <SelectItem value="CHECKER">
-                      <div>
-                        <div className="font-medium">{roleLabels.CHECKER}</div>
-                        <div className="text-xs text-gray-500 group-hover:text-white">
-                          {roleDescriptions.CHECKER}
-                        </div>
-                      </div>
-                    </SelectItem>
-                    <SelectItem value="SENDER">
-                      <div>
-                        <div className="font-medium">{roleLabels.SENDER}</div>
-                        <div className="text-xs text-gray-500 group-hover:text-white">
-                          {roleDescriptions.SENDER}
-                        </div>
-                      </div>
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+              <SeletorCargos
+                idPrefixo="novo-cargo"
+                value={formRoles}
+                onChange={setFormRoles}
+                podeTodos={canAssignAdmin}
+              />
 
-              {formRole === "SENDER" && (
-                <div>
-                  <Label htmlFor="clinic">Clínica *</Label>
-                  <Select
-                    value={formClinicId}
-                    onValueChange={setFormClinicId}
-                    disabled={loadingClinics}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder={loadingClinics ? "Carregando..." : "Selecione uma clínica"} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {clinics.length === 0 ? (
-                        <div className="px-2 py-3 text-sm text-gray-500 text-center">
-                          Nenhuma clínica disponível
-                        </div>
-                      ) : (
-                        clinics.map((clinic) => (
-                          <SelectItem key={clinic.id} value={clinic.id}>
-                            <div>
-                              <div className="font-medium">{clinic.name}</div>
-                              {clinic.cnpj && (
-                                <div className="text-xs text-gray-500">
-                                  CNPJ: {clinic.cnpj}
-                                </div>
-                              )}
-                            </div>
-                          </SelectItem>
-                        ))
-                      )}
-                    </SelectContent>
-                  </Select>
-                  <p className="text-xs text-gray-500 mt-1">
-                    Usuários SENDER devem estar vinculados a uma clínica
-                  </p>
-                </div>
+              {temEnviador && (
+                <SeletorClinica
+                  value={formClinicId}
+                  onChange={setFormClinicId}
+                  clinics={clinics}
+                  loading={loadingClinics}
+                />
               )}
             </div>
 
@@ -643,7 +702,8 @@ export default function UsersAdminPage() {
                   !!emailError ||
                   !formEmail ||
                   !formName ||
-                  (formRole === "SENDER" && !formClinicId)
+                  formRoles.length === 0 ||
+                  (temEnviador && !formClinicId)
                 }
               >
                 {creating ? "Criando..." : "Criar Usuário"}
@@ -677,34 +737,33 @@ export default function UsersAdminPage() {
                 />
               </div>
 
-              <div>
-                <Label htmlFor="edit-role">Role</Label>
-                <Select value={formRole} onValueChange={(v) => setFormRole(v as UserRole)}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {canAssignAdmin && (
-                      <SelectItem value="ADMIN">{roleLabels.ADMIN}</SelectItem>
-                    )}
-                    {canAssignAdmin && (
-                      <SelectItem value="MANAGER">{roleLabels.MANAGER}</SelectItem>
-                    )}
-                    {canAssignAdmin && (
-                      <SelectItem value="CURATOR">{roleLabels.CURATOR}</SelectItem>
-                    )}
-                    <SelectItem value="CHECKER">{roleLabels.CHECKER}</SelectItem>
-                    <SelectItem value="SENDER">{roleLabels.SENDER}</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+              <SeletorCargos
+                idPrefixo="editar-cargo"
+                value={formRoles}
+                onChange={setFormRoles}
+                podeTodos={canAssignAdmin}
+              />
+
+              {temEnviador && (
+                <SeletorClinica
+                  value={formClinicId}
+                  onChange={setFormClinicId}
+                  clinics={clinics}
+                  loading={loadingClinics}
+                />
+              )}
             </div>
 
             <DialogFooter>
               <Button variant="outline" onClick={() => setEditModalOpen(false)}>
                 Cancelar
               </Button>
-              <Button onClick={handleUpdateUser}>Salvar</Button>
+              <Button
+                onClick={handleUpdateUser}
+                disabled={formRoles.length === 0 || (temEnviador && !formClinicId)}
+              >
+                Salvar
+              </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>

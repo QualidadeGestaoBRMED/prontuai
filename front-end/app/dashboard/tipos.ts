@@ -190,6 +190,33 @@ export interface DadosDashboard {
    * automática da IA fica de fora.
    */
   prazo_tecnico_dia: Record<string, Prazos>;
+  /**
+   * Acurácia por exame, do parecer do revisor no modal de feedback. Ausente num
+   * back-end anterior ao indicador e null quando a consulta falhou — nos dois
+   * casos o card mostra "Em breve". Ver `dashboard_service._agregar_pareceres`.
+   */
+  acuracia_exames?: AcuraciaExamesDados | null;
+}
+
+/** Um período (semana ou mês, mesma chave das outras séries) da acurácia por exame. */
+export interface BlocoAcuraciaExames {
+  /** Pareceres que entram na acurácia: a IA chegou a julgar os exames. */
+  pareceres: number;
+  /** Todos os pareceres, inclusive de falha técnica — numerador da adesão. */
+  com_parecer: number;
+  /** Decisões humanas desde que o modal existe, mais as que têm parecer. */
+  decisoes: number;
+  /** Por exame exigido: [avaliações, falta indevida, presença indevida]. */
+  exames: Record<string, [number, number, number]>;
+}
+
+export interface AcuraciaExamesDados {
+  /**
+   * Data de envio (ISO) do documento mais antigo com parecer — o começo da
+   * série. Não é a data do primeiro parecer: dá para avaliar documento antigo.
+   */
+  desde: string | null;
+  series: Partial<Record<SerieKey, Record<string, BlocoAcuraciaExames>>>;
 }
 
 /** [antecipado, no dia, atrasado]. */

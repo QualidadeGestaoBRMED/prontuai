@@ -1,8 +1,11 @@
 apiVersion: 1
 
 # Regras de alerta provisionadas.
-# Configure o destino (e-mail/Slack) em Alerting > Contact points no Grafana,
-# ou provisione um contact point neste diretório.
+#
+# Toda regra aponta para o contact point `prontuai-email` (contact-points.yml)
+# por `notification_settings`, o roteamento por regra do Grafana 11. Regra nova
+# precisa do mesmo bloco: sem ele o alerta cai na policy padrão da org, que é
+# compartilhada com os outros projetos e não manda para ninguém do ProntuAI.
 
 groups:
   - orgId: 1
@@ -10,8 +13,26 @@ groups:
     folder: ProntuAI
     interval: 1m
     rules:
+      # Pico de erro no log do backend.
+      #
+      # Conta LINHAS numa janela de 5 min, e nao `rate()`: o alerta antigo
+      # mostrava "0.016667", que e 5 erros em 5 min escritos em erros por
+      # segundo -- ilegivel para quem recebe o e-mail.
+      #
+      # O limiar sai de medicao, nao de chute. Em 7 dias (2016 janelas de
+      # 5 min), fora o ruido filtrado abaixo: 96% das janelas com ZERO erro,
+      # mediana 1 e MAXIMO 3. Entao 5 e o dobro do pior caso normal, e nao
+      # teria disparado nenhuma vez na semana medida.
+      #
+      # `!= "Signature has expired"`: sessao de usuario vencendo e fluxo
+      # normal -- o front pega o 401 e renova pelo refresh token --, mas o
+      # backend registra como ERROR (app/core/auth.py, no `except JWTError`).
+      # Eram 668 das 737 linhas de erro em 3 dias, 91% do total: com elas o
+      # alerta ficava aceso 18% do tempo e nao sobrava sinal nenhum. O filtro
+      # aqui e remendo; o certo e a expiracao nao nascer como ERROR, e ai
+      # esta linha vira redundante (inofensiva) e pode sair.
       - uid: prontuai-errors
-        title: Backend errors detected
+        title: Pico de erros no backend
         condition: C
         data:
           - refId: A
@@ -23,7 +44,7 @@ groups:
               datasource:
                 type: loki
                 uid: loki
-              expr: "sum(rate({job=\"prontuai-backend\", level=\"ERROR\"}[5m]))"
+              expr: "sum(count_over_time({job=\"prontuai-backend\", level=\"ERROR\"} != `Signature has expired` [5m]))"
               refId: A
               queryType: range
           - refId: C
@@ -34,7 +55,7 @@ groups:
                 - evaluator:
                     type: gt
                     params:
-                      - 0
+                      - 5
                   operator:
                     type: and
                   reducer:
@@ -42,14 +63,16 @@ groups:
                   query:
                     params:
                       - A
-        for: 2m
-        noDataState: NoData
+        for: 5m
+        noDataState: OK
         execErrState: Error
         annotations:
-          summary: "Errors detected in backend logs"
-          description: "Check Loki logs for error details."
+          summary: "Mais de 5 erros em 5 minutos no log do backend"
+          description: "Acima do normal medido (maximo 3 por janela de 5 min em 7 dias). Sessao expirada nao entra na conta. Veja os logs no Loki filtrando level=ERROR; os suspeitos recorrentes sao falha ao consultar exames obrigatorios (BRNET) e erro de OCR."
         labels:
           severity: warning
+        notification_settings:
+          receiver: prontuai-email
 
       - uid: prontuai-backend-down
         title: Backend sem métricas (fora do ar?)
@@ -91,6 +114,8 @@ groups:
           description: "prontuai_backend_up é um heartbeat que todo worker do backend empurra por OTLP. A série some do Prometheus ~90s (metric_expiration do collector) depois que o último worker para de exportar. Causas: backend fora do ar, OTEL_SDK_DISABLED=true, OTEL_EXPORTER_OTLP_ENDPOINT errado ou ausente, ou o otel-collector inacessível — confira o alerta do collector antes de culpar o backend."
         labels:
           severity: critical
+        notification_settings:
+          receiver: prontuai-email
 
       # Com o modelo de push o collector virou o único caminho das métricas do
       # backend: se ele cai, o alerta acima dispara junto e este aqui é o que
@@ -135,6 +160,8 @@ groups:
           description: "Sem o collector, nenhuma métrica do backend chega ao Prometheus. Verifique 'docker compose ps otel-collector' e os logs na stack de observabilidade."
         labels:
           severity: critical
+        notification_settings:
+          receiver: prontuai-email
 
 
       - uid: prontuai-job-backup-atrasado
@@ -177,6 +204,16 @@ groups:
           description: "O alerta e sobre a IDADE do ultimo sucesso, nao sobre erro: pega tambem timer que nao disparou, script travado ou maquina desligada — casos em que nenhum exit code e gerado. Veja: journalctl -u prontuai-db-backup.service -n 50. Sem dado significa que o job nunca reportou sucesso."
         labels:
           severity: critical
+        notification_settings:
+          receiver: prontuai-email
+          # Lembrete no ritmo do job (timer diario): repetir antes disso
+          # so reimprime o mesmo fato, porque nao houve nova chance de dar
+          # certo. Enquanto isso o alerta segue aceso na tela -- o silencio
+          # e da notificacao, nao do estado. Sem este campo a repeticao cai
+          # no padrao da org (de hora em hora), que rendeu 5 e-mails por hora.
+          # As regras de infra nao levam o campo de proposito: backend fora
+          # do ar deve insistir rapido.
+          repeat_interval: 24h
 
       - uid: prontuai-job-purga-atrasada
         title: Purga semanal sem sucesso ha mais de 9 dias
@@ -218,6 +255,16 @@ groups:
           description: "Janela de 9 dias da folga para uma execucao pulada pelo lock com o backup. Veja: journalctl -u prontuai-db-purge.service -n 50."
         labels:
           severity: warning
+        notification_settings:
+          receiver: prontuai-email
+          # Lembrete no ritmo do job (timer semanal (domingo)): repetir antes disso
+          # so reimprime o mesmo fato, porque nao houve nova chance de dar
+          # certo. Enquanto isso o alerta segue aceso na tela -- o silencio
+          # e da notificacao, nao do estado. Sem este campo a repeticao cai
+          # no padrao da org (de hora em hora), que rendeu 5 e-mails por hora.
+          # As regras de infra nao levam o campo de proposito: backend fora
+          # do ar deve insistir rapido.
+          repeat_interval: 7d
 
       - uid: prontuai-job-arquivamento-atrasado
         title: Arquivamento de documentos sem sucesso ha mais de 10 dias
@@ -259,6 +306,16 @@ groups:
           description: "Sem ele o disco da EC2 volta a encher: sao ~8 GB de documentos por mes. Veja: journalctl -u prontuai-archive-drive.service -n 50."
         labels:
           severity: warning
+        notification_settings:
+          receiver: prontuai-email
+          # Lembrete no ritmo do job (timer semanal (segunda)): repetir antes disso
+          # so reimprime o mesmo fato, porque nao houve nova chance de dar
+          # certo. Enquanto isso o alerta segue aceso na tela -- o silencio
+          # e da notificacao, nao do estado. Sem este campo a repeticao cai
+          # no padrao da org (de hora em hora), que rendeu 5 e-mails por hora.
+          # As regras de infra nao levam o campo de proposito: backend fora
+          # do ar deve insistir rapido.
+          repeat_interval: 7d
 
       - uid: prontuai-job-offload-backups-atrasado
         title: Offload dos backups para o Drive sem sucesso ha mais de 3 dias
@@ -300,6 +357,16 @@ groups:
           description: "O job e diario e sai com sucesso tambem quando o bucket esta abaixo do teto; 3 dias toleram execucoes puladas pelo lock. Sem ele o bucket passa do teto de 4 GB. Veja: journalctl -u prontuai-offload-backups.service -n 50."
         labels:
           severity: warning
+        notification_settings:
+          receiver: prontuai-email
+          # Lembrete no ritmo do job (timer diario): repetir antes disso
+          # so reimprime o mesmo fato, porque nao houve nova chance de dar
+          # certo. Enquanto isso o alerta segue aceso na tela -- o silencio
+          # e da notificacao, nao do estado. Sem este campo a repeticao cai
+          # no padrao da org (de hora em hora), que rendeu 5 e-mails por hora.
+          # As regras de infra nao levam o campo de proposito: backend fora
+          # do ar deve insistir rapido.
+          repeat_interval: 24h
 
       - uid: prontuai-job-com-falha
         title: Job de manutencao terminou com erro
@@ -341,6 +408,16 @@ groups:
           description: "Complementa os alertas de atraso: aqui o job rodou e falhou, entao o erro esta no journal da unit correspondente."
         labels:
           severity: warning
+        notification_settings:
+          receiver: prontuai-email
+          # Lembrete no ritmo do job (cobre jobs diarios): repetir antes disso
+          # so reimprime o mesmo fato, porque nao houve nova chance de dar
+          # certo. Enquanto isso o alerta segue aceso na tela -- o silencio
+          # e da notificacao, nao do estado. Sem este campo a repeticao cai
+          # no padrao da org (de hora em hora), que rendeu 5 e-mails por hora.
+          # As regras de infra nao levam o campo de proposito: backend fora
+          # do ar deve insistir rapido.
+          repeat_interval: 24h
 
       - uid: prontuai-db-down
         title: Postgres sem scrape (exporter ou banco fora do ar?)
@@ -382,6 +459,8 @@ groups:
           description: "prontuai-db-exporter ou o container prontuai-db podem estar fora do ar. Verifique docker-compose.db.yml na VPS."
         labels:
           severity: critical
+        notification_settings:
+          receiver: prontuai-email
 
       - uid: prontuai-5xx-rate
         title: Taxa de erros 5xx acima de 5%
@@ -423,6 +502,8 @@ groups:
           description: "Verifique logs no Loki e erros no Sentry."
         labels:
           severity: critical
+        notification_settings:
+          receiver: prontuai-email
 
       - uid: prontuai-ocr-lento
         title: OCR degradado (p95 > 5 min)
@@ -464,6 +545,8 @@ groups:
           description: "Possível fila no Textract ou uso do fallback Docling."
         labels:
           severity: warning
+        notification_settings:
+          receiver: prontuai-email
 
       - uid: prontuai-fallback-docling
         title: Fallback Docling ativado
@@ -505,6 +588,8 @@ groups:
           description: "Qualidade do OCR pode degradar. Verifique timeouts do Textract."
         labels:
           severity: warning
+        notification_settings:
+          receiver: prontuai-email
 
       - uid: prontuai-qualidade
         title: Qualidade de entrega degradada (score de confiança baixo)
@@ -546,6 +631,8 @@ groups:
           description: "Documentos sendo entregues com baixa qualidade (OCR ruim ou exames obrigatórios não encontrados). Verifique fallback Docling, clínicas com scans fora do padrão e a API externa."
         labels:
           severity: warning
+        notification_settings:
+          receiver: prontuai-email
 
       - uid: prontuai-disco
         title: Disco acima de 85%
@@ -587,6 +674,8 @@ groups:
           description: "Logs, resultados de OCR e volumes Docker podem estar crescendo. Limpe ou expanda o disco."
         labels:
           severity: warning
+        notification_settings:
+          receiver: prontuai-email
 
       - uid: prontuai-ram
         title: Memória acima de 90%
@@ -628,3 +717,5 @@ groups:
           description: "Risco de OOM kill do backend/OCR. Verifique consumo por container no dashboard."
         labels:
           severity: critical
+        notification_settings:
+          receiver: prontuai-email

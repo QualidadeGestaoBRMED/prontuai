@@ -83,7 +83,7 @@ const data = {
 };
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
-  const { isAdmin, isManagement, canCurateExams, canViewDashboard, role } = usePermissions();
+  const { isAdmin, isManagement, canCurateExams, canViewDashboard, roles } = usePermissions();
   const documentsRoutes = new Set(["/pendentes", "/historico", "/checagem"]);
   const handleDocumentsRefresh = (url?: string) => {
     if (!url || !documentsRoutes.has(url)) return;
@@ -96,9 +96,10 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   };
   const visibleItems = data.navMain[0]?.items.filter((item) => {
     if (isManagement) return true;
-    if (!role) return false;
+    if (!roles.length) return false;
     if (!item.roles || item.roles.length === 0) return true;
-    return item.roles.includes(role);
+    // Qualquer cargo serve: o CHECKER + SENDER vê Checagem E Anexar Prontuário.
+    return roles.some((r) => item.roles.includes(r));
   });
 
   return (

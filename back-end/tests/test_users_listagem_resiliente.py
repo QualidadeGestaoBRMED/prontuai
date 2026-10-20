@@ -16,10 +16,11 @@ from app.core.database_postgres import PostgresUserDatabase
 from app.models.user import User
 
 
-def linha(id, email="ok@grupobrmed.com.br", name="Alguém", role="CHECKER",
+def linha(id, email="ok@grupobrmed.com.br", name="Alguém", role="CHECKER", roles=None,
           created_at=SimpleNamespace(isoformat=lambda: "2026-01-01T00:00:00"), **kw):
+    # `roles=None` é a linha anterior à migration 012: o usuário fica com [role].
     return SimpleNamespace(
-        id=id, email=email, name=name, role=role, is_active=True, clinic_id=None,
+        id=id, email=email, name=name, role=role, roles=roles, is_active=True, clinic_id=None,
         created_at=created_at, updated_at=created_at, **kw
     )
 

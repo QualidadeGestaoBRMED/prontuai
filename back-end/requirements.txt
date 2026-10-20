@@ -34,7 +34,12 @@ google-auth>=2.29.0  # Autenticação Google
 google-auth-httplib2>=0.2.0  # Transporte HTTP para Google APIs
 
 # Database
-sqlalchemy>=2.0.0  # ORM para PostgreSQL
+# Teto em 2.1: opentelemetry-instrumentation-sqlalchemy declara
+# `sqlalchemy>=1.0.0,<2.1.0` e, fora dessa faixa, desiste em silencio — a app
+# sobe normal e as traces de banco somem. Checado em 16/10/2026: nem a versao
+# mais nova da instrumentacao (0.66b1) aceita a 2.1. Remova o teto quando ela
+# aceitar, nao antes.
+sqlalchemy>=2.0.0,<2.1.0  # ORM para PostgreSQL
 psycopg2-binary>=2.9.0  # PostgreSQL driver
 redis>=5.0.0  # Rate limit compartilhado entre instâncias (REDIS_URL)
 asyncpg>=0.29.0  # Async PostgreSQL driver (futuro)

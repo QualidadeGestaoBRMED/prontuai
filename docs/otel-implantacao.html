@@ -1,0 +1,646 @@
+<title>Implantação OpenTelemetry</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chivo:ital,wght@0,600;0,800;0,900;1,600&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;500;700&display=swap">
+
+<style>
+  :root {
+    --ground:        #F7F8FA;
+    --surface:       #FFFFFF;
+    --surface-sunk:  #EDF0F5;
+    --ink:           #161B22;
+    --ink-muted:     #59657A;
+    --ink-faint:     #8996A8;
+    --rule:          #DDE3EC;
+    --rule-strong:   #C3CCDA;
+    --accent:        #2E5AAC;
+    --accent-soft:   #E7EDF9;
+    --signal:        #9C6318;
+    --signal-soft:   #FBF0E0;
+    --signal-rule:   #E0BC85;
+    --verify:        #16665A;
+    --verify-soft:   #E2F0ED;
+
+    --f-display: "Chivo", "Helvetica Neue", Arial, sans-serif;
+    --f-body:    "Source Serif 4", Georgia, "Times New Roman", serif;
+    --f-mono:    "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+
+    --measure: 68ch;
+    --rail: 4.5rem;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground:        #0F131A;
+      --surface:       #161C25;
+      --surface-sunk:  #1D242F;
+      --ink:           #E7ECF3;
+      --ink-muted:     #9CAABD;
+      --ink-faint:     #6C7A8D;
+      --rule:          #28313E;
+      --rule-strong:   #3A4655;
+      --accent:        #8DB0EC;
+      --accent-soft:   #1B2637;
+      --signal:        #E0AC63;
+      --signal-soft:   #2A2113;
+      --signal-rule:   #6B5227;
+      --verify:        #6FC7B5;
+      --verify-soft:   #12251F;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground:        #0F131A;
+    --surface:       #161C25;
+    --surface-sunk:  #1D242F;
+    --ink:           #E7ECF3;
+    --ink-muted:     #9CAABD;
+    --ink-faint:     #6C7A8D;
+    --rule:          #28313E;
+    --rule-strong:   #3A4655;
+    --accent:        #8DB0EC;
+    --accent-soft:   #1B2637;
+    --signal:        #E0AC63;
+    --signal-soft:   #2A2113;
+    --signal-rule:   #6B5227;
+    --verify:        #6FC7B5;
+    --verify-soft:   #12251F;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--f-body);
+    font-size: 1.0625rem;
+    line-height: 1.68;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap { max-width: 78rem; margin: 0 auto; padding: 0 1.5rem 6rem; }
+
+  /* ---------- topbar ---------- */
+  .topbar {
+    display: flex; align-items: baseline; gap: .75rem; flex-wrap: wrap;
+    padding: 1.25rem 0; border-bottom: 1px solid var(--rule); margin-bottom: 3.5rem;
+  }
+  .topbar__mark {
+    font-family: var(--f-mono); font-size: .6875rem; font-weight: 700;
+    letter-spacing: .14em; text-transform: uppercase; color: var(--accent);
+  }
+  .topbar__meta {
+    font-family: var(--f-mono); font-size: .6875rem; letter-spacing: .06em;
+    color: var(--ink-faint); margin-left: auto;
+  }
+
+  /* ---------- masthead ---------- */
+  .masthead { max-width: var(--measure); margin-bottom: 4.5rem; }
+  .masthead h1 {
+    font-family: var(--f-display); font-weight: 900;
+    font-size: clamp(2.1rem, 5.4vw, 3.5rem); line-height: 1.02;
+    letter-spacing: -.022em; margin: 0 0 1.25rem; text-wrap: balance;
+  }
+  .masthead h1 em {
+    font-style: italic; font-weight: 600; color: var(--accent);
+  }
+  .lede { font-size: 1.1875rem; color: var(--ink-muted); margin: 0 0 1.5rem; }
+  .lede strong { color: var(--ink); font-weight: 600; }
+
+  .premise {
+    border-left: 3px solid var(--accent); padding: .125rem 0 .125rem 1.25rem;
+    font-size: 1.0625rem; color: var(--ink);
+  }
+  .premise b { font-family: var(--f-display); font-weight: 800; letter-spacing: -.005em; }
+
+  /* ---------- section headers ---------- */
+  .band {
+    display: flex; align-items: baseline; gap: 1rem;
+    margin: 0 0 2.5rem; padding-bottom: .625rem;
+    border-bottom: 2px solid var(--ink);
+  }
+  .band h2 {
+    font-family: var(--f-display); font-weight: 800; font-size: 1.25rem;
+    letter-spacing: -.01em; margin: 0; text-transform: none;
+  }
+  .band__count {
+    font-family: var(--f-mono); font-size: .6875rem; letter-spacing: .1em;
+    color: var(--ink-faint); margin-left: auto; text-transform: uppercase;
+  }
+
+  /* ---------- phases: numbered rail (real sequence) ---------- */
+  .phases { display: flex; flex-direction: column; gap: 2.75rem; margin-bottom: 5.5rem; }
+  .phase { display: grid; grid-template-columns: var(--rail) minmax(0, var(--measure)); gap: 1.75rem; }
+  .phase__num {
+    font-family: var(--f-mono); font-weight: 700; font-size: 1.5rem;
+    color: var(--accent); line-height: 1.1; padding-top: .2rem;
+    font-variant-numeric: tabular-nums; text-align: right;
+  }
+  .phase__num span { display: block; font-size: .625rem; font-weight: 500;
+    letter-spacing: .12em; color: var(--ink-faint); text-transform: uppercase; margin-top: .35rem; }
+  .phase__body > :first-child { margin-top: 0; }
+  .phase h3 {
+    font-family: var(--f-display); font-weight: 800; font-size: 1.375rem;
+    letter-spacing: -.014em; line-height: 1.22; margin: 0 0 .75rem; text-wrap: balance;
+  }
+  .phase p { margin: 0 0 .9rem; }
+  .phase ul { margin: 0 0 .9rem; padding-left: 1.1rem; }
+  .phase li { margin-bottom: .5rem; }
+  .phase li::marker { color: var(--rule-strong); }
+
+  code {
+    font-family: var(--f-mono); font-size: .84em;
+    background: var(--surface-sunk); color: var(--ink);
+    padding: .1em .34em; border-radius: 3px;
+    overflow-wrap: anywhere;
+  }
+
+  /* ---------- env contract table ---------- */
+  .tablewrap { overflow-x: auto; margin: 0 0 1rem; border: 1px solid var(--rule); border-radius: 4px; background: var(--surface); }
+  table { border-collapse: collapse; width: 100%; font-size: .9375rem; }
+  caption {
+    caption-side: top; text-align: left; padding: .75rem 1rem .25rem;
+    font-family: var(--f-mono); font-size: .6875rem; letter-spacing: .1em;
+    text-transform: uppercase; color: var(--ink-faint);
+  }
+  th, td { text-align: left; padding: .6rem 1rem; border-bottom: 1px solid var(--rule); vertical-align: top; }
+  thead th {
+    font-family: var(--f-display); font-weight: 700; font-size: .75rem;
+    letter-spacing: .06em; text-transform: uppercase; color: var(--ink-muted);
+    background: var(--surface-sunk);
+  }
+  tbody tr:last-child td { border-bottom: 0; }
+  td code { background: transparent; padding: 0; color: var(--accent); font-size: .8125rem; }
+
+  .split { display: grid; gap: 1.25rem; grid-template-columns: 1fr; }
+  @media (min-width: 52rem) { .split { grid-template-columns: 1fr 1fr; } }
+  .halfcard {
+    border: 1px solid var(--rule); border-radius: 4px; padding: 1.1rem 1.25rem;
+    background: var(--surface);
+  }
+  .halfcard h4 {
+    font-family: var(--f-mono); font-size: .6875rem; letter-spacing: .1em;
+    text-transform: uppercase; margin: 0 0 .6rem; color: var(--ink-muted);
+  }
+  .halfcard ul { margin: 0; padding-left: 1.05rem; font-size: .9375rem; }
+  .halfcard li { margin-bottom: .4rem; }
+  .halfcard--yes { border-left: 3px solid var(--verify); }
+  .halfcard--no  { border-left: 3px solid var(--signal); }
+
+  /* ---------- traps: a set, not a sequence — no numbering as decoration ---------- */
+  .traps { display: flex; flex-direction: column; gap: 1.25rem; }
+  .trap {
+    display: grid; grid-template-columns: minmax(0,1fr); gap: .75rem;
+    background: var(--surface); border: 1px solid var(--rule);
+    border-left: 3px solid var(--signal-rule); border-radius: 4px;
+    padding: 1.25rem 1.4rem;
+  }
+  .trap__head { display: flex; align-items: baseline; gap: .75rem; flex-wrap: wrap; }
+  .trap__id {
+    font-family: var(--f-mono); font-size: .75rem; font-weight: 700;
+    color: var(--signal); font-variant-numeric: tabular-nums;
+  }
+  .trap__title {
+    font-family: var(--f-display); font-weight: 800; font-size: 1.0625rem;
+    letter-spacing: -.008em; margin: 0; flex: 1 1 18rem; text-wrap: balance;
+  }
+  .trap p { margin: 0; font-size: .9375rem; color: var(--ink); }
+  .trap p + p { margin-top: .6rem; }
+  .measured {
+    align-self: start; display: inline-flex; align-items: baseline; gap: .4rem;
+    background: var(--verify-soft); color: var(--verify);
+    border: 1px solid color-mix(in srgb, var(--verify) 28%, transparent);
+    border-radius: 999px; padding: .22rem .7rem;
+    font-family: var(--f-mono); font-size: .6875rem; font-weight: 500; letter-spacing: .03em;
+    white-space: nowrap;
+  }
+  .measured b { font-weight: 700; }
+
+  /* ---------- closing sequence ---------- */
+  .rollout { counter-reset: step; display: flex; flex-direction: column; gap: .85rem;
+    max-width: var(--measure); list-style: none; margin: 0; padding: 0; }
+  .rollout li {
+    counter-increment: step; display: grid; grid-template-columns: 1.75rem 1fr; gap: .9rem;
+    align-items: baseline; font-size: 1rem;
+  }
+  .rollout li::before {
+    content: counter(step); font-family: var(--f-mono); font-weight: 700; font-size: .8125rem;
+    color: var(--accent); background: var(--accent-soft);
+    width: 1.75rem; height: 1.75rem; border-radius: 50%;
+    display: grid; place-items: center; font-variant-numeric: tabular-nums;
+  }
+
+  footer {
+    margin-top: 5rem; padding-top: 1.25rem; border-top: 1px solid var(--rule);
+    font-family: var(--f-mono); font-size: .75rem; color: var(--ink-faint);
+    max-width: var(--measure);
+  }
+
+  a { color: var(--accent); }
+  a:focus-visible, [tabindex]:focus-visible {
+    outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px;
+  }
+
+  @media (max-width: 46rem) {
+    .phase { grid-template-columns: minmax(0,1fr); gap: .5rem; }
+    .phase__num { text-align: left; display: flex; align-items: baseline; gap: .6rem; padding-top: 0; }
+    .phase__num span { margin-top: 0; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    * { animation: none !important; transition: none !important; }
+  }
+</style>
+
+<div class="wrap">
+
+  <div class="topbar">
+    <span class="topbar__mark">Implantação OpenTelemetry</span>
+    <span class="topbar__meta">método · 8 fases · 12 armadilhas</span>
+  </div>
+
+  <header class="masthead">
+    <h1>Como introduzir OpenTelemetry <em>medindo antes de escrever</em></h1>
+    <p class="lede">Um método para instrumentar um serviço Python que exporta telemetria
+    para um coletor compartilhado. A ordem das fases importa: cada uma depende de fatos
+    que a anterior levanta.</p>
+    <p class="premise"><b>A premissa.</b> Quase toda decisão aqui parece óbvia até você
+    observar o que o SDK e o coletor realmente emitem. As doze armadilhas do fim deste
+    documento foram todas encontradas medindo — e cada uma delas passaria silenciosa
+    numa revisão de código.</p>
+  </header>
+
+  <section>
+    <div class="band">
+      <h2>As fases</h2>
+      <span class="band__count">na ordem</span>
+    </div>
+
+    <div class="phases">
+
+      <article class="phase">
+        <div class="phase__num">00<span>fatos</span></div>
+        <div class="phase__body">
+          <h3>Levante os fatos do destino</h3>
+          <p>Não escreva uma linha de configuração antes de saber para onde a telemetria
+          vai. Cada versão habilita ou proíbe um caminho inteiro.</p>
+          <ul>
+            <li><b>Versão do coletor.</b> Opções e componentes mudam entre minors, e
+            componentes são depreciados e removidos. Valide a config contra a versão
+            exata de produção.</li>
+            <li><b>Versão do Prometheus.</b> 3.x aceita OTLP nativo; 2.x só faz scrape.
+            Decide se o coletor empurra métricas ou as expõe — e muda o desenho dos rótulos.</li>
+            <li><b>Versão do Loki.</b> 3.x ingere OTLP; 2.x não. Decide se os logs viajam
+            no mesmo canal ou precisam de caminho próprio.</li>
+            <li><b>Existe backend de traces?</b> Sem ele, exportar spans é gastar CPU para
+            o coletor descartar.</li>
+            <li><b>Topologia e autenticação.</b> Coletor remoto exige token e TLS:
+            telemetria carrega nome de rota, identificadores e atributos de negócio no payload.</li>
+            <li><b>O que já vem de scrape local.</b> Métricas de host, container e banco não
+            têm como sair por OTLP sozinhas — alguém precisa decidir o destino delas.</li>
+          </ul>
+        </div>
+      </article>
+
+      <article class="phase">
+        <div class="phase__num">01<span>identidade</span></div>
+        <div class="phase__body">
+          <h3>Defina a identidade do serviço</h3>
+          <p>Três atributos de resource, e um que você deve deixar de fora.</p>
+          <ul>
+            <li><code>service.name</code> é a identidade. No caminho de scrape ele vira o
+            rótulo <code>job</code> das métricas <em>e</em> o label <code>job</code> dos
+            streams de log. Trocar depois quebra todo painel e todo alerta.</li>
+            <li><code>service.instance.id</code> precisa ser único <b>por processo</b>, não
+            por máquina. Com múltiplos workers, o mesmo valor faz as séries colidirem numa
+            só e os números oscilarem.</li>
+            <li><code>service.version</code> e <code>deployment.environment.name</code>
+            entram livremente: não afetam rótulo, vão para <code>target_info</code>.</li>
+            <li><code>service.namespace</code> — não defina. Ver armadilha 03.</li>
+          </ul>
+        </div>
+      </article>
+
+      <article class="phase">
+        <div class="phase__num">02<span>config</span></div>
+        <div class="phase__body">
+          <h3>Configure por variável de ambiente, não por parâmetro</h3>
+          <p>Quase toda a configuração do SDK é feita por env var, e isso é intencional:
+          permite mudar comportamento sem tocar em código. Prefira sempre a variável padrão
+          ao parâmetro.</p>
+          <div class="split">
+            <div class="halfcard halfcard--yes">
+              <h4>O SDK honra sozinho</h4>
+              <ul>
+                <li>identidade e resource</li>
+                <li>endpoint, protocolo, headers, compressão, timeout</li>
+                <li>sampler e seus argumentos</li>
+                <li>intervalo de exportação</li>
+                <li>batching e limites de atributo</li>
+                <li>rotas excluídas da instrumentação</li>
+                <li>o kill switch global</li>
+              </ul>
+            </div>
+            <div class="halfcard halfcard--no">
+              <h4>Você precisa checar no código</h4>
+              <ul>
+                <li>exporter por sinal — ler e decidir se monta cada pipeline</li>
+                <li>lista de instrumentações desabilitadas</li>
+                <li>correlação de log (ver armadilha 09 antes de usar)</li>
+              </ul>
+              <p style="margin:.7rem 0 0;font-size:.875rem;color:var(--ink-muted)">Essas só
+              são honradas pelo caminho da auto-instrumentação.</p>
+            </div>
+          </div>
+          <p style="margin-top:1.1rem">Cuidado com o endpoint: a variável geral é a
+          <b>base</b>, sem o caminho do sinal. As variantes por sinal exigem o caminho
+          <b>completo</b>. Misturar as duas formas dá 404 silencioso.</p>
+        </div>
+      </article>
+
+      <article class="phase">
+        <div class="phase__num">03<span>medição</span></div>
+        <div class="phase__body">
+          <h3>Meça o que o SDK emite</h3>
+          <p>Antes de escrever config de coletor, query de painel ou regra de alerta,
+          observe o que sai de verdade. Um script curto com um reader em memória responde:</p>
+          <ul>
+            <li>o <b>nome exato</b> do instrumento e sua <b>unidade</b>;</li>
+            <li><b>quais atributos</b> ele carrega — é aqui que a cardinalidade se decide;</li>
+            <li><b>quais buckets</b> um histograma usa.</li>
+          </ul>
+          <p>Depois meça o <b>round-trip completo</b>: empurre por OTLP para o coletor real,
+          na versão real, e compare o que sai com o que entrou. Nomes ganham e perdem
+          sufixos nessa travessia, e escopos podem colidir.</p>
+          <p>Rode o mesmo teste na <b>versão mínima</b> que você declarar na dependência. O
+          comportamento não é estável entre versões — a armadilha 04 é exatamente isso.</p>
+        </div>
+      </article>
+
+      <article class="phase">
+        <div class="phase__num">04<span>cardinalidade</span></div>
+        <div class="phase__body">
+          <h3>Trate cardinalidade como orçamento</h3>
+          <p>O jeito mais rápido de derrubar um Prometheus é colocar um identificador em
+          atributo de métrica. Vale para os três sinais, com efeitos diferentes: séries no
+          Prometheus, streams no Loki, agregações inúteis nas traces.</p>
+          <ul>
+            <li>Ligue o <b>opt-in de semconv</b> da instrumentação HTTP. Sem ele o rótulo
+            costuma ser o caminho cru da URL — uma série nova por recurso.</li>
+            <li>Rotule por <b>template de rota</b>, nunca por caminho concreto.</li>
+            <li>Atributos de negócio só entram se forem <b>limitados por natureza</b>:
+            dezenas de valores, não milhares. Papel de usuário, sim; e-mail, nunca.</li>
+            <li>No Loki, <b>nunca</b> promova a label identificador de requisição,
+            <code>trace_id</code> ou <code>service.instance.id</code>. Continuam filtráveis
+            em structured metadata.</li>
+          </ul>
+        </div>
+      </article>
+
+      <article class="phase">
+        <div class="phase__num">05<span>views</span></div>
+        <div class="phase__body">
+          <h3>Use Views para o que o default erra</h3>
+          <p>Duas situações pedem View explícita.</p>
+          <ul>
+            <li><b>Buckets de histograma.</b> O default do SDK é largo e genérico, inútil
+            para duração em segundos. Declare os limites que o seu domínio exige — e declare
+            também para os histogramas da instrumentação, não só para os seus.</li>
+            <li><b>Colisão entre escopos.</b> Duas instrumentações podem emitir o mesmo nome
+            com os mesmos atributos. Restrinja a View por escopo e descarte o que não
+            interessa. Atenção: quando duas Views casam com o mesmo instrumento, <b>as duas
+            se aplicam</b> — restringir uma exige restringir a outra.</li>
+          </ul>
+        </div>
+      </article>
+
+      <article class="phase">
+        <div class="phase__num">06<span>correlação</span></div>
+        <div class="phase__body">
+          <h3>Correlacione logs com traces</h3>
+          <p>O ganho concreto da adoção é pular de um trace para as linhas de log daquela
+          requisição. Para isso:</p>
+          <ul>
+            <li>Registre o <b>provider de traces mesmo sem exportar traces</b>. Sem provider,
+            o span corrente é inválido e nenhum <code>trace_id</code> aparece nos logs.</li>
+            <li>Use amostragem <b>integral</b> enquanto o volume permitir. Com 10%, nove de
+            cada dez <code>trace_id</code> nos logs apontariam para traces que nunca foram
+            gravadas.</li>
+            <li>Injete o contexto da requisição <b>no LogRecord</b>, não só no formatter
+            (armadilha 10).</li>
+            <li>Decida os <b>dois caminhos de log</b> conscientemente: o arquivo local é a
+            fonte operacional e pega log de crash; o OTLP é o caminho correlacionado. Manter
+            os dois é a recomendação — mas então nada deve ficar <em>lendo</em> o arquivo, e
+            o arquivo precisa de rotação.</li>
+          </ul>
+        </div>
+      </article>
+
+      <article class="phase">
+        <div class="phase__num">07<span>fork</span></div>
+        <div class="phase__body">
+          <h3>Verifique segurança de fork</h3>
+          <p>O processador em lote sobe uma thread com lock. Num <code>fork()</code>, o filho
+          herda a memória — inclusive o lock, possivelmente travado — mas não a thread.
+          Resultado: deadlock ou exportação silenciosamente morta no worker.</p>
+          <p>Se o servidor de aplicação carrega o app <b>dentro de cada worker, depois do
+          fork</b> (o padrão quando não há pré-carregamento), inicializar no import é seguro.
+          Documente essa dependência no código: ligar o pré-carregamento depois, por economia
+          de memória, quebra a telemetria sem erro visível.</p>
+          <p>A alternativa que elimina a classe do problema: um worker por container, e
+          escale por réplicas.</p>
+        </div>
+      </article>
+
+      <article class="phase">
+        <div class="phase__num">08<span>validação</span></div>
+        <div class="phase__body">
+          <h3>Valide contra a stack real</h3>
+          <p>Config que valida não é config que funciona. Suba coletor e backends nas versões
+          reais, gere carga e verifique:</p>
+          <ul>
+            <li><b>todas</b> as queries de painel e alerta rodam e retornam dados — não uma
+            amostra, todas;</li>
+            <li>os valores fazem sentido: uma taxa de erro conhecida bate com a esperada;</li>
+            <li>a cardinalidade é a prevista — N requisições com identificadores distintos
+            produzem quantas séries?</li>
+            <li>os rótulos sobreviveram à travessia;</li>
+            <li><b>quanto tempo leva</b> para o sistema perceber que o app caiu. Meça, não
+            presuma: essa é a armadilha 01.</li>
+          </ul>
+        </div>
+      </article>
+
+    </div>
+  </section>
+
+  <section>
+    <div class="band">
+      <h2>As doze armadilhas</h2>
+      <span class="band__count">nenhuma emite erro</span>
+    </div>
+
+    <div class="traps">
+
+      <article class="trap">
+        <div class="trap__head">
+          <span class="trap__id">01</span>
+          <h3 class="trap__title">Timestamp explícito desliga o tratamento de staleness</h3>
+        </div>
+        <p>Com timestamps na exposição, o Prometheus não marca séries ausentes: quando o app
+        cai, ele segue devolvendo o último valor por até 5 minutos, e o alerta de queda nunca
+        dispara. O custo de desligar é o instante virar o do scrape em vez do da medição —
+        desvio de um intervalo de exportação.</p>
+        <span class="measured">medido · série ausente em <b>105s</b></span>
+      </article>
+
+      <article class="trap">
+        <div class="trap__head">
+          <span class="trap__id">02</span>
+          <h3 class="trap__title">Sem <code>honor_labels</code>, o <code>job</code> do coletor é sobrescrito</h3>
+        </div>
+        <p>O coletor rotula cada série com o <code>job</code> vindo do
+        <code>service.name</code> do app. O Prometheus, por padrão, renomeia rótulos
+        conflitantes para <code>exported_job</code> e impõe o <code>job</code> do scrape
+        config. Num coletor compartilhado, isso colapsa projetos diferentes num
+        <code>job</code> só.</p>
+      </article>
+
+      <article class="trap">
+        <div class="trap__head">
+          <span class="trap__id">03</span>
+          <h3 class="trap__title"><code>service.namespace</code> reescreve o <code>job</code></h3>
+        </div>
+        <p>O exporter Prometheus do coletor monta o rótulo como
+        <code>&lt;namespace&gt;/&lt;name&gt;</code>. Definir namespace transforma
+        <code>job="meu-servico"</code> em <code>job="ns/meu-servico"</code> e nenhum seletor
+        encontra as séries. No caminho OTLP nativo do Prometheus 3.x o namespace viraria um
+        label próprio — o comportamento depende do caminho.</p>
+      </article>
+
+      <article class="trap">
+        <div class="trap__head">
+          <span class="trap__id">04</span>
+          <h3 class="trap__title">Buckets recomendados pelo semconv são ignorados por SDKs mais antigos</h3>
+        </div>
+        <p>Numa versão mais nova, o histograma de latência HTTP nasce com limites de 0,005 a
+        10 s. Numa mais antiga, cai nos limites default do SDK — para um histograma em
+        <b>segundos</b>, isso joga todo o tráfego no primeiro bucket e zera o p95. Declarar a
+        View deixa o resultado igual em qualquer versão.</p>
+        <span class="measured">medido · default <b>0–10000</b> em métrica de segundos</span>
+      </article>
+
+      <article class="trap">
+        <div class="trap__head">
+          <span class="trap__id">05</span>
+          <h3 class="trap__title">Sem o opt-in de semconv, o rótulo é o caminho cru</h3>
+        </div>
+        <p>A instrumentação passa a usar o caminho concreto em vez do template da rota: uma
+        série nova por recurso acessado.</p>
+        <span class="measured">medido · 9 mil requisições → <b>2 séries</b></span>
+      </article>
+
+      <article class="trap">
+        <div class="trap__head">
+          <span class="trap__id">06</span>
+          <h3 class="trap__title">Dois escopos com a mesma métrica perdem metade das amostras</h3>
+        </div>
+        <p>Duas instrumentações de cliente HTTP emitem o mesmo nome com os mesmos atributos,
+        em escopos diferentes. O SDK mantém os dois separados; o exporter Prometheus achata o
+        escopo, as séries ficam idênticas e uma sobrescreve a outra. Nem habilitar
+        OpenMetrics preserva o escopo.</p>
+        <span class="measured">medido · 40 chamadas → <b>20 registradas</b></span>
+      </article>
+
+      <article class="trap">
+        <div class="trap__head">
+          <span class="trap__id">07</span>
+          <h3 class="trap__title"><code>service.instance.id</code> como label do Loki cria um stream por deploy</h3>
+        </div>
+        <p>O exporter promove esse atributo a label. Com o valor sendo
+        <code>&lt;host&gt;-&lt;pid&gt;</code>, cada restart e cada worker gera um stream novo.
+        Remova o atributo <b>apenas no pipeline de logs</b> — nas métricas ele é necessário
+        para os workers não colidirem.</p>
+        <span class="measured">medido · <b>1 stream</b> indexado após a correção</span>
+      </article>
+
+      <article class="trap">
+        <div class="trap__head">
+          <span class="trap__id">08</span>
+          <h3 class="trap__title">O instrumentor de logging não injeta nada por padrão</h3>
+        </div>
+        <p>Chamar <code>instrument()</code> roda sem erro e não faz nada. A injeção depende de
+        um parâmetro explícito de contexto de trace, cujo nome não é óbvio. Confira lendo o
+        código da versão instalada, não a documentação.</p>
+      </article>
+
+      <article class="trap">
+        <div class="trap__head">
+          <span class="trap__id">09</span>
+          <h3 class="trap__title">A variável de correlação de log destrói o seu formatter</h3>
+        </div>
+        <p>O atalho que "liga a correlação" também chama a configuração básica de logging e
+        substitui os handlers já montados. Se você tem formato JSON estruturado, passe
+        explicitamente o parâmetro que desliga esse comportamento — assim a variável de
+        ambiente deixa de ser capaz de quebrar o formato.</p>
+      </article>
+
+      <article class="trap">
+        <div class="trap__head">
+          <span class="trap__id">10</span>
+          <h3 class="trap__title">Contexto em contextvars não chega ao caminho OTLP</h3>
+        </div>
+        <p>Se o seu formatter lê o contexto da requisição direto dos contextvars, o handler
+        OTLP não o vê: ele só enxerga o que está no LogRecord. Os logs chegam ao backend sem
+        identificador de requisição e sem usuário — justamente os campos pelos quais se
+        investiga.</p>
+        <p>Instale uma fábrica de LogRecord que copie o contexto para dentro do record,
+        encadeando com a fábrica anterior para conviver com a do instrumentor.</p>
+      </article>
+
+      <article class="trap">
+        <div class="trap__head">
+          <span class="trap__id">11</span>
+          <h3 class="trap__title">A variável de exporter de logs sem provider é decorativa</h3>
+        </div>
+        <p>A variável existe no padrão, mas se o código não monta o provider de logs ela não
+        tem efeito nenhum. Alguém vai trocá-la para <code>otlp</code> e esperar log fluir.
+        Documente, ou implemente.</p>
+      </article>
+
+      <article class="trap">
+        <div class="trap__head">
+          <span class="trap__id">12</span>
+          <h3 class="trap__title">Handler de arquivo sem rotação cresce para sempre</h3>
+        </div>
+        <p>Não é uma armadilha de OTel, mas aparece na mesma investigação: um handler de
+        arquivo simples não rotaciona nada. O arquivo chega a dezenas ou centenas de MB, e um
+        coletor de logs seguindo esse arquivo é o que pesa na máquina. Se você tirar o leitor,
+        o arquivo continua crescendo; se mantiver, ele continua pesando. Rotação resolve os
+        dois.</p>
+      </article>
+
+    </div>
+  </section>
+
+  <section style="margin-top:5.5rem">
+    <div class="band">
+      <h2>Ordem de subida</h2>
+      <span class="band__count">sequência</span>
+    </div>
+    <ol class="rollout">
+      <li>Backends e coletor no destino, com o segredo de autenticação criado.</li>
+      <li>Configuração do app, com o kill switch desligado — a telemetria só liga quando o
+      endpoint estiver definido.</li>
+      <li>Rebuild da imagem: as dependências mudaram.</li>
+      <li>Um sinal de heartbeat sempre presente confirma que o caminho funciona antes de você
+      depender de qualquer painel. Se ele não aparecer, o log de inicialização da telemetria
+      deve dizer por que ela desistiu — projete essas mensagens.</li>
+    </ol>
+  </section>
+
+  <footer>
+    Método derivado de uma implantação real · o par em prosa deste documento está em
+    <code>docs/otel-implantacao-prompt.md</code>
+  </footer>
+
+</div>

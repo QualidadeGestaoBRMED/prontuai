@@ -20,6 +20,11 @@ _SQL_PATH = os.path.join(
 )
 
 
+# O WHEN de palavras-chave da regra formal. O parecer do modal também leva a
+# 'regra_formal', antes dele; os testes de ordem falam deste.
+_REGEX_FORMAL = "WHEN j.motivo ~ ('cortad"
+
+
 @pytest.fixture(scope="module")
 def sql() -> str:
     with open(_SQL_PATH, encoding="utf-8") as arquivo:
@@ -62,7 +67,7 @@ def test_exame_nomeado_decide_antes_da_regra_formal(bloco_motivado: str):
     nos dois lados; quem vier primeiro no CASE vence.
     """
     ramo = bloco_motivado[bloco_motivado.index("humano_status = 'rejected' THEN"):]
-    assert ramo.index("falta_exame_nomeado") < ramo.index("'regra_formal'")
+    assert ramo.index("falta_exame_nomeado") < ramo.index(_REGEX_FORMAL)
 
 
 def test_palavra_de_falta_sozinha_nao_promove_a_exame(bloco_motivado: str):
@@ -75,7 +80,7 @@ def test_palavra_de_falta_sozinha_nao_promove_a_exame(bloco_motivado: str):
     """
     ramo = bloco_motivado[bloco_motivado.index("humano_status = 'rejected' THEN"):]
     regex_ampla = ramo.index("|somente|apenas|nao enviou")
-    assert ramo.index("'regra_formal'") < regex_ampla
+    assert ramo.index(_REGEX_FORMAL) < regex_ampla
 
 
 def test_proximidade_exige_trecho_limpo_de_substantivo_formal(sql: str):
@@ -103,12 +108,13 @@ def test_parecer_medico_nao_conta_como_exame(bloco_motivado: str):
 
 
 def test_reconhecimento_casa_por_radical(bloco_motivado: str):
-    """O revisor escreve "não reconhece", "não reconheu", "não identifou".
+    """O revisor escreve "não reconhece", "não reconheu", "não identifou",
+    "não identuificou".
 
     O regex antigo exigia a forma exata ("reconheceu", "identificou") e perdia
     as variantes, que caíam em "Outros motivos".
     """
-    assert "nao (reconhe|identif|" in bloco_motivado
+    assert "nao (reconhe|ident|" in bloco_motivado
     assert "nomecla" in bloco_motivado  # "nomeclatura", sem o segundo N
 
 
@@ -144,3 +150,42 @@ def test_motivo_externo_do_parecer_decide_antes_das_palavras_chave(sql: str):
     )
     # LEFT, e não INNER: documento sem parecer continua no julgamento.
     assert "LEFT JOIN document_feedbacks fb ON fb.document_id = d.id" in bloco
+
+
+def test_parecer_do_modal_decide_antes_do_texto(bloco_motivado: str):
+    """No "Errou" de uma liberação o front não grava texto nenhum.
+
+    Lendo só o texto, os 6 pareceres de 19/10/2026 que diziam "estava no
+    documento" caíam em "Revisor não informou a causa", justamente quando a
+    causa foi dita exame por exame. O parecer vem antes, nos dois ramos.
+    """
+    rejeitou = bloco_motivado[bloco_motivado.index("humano_status = 'rejected' THEN"):
+                              bloco_motivado.index("humano_status = 'validated' THEN")]
+    assert rejeitou.index("parecer_nao_estava THEN 'exame_nao_detectado'") < rejeitou.index("'sem_justificativa'")
+    assert rejeitou.index("parecer_formal THEN 'regra_formal'") < rejeitou.index("'sem_justificativa'")
+    liberou = bloco_motivado[bloco_motivado.index("humano_status = 'validated' THEN"):]
+    assert liberou.index("parecer_estava THEN 'matching_ia'") < liberou.index("'sem_justificativa'")
+
+
+def test_categorias_do_parecer_existem_no_modelo(sql: str):
+    """Código digitado errado no SQL some em silêncio: o bool_or só dá falso."""
+    from app.models.feedback import CATEGORIAS_DOCUMENTO, CATEGORIAS_EXAME
+
+    inicio = sql.index("julgamento AS (")
+    bloco = sql[inicio:sql.index("motivado AS (", inicio)]
+    citados = set(re.findall(r"'([A-Z][A-Z_]+)'", bloco))
+    assert citados, "a leitura do parecer sumiu do julgamento"
+    assert citados <= CATEGORIAS_EXAME | CATEGORIAS_DOCUMENTO, citados - (CATEGORIAS_EXAME | CATEGORIAS_DOCUMENTO)
+
+
+def test_documento_exigido_pela_empresa_e_regra_formal(bloco_motivado: str):
+    """"faltando kit vix" e "faltando aso com o decreto" não são exame da grade.
+
+    Caíam em exame faltante pela palavra de falta. Medido no histórico inteiro:
+    a mudança move 19 linhas de categoria, todas conferidas pelo texto.
+    """
+    ramo = bloco_motivado[bloco_motivado.index("humano_status = 'rejected' THEN"):]
+    inicio = ramo.index(_REGEX_FORMAL)
+    formal = ramo[inicio:ramo.index("THEN 'regra_formal'", inicio)]
+    for termo in ("\\mkit\\M", "decreto", "digitaliz", "\\mnrs?\\M"):
+        assert termo in formal, termo

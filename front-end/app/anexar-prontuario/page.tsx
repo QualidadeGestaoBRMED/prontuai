@@ -55,7 +55,10 @@ function PageContent() {
     process.env.NEXT_PUBLIC_DEV_AUTH_BYPASS === "true"
   const searchParams = useSearchParams()
   const router = useRouter()
-  const { isReadOnly } = usePermissions()
+  // Só lê quem não tem cargo que envia: o CURATOR, sozinho ou junto de um
+  // CHECKER. Com SENDER na lista, envia.
+  const { canSendDocuments } = usePermissions()
+  const isReadOnly = !canSendDocuments
   const autoOpenUpload = searchParams.get("reenviar") === "1" && !isReadOnly
   const initialSearch =
     searchParams.get("filename") || searchParams.get("cpf") || undefined

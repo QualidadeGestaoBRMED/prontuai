@@ -412,8 +412,12 @@ def _exigir_papel(
 
     Centraliza o que estava repetido em nove guardas `require_*`, todas
     levantando 403 em silêncio. Ver `_registrar_recusa`.
+
+    Basta UM dos cargos do usuário estar entre os permitidos. Olhar só o papel
+    principal barraria quem acumula: o MANAGER + CURATOR no catálogo (o
+    principal é MANAGER, que não entra lá) e o CHECKER + SENDER no envio.
     """
-    if current_user.role in permitidos:
+    if current_user.tem_papel(*permitidos):
         return current_user
     _registrar_recusa(
         request,
@@ -421,6 +425,7 @@ def _exigir_papel(
         "papel_sem_permissao",
         email=current_user.email,
         papel=current_user.role.value,
+        papeis=[p.value for p in current_user.roles],
         papeis_exigidos=[p.value for p in permitidos],
         rota=request.url.path if request is not None else None,
     )
@@ -585,7 +590,9 @@ async def require_document_reader(
 
 # Quem vê o dashboard de indicadores. Lista única: o front espelha esta mesma
 # regra em `usePermissions.canViewDashboard`, e as duas precisam andar juntas.
-DASHBOARD_ROLES = (UserRole.ADMIN, UserRole.MANAGER)
+# VIEWER é o cargo que existe só para isto — somado a outro (ex.: CHECKER +
+# VIEWER), dá os indicadores sem dar a gestão.
+DASHBOARD_ROLES = (UserRole.ADMIN, UserRole.MANAGER, UserRole.VIEWER)
 
 
 async def require_dashboard(
@@ -595,10 +602,10 @@ async def require_dashboard(
     """
     Requer um papel com acesso ao dashboard de indicadores.
 
-    Hoje a lista é a mesma de `require_management` (ADMIN e MANAGER), mas a
-    guarda é própria de propósito: quem vê os indicadores já mudou duas vezes
-    sem que a gestão administrativa mudasse junto, e com esta separação a troca
-    é uma linha em `DASHBOARD_ROLES`.
+    A guarda é própria, e não `require_management`, de propósito: quem vê os
+    indicadores já mudou três vezes sem que a gestão administrativa mudasse
+    junto (a última trouxe de volta o VIEWER), e com esta separação a troca é
+    uma linha em `DASHBOARD_ROLES`.
     """
     return _exigir_papel(
         request, current_user, DASHBOARD_ROLES,

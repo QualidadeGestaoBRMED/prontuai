@@ -86,7 +86,8 @@ export const ABAS: { id: Aba; label: string }[] = [
 // ── textos de apoio ──────────────────────────────────────────────────────────
 const TIPS_KPI: Record<string, string> = {
   "Documentos enviados": "Prontuários recebidos pela plataforma no período.",
-  "Documentos revisados": "Já com decisão humana: aprovados ou rejeitados por um revisor.",
+  "Documentos revisados":
+    "Aprovados ou rejeitados por uma pessoa do time BR MED (checador, gestor ou administrador). A decisão automática da IA não conta.",
   "Expedições via ProntuAI":
     "Pedidos atendidos nas credenciadas que tiveram o prontuário processado pelo ProntuAI, ligados pelo número do pedido no BRNET. Meta: 100%.",
 };
@@ -100,35 +101,407 @@ const TIPS_ACC: Record<string, string> = {
     "A IA liberou e o revisor barrou. É o erro com consequência: sem revisão, o documento teria passado.",
   "Falhas técnicas":
     "A IA não conseguiu ler o CPF/CNPJ ou achar o paciente. Não é julgamento, por isso fica fora da acurácia.",
+  "Acurácia por exame":
+    "Do parecer do revisor no modal de feedback: exame a exame, onde a IA errou. Clique no número para ver por exame.",
 };
 
-export const AJUDA_ACURACIA = [
-  {
-    titulo: "Como a IA decide",
-    texto:
-      "A IA faz uma coisa só: confere se o prontuário tem todos os exames que a grade exige. A partir disso ela dá um de dois vereditos — aprova (libera o documento) ou rejeita (aponta o que falta e manda para a fila Pendentes, onde um checador decide).",
+/**
+ * O processo por trás de cada indicador, aberto pelo "?" do card.
+ *
+ * Existe para a resposta estar na tela quando alguém pergunta numa reunião
+ * "isso conta o quê?". Por isso cada entrada diz o que entra, o que fica de
+ * fora e em que período o número cai — as três perguntas que de fato aparecem —,
+ * em vez de descrever a consulta.
+ *
+ * Um card que reaproveita a conta de outro aponta para a mesma entrada (o
+ * gráfico de cobertura e o KPI de expedições, por exemplo): duas explicações do
+ * mesmo número acabariam divergindo.
+ *
+ * Ao mudar uma regra em `dashboard_indicadores.sql`, em `dashboard_service.py`
+ * ou neste arquivo, atualize o texto aqui junto — é ele que vai ser lido em voz
+ * alta.
+ */
+export type IdIndicador =
+  | "enviados"
+  | "revisados"
+  | "expedicoes"
+  | "ranking"
+  | "prazoClinica"
+  | "prazoTecnico"
+  | "usandoPouco"
+  | "valeIncluir"
+  | "acuracia"
+  | "concordancia"
+  | "derrubadas"
+  | "falhas"
+  | "motivos"
+  | "matriz"
+  | "acuraciaExame";
+
+export interface ComoCalculamos {
+  titulo: string;
+  /** A pergunta que o indicador responde, em uma linha. */
+  pergunta: string;
+  blocos: { titulo: string; texto: string }[];
+}
+
+export const RODAPE_COMO_CALCULAMOS =
+  "Todos os números do painel são recalculados uma vez por dia, às 7h (horário de Brasília), e quando alguém aperta Atualizar.";
+
+export const COMO_CALCULAMOS: Record<IdIndicador, ComoCalculamos> = {
+  enviados: {
+    titulo: "Documentos enviados",
+    pergunta: "Quanto as clínicas estão usando a plataforma.",
+    blocos: [
+      {
+        titulo: "O que conta",
+        texto:
+          "Cada prontuário que uma clínica subiu no ProntuAI é um documento. Reenvio conta de novo: o mesmo prontuário mandado duas vezes são dois envios.",
+      },
+      {
+        titulo: "Em que período cai",
+        texto:
+          "Pela data do envio. O período mais recente ainda está em andamento — no gráfico é o último ponto, e no card é a semana ou o mês corrente.",
+      },
+      {
+        titulo: "A variação",
+        texto:
+          "Compara com o período anterior de mesmo tamanho: a semana anterior, o mês anterior, os três meses anteriores. Como o período atual ainda não acabou e o anterior está fechado, no começo da semana ou do mês a variação tende a sair negativa.",
+      },
+    ],
   },
-  {
-    titulo: "O que não entra na conta",
-    texto:
-      "Existe um terceiro desfecho que não é veredito: quando a IA não consegue nem ler o documento, porque não achou o CPF, o CNPJ veio errado ou o paciente não estava no BRNET. Isso é falha técnica de leitura, não julgamento. Fica fora da acurácia e é acompanhado à parte — seria como reprovar um revisor por causa de uma folha que chegou rasgada.",
+  revisados: {
+    titulo: "Documentos revisados",
+    pergunta: "Quanto do que chegou já passou pela decisão do time BR MED.",
+    blocos: [
+      {
+        titulo: "O que conta",
+        texto:
+          "Documento que uma pessoa do time BR MED — checador, gestor ou administrador — aprovou ou rejeitou. A decisão automática da IA não conta: documento aprovado pela IA e ainda não conferido fica fora.",
+      },
+      {
+        titulo: "Em que período cai",
+        texto:
+          "Pela data em que o documento foi enviado, não pela data da revisão. Um prontuário enviado em 30/09 e revisado em 02/10 conta em setembro — por isso o número de um período continua crescendo depois que ele acaba.",
+      },
+      {
+        titulo: "O percentual",
+        texto:
+          "Revisados ÷ enviados no mesmo período. Mostra quanto do volume a revisão humana já cobriu, não a velocidade dela.",
+      },
+    ],
   },
-  {
-    titulo: "O que é acurácia aqui",
-    texto:
-      "Acurácia é concordância direta: quantas vezes a IA e o revisor humano chegaram à mesma conclusão. Conta como acerto quando a IA aprovou e o humano confirmou, e quando a IA rejeitou e o humano confirmou a rejeição.",
+  expedicoes: {
+    titulo: "Expedições via ProntuAI",
+    pergunta: "De tudo o que a BR MED liberou nas credenciadas, quanto passou pelo ProntuAI. Meta: 100%.",
+    blocos: [
+      {
+        titulo: "O total",
+        texto:
+          "Vem do BRNET (monitoramento de credenciados): todo pedido de credenciada liberado no período, datado pelo dia da liberação. Pedido atendido e ainda não liberado não entra.",
+      },
+      {
+        titulo: "O que conta como via ProntuAI",
+        texto:
+          "O pedido que teve pelo menos um prontuário processado no ProntuAI, ligado pelo número do pedido no BRNET. Conta pedido, não documento, então reenvio não infla o número. Conta mesmo se o documento foi rejeitado: a pergunta é se a clínica usou a plataforma, não se o envio estava completo.",
+      },
+      {
+        titulo: "Desde quando",
+        texto:
+          "A partir do mês em que os prontuários passaram a guardar o número do pedido do BRNET — antes disso não há como ligar um ao outro. Período que começa antes é medido a partir dessa data, e o card avisa. A conta para no último dia com documento no ProntuAI, para o total e a parte via ProntuAI cobrirem os mesmos dias.",
+      },
+      {
+        titulo: "Cobertura das expedições",
+        texto:
+          "O gráfico faz a mesma conta em cada semana ou mês. Se o BRNET não responder na atualização, o card mostra só quantos documentos foram liberados na plataforma, sem percentual.",
+      },
+    ],
   },
-  {
-    titulo: "A exceção: motivo externo",
-    texto:
-      "Nem toda divergência é erro da IA. Às vezes o revisor contraria a IA por uma razão que estava fora do documento — o exame chegou por outro canal, o paciente já tinha o resultado no sistema, a clínica confirmou por fora. Nesses casos a leitura da IA estava certa para o que ela tinha em mãos, e o caso conta como acerto. Quem diz isso é o revisor: ao liberar o que a IA rejeitou, ele marca no parecer que ela acertou e escolhe o motivo. Antes do parecer, o motivo era reconhecido pelo texto da justificativa.",
+  ranking: {
+    titulo: "Ranking de clínicas",
+    pergunta: "Quem mais mandou documentos no período.",
+    blocos: [
+      {
+        titulo: "O que conta",
+        texto:
+          "Documentos enviados por clínica no período escolhido, do maior para o menor — a mesma conta de Documentos enviados, aberta por clínica. Mostra as 6 maiores; o link abaixo abre todas. Cadastros de teste ficam fora.",
+      },
+      {
+        titulo: "A variação",
+        texto:
+          "Contra o período anterior de mesmo tamanho. \"novo\" é clínica que não tinha enviado nada no período anterior. Passando o mouse, aparecem também quantos documentos dela já foram revisados e quantos foram liberados.",
+      },
+    ],
   },
-  {
-    titulo: "Onde mora o risco",
-    texto:
-      "O motivo externo aparece muito mais de um lado que do outro. Quando a IA rejeita e o humano libera, um terço das vezes é motivo externo. Mas quando a IA aprova e o humano derruba, quase nunca é — nesses casos a IA errou de verdade, e é aí que existe o risco de um documento incompleto passar batido.",
+  prazoClinica: {
+    titulo: "Envio da clínica × prazo do credenciado",
+    pergunta: "A clínica manda o prontuário dentro do prazo dela?",
+    blocos: [
+      {
+        titulo: "O prazo",
+        texto:
+          "A data prevista de liberação do pedido no BRNET: o dia do atendimento mais o prazo do credenciado, em dias úteis.",
+      },
+      {
+        titulo: "A conta",
+        texto:
+          "Cada prontuário enviado é comparado com o prazo do seu pedido: antes do dia é antecipado, no próprio dia é no dia, depois é atrasado. O dia do envio é o do horário de Brasília — enviado às 22h do último dia ainda está no prazo.",
+      },
+      {
+        titulo: "O que entra e quando",
+        texto:
+          "Conta cada envio, porque cada um foi uma entrega da clínica: reenvio do mesmo pedido entra de novo. Fica fora o documento sem número de pedido do BRNET ou cujo pedido não tem data prevista. Cai no período pelo dia do envio.",
+      },
+    ],
   },
-];
+  prazoTecnico: {
+    titulo: "Liberação do técnico de credenciados × prazo da BR MED",
+    pergunta: "O time BR MED libera dentro do prazo da BR MED?",
+    blocos: [
+      {
+        titulo: "O prazo",
+        texto:
+          "A data de liberação que o BRNET devolve quando o ProntuAI processa o documento. Medido nos documentos, ela fica um dia útil depois do prazo da clínica — assim o técnico não é cobrado pelo dia que é da clínica.",
+      },
+      {
+        titulo: "A conta",
+        texto:
+          "Só aprovações feitas por uma pessoa: o dia da aprovação contra o prazo, no horário de Brasília. Aprovação automática da IA e rejeições ficam fora. Cai no período pelo dia da aprovação.",
+      },
+    ],
+  },
+  usandoPouco: {
+    titulo: "Quem está usando pouco",
+    pergunta: "Das clínicas que já têm login no ProntuAI, quais deixam pedidos passarem por fora.",
+    blocos: [
+      {
+        titulo: "Quem entra",
+        texto:
+          "Só as clínicas com login no ProntuAI (cadastro ativo). O BRNET não informa o cadastro, então a ligação é pelo nome do credenciado; quando o nome não bate, vale a clínica que enviou os documentos daquele credenciado, a partir de 3 documentos.",
+      },
+      {
+        titulo: "Previstos na semana",
+        texto:
+          "Pedidos dessas clínicas no BRNET com previsão de liberação naquela semana, de segunda a domingo. Só semanas já fechadas.",
+      },
+      {
+        titulo: "Os três desfechos",
+        texto:
+          "Cada previsto é acompanhado pelo número do pedido até o fim: Via ProntuAI (liberado, com prontuário processado na plataforma), Liberado por fora (liberado sem passar pela plataforma) ou Não liberado (ainda sem liberação no BRNET). Os três somam os previstos.",
+      },
+      {
+        titulo: "Adesão",
+        texto:
+          "Via ProntuAI ÷ previstos da semana. Verde a partir de 90%, laranja de 75% a 90%, vermelho abaixo de 75%.",
+      },
+      {
+        titulo: "Em que semana cai",
+        texto:
+          "Na semana da previsão, não na da liberação: pedido previsto para sexta e liberado na segunda conta na semana da sexta. Por isso uma semana fechada ainda muda — quando um pedido Não liberado sai, ele passa para um dos outros dois.",
+      },
+    ],
+  },
+  valeIncluir: {
+    titulo: "Quem vale a pena incluir",
+    pergunta: "Quais credenciadas ainda sem login no ProntuAI trariam mais volume.",
+    blocos: [
+      {
+        titulo: "Quem entra",
+        texto:
+          "Credenciadas do BRNET sem cadastro ativo no ProntuAI que liberaram alguma coisa nas últimas 12 semanas ou têm pedido previsto na janela.",
+      },
+      {
+        titulo: "Previstos",
+        texto:
+          "Pedidos ainda não liberados com previsão de hoje até o fim da janela: 7 dias no filtro Semana, 30 nos demais. É a ordem padrão da lista.",
+      },
+      {
+        titulo: "Média por semana e semanas com liberação",
+        texto:
+          "A média soma as liberações das últimas 12 semanas fechadas e divide por 12, com as semanas zeradas na conta — sem os zeros, quem liberou 400 numa semana e nada nas outras onze pareceria liberar 400 por semana. A coluna ao lado diz em quantas dessas 12 semanas houve pelo menos uma liberação.",
+      },
+      {
+        titulo: "PICO",
+        texto:
+          "Marca quem tem 5 ou mais previstos e mais que o dobro do que a média faria esperar no mesmo número de dias. Clicar no nome abre o histórico semana a semana, para conferir se é ritmo ou um evento isolado.",
+      },
+      {
+        titulo: "Simulador",
+        texto:
+          "Soma a média semanal das clínicas marcadas e multiplica pela adesão da última semana fechada de Quem está usando pouco. O aumento é esse ganho sobre o volume que passou pela plataforma naquela mesma semana. Nada é gravado.",
+      },
+    ],
+  },
+  acuracia: {
+    titulo: "Acurácia",
+    pergunta: "Quantas vezes a IA e o revisor do time BR MED chegaram à mesma conclusão.",
+    blocos: [
+      {
+        titulo: "Como a IA decide",
+        texto:
+          "A IA faz uma coisa só: confere se o prontuário tem todos os exames que a grade exige. A partir disso ela dá um de dois vereditos — aprova (libera o documento) ou rejeita (aponta o que falta e manda para a fila Pendentes, onde um checador decide).",
+      },
+      {
+        titulo: "O que não entra na conta",
+        texto:
+          "Existe um terceiro desfecho que não é veredito: quando a IA não consegue nem ler o documento, porque não achou o CPF, o CNPJ veio errado ou o paciente não estava no BRNET. Isso é falha técnica de leitura, não julgamento. Fica fora da acurácia e é acompanhado à parte — seria como reprovar um revisor por causa de uma folha que chegou rasgada.",
+      },
+      {
+        titulo: "O que é acurácia aqui",
+        texto:
+          "Acurácia é concordância direta: quantas vezes a IA e o revisor humano chegaram à mesma conclusão. Conta como acerto quando a IA aprovou e o humano confirmou, e quando a IA rejeitou e o humano confirmou a rejeição.",
+      },
+      {
+        titulo: "A exceção: motivo externo",
+        texto:
+          "Nem toda divergência é erro da IA. Às vezes o revisor contraria a IA por uma razão que estava fora do documento — o exame chegou por outro canal, o paciente já tinha o resultado no sistema, a clínica confirmou por fora. Nesses casos a leitura da IA estava certa para o que ela tinha em mãos, e o caso conta como acerto. Quem diz isso é o revisor: ao liberar o que a IA rejeitou, ele marca no parecer que ela acertou e escolhe o motivo. Antes do parecer, o motivo era reconhecido pelo texto da justificativa.",
+      },
+      {
+        titulo: "Onde mora o risco",
+        texto:
+          "O motivo externo aparece muito mais de um lado que do outro. Quando a IA rejeita e o humano libera, um terço das vezes é motivo externo. Mas quando a IA aprova e o humano derruba, quase nunca é — nesses casos a IA errou de verdade, e é aí que existe o risco de um documento incompleto passar batido.",
+      },
+      {
+        titulo: "Quais documentos entram",
+        texto:
+          "Os que tiveram veredito da IA e, depois, decisão de uma pessoa do time BR MED. O mesmo arquivo reenviado conta uma vez só — fica o primeiro envio, que é onde a IA decidiu sem saber de nada. Cai no período pela data do envio, não da revisão.",
+      },
+      {
+        titulo: "Acurácia por período",
+        texto:
+          "O gráfico faz a mesma conta em cada semana ou mês. A escala começa em 70% para as diferenças entre os pontos aparecerem.",
+      },
+    ],
+  },
+  concordancia: {
+    titulo: "Concordância direta",
+    pergunta: "A acurácia sem a exceção do motivo externo.",
+    blocos: [
+      {
+        titulo: "A conta",
+        texto:
+          "IA aprovou e o revisor aprovou, mais IA apontou falta e o revisor rejeitou, sobre a mesma base da acurácia. A única diferença para a acurácia é que aqui a divergência resolvida por motivo externo não conta como acerto.",
+      },
+      {
+        titulo: "Como ler junto com a acurácia",
+        texto:
+          "A distância entre os dois números é o peso do motivo externo no período. Se ela cresce, mais divergências estão sendo explicadas por razão de fora do documento.",
+      },
+    ],
+  },
+  derrubadas: {
+    titulo: "Aprovações derrubadas",
+    pergunta: "Quantas vezes a IA liberou um documento que o revisor barrou.",
+    blocos: [
+      {
+        titulo: "A conta",
+        texto:
+          "Documentos que a IA aprovou e uma pessoa do time BR MED rejeitou, tirando os casos em que o revisor registrou motivo externo. É número absoluto, não percentual.",
+      },
+      {
+        titulo: "Por que importa",
+        texto:
+          "É o erro com consequência: sem a revisão humana, o documento incompleto teria passado. Aqui a variação para baixo é a boa.",
+      },
+    ],
+  },
+  falhas: {
+    titulo: "Falhas técnicas",
+    pergunta: "Quantas vezes a IA não chegou a julgar o documento.",
+    blocos: [
+      {
+        titulo: "A conta",
+        texto:
+          "Documentos em que a IA parou antes de olhar os exames — não achou o CPF, o CNPJ veio errado, o paciente não estava no BRNET, entre outros impedimentos — e que depois tiveram decisão de uma pessoa do time BR MED. Falha que ainda está na fila não aparece aqui.",
+      },
+      {
+        titulo: "Por que fica fora da acurácia",
+        texto:
+          "Não houve veredito para comparar com o do revisor. O número é acompanhado à parte, como medida da leitura dos documentos. A variação para baixo é a boa.",
+      },
+    ],
+  },
+  motivos: {
+    titulo: "Por que a acurácia não está maior",
+    pergunta: "Do que são feitas as divergências que contam contra a IA.",
+    blocos: [
+      {
+        titulo: "O que entra",
+        texto:
+          "Só as divergências que derrubam a acurácia: a IA aprovou e o revisor rejeitou, ou a IA apontou falta e o revisor liberou. Motivo externo e falha técnica ficam fora.",
+      },
+      {
+        titulo: "Como cada uma é classificada",
+        texto:
+          "Pelo parecer do modal de feedback, quando há: o revisor diz, exame a exame, onde a IA errou. Sem parecer, como em todo o histórico anterior a 19/10, pelo texto que o revisor escreveu ao decidir, por palavras-chave. Exame faltante que a IA não detectou: a IA aprovou e o revisor apontou um exame que não estava. IA não reconheceu exame que estava no PDF: a IA apontou falta e o revisor disse que o exame estava lá. Regra formal que a IA ainda não verifica: carimbo, assinatura, aptidão, data, legibilidade, documento de outra pessoa ou exigido pela empresa. Revisor não informou a causa: sem parecer e com justificativa vazia ou só \"ok\". Outros motivos: o que sobra.",
+      },
+      {
+        titulo: "Por que \"a confirmar\"",
+        texto:
+          "Sem parecer, a classificação lê texto livre, e parte dos casos cai na categoria errada. Ela explica a divergência, não decide se houve: mexer nela não move a acurácia.",
+      },
+    ],
+  },
+  matriz: {
+    titulo: "Matriz de decisão",
+    pergunta: "Todos os desfechos possíveis entre a IA e o revisor.",
+    blocos: [
+      {
+        titulo: "As cinco linhas",
+        texto:
+          "Os dois acertos diretos (a IA aprovou e o humano aprovou; a IA apontou falta e o humano rejeitou), a divergência resolvida por motivo externo, que também conta como acerto, e as duas divergências: a IA apontou falta e o humano liberou, e a IA aprovou e o humano rejeitou — esta é o risco real.",
+      },
+      {
+        titulo: "O percentual",
+        texto:
+          "Cada linha sobre a base da acurácia, então as cinco somam 100% e as três de acerto somam a acurácia do período. Falhas técnicas ficam fora da matriz.",
+      },
+    ],
+  },
+  acuraciaExame: {
+    titulo: "Acurácia por exame",
+    pergunta: "Em quais exames da grade a IA mais erra, segundo o revisor.",
+    blocos: [
+      {
+        titulo: "De onde vem",
+        texto:
+          "Do parecer que o revisor dá no modal de feedback da Checagem. Para cada exame exigido pelo BRNET, ele diz se a IA acertou e, quando errou, de que jeito. É ele quem diz, exame a exame — nada é deduzido da decisão sobre o documento.",
+      },
+      {
+        titulo: "A conta",
+        texto:
+          "Cada exame exigido de cada documento com parecer é uma avaliação. É erro quando o revisor marcou o exame como \"Estava no documento\" ou \"Com outro nome\" numa falta que a IA apontou (falta indevida), ou como \"Não estava\" num exame que a IA deu como encontrado (presença indevida). Acurácia = avaliações sem erro ÷ avaliações.",
+      },
+      {
+        titulo: "O que fica de fora, por enquanto",
+        texto:
+          "Os problemas de qualidade do exame — de outra data, ilegível, sem carimbo, fora da validade: a IA ainda não confere essas coisas, e se eles entram na conta está em definição. \"Não é exigido\" é erro da exigência do BRNET, não da IA. Também ficam fora o exame digitado pelo revisor, que não estava na lista do BRNET, e o documento em que a IA não chegou a julgar os exames (falha técnica).",
+      },
+      {
+        titulo: "A amostra",
+        texto:
+          "Só entram documentos com parecer. Por isso a adesão aparece junto: pareceres sobre as decisões do time BR MED desde que o modal existe. Com poucos pareceres o número pesa pouco. E o \"Acertou\" já vem marcado quando a IA e o revisor decidem igual, o que pode esconder parte dos erros.",
+      },
+      {
+        titulo: "Em que período cai",
+        texto:
+          "Pela data de envio do documento, como a acurácia geral, e segue o filtro de período. Exames com menos de 20 avaliações no período entram no total, mas não na lista: com tão poucos casos, um erro sozinho derruba o percentual.",
+      },
+    ],
+  },
+};
+
+/** Qual entrada de `COMO_CALCULAMOS` cada KPI abre — pelo rótulo, como as dicas. */
+const AJUDA_KPI: Record<string, IdIndicador> = {
+  "Documentos enviados": "enviados",
+  "Documentos revisados": "revisados",
+  "Expedições via ProntuAI": "expedicoes",
+  Acurácia: "acuracia",
+  "Concordância direta": "concordancia",
+  "Aprovações derrubadas": "derrubadas",
+  "Falhas técnicas": "falhas",
+  "Acurácia por exame": "acuraciaExame",
+};
 
 // ── formatação e datas ───────────────────────────────────────────────────────
 const MESES_ABBR = ["JAN", "FEV", "MAR", "ABR", "MAI", "JUN", "JUL", "AGO", "SET", "OUT", "NOV", "DEZ"];
@@ -287,8 +660,8 @@ export interface Kpi {
   tip: string;
   delta: string;
   deltaColor: string;
-  /** Só o card de Acurácia abre o modal de cálculo. */
-  temAjuda?: boolean;
+  /** Entrada de `COMO_CALCULAMOS` que o "?" do card abre. */
+  ajuda?: IdIndicador;
 }
 
 export interface BarraDocs {
@@ -486,6 +859,40 @@ export interface LinhaForaProntuai {
   tip: string;
 }
 
+/** Uma linha da lista de "Acurácia por exame" (modal aberto pelo número do card). */
+export interface LinhaAcuraciaExame {
+  exame: string;
+  avaliacoes: number;
+  faltaIndevida: number;
+  presencaIndevida: number;
+  erros: number;
+  acuracia: number;
+  acuraciaLabel: string;
+  /** Largura de cada segmento da barra de erro, em % da linha. */
+  pctFalta: number;
+  pctPresenca: number;
+  tip: string;
+}
+
+/** "Acurácia por exame", do parecer do modal de feedback, no período escolhido. */
+export interface AcuraciaExameVisao {
+  kpi: Kpi;
+  /** Só exames com pelo menos `minimo` avaliações. */
+  linhas: LinhaAcuraciaExame[];
+  minimo: number;
+  /** Exames que ficaram fora da lista por volume baixo (entram no total). */
+  abaixoDoMinimo: number;
+  avaliacoes: number;
+  faltaIndevida: number;
+  presencaIndevida: number;
+  pareceres: number;
+  decisoes: number;
+  /** Pareceres ÷ decisões; null sem decisão no período. */
+  adesaoLabel: string | null;
+  acuraciaLabel: string;
+  periodoLabel: string;
+}
+
 export interface LinhaMatriz {
   name: string;
   vol: string;
@@ -549,6 +956,11 @@ export interface VisaoDashboard {
   penteFino: FatorPenteFino[];
   notaSemJustificativa: string;
   porTipo: LinhaMatriz[];
+  /**
+   * null num back-end sem o indicador (o card mostra "Em breve"). Com o
+   * indicador e sem parecer no período, vem com zeros e o card mostra "—".
+   */
+  acuraciaExame: AcuraciaExameVisao | null;
 }
 
 export interface OpcoesVisao {
@@ -557,6 +969,13 @@ export interface OpcoesVisao {
   comparar: boolean;
   verTodasClinicas: boolean;
 }
+
+/**
+ * "Acurácia por exame": exame com menos avaliações que isto no período entra no
+ * total, mas não na lista — com poucos casos, um erro sozinho derruba o
+ * percentual e o exame vai parar no topo sem motivo.
+ */
+const MINIMO_AVALIACOES_EXAME = 20;
 
 /** Escala do gráfico de acurácia: a métrica vive na faixa alta e 0–100 achataria. */
 const PISO_ACC = 70;
@@ -600,13 +1019,13 @@ export function calcularVisao({ dados, filtro, comparar, verTodasClinicas }: Opc
     value,
     sub: sub || "",
     tip: TIPS_KPI[label] || "",
+    ajuda: AJUDA_KPI[label],
     ...delta(d, dir),
   });
 
   const kpiAcc = (label: string, value: string, d: string, dir: "up" | "down", sub?: string): Kpi => ({
     ...kpi(label, value, d, dir, sub),
     tip: TIPS_ACC[label] || "",
-    temAjuda: label === "Acurácia",
   });
 
   const variacao = (campo: keyof PontoSerie) => {
@@ -1127,7 +1546,9 @@ export function calcularVisao({ dados, filtro, comparar, verTodasClinicas }: Opc
         fmt(revisados),
         variacao("revisados"),
         "up",
-        `${num(pct(revisados, enviados))} do que foi enviado`,
+        // O número é só de decisão humana; o rótulo diz de quem, para não ser
+        // lido como documento que a IA analisou.
+        `decisões do time BR MED · ${num(pct(revisados, enviados))} do que foi enviado`,
       ),
       kpiExpedicoes(),
     ],
@@ -1293,5 +1714,99 @@ export function calcularVisao({ dados, filtro, comparar, verTodasClinicas }: Opc
       peso: Math.round(pct(count, Math.max(1, ...situacoes.map((s) => s[1])))),
       cor,
     })),
+
+    acuraciaExame: (() => {
+      const fonte = dados.acuracia_exames;
+      if (!fonte) return null;
+      const blocos = fonte.series?.[cfg.periodo.serie] ?? {};
+
+      // Soma pelos MESMOS pontos do período dos outros indicadores: as chaves
+      // são as da série principal (segunda-feira da semana, dia 1 do mês).
+      const somar = (pontos: PontoSerie[]) => {
+        let pareceres = 0;
+        let comParecer = 0;
+        let decisoes = 0;
+        const exames = new Map<string, [number, number, number]>();
+        for (const p of pontos) {
+          const b = blocos[p.chave];
+          if (!b) continue;
+          pareceres += b.pareceres;
+          comParecer += b.com_parecer;
+          decisoes += b.decisoes;
+          for (const [nome, [n, f, pr]] of Object.entries(b.exames)) {
+            const e = exames.get(nome) ?? [0, 0, 0];
+            e[0] += n;
+            e[1] += f;
+            e[2] += pr;
+            exames.set(nome, e);
+          }
+        }
+        let avaliacoes = 0;
+        let falta = 0;
+        let presenca = 0;
+        exames.forEach(([n, f, pr]) => {
+          avaliacoes += n;
+          falta += f;
+          presenca += pr;
+        });
+        const acuracia = avaliacoes ? ((avaliacoes - falta - presenca) / avaliacoes) * 100 : null;
+        return { pareceres, comParecer, decisoes, exames, avaliacoes, falta, presenca, acuracia };
+      };
+
+      const agora = somar(atual);
+      const antes = comparavel ? somar(anterior) : null;
+
+      const doMinimo = [...agora.exames.entries()].filter(([, [n]]) => n >= MINIMO_AVALIACOES_EXAME);
+      // A barra é a TAXA de erro, na escala do exame que mais erra: com a
+      // acurácia toda perto de 100%, uma barra de acurácia sairia cheia em
+      // todas as linhas.
+      const maiorTaxa = Math.max(0, ...doMinimo.map(([, [n, f, pr]]) => (f + pr) / n)) || 1;
+      const vezes = (n: number, um: string, varios: string) => `${fmt(n)} ${n === 1 ? um : varios}`;
+
+      const linhas: LinhaAcuraciaExame[] = doMinimo.map(([exame, [n, f, pr]]) => {
+        const erros = f + pr;
+        const acuracia = ((n - erros) / n) * 100;
+        return {
+          exame,
+          avaliacoes: n,
+          faltaIndevida: f,
+          presencaIndevida: pr,
+          erros,
+          acuracia,
+          acuraciaLabel: num(acuracia),
+          pctFalta: (f / n / maiorTaxa) * 100,
+          pctPresenca: (pr / n / maiorTaxa) * 100,
+          tip: erros
+            ? `${exame} — ${vezes(n, "avaliação", "avaliações")}: ` +
+              `${vezes(f, "falta apontada que estava no documento", "faltas apontadas que estavam no documento")}, ` +
+              `${vezes(pr, "exame dado como presente que não estava", "exames dados como presentes que não estavam")}`
+            : `${exame} — ${vezes(n, "avaliação", "avaliações")}, nenhum erro apontado`,
+        };
+      });
+
+      const acuraciaLabel = agora.acuracia === null ? "—" : num(agora.acuracia);
+      return {
+        kpi: kpiAcc(
+          "Acurácia por exame",
+          acuraciaLabel,
+          antes && agora.acuracia !== null && antes.acuracia !== null ? pp(agora.acuracia, antes.acuracia) : "",
+          "up",
+          agora.avaliacoes
+            ? `${fmt(agora.avaliacoes)} exames em ${fmt(agora.pareceres)} pareceres`
+            : "nenhum parecer no período",
+        ),
+        linhas,
+        minimo: MINIMO_AVALIACOES_EXAME,
+        abaixoDoMinimo: agora.exames.size - doMinimo.length,
+        avaliacoes: agora.avaliacoes,
+        faltaIndevida: agora.falta,
+        presencaIndevida: agora.presenca,
+        pareceres: agora.pareceres,
+        decisoes: agora.decisoes,
+        adesaoLabel: agora.decisoes ? num(pct(agora.comParecer, agora.decisoes)) : null,
+        acuraciaLabel,
+        periodoLabel: nomePeriodo(cfg.periodo.serie, atual),
+      };
+    })(),
   };
 }

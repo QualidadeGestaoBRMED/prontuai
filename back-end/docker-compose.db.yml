@@ -40,7 +40,15 @@ services:
     networks:
       - prontuai-db-net
     healthcheck:
-      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:9187/metrics || exit 1"]
+      # Nao basta o /metrics responder: se o exporter subir antes do Postgres
+      # estar pronto, o PostgresCollector falha na criacao e NUNCA mais tenta —
+      # as queries legadas seguem servindo 200, e pg_up fica 1. Ficou 18 dias
+      # assim em ago/2026 sem nenhum sinal. Checar uma metrica do collector novo
+      # torna a falha visivel (container unhealthy).
+      #
+      # Num reboot o Docker religa pela politica restart:, que IGNORA
+      # depends_on — entao a corrida entre exporter e banco pode se repetir.
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:9187/metrics | grep -q '^pg_stat_database_numbackends' || exit 1"]
       interval: 30s
       timeout: 5s
       retries: 3
