@@ -339,6 +339,28 @@ def _exames_sem_laudo(markdown: str, exames_brnet: list[str]) -> Optional[list[s
     return [nome for norm, nome in alvos.items() if norm not in encontrados]
 
 
+# Kit VIX: a VIX Logística exige, além do ASO da BR MED, o kit próprio — ASO
+# VIXPAR e ficha clínica (formulário FM.COP). O BRNET não manda essa exigência,
+# então a IA aprovava o documento sem ele.
+_RE_VIX_LOGISTICA = re.compile(r"\bVIX LOGISTICA\b")
+_RE_KIT_VIX = re.compile(r"\bVIXPAR\b|\bFM COP\b")
+KIT_VIX_FALTANTE = "KIT VIX (ASO VIXPAR E FICHA CLÍNICA)"
+
+
+def _falta_kit_vix(markdown: str) -> bool:
+    """Documento da VIX Logística sem o kit da VIX.
+
+    Medido no texto gravado de 14/09 a 19/10/2026: pega 4 documentos, todos
+    rejeitados pelo revisor por falta do kit, e nenhum dos 30 aprovados que
+    citam a VIX Logística — todos trazem o kit. Não vale para a VIX
+    Transportes, que tem aprovados sem VIXPAR.
+    """
+    if not markdown:
+        return False
+    texto = f" {_normalizar_busca(markdown)} "
+    return bool(_RE_VIX_LOGISTICA.search(texto)) and not _RE_KIT_VIX.search(texto)
+
+
 def _paginas_insuficientes(paginas: Optional[int], exigidos: int) -> bool:
     """O PDF tem menos páginas do que seria preciso para conter todos os laudos.
 
@@ -1208,6 +1230,22 @@ async def _processar_documento_completo_impl(
                 else "Todos os exames obrigatórios foram enviados. Liberação concedida."
             )
             _log_event("laudo_evidencia", run_id=run_id, mudancas=mudancas_laudo)
+
+    # Documento exigido pela empresa, fora da grade do BRNET: entra como faltante
+    # para o documento ir à checagem. Fica fora da `tabela_comparacao`, que é só
+    # dos exames exigidos. Ver `_falta_kit_vix`.
+    falta_kit_vix = not resultado_validacao.get("erro") and _falta_kit_vix(markdown_content or "")
+    if falta_kit_vix:
+        resultado_validacao["status_liberado"] = False
+        faltantes_exames = [
+            e["exame"] for e in resultado_validacao.get("exames_comparativo", []) if e.get("status") == "faltante"
+        ]
+        resultado_validacao["mensagem"] = (
+            f"Faltam exames obrigatórios: {', '.join(faltantes_exames)}. Falta também o {KIT_VIX_FALTANTE}."
+            if faltantes_exames
+            else f"Falta o {KIT_VIX_FALTANTE}, exigido pela VIX Logística."
+        )
+        _log_event("kit_vix_ausente", run_id=run_id)
     await send_progress(90, "validacao", "Validação concluída, preparando resultado...")
     logger.info(f"[WORKFLOW] Validação concluída.")
     _log_event(
@@ -1263,6 +1301,8 @@ async def _processar_documento_completo_impl(
         "paginas": paginas_documento,
         "paginas_insuficientes": poucas_paginas,
     }
+    if falta_kit_vix:
+        confidence_details["kit_vix_ausente"] = True
     if poucas_paginas:
         _log_event(
             "paginas_insuficientes",
@@ -1324,7 +1364,8 @@ async def _processar_documento_completo_impl(
             "atendimento_realizado_em": brmed_resultado.get("atendimento_realizado_em"),
         },
         "validation_result": {
-            "exames_faltantes": [e["exame"] for e in resultado_validacao["exames_comparativo"] if e["status"] == "faltante"],
+            "exames_faltantes": [e["exame"] for e in resultado_validacao["exames_comparativo"] if e["status"] == "faltante"]
+            + ([KIT_VIX_FALTANTE] if falta_kit_vix else []),
             "exames_extras": [e["exame"] for e in resultado_validacao["exames_comparativo"] if e["status"] == "extra_no_ocr"],
             "analysis": resultado_validacao["mensagem"]
         },
