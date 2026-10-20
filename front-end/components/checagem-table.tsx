@@ -46,9 +46,9 @@ import {
 } from "@/components/ui/table";
 import type { DocumentoChecagem, StatusDocumento } from "@/types/checagem";
 import { ClinicFilter } from "@/components/clinic-filter";
-import { UploadDateFilter } from "@/components/upload-date-filter";
+import { DateFilter } from "@/components/date-filter";
 import type { ClinicOption } from "@/hooks/use-clinic-options";
-import type { UploadDateFilter as UploadDateFilterValue } from "@/hooks/use-documents-paged";
+import type { FiltroData } from "@/hooks/use-documents-paged";
 
 declare module "@tanstack/react-table" {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -90,12 +90,13 @@ type CheckagemTableProps = {
     loading?: boolean;
   };
   /**
-   * Período de envio server-side. Precisa ir ao banco: filtrar no cliente só
-   * enxergaria os 10 documentos da página atual.
+   * Período por data de envio ou de previsão de liberação, server-side.
+   * Precisa ir ao banco: filtrar no cliente só enxergaria os 10 documentos da
+   * página atual.
    */
   serverDate?: {
-    value: UploadDateFilterValue;
-    onChange: (value: UploadDateFilterValue) => void;
+    value: FiltroData;
+    onChange: (value: FiltroData) => void;
   };
 };
 
@@ -439,9 +440,7 @@ export function CheckagemTable({
             <Filter column={table.getColumn("status")!} />
           )}
         </div>
-        {serverDate ? (
-          <UploadDateFilter value={serverDate.value} onChange={serverDate.onChange} />
-        ) : null}
+        {serverDate ? <DateFilter value={serverDate.value} onChange={serverDate.onChange} /> : null}
         {serverClinic ? (
           <ClinicFilter
             value={serverClinic.value}
@@ -552,9 +551,11 @@ export function CheckagemTable({
                 >
                   {serverClinic?.value && serverClinic.value !== "all"
                     ? `Nenhum atendimento da ${selectedClinicName || "clínica selecionada"} com os filtros atuais.`
-                    : serverDate?.value
-                      ? "Nenhum documento enviado nesse período com os filtros atuais."
-                      : "Nenhum documento encontrado."}
+                    : serverDate?.value?.campo === "previsao"
+                      ? "Nenhum documento com previsão de liberação nesse período com os filtros atuais."
+                      : serverDate?.value
+                        ? "Nenhum documento enviado nesse período com os filtros atuais."
+                        : "Nenhum documento encontrado."}
                 </TableCell>
               </TableRow>
             )}

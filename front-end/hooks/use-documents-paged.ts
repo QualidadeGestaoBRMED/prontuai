@@ -15,11 +15,17 @@ type UseDocumentsPagedOptions = {
 }
 
 /**
- * Período de envio, em dias do calendário local ("2026-10-15"), com as duas
- * pontas inclusas. Fica como texto, e não `Date`, para o estado não trocar de
- * identidade sem que o dia tenha mudado.
+ * Período em dias do calendário local ("2026-10-15"), com as duas pontas
+ * inclusas. Fica como texto, e não `Date`, para o estado não trocar de
+ * identidade sem que o dia tenha mudado. Uma ponta pode faltar: "atrasados" na
+ * previsão de liberação é só o fim (até ontem).
  */
-export type UploadDateFilter = { from: string; to: string } | null
+export type PeriodoDias = { from?: string; to?: string }
+
+/** Qual data do documento o filtro recorta: o envio ou a previsão de liberação do BRNET. */
+export type CampoData = "envio" | "previsao"
+
+export type FiltroData = { campo: CampoData; periodo: PeriodoDias } | null
 
 /**
  * Meia-noite LOCAL do dia, deslocada em `dias`. O back-end guarda `uploaded_at`
@@ -46,7 +52,7 @@ export function useDocumentsPaged(options: UseDocumentsPagedOptions) {
   const [search, setSearch] = useState("")
   const [statusFilter, setStatusFilter] = useState<"all" | "approved" | "rejected" | "pending_review">("all")
   const [clinicFilter, setClinicFilter] = useState("all")
-  const [dateFilter, setDateFilter] = useState<UploadDateFilter>(null)
+  const [dataFilter, setDataFilter] = useState<FiltroData>(null)
   const [summaryCounts, setSummaryCounts] = useState<DocumentSummaryCounts>({
     approved: 0,
     rejected: 0,
@@ -82,11 +88,17 @@ export function useDocumentsPaged(options: UseDocumentsPagedOptions) {
         if (search.trim()) url.searchParams.set("search", search.trim())
         if (statusFilter !== "all") url.searchParams.set("status_filter", statusFilter)
         if (clinicFilter !== "all") url.searchParams.set("clinic_id", clinicFilter)
-        if (dateFilter) {
+        const periodo = dataFilter?.periodo
+        if (dataFilter?.campo === "envio" && periodo) {
           // Intervalo semiaberto: o fim é a meia-noite do dia SEGUINTE ao último
           // escolhido, para o envio das 23:59 desse dia entrar.
-          url.searchParams.set("uploaded_from", inicioDoDia(dateFilter.from).toISOString())
-          url.searchParams.set("uploaded_to", inicioDoDia(dateFilter.to, 1).toISOString())
+          if (periodo.from) url.searchParams.set("uploaded_from", inicioDoDia(periodo.from).toISOString())
+          if (periodo.to) url.searchParams.set("uploaded_to", inicioDoDia(periodo.to, 1).toISOString())
+        } else if (dataFilter?.campo === "previsao" && periodo) {
+          // A previsão é data de calendário no banco também: vai como está, sem
+          // fuso, com as duas pontas inclusas.
+          if (periodo.from) url.searchParams.set("previsao_from", periodo.from)
+          if (periodo.to) url.searchParams.set("previsao_to", periodo.to)
         }
 
         const response = await authFetch(url.toString(), {
@@ -140,7 +152,7 @@ export function useDocumentsPaged(options: UseDocumentsPagedOptions) {
         }
       }
     },
-    [session?.user?.email, queue, page, pageSize, compact, search, statusFilter, clinicFilter, dateFilter],
+    [session?.user?.email, queue, page, pageSize, compact, search, statusFilter, clinicFilter, dataFilter],
   )
 
   useEffect(() => {
@@ -192,8 +204,8 @@ export function useDocumentsPaged(options: UseDocumentsPagedOptions) {
     setPage(1)
   }, [])
 
-  const aplicarDateFilter = useCallback((valor: UploadDateFilter) => {
-    setDateFilter(valor)
+  const aplicarDataFilter = useCallback((valor: FiltroData) => {
+    setDataFilter(valor)
     setPage(1)
   }, [])
 
@@ -218,8 +230,8 @@ export function useDocumentsPaged(options: UseDocumentsPagedOptions) {
     setStatusFilter: aplicarStatusFilter,
     clinicFilter,
     setClinicFilter: aplicarClinicFilter,
-    dateFilter,
-    setDateFilter: aplicarDateFilter,
+    dataFilter,
+    setDataFilter: aplicarDataFilter,
     summaryCounts,
     refresh: fetchPage,
   }
