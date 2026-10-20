@@ -48,6 +48,31 @@ PRECEDENCIA_PAPEIS = (
 )
 
 
+# Cargo que outro já contém não se acumula com ele: "Gestor + Visualizador"
+# não dá nada além do Gestor sozinho, e a lista dizia o contrário a quem a lia.
+# O ADMIN contém todos; o MANAGER contém checagem, envio e dashboard
+# (`require_checker`, `require_sender` e `DASHBOARD_ROLES` em core/auth.py).
+#
+# O SENDER entra mesmo prendendo o usuário a uma clínica: decisão de produto
+# (out/2026). Ninguém usava a combinação, e o ADMIN/MANAGER que envia segue o
+# caminho de quem não tem clínica.
+#
+# Espelho em front-end/hooks/usePermissions.ts (`CARGOS_CONTIDOS`). Mude os dois
+# juntos — e ao dar acesso novo ao MANAGER, veja se ele passou a conter mais um.
+CARGOS_CONTIDOS: dict[UserRole, frozenset[UserRole]] = {
+    UserRole.ADMIN: frozenset(UserRole) - {UserRole.ADMIN},
+    UserRole.MANAGER: frozenset({UserRole.CHECKER, UserRole.SENDER, UserRole.VIEWER}),
+}
+
+
+def cargo_que_contem(papel: UserRole, papeis: Iterable[UserRole | str]) -> Optional[UserRole]:
+    """O cargo da lista que já contém `papel`, ou None."""
+    for outro in normalizar_papeis(papeis):
+        if papel in CARGOS_CONTIDOS.get(outro, ()):
+            return outro
+    return None
+
+
 def normalizar_papeis(papeis: Iterable[UserRole | str]) -> List[UserRole]:
     """Sem repetição e na ordem de `PRECEDENCIA_PAPEIS`: o primeiro é o principal."""
     conjunto = {UserRole(p) for p in papeis}

@@ -21,6 +21,26 @@ export function papeisDoUsuario(user?: { role?: UserRole; roles?: UserRole[] } |
   return PRECEDENCIA_PAPEIS.filter((p) => lista.includes(p));
 }
 
+/**
+ * Cargo que outro já contém não se acumula com ele. Espelho de
+ * `CARGOS_CONTIDOS` em back-end/app/models/user.py, que recusa a combinação —
+ * aqui ela só some da tela. Mude os dois juntos.
+ */
+export const CARGOS_CONTIDOS: Partial<Record<UserRole, UserRole[]>> = {
+  ADMIN: ["MANAGER", "CHECKER", "CURATOR", "SENDER", "VIEWER"],
+  MANAGER: ["CHECKER", "SENDER", "VIEWER"],
+};
+
+/** O cargo da lista que já contém `papel`, ou undefined. */
+export function cargoQueContem(papel: UserRole, papeis: UserRole[]): UserRole | undefined {
+  return PRECEDENCIA_PAPEIS.find((outro) => papeis.includes(outro) && CARGOS_CONTIDOS[outro]?.includes(papel));
+}
+
+/** A lista sem os cargos que outro dela já contém. */
+export function semCargosContidos(papeis: UserRole[]): UserRole[] {
+  return papeis.filter((p) => !cargoQueContem(p, papeis));
+}
+
 /** Tem pelo menos um dos cargos permitidos — a mesma regra do `_exigir_papel` do back. */
 export function temAlgumPapel(papeis: UserRole[], permitidos: UserRole[]): boolean {
   return papeis.some((p) => permitidos.includes(p));

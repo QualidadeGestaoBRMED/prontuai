@@ -11,8 +11,9 @@ principal, derivado da lista. Duas coisas não podem quebrar sem ninguém ver:
     CHECKER ou MANAGER. Um CHECKER + CURATOR gravado como CURATOR some da
     acurácia.
 
-E a gestão: MANAGER não esconde um ADMIN no meio de [CHECKER, ADMIN], e a
-clínica acompanha o cargo SENDER.
+E a gestão: MANAGER não esconde um ADMIN no meio de [CHECKER, ADMIN], a
+clínica acompanha o cargo SENDER, e cargo que outro já contém (MANAGER +
+VIEWER, ADMIN + qualquer um) não é gravado.
 
 Rodar sem o conftest, que importa main.py e exige DATABASE_URL:
 
@@ -237,6 +238,60 @@ def test_continuar_sender_mantem_a_clinica_atual(monkeypatch):
     editar(users, "alvo", {"roles": ["SENDER", "CHECKER"]}, ADMIN)
     assert banco.atualizado["clinic_id"] == "c1"
     assert banco.atualizado["limpar_clinica"] is False
+
+
+# ── cargo contido em outro ───────────────────────────────────────────────────
+
+@pytest.mark.parametrize("papeis", [
+    ["MANAGER", "VIEWER"],      # o caso que existia em produção (2 gestores, out/2026)
+    ["MANAGER", "CHECKER"],
+    ["MANAGER", "SENDER"],      # decisão de produto: entra mesmo prendendo a uma clínica
+    ["ADMIN", "MANAGER"],
+    ["ADMIN", "CURATOR"],
+    ["CHECKER", "ADMIN"],       # a ordem em que chega não importa
+])
+def test_cargo_contido_em_outro_e_recusado(monkeypatch, papeis):
+    users = carregar(monkeypatch, BancoFalso([usuario("alvo", CH)]), "app.api.v1.users")
+    with pytest.raises(HTTPException) as exc:
+        criar(users, {"email": "n@grupobrmed.com.br", "name": "n", "roles": papeis,
+                      "clinic_id": "c1"}, ADMIN)
+    assert exc.value.status_code == 400
+    with pytest.raises(HTTPException) as exc:
+        editar(users, "alvo", {"roles": papeis, "clinic_id": "c1"}, ADMIN)
+    assert exc.value.status_code == 400
+
+
+@pytest.mark.parametrize("papeis", [
+    ["CHECKER", "SENDER"],
+    ["CHECKER", "CURATOR"],
+    ["MANAGER", "CURATOR"],     # o catálogo não é do gestor: o CURATOR acrescenta
+    ["CURATOR", "VIEWER"],
+    ["CHECKER", "VIEWER"],
+])
+def test_cargos_que_nao_se_contem_continuam_juntos(monkeypatch, papeis):
+    banco = BancoFalso()
+    users = carregar(monkeypatch, banco, "app.api.v1.users")
+    criar(users, {"email": "n@grupobrmed.com.br", "name": "n", "roles": papeis, "clinic_id": "c1"}, ADMIN)
+    assert set(banco.criado["roles"]) == {UserRole(p) for p in papeis}
+
+
+def test_gestor_com_admin_na_lista_ainda_e_falta_de_permissao(monkeypatch):
+    """A escalada responde 403 antes de a sobreposição responder 400."""
+    users = carregar(monkeypatch, BancoFalso(), "app.api.v1.users")
+    with pytest.raises(HTTPException) as exc:
+        criar(users, {"email": "n@grupobrmed.com.br", "name": "n", "roles": ["ADMIN", "CHECKER"]}, GESTOR)
+    assert exc.value.status_code == 403
+
+
+def test_quem_ja_tem_a_sobreposicao_e_editado_sem_mexer_nos_cargos(monkeypatch):
+    """A regra vale para o que se grava: ativar ou renomear não exige limpar antes."""
+    banco = BancoFalso([usuario("alvo", M, V)])
+    users = carregar(monkeypatch, banco, "app.api.v1.users")
+    editar(users, "alvo", {"name": "novo nome"}, ADMIN)
+    assert banco.atualizado["roles"] is None
+    # E a limpeza, que é o que a tela manda ao salvar, passa.
+    editar(users, "alvo", {"roles": ["MANAGER"]}, ADMIN)
+    assert banco.atualizado["roles"] == [M]
 
 
 # ── jobs ─────────────────────────────────────────────────────────────────────
