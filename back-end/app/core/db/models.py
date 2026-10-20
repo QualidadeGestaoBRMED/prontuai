@@ -45,6 +45,9 @@ class ClinicModel(Base):
     address = Column(String, nullable=True)
     city = Column(String, nullable=True)
     state = Column(String, nullable=True)
+    # Credenciado do BRNET ("C25414", migration 014). Índice comum e não único
+    # enquanto as clínicas duplicadas não são unificadas — ver a migration.
+    brnet_id = Column(String(16), nullable=True, index=True)
     is_active = Column(Boolean, nullable=False, default=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)

@@ -8,8 +8,20 @@ from app.core.auth import require_admin, require_management, get_current_user
 from app.core.database import user_db
 from app.core import metrics
 from app.models.user import User, UserRole, GLOBAL_READ_ROLES
-from app.models.clinic import Clinic, ClinicCreate, ClinicUpdate
+from app.models.clinic import (
+    Clinic,
+    ClinicaVinculada,
+    ClinicCreate,
+    ClinicUpdate,
+    CredenciadoBrnetOpcao,
+)
 from app.core.pii import mask_identifier
+from app.services.rede_credenciada_service import (
+    CredenciadoRede,
+    RedeCredenciadaIndisponivel,
+    buscar_credenciado,
+    listar_rede_credenciada,
+)
 import logging
 
 logger = logging.getLogger(__name__)
@@ -34,7 +46,8 @@ async def test_auth(current_user: User = Depends(require_management)):
 @router.post("/test-create")
 async def test_create(
     name: str,
-    current_user: User = Depends(require_management)
+    # Cria clínica sem vínculo com o BRNET, o que só o ADMIN pode fazer.
+    current_user: User = Depends(require_admin)
 ):
     """Endpoint de teste simplificado para criar clínica"""
     try:
@@ -103,6 +116,51 @@ async def list_clinic_options(current_user: User = Depends(get_current_user)):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Erro ao listar opções de clínicas"
         )
+
+
+async def _credenciado_da_rede(brnet_id: str) -> CredenciadoRede:
+    """O credenciado escolhido, conferido contra a rede do BRNET."""
+    try:
+        credenciado = await buscar_credenciado(brnet_id)
+    except RedeCredenciadaIndisponivel as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Não foi possível consultar a rede credenciada do BRNET: {exc}",
+        ) from exc
+    if credenciado is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"O credenciado {brnet_id} não está na rede credenciada do BRNET.",
+        )
+    return credenciado
+
+
+@router.get("/credenciados-brnet", response_model=List[CredenciadoBrnetOpcao])
+async def list_credenciados_brnet(current_user: User = Depends(require_management)):
+    """
+    Rede credenciada do BRNET, para escolher o credenciado de uma clínica.
+
+    Cada credenciado vem com as clínicas do ProntuAI já vinculadas a ele —
+    inclusive inativas, porque reativar uma é melhor que cadastrar outra.
+    """
+    try:
+        rede = await listar_rede_credenciada()
+    except RedeCredenciadaIndisponivel as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Não foi possível consultar a rede credenciada do BRNET: {exc}",
+        ) from exc
+
+    vinculadas: dict[str, list[ClinicaVinculada]] = {}
+    for clinica in user_db.get_all_clinics(include_inactive=True):
+        if clinica.brnet_id:
+            vinculadas.setdefault(clinica.brnet_id, []).append(
+                ClinicaVinculada(id=clinica.id, name=clinica.name, is_active=clinica.is_active)
+            )
+    return [
+        CredenciadoBrnetOpcao(**c.model_dump(), clinicas=vinculadas.get(c.identificador, []))
+        for c in rede
+    ]
 
 
 @router.get("/{clinic_id}/users")
@@ -234,8 +292,23 @@ async def create_clinic(
 
     A clínica é identificada por ID (UUID). Usuários SENDER são associados a ela posteriormente.
     """
+    # Sem credenciado do BRNET, só o ADMIN cadastra: contas internas e
+    # credenciado que não está na rede. O Gestor escolhe da lista.
+    brnet_id = (clinic_data.brnet_id or "").strip() or None
+    cidade, uf = clinic_data.city, clinic_data.state
+    if brnet_id:
+        credenciado = await _credenciado_da_rede(brnet_id)
+        brnet_id = credenciado.identificador
+        # Cidade e UF vêm da rede, não do formulário: são os do credenciado.
+        cidade, uf = credenciado.cidade, credenciado.uf
+    elif not current_user.tem_papel(UserRole.ADMIN):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Escolha o credenciado do BRNET. Só administradores cadastram clínica sem vínculo.",
+        )
+
     try:
-        logger.info(f"[CLINICS] Tentativa de criação: name={clinic_data.name}, cnpj={mask_identifier(clinic_data.cnpj)}")
+        logger.info(f"[CLINICS] Tentativa de criação: name={clinic_data.name}, cnpj={mask_identifier(clinic_data.cnpj)}, brnet_id={brnet_id}")
         logger.info(f"[CLINICS] Admin autenticado: {current_user.email}")
 
         # Verificar se user_db tem os métodos necessários
@@ -251,8 +324,9 @@ async def create_clinic(
             cnpj=clinic_data.cnpj,
             phone=clinic_data.phone,
             address=clinic_data.address,
-            city=clinic_data.city,
-            state=clinic_data.state
+            city=cidade,
+            state=uf,
+            brnet_id=brnet_id,
         )
 
         logger.info(f"[CLINICS] Admin {current_user.email} criou clínica {clinic.id} ({clinic.name})")
@@ -288,15 +362,31 @@ async def update_clinic(
                 detail="Clínica não encontrada"
             )
 
+        brnet_id = (clinic_data.brnet_id or "").strip() or None
+        cidade, uf = clinic_data.city, clinic_data.state
+        if clinic_data.remover_vinculo_brnet:
+            if not current_user.tem_papel(UserRole.ADMIN):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Só administradores tiram o vínculo de uma clínica com o BRNET.",
+                )
+            brnet_id = None
+        elif brnet_id:
+            credenciado = await _credenciado_da_rede(brnet_id)
+            brnet_id = credenciado.identificador
+            cidade, uf = credenciado.cidade, credenciado.uf
+
         clinic = user_db.update_clinic(
             clinic_id=clinic_id,
             name=clinic_data.name,
             cnpj=clinic_data.cnpj,
             phone=clinic_data.phone,
             address=clinic_data.address,
-            city=clinic_data.city,
-            state=clinic_data.state,
-            is_active=clinic_data.is_active
+            city=cidade,
+            state=uf,
+            is_active=clinic_data.is_active,
+            brnet_id=brnet_id,
+            remover_vinculo_brnet=clinic_data.remover_vinculo_brnet,
         )
 
         logger.info(f"[CLINICS] Admin {current_user.email} atualizou clínica {clinic_id}")
