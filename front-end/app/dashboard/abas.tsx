@@ -29,6 +29,30 @@ const TITULO = "text-[16.5px] font-semibold text-[#193B4F]";
 const SUB = "mt-[5px] text-[13px] text-[#767A7B]";
 const CABECALHO_TABELA =
   "text-[11.5px] font-medium uppercase tracking-[0.06em] text-[#767A7B]";
+// Botão de seta dos navegadores (semana no card, clínica no modal).
+const BOTAO_NAV =
+  "flex size-[34px] cursor-pointer items-center justify-center text-[#193B4F] transition-colors hover:bg-[#F3F6F8] disabled:cursor-default disabled:text-[#C6CBCE] disabled:hover:bg-transparent";
+
+const CAMINHO_SETA = { esquerda: "M10 4L6 8l4 4", direita: "M6 4l4 4-4 4", baixo: "M4 6l4 4 4-4" };
+
+/**
+ * Seta desenhada, e não caractere: ‹ › e ▼ dependem da fonte de cada sistema e
+ * saíam miúdos e desalinhados — o ▼ do seletor de semana quase sumia.
+ */
+function Seta({ para, className = "size-4" }: { para: keyof typeof CAMINHO_SETA; className?: string }) {
+  return (
+    <svg viewBox="0 0 16 16" aria-hidden="true" className={className}>
+      <path
+        d={CAMINHO_SETA[para]}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
 
 type AbrirAjuda = (id: IdIndicador) => void;
 
@@ -233,26 +257,27 @@ function TabelaUsoSemana({ uso, onAjuda }: { uso: UsoSemanal; onAjuda: AbrirAjud
 
         {/* Navegação por semana. Para trás é o passado, e o passado acaba: os
             botões travam nas pontas em vez de rodarem em círculo. */}
-        <div className="flex items-center gap-1.5 rounded-[10px] border border-[#DFE0E2] bg-white p-1">
+        <div className="flex items-center overflow-hidden rounded-[9px] border border-[#DFE0E2] bg-white">
           <button
             type="button"
             onClick={() => setI((v) => Math.min(v + 1, uso.semanas.length - 1))}
             disabled={i >= uso.semanas.length - 1}
             aria-label="Semana anterior"
-            className="size-[26px] rounded-[7px] text-[13px] text-[#193B4F] transition-colors hover:bg-[#F3F3F3] disabled:text-[#C6CBCE] disabled:hover:bg-transparent"
+            title="Semana anterior"
+            className={BOTAO_NAV}
           >
-            ‹
+            <Seta para="esquerda" />
           </button>
           {/* As setas andam uma semana; a lista pula direto para qualquer
               semana fechada — para comparar com uma semana de três meses
               atrás, eram doze cliques. */}
-          <div className="relative">
+          <div className="relative border-x border-[#DFE0E2]">
             <select
               id="uso-semana"
               value={Math.min(i, uso.semanas.length - 1)}
               onChange={(e) => setI(Number(e.target.value))}
               aria-label="Escolher a semana"
-              className="h-[26px] min-w-[124px] cursor-pointer appearance-none rounded-[7px] bg-transparent pr-6 pl-2 text-center text-[13px] font-medium tabular-nums text-[#193B4F] outline-none transition-colors hover:bg-[#F3F3F3] focus-visible:ring-2 focus-visible:ring-[#7EBFCC]"
+              className="h-[34px] min-w-[136px] cursor-pointer appearance-none bg-transparent pr-8 pl-3 text-[13px] font-medium tabular-nums text-[#193B4F] outline-none transition-colors hover:bg-[#F3F6F8] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#7EBFCC]"
             >
               {uso.semanas.map((s, k) => (
                 <option key={s.iso} value={k}>
@@ -260,11 +285,8 @@ function TabelaUsoSemana({ uso, onAjuda }: { uso: UsoSemanal; onAjuda: AbrirAjud
                 </option>
               ))}
             </select>
-            <span
-              aria-hidden="true"
-              className="pointer-events-none absolute top-1/2 right-2 -translate-y-1/2 text-[8px] text-[#767A7B]"
-            >
-              ▼
+            <span className="pointer-events-none absolute top-1/2 right-2.5 -translate-y-1/2 text-[#193B4F]">
+              <Seta para="baixo" className="size-3.5" />
             </span>
           </div>
           <button
@@ -272,9 +294,10 @@ function TabelaUsoSemana({ uso, onAjuda }: { uso: UsoSemanal; onAjuda: AbrirAjud
             onClick={() => setI((v) => Math.max(v - 1, 0))}
             disabled={i === 0}
             aria-label="Semana seguinte"
-            className="size-[26px] rounded-[7px] text-[13px] text-[#193B4F] transition-colors hover:bg-[#F3F3F3] disabled:text-[#C6CBCE] disabled:hover:bg-transparent"
+            title="Semana seguinte"
+            className={BOTAO_NAV}
           >
-            ›
+            <Seta para="direita" />
           </button>
         </div>
       </div>
@@ -1047,9 +1070,6 @@ function ModalHistoricoFora({
             : "Nenhuma semana do histórico foi pico: um volume assim não tem precedente.")
         : null;
 
-  const botaoNav =
-    "flex size-[34px] cursor-pointer items-center justify-center text-[#193B4F] transition-colors hover:bg-[#F3F6F8] disabled:cursor-default disabled:text-[#C6CBCE] disabled:hover:bg-transparent";
-
   return (
     <Dialog open={aberto && !!c} onOpenChange={(v) => !v && onFechar()}>
       {c && (
@@ -1091,11 +1111,9 @@ function ModalHistoricoFora({
                   onClick={() => anterior && onIr(anterior)}
                   aria-label="Clínica anterior"
                   title="Clínica anterior (←)"
-                  className={botaoNav}
+                  className={BOTAO_NAV}
                 >
-                  <svg viewBox="0 0 16 16" aria-hidden="true" className="size-4">
-                    <path d="M10 4L6 8l4 4" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
+                  <Seta para="esquerda" />
                 </button>
                 <span className="min-w-[78px] border-x border-[#DFE0E2] px-2 text-center text-[12.5px] leading-[34px] tabular-nums text-[#767A7B]">
                   {i + 1} de {linhas.length}
@@ -1106,11 +1124,9 @@ function ModalHistoricoFora({
                   onClick={() => proxima && onIr(proxima)}
                   aria-label="Próxima clínica"
                   title="Próxima clínica (→)"
-                  className={botaoNav}
+                  className={BOTAO_NAV}
                 >
-                  <svg viewBox="0 0 16 16" aria-hidden="true" className="size-4">
-                    <path d="M6 4l4 4-4 4" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
+                  <Seta para="direita" />
                 </button>
               </div>
             </div>
