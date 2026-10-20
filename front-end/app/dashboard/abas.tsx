@@ -10,6 +10,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 
 import type {
+  AcuraciaExameVisao,
   BarraPercentual,
   BarraSemana,
   GraficoPrazo,
@@ -1200,8 +1201,26 @@ function ModalHistoricoFora({
   );
 }
 
-function CartaoKpi({ kpi, onAjuda }: { kpi: Kpi; onAjuda: AbrirAjuda }) {
+function CartaoKpi({
+  kpi,
+  onAjuda,
+  onValor,
+}: {
+  kpi: Kpi;
+  onAjuda: AbrirAjuda;
+  /** Torna o número clicável — abre o detalhe por trás dele. */
+  onValor?: () => void;
+}) {
   const ajuda = kpi.ajuda;
+  const valor = (
+    <div
+      className={`whitespace-nowrap text-[36px] font-medium leading-none tracking-[-0.025em] text-[#193B4F] tabular-nums ${
+        onValor ? "transition-colors group-hover:text-[#007891]" : ""
+      }`}
+    >
+      {kpi.value}
+    </div>
+  );
   return (
     <div
       className={`${styles.tip} ${styles.tipBaixo} flex flex-col gap-4 rounded-xl border border-[#DFE0E2] bg-white px-[22px] pt-5 pb-[22px]`}
@@ -1212,9 +1231,20 @@ function CartaoKpi({ kpi, onAjuda }: { kpi: Kpi; onAjuda: AbrirAjuda }) {
         {ajuda && <BotaoAjuda rotulo={kpi.label} onClick={() => onAjuda(ajuda)} />}
       </div>
       <div className="flex flex-col items-start gap-2">
-        <div className="whitespace-nowrap text-[36px] font-medium leading-none tracking-[-0.025em] text-[#193B4F] tabular-nums">
-          {kpi.value}
-        </div>
+        {onValor ? (
+          <button
+            type="button"
+            onClick={onValor}
+            aria-haspopup="dialog"
+            aria-label={`Ver ${kpi.label.toLowerCase()}`}
+            title="Ver por exame"
+            className="group cursor-pointer rounded-[6px] text-left"
+          >
+            {valor}
+          </button>
+        ) : (
+          valor
+        )}
         <div className="whitespace-nowrap text-[13px] font-medium" style={{ color: kpi.deltaColor }}>
           {kpi.delta}
         </div>
@@ -1467,9 +1497,9 @@ export function AbaUtilizacao({
 }
 
 /**
- * Lugar reservado para "Acurácia por exame", ao lado de "Acurácia" e no mesmo
- * tamanho dos KPIs. Sem número até o parecer do revisor no modal de feedback,
- * que diz exame a exame se a IA acertou, passar a alimentar o indicador.
+ * Lugar reservado para "Acurácia por exame" quando o back-end não manda o
+ * indicador (versão anterior a ele, ou a consulta dos pareceres falhou). Mesmo
+ * tamanho dos KPIs, ao lado de "Acurácia".
  */
 function CartaoEmBreve({ label }: { label: string }) {
   return (
@@ -1480,20 +1510,192 @@ function CartaoEmBreve({ label }: { label: string }) {
   );
 }
 
+// Literal pelo mesmo motivo de COLUNAS_FORA: o Tailwind só compila a classe que
+// encontra escrita no código.
+const COLUNAS_EXAME = "grid-cols-[2fr_0.75fr_2fr_0.8fr]";
+
+// As duas formas de errar, na ordem em que entram na barra. A chave aponta
+// para os campos da linha e do total.
+const ERROS_EXAME = [
+  {
+    chave: "pctFalta",
+    total: "faltaIndevida",
+    titulo: "Falta indevida",
+    explicacao: "a IA apontou falta, o exame estava",
+    cor: "#CC851E",
+  },
+  {
+    chave: "pctPresenca",
+    total: "presencaIndevida",
+    titulo: "Presença indevida",
+    explicacao: "a IA deu como presente, não estava",
+    cor: "#B4453A",
+  },
+] as const;
+
+/**
+ * A lista de "Acurácia por exame", aberta pelo número do card. Vem do parecer
+ * do revisor no modal de feedback e segue o filtro de período da tela.
+ *
+ * A adesão fica no cabeçalho, junto do número: a acurácia só enxerga os
+ * documentos com parecer, e com poucos pareceres ela pesa pouco.
+ *
+ * A barra é a taxa de ERRO, dividida nas duas formas de errar: a pergunta é
+ * "onde a IA erra", e as duas pedem correções diferentes — falta indevida é
+ * nome que o catálogo não reconhece; presença indevida, exame que a IA achou
+ * onde não havia.
+ */
+function ModalAcuraciaExame({
+  dados,
+  aberto,
+  onFechar,
+}: {
+  dados: AcuraciaExameVisao;
+  aberto: boolean;
+  onFechar: () => void;
+}) {
+  const { ordem, ordenarPor } = useOrdem({ col: "acuracia", dir: "asc" });
+  const visiveis = ordenar(dados.linhas, ordem, (l, col) =>
+    col === "exame" ? l.exame
+    : col === "avaliacoes" ? l.avaliacoes
+    : col === "erros" ? l.erros / l.avaliacoes
+    : l.acuracia,
+  );
+  const n = (v: number) => v.toLocaleString("pt-BR");
+
+  return (
+    <Dialog open={aberto} onOpenChange={(v) => !v && onFechar()}>
+      <DialogContent className="flex max-h-[calc(100dvh-3rem)] flex-col gap-0 overflow-hidden rounded-[16px] border-[#DFE0E2] bg-white p-0 sm:max-w-[980px]">
+        {/* Título e descrição ocupam a largura toda, e os números descem para
+            uma fileira própria: com o total à direita da descrição, os dois
+            disputavam a mesma linha e o número ficava espremido contra o X. */}
+        <div className="border-b border-[#EDEFF0] py-4 pr-14 pl-6">
+          <DialogTitle className="text-[20px] leading-tight font-semibold text-[#193B4F]">
+            Acurácia por exame
+          </DialogTitle>
+          <DialogDescription className="mt-1 text-[13px] leading-[1.5] text-[#767A7B]">
+            Pelo parecer do revisor no modal de feedback · documentos enviados em {dados.periodoLabel}.
+            <span className="block">
+              {dados.adesaoLabel
+                ? `${n(dados.pareceres)} pareceres em ${n(dados.decisoes)} decisões do time BR MED (adesão de ${dados.adesaoLabel}).`
+                : "Nenhuma decisão do time BR MED com parecer neste período."}
+            </span>
+          </DialogDescription>
+
+          {/* Os dois tipos de erro entram como números, com a cor da barra ao
+              lado: a fileira faz também o papel de legenda. */}
+          <div className="mt-4 flex flex-wrap items-start gap-x-8 gap-y-3">
+            {[
+              { r: "Acurácia", v: dados.acuraciaLabel, cor: "#007891" },
+              { r: "Exames avaliados", v: n(dados.avaliacoes) },
+              { r: "Pareceres", v: n(dados.pareceres) },
+              ...ERROS_EXAME.map((e) => ({
+                r: e.titulo,
+                v: n(dados[e.total]),
+                amostra: e.cor,
+                sub: e.explicacao,
+              })),
+            ].map((x: { r: string; v: string; cor?: string; amostra?: string; sub?: string }) => (
+              <div key={x.r} className="flex flex-col gap-1">
+                <div className={`${CABECALHO_TABELA} flex items-center gap-1.5`}>
+                  {x.amostra && <span className="size-2.5 flex-none rounded-[2px]" style={{ background: x.amostra }} />}
+                  {x.r}
+                </div>
+                <div
+                  className="text-[19px] font-medium leading-none tabular-nums"
+                  style={{ color: x.cor ?? "#193B4F" }}
+                >
+                  {x.v}
+                </div>
+                {x.sub && <div className="text-[11px] text-[#9AA3A8]">{x.sub}</div>}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-auto px-6">
+          {visiveis.length ? (
+            <div className="min-w-[720px]">
+              <div
+                className={`sticky top-0 z-10 grid ${COLUNAS_EXAME} items-end gap-x-[18px] border-b border-[#DFE0E2] bg-white px-1 pt-3.5 pb-2.5`}
+              >
+                <Th label="Exame" col="exame" ordem={ordem} onOrdenar={ordenarPor} />
+                <Th label="Avaliados" col="avaliacoes" ordem={ordem} onOrdenar={ordenarPor} numerica />
+                <Th label="Erros" sub="barra = taxa · número = casos" col="erros" ordem={ordem} onOrdenar={ordenarPor} numerica />
+                <Th label="Acurácia" col="acuracia" ordem={ordem} onOrdenar={ordenarPor} numerica />
+              </div>
+              {visiveis.map((l) => (
+                <div
+                  key={l.exame}
+                  className={`${styles.linhaTip} grid ${COLUNAS_EXAME} items-center gap-x-[18px] border-b border-[#F3F3F3] px-1 py-3 text-[13.5px] text-[#193B4F]`}
+                >
+                  {/* Mesmo invólucro de "Quem está usando pouco": a seta do balão
+                      aponta para o nome só se ele encolher até o texto. */}
+                  <div className="min-w-0">
+                    <span className={`${styles.tip} ${styles.tipNome} min-w-0`} data-tip={l.tip}>
+                      <span className="block truncate">{l.exame}</span>
+                    </span>
+                  </div>
+                  <div className="tabular-nums text-[#767A7B]">{n(l.avaliacoes)}</div>
+                  <div className="flex items-center gap-2.5">
+                    <div className="flex h-[9px] flex-1 overflow-hidden rounded-[4px] bg-[#F3F3F3]">
+                      {ERROS_EXAME.map((e) => (
+                        <div key={e.chave} className="h-full" style={{ width: `${l[e.chave]}%`, background: e.cor }} />
+                      ))}
+                    </div>
+                    <div className="w-[26px] text-right font-medium tabular-nums">{l.erros || "—"}</div>
+                  </div>
+                  <div className="font-medium tabular-nums">{l.acuraciaLabel}</div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="py-10 text-center text-[13px] text-[#767A7B]">
+              {dados.avaliacoes
+                ? `Nenhum exame chegou a ${dados.minimo} avaliações neste período. Escolha um período maior para ver a lista.`
+                : "Nenhum parecer neste período."}
+            </div>
+          )}
+        </div>
+
+        <div className="border-t border-[#EDEFF0] px-6 py-3 text-[12px] text-[#9AA3A8]">
+          Exames com menos de {dados.minimo} avaliações no período entram no total, mas não na lista
+          {dados.abaixoDoMinimo ? ` (${n(dados.abaixoDoMinimo)} exames neste período)` : ""}.
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export function AbaAcuracia({ visao, onAjuda }: { visao: VisaoDashboard; onAjuda: AbrirAjuda }) {
+  const [examesAberto, setExamesAberto] = useState(false);
   // "Acurácia por exame" entra logo depois de "Acurácia": é o mesmo número
   // aberto por exame, e quem lê um procura o outro do lado.
   const [acuracia, ...demais] = visao.kpisAcuracia;
+  const porExame = visao.acuraciaExame;
 
   return (
     <div className="flex flex-col gap-5 px-[34px] pt-[26px] pb-10">
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
         <CartaoKpi kpi={acuracia} onAjuda={onAjuda} />
-        <CartaoEmBreve label="Acurácia por exame" />
+        {/* Sem o bloco no back-end (versão anterior ao indicador, ou a consulta
+            falhou), o lugar fica reservado em vez de mostrar um zero falso. */}
+        {porExame ? (
+          <CartaoKpi
+            kpi={porExame.kpi}
+            onAjuda={onAjuda}
+            onValor={porExame.avaliacoes ? () => setExamesAberto(true) : undefined}
+          />
+        ) : (
+          <CartaoEmBreve label="Acurácia por exame" />
+        )}
         {demais.map((k) => (
           <CartaoKpi key={k.label} kpi={k} onAjuda={onAjuda} />
         ))}
       </div>
+      {porExame && (
+        <ModalAcuraciaExame dados={porExame} aberto={examesAberto} onFechar={() => setExamesAberto(false)} />
+      )}
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
         <div className={`${CARTAO} px-[22px] pt-5 pb-[18px]`}>
