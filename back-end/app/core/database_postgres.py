@@ -1613,12 +1613,19 @@ class PostgresUserDatabase:
                 "filename": DocumentModel.filename,
                 "cpf": DocumentModel.cpf,
                 "status": DocumentModel.validation_status,
+                "previsao": DocumentModel.data_previsao_liberacao,
             }
             sort_column = sort_columns.get(sort_by, DocumentModel.uploaded_at)
-            if sort_dir.lower() == "asc":
-                scoped_query = scoped_query.order_by(sort_column.asc())
+            ordem = sort_column.asc() if sort_dir.lower() == "asc" else sort_column.desc()
+            if sort_by == "previsao":
+                # Centenas de documentos dividem o mesmo dia de previsão: sem
+                # desempate, a paginação por OFFSET repete ou pula linhas entre
+                # uma página e outra. Sem previsão vai para o fim nos dois sentidos.
+                scoped_query = scoped_query.order_by(
+                    ordem.nulls_last(), DocumentModel.uploaded_at.desc(), DocumentModel.id
+                )
             else:
-                scoped_query = scoped_query.order_by(sort_column.desc())
+                scoped_query = scoped_query.order_by(ordem)
 
             if page_size > 0:
                 scoped_query = scoped_query.offset((safe_page - 1) * page_size).limit(page_size)
