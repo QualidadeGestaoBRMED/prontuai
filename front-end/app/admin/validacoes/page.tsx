@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 import { AppSidebar } from "@/components/app-sidebar";
 import {
@@ -29,7 +29,6 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Info, Loader2, ClipboardList } from "lucide-react";
 import { toast } from "sonner";
-import { DocumentApi } from "@/types/document";
 
 type ValidationItem = {
   id: string;
@@ -43,8 +42,31 @@ type ValidationItem = {
   analysis?: string | null;
   approvalReason?: string | null;
   rejectionReason?: string | null;
-  resultPayload?: Record<string, unknown> | null;
 };
+
+/** Uma linha de `GET /v1/documents/revisoes`. */
+type RevisaoApi = {
+  id: string;
+  filename: string;
+  cpf?: string | null;
+  validation_status?: string | null;
+  uploaded_at?: string | null;
+  reviewed_by?: string | null;
+  reviewed_at?: string | null;
+  confidence_score?: number | null;
+  analysis?: string | null;
+  approval_reason?: string | null;
+  rejection_reason?: string | null;
+};
+
+type PaginaRevisoes = {
+  items: RevisaoApi[];
+  page: number;
+  total_items: number;
+  total_pages: number;
+};
+
+const ITENS_POR_PAGINA = 20;
 
 function formatDateTime(value?: string | null) {
   if (!value) return "-";
@@ -64,6 +86,9 @@ function statusBadge(status?: string | null) {
   return <Badge variant="secondary">Pendente</Badge>;
 }
 
+// Espelho de JUSTIFICATIVAS_VAZIAS em back-end/app/models/document.py, que
+// aplica a mesma lista no filtro "Somente com justificativas" —
+// `test_justificativas_vazias_batem_com_as_da_tela` compara as duas.
 function normalizeReason(value?: string | null) {
   if (!value) return "";
   const trimmed = value.trim();
@@ -87,7 +112,10 @@ function normalizeReason(value?: string | null) {
 
 export default function ValidacoesPage() {
   const { data: session } = useSession();
-  const [docs, setDocs] = useState<DocumentApi[]>([]);
+  const [items, setItems] = useState<ValidationItem[]>([]);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalItems, setTotalItems] = useState(0);
   const [loading, setLoading] = useState(true);
   const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
   const [selected, setSelected] = useState<ValidationItem | null>(null);
@@ -99,30 +127,98 @@ export default function ValidacoesPage() {
   const [textFilter, setTextFilter] = useState("");
   const [onlyWithJustification, setOnlyWithJustification] = useState(false);
 
+  // Filtro novo volta para a primeira página: a página 30 de "todos" não
+  // existe em "rejeitados". A volta acontece junto com a troca do filtro, no
+  // mesmo render — num efeito à parte, a tela consultava antes a página antiga
+  // já filtrada, só para descartar a resposta.
+
+  // Os campos de texto filtram 400ms depois da última tecla: cada mudança é uma
+  // consulta ao banco, e a busca na mensagem da IA leva alguns segundos.
+  const [filtrosAplicados, setFiltrosAplicados] = useState({ cpf: "", revisor: "", texto: "" });
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      const novo = { cpf: cpfFilter.trim(), revisor: reviewerFilter.trim(), texto: textFilter.trim() };
+      const atual = filtrosAplicados;
+      // Mesmo valor, nada a fazer: senão abrir a tela já consultava duas vezes.
+      if (atual.cpf === novo.cpf && atual.revisor === novo.revisor && atual.texto === novo.texto) return;
+      setFiltrosAplicados(novo);
+      setPage(1);
+    }, 400);
+    return () => window.clearTimeout(timeout);
+  }, [cpfFilter, reviewerFilter, textFilter, filtrosAplicados]);
+
+  const trocarStatus = (valor: string) => {
+    setStatusFilter(valor);
+    setPage(1);
+  };
+  const trocarSoComJustificativa = (valor: boolean) => {
+    setOnlyWithJustification(valor);
+    setPage(1);
+  };
+
+  // Resposta de uma consulta antiga não pode sobrescrever a da mais nova.
+  const abortRef = useRef<AbortController | null>(null);
+
+  /**
+   * A página vem pronta do servidor, do envio mais recente para o mais antigo.
+   * Antes a tela baixava todos os documentos (~69 MB) e filtrava aqui — e, sem
+   * ordenação na consulta, a lista terminava num documento de 24/09.
+   */
   const fetchDocuments = useCallback(async () => {
     if (!session?.user?.email) return;
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
     setLoading(true);
     try {
-      const response = await authFetch(
-        `${API_ENDPOINTS.DOCUMENTS}?compact=true&cache_seconds=10&stale_seconds=120`,
-      );
+      const url = new URL(API_ENDPOINTS.DOCUMENTS_REVISOES, window.location.origin);
+      url.searchParams.set("page", String(page));
+      url.searchParams.set("page_size", String(ITENS_POR_PAGINA));
+      if (filtrosAplicados.cpf) url.searchParams.set("cpf", filtrosAplicados.cpf);
+      if (filtrosAplicados.revisor) url.searchParams.set("revisor", filtrosAplicados.revisor);
+      if (filtrosAplicados.texto) url.searchParams.set("texto", filtrosAplicados.texto);
+      if (statusFilter !== "all") url.searchParams.set("status_filter", statusFilter);
+      if (onlyWithJustification) url.searchParams.set("so_com_justificativa", "true");
+
+      const response = await authFetch(url.toString(), { cache: "no-store", signal: controller.signal });
       if (!response.ok) {
         throw new Error("Erro ao carregar documentos");
       }
-      const data = (await response.json()) as DocumentApi[];
-      setDocs(data);
+      const data = (await response.json()) as PaginaRevisoes;
+      setItems(
+        data.items.map((doc) => ({
+          id: doc.id,
+          filename: doc.filename,
+          cpf: doc.cpf,
+          status: doc.validation_status,
+          uploadedAt: doc.uploaded_at ?? null,
+          reviewedBy: doc.reviewed_by ?? null,
+          reviewedAt: doc.reviewed_at ?? null,
+          confidenceScore: doc.confidence_score ?? null,
+          analysis: doc.analysis ?? null,
+          approvalReason: normalizeReason(doc.approval_reason),
+          rejectionReason: normalizeReason(doc.rejection_reason),
+        })),
+      );
+      setTotalPages(data.total_pages || 1);
+      setTotalItems(data.total_items || 0);
+      // O servidor devolve a última página que existe se a pedida passou do fim.
+      if (data.page && data.page !== page) setPage(data.page);
       setLastUpdatedAt(new Date());
     } catch (error) {
+      if (controller.signal.aborted) return;
       console.error("Erro:", error);
       toast.error("Erro ao carregar revisões");
     } finally {
-      setLoading(false);
+      if (abortRef.current === controller) setLoading(false);
     }
-  }, [session?.user?.email]);
+  }, [session?.user?.email, page, filtrosAplicados, statusFilter, onlyWithJustification]);
 
   useEffect(() => {
     fetchDocuments();
   }, [fetchDocuments]);
+
+  useEffect(() => () => abortRef.current?.abort(), []);
 
   const highlightLiberacao = (text?: string | null) => {
     if (!text) return null;
@@ -141,69 +237,6 @@ export default function ValidacoesPage() {
       </>
     );
   };
-
-  const items = useMemo<ValidationItem[]>(() => {
-    return docs
-      .map((doc) => {
-        const payload = (doc.result_payload || {}) as Record<string, unknown>;
-        const validation = (payload.validation_result || {}) as Record<string, unknown>;
-        const analysis =
-          (typeof validation.analysis === "string" ? validation.analysis : null) ??
-          (typeof payload.decisao_final === "string" ? payload.decisao_final : null) ??
-          (typeof payload.analysis === "string" ? payload.analysis : null);
-        const reviewedBy = typeof payload.reviewed_by === "string" ? payload.reviewed_by : null;
-        const reviewedAt = typeof payload.reviewed_at === "string" ? payload.reviewed_at : null;
-        const approvalReason = normalizeReason(
-          (typeof payload.approvalReason === "string" ? payload.approvalReason : null) ??
-            (doc.approval_reason ?? null),
-        );
-        const rejectionReason = normalizeReason(
-          (typeof payload.rejectionReason === "string" ? payload.rejectionReason : null) ??
-            (doc.rejection_reason ?? null),
-        );
-        return {
-          id: doc.id,
-          filename: doc.filename,
-          cpf: doc.cpf,
-          status: doc.validation_status,
-          uploadedAt: doc.uploaded_at ?? null,
-          reviewedBy,
-          reviewedAt,
-          confidenceScore: doc.confidence_score ?? null,
-          analysis,
-          approvalReason,
-          rejectionReason,
-          resultPayload: payload,
-        };
-      })
-      .filter((item) => item.analysis);
-  }, [docs]);
-
-  const filteredItems = useMemo(() => {
-    const cpf = cpfFilter.trim();
-    const reviewer = reviewerFilter.trim().toLowerCase();
-    const text = textFilter.trim().toLowerCase();
-    return items.filter((item) => {
-      const hasJustification = Boolean(item.approvalReason || item.rejectionReason);
-      if (onlyWithJustification && !hasJustification) return false;
-      if (cpf && !(item.cpf || "").includes(cpf)) return false;
-      if (reviewer && !(item.reviewedBy || "").toLowerCase().includes(reviewer)) return false;
-      if (statusFilter !== "all" && item.status !== statusFilter) return false;
-      if (text) {
-        const haystack = [
-          item.filename,
-          item.analysis,
-          item.approvalReason,
-          item.rejectionReason,
-        ]
-          .filter(Boolean)
-          .join(" ")
-          .toLowerCase();
-        if (!haystack.includes(text)) return false;
-      }
-      return true;
-    });
-  }, [items, cpfFilter, reviewerFilter, statusFilter, textFilter, onlyWithJustification]);
 
   const openDetails = (item: ValidationItem) => {
     setSelected(item);
@@ -265,7 +298,7 @@ export default function ValidacoesPage() {
                       id="validation-status"
                       className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
                       value={statusFilter}
-                      onChange={(event) => setStatusFilter(event.target.value)}
+                      onChange={(event) => trocarStatus(event.target.value)}
                     >
                       <option value="all">Todos</option>
                       <option value="validated">Aprovados</option>
@@ -289,7 +322,7 @@ export default function ValidacoesPage() {
                       type="checkbox"
                       className="size-4 rounded border border-input"
                       checked={onlyWithJustification}
-                      onChange={(event) => setOnlyWithJustification(event.target.checked)}
+                      onChange={(event) => trocarSoComJustificativa(event.target.checked)}
                     />
                     Somente com justificativas
                   </label>
@@ -304,9 +337,9 @@ export default function ValidacoesPage() {
                     onClick={() => {
                       setCpfFilter("");
                       setReviewerFilter("");
-                      setStatusFilter("all");
                       setTextFilter("");
-                      setOnlyWithJustification(false);
+                      trocarStatus("all");
+                      trocarSoComJustificativa(false);
                     }}
                   >
                     Limpar filtros
@@ -322,12 +355,12 @@ export default function ValidacoesPage() {
                       <span>Carregando revisões...</span>
                     </div>
                   </div>
-                ) : filteredItems.length === 0 ? (
+                ) : items.length === 0 ? (
                   <div className="rounded-lg border bg-white p-8 text-center text-muted-foreground md:col-span-2">
                     Nenhuma revisão encontrada com os filtros atuais.
                   </div>
                 ) : (
-                  filteredItems.map((item) => (
+                  items.map((item) => (
                     <div
                       key={item.id}
                       role="button"
@@ -389,6 +422,33 @@ export default function ValidacoesPage() {
                   ))
                 )}
               </div>
+
+              {totalItems > 0 && (
+                <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-muted-foreground">
+                  <span>
+                    Página {page} de {totalPages} · {totalItems.toLocaleString("pt-BR")}{" "}
+                    {totalItems === 1 ? "revisão" : "revisões"}
+                  </span>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={loading || page <= 1}
+                      onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    >
+                      Anterior
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={loading || page >= totalPages}
+                      onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                    >
+                      Próxima
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 

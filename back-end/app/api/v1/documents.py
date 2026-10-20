@@ -12,6 +12,7 @@ from app.models.document import (
     DocumentUpdate,
     DocumentQueue,
     PaginatedDocumentsResponse,
+    PaginatedRevisoesResponse,
     previsao_liberacao_do_payload,
 )
 from app.core.logging import set_audit_context
@@ -411,6 +412,33 @@ async def list_documents_paged(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Erro ao listar documentos paginados."
         ) from exc
+
+@router.get("/revisoes", response_model=PaginatedRevisoesResponse)
+async def list_revisoes(
+    current_user: User = Depends(require_admin),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    cpf: str | None = Query(None, max_length=20),
+    revisor: str | None = Query(None, max_length=120),
+    status_filter: str | None = Query(None, pattern="^(validated|rejected|pending)$"),
+    texto: str | None = Query(None, max_length=120),
+    so_com_justificativa: bool = Query(False),
+):
+    """
+    Tela de Revisões (`/admin/validacoes`), paginada e do mais recente para o
+    mais antigo. Substitui o `GET /v1/documents` inteiro que a tela baixava.
+    """
+    payload = user_db.list_revisoes_paged(
+        page=page,
+        page_size=page_size,
+        cpf=cpf,
+        revisor=revisor,
+        status=status_filter,
+        texto=texto,
+        so_com_justificativa=so_com_justificativa,
+    )
+    return PaginatedRevisoesResponse(**payload)
+
 
 @router.get("", response_model=List[Document])
 async def list_documents(

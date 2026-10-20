@@ -17,7 +17,14 @@ from sqlalchemy import String, cast, create_engine, text, func, or_, and_, case
 from sqlalchemy.orm import sessionmaker, Session, defer
 from app.models.user import User, UserCreate, UserUpdate, UserRole, GLOBAL_READ_ROLES, normalizar_papeis
 from app.models.clinic import Clinic, ClinicCreate, ClinicUpdate
-from app.models.document import Document, DocumentCreate, DocumentUpdate, previsao_liberacao_do_payload
+from app.models.document import (
+    Document,
+    DocumentCreate,
+    DocumentUpdate,
+    JUSTIFICATIVAS_VAZIAS,
+    analise_do_payload,
+    previsao_liberacao_do_payload,
+)
 from app.models.feedback import DocumentFeedback
 from app.models.notification import Notification, NotificationCreate, NotificationUpdate
 from app.models.audit_log import AuditLog, AuditLogCreate
@@ -1677,6 +1684,114 @@ class PostgresUserDatabase:
                     "pending_review": int(summary_map.get("pending_review", 0) or 0),
                     "total": int(summary_map.get("total", 0) or 0),
                 },
+            }
+        finally:
+            session.close()
+
+    def list_revisoes_paged(
+        self,
+        *,
+        page: int = 1,
+        page_size: int = 20,
+        cpf: Optional[str] = None,
+        revisor: Optional[str] = None,
+        status: Optional[str] = None,
+        texto: Optional[str] = None,
+        so_com_justificativa: bool = False,
+    ) -> dict:
+        """
+        Página da tela de Revisões (`/admin/validacoes`), do envio mais recente
+        para o mais antigo.
+
+        A tela baixava `GET /v1/documents` inteiro (12 mil documentos, ~69 MB) e
+        filtrava no navegador — e, como aquela consulta não tem ORDER BY, a lista
+        saía na ordem física das linhas, que terminava num documento de 24/09.
+        Aqui os filtros são os mesmos da tela, só que no banco:
+
+          * `texto` procura no nome do arquivo, nas justificativas e na mensagem
+            da IA. A mensagem mora no payload compacto; o regex isola o valor de
+            `analysis` para a busca não casar com nome de chave do JSON (~1s
+            sobre a tabela inteira, aceitável numa tela só de ADMIN);
+          * `so_com_justificativa` ignora o que está em JUSTIFICATIVAS_VAZIAS.
+            As justificativas vêm das colunas: conferido que nenhum documento
+            tem a do payload sem a da coluna.
+        """
+        session = self._get_session()
+        try:
+            query = session.query(DocumentModel).options(
+                defer(DocumentModel.ocr_markdown), defer(DocumentModel.result_payload)
+            )
+
+            digitos = re.sub(r"\D", "", cpf or "")
+            if digitos:
+                query = query.filter(DocumentModel.cpf.like(f"%{digitos}%"))
+            if revisor and revisor.strip():
+                query = query.filter(DocumentModel.reviewed_by.ilike(f"%{revisor.strip()}%"))
+            if status == "pending":
+                query = query.filter(
+                    or_(DocumentModel.validation_status == "pending", DocumentModel.validation_status.is_(None))
+                )
+            elif status:
+                query = query.filter(DocumentModel.validation_status == status)
+            if texto and texto.strip():
+                like = f"%{texto.strip()}%"
+                analise = func.substring(
+                    DocumentModel.result_payload_compact, r'"analysis":\s*"((?:[^"\\]|\\.)*)"'
+                )
+                query = query.filter(
+                    or_(
+                        DocumentModel.filename.ilike(like),
+                        DocumentModel.approval_reason.ilike(like),
+                        DocumentModel.rejection_reason.ilike(like),
+                        analise.ilike(like),
+                    )
+                )
+            if so_com_justificativa:
+                def _preenchida(coluna):
+                    limpa = func.trim(coluna)
+                    return and_(limpa != "", func.lower(limpa).notin_(sorted(JUSTIFICATIVAS_VAZIAS)))
+
+                query = query.filter(
+                    or_(_preenchida(DocumentModel.approval_reason), _preenchida(DocumentModel.rejection_reason))
+                )
+
+            total_items = query.count()
+            total_pages = max(1, (total_items + page_size - 1) // page_size)
+            safe_page = max(1, min(page, total_pages))
+            models = (
+                query.order_by(DocumentModel.uploaded_at.desc(), DocumentModel.id)
+                .offset((safe_page - 1) * page_size)
+                .limit(page_size)
+                .all()
+            )
+
+            items = []
+            for m in models:
+                try:
+                    compacto = json.loads(m.result_payload_compact) if m.result_payload_compact else None
+                except (TypeError, ValueError):
+                    compacto = None
+                items.append({
+                    "id": m.id,
+                    "filename": m.filename,
+                    "cpf": m.cpf,
+                    "validation_status": m.validation_status,
+                    "uploaded_at": m.uploaded_at,
+                    "reviewed_by": m.reviewed_by,
+                    "reviewed_at": m.reviewed_at,
+                    "confidence_score": m.confidence_score,
+                    "analysis": analise_do_payload(compacto),
+                    "approval_reason": m.approval_reason,
+                    "rejection_reason": m.rejection_reason,
+                })
+
+            return {
+                "items": items,
+                "page": safe_page,
+                "page_size": page_size,
+                "total_items": total_items,
+                "total_pages": total_pages,
+                "has_next": safe_page < total_pages,
             }
         finally:
             session.close()
