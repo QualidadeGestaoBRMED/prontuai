@@ -240,8 +240,29 @@ function TabelaUsoSemana({ uso, onAjuda }: { uso: UsoSemanal; onAjuda: AbrirAjud
           >
             ‹
           </button>
-          <div className="min-w-[108px] text-center text-[13px] font-medium tabular-nums text-[#193B4F]">
-            {semana.label}
+          {/* As setas andam uma semana; a lista pula direto para qualquer
+              semana fechada — para comparar com uma semana de três meses
+              atrás, eram doze cliques. */}
+          <div className="relative">
+            <select
+              id="uso-semana"
+              value={Math.min(i, uso.semanas.length - 1)}
+              onChange={(e) => setI(Number(e.target.value))}
+              aria-label="Escolher a semana"
+              className="h-[26px] min-w-[124px] cursor-pointer appearance-none rounded-[7px] bg-transparent pr-6 pl-2 text-center text-[13px] font-medium tabular-nums text-[#193B4F] outline-none transition-colors hover:bg-[#F3F3F3] focus-visible:ring-2 focus-visible:ring-[#7EBFCC]"
+            >
+              {uso.semanas.map((s, k) => (
+                <option key={s.iso} value={k}>
+                  {s.label}
+                </option>
+              ))}
+            </select>
+            <span
+              aria-hidden="true"
+              className="pointer-events-none absolute top-1/2 right-2 -translate-y-1/2 text-[8px] text-[#767A7B]"
+            >
+              ▼
+            </span>
           </div>
           <button
             type="button"
