@@ -12,7 +12,7 @@ import time
 import json
 import logging
 from typing import List, Optional
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from sqlalchemy import String, cast, create_engine, text, func, or_, and_, case
 from sqlalchemy.orm import sessionmaker, Session, defer
 from app.models.user import User, UserCreate, UserUpdate, UserRole, GLOBAL_READ_ROLES, normalizar_papeis
@@ -23,6 +23,7 @@ from app.models.document import (
     DocumentUpdate,
     JUSTIFICATIVAS_VAZIAS,
     analise_do_payload,
+    previsao_liberacao_do_payload,
 )
 from app.models.feedback import DocumentFeedback
 from app.models.notification import Notification, NotificationCreate, NotificationUpdate
@@ -1485,6 +1486,8 @@ class PostgresUserDatabase:
         filter_clinic_id: Optional[str] = None,
         uploaded_from: Optional[datetime] = None,
         uploaded_to: Optional[datetime] = None,
+        previsao_from: Optional[date] = None,
+        previsao_to: Optional[date] = None,
     ) -> dict:
         """
         Lista documentos paginados com escopo por role e filtros de fila.
@@ -1493,6 +1496,11 @@ class PostgresUserDatabase:
         semiaberto [de, até), em UTC sem fuso — o mesmo formato de
         `uploaded_at`. Quem converte o dia local em instante é o chamador: o
         "dia 15" do revisor começa às 03:00 UTC, e só o browser sabe disso.
+
+        `previsao_from`/`previsao_to` recortam pela previsão de liberação, com
+        as duas pontas inclusas. É data de calendário, sem fuso: não há
+        conversão a fazer. Qualquer uma das pontas pode faltar ("atrasados" é
+        só o `previsao_to`), e documento sem previsão sai do recorte.
         """
         session = self._get_session()
         try:
@@ -1527,6 +1535,15 @@ class PostgresUserDatabase:
                 filtros_envio.append(DocumentModel.uploaded_at < uploaded_to)
             if filtros_envio:
                 scoped_query = scoped_query.filter(*filtros_envio)
+
+            # Previsão de liberação: mesmo raciocínio, entra nos cards também.
+            filtros_previsao = []
+            if previsao_from:
+                filtros_previsao.append(DocumentModel.data_previsao_liberacao >= previsao_from)
+            if previsao_to:
+                filtros_previsao.append(DocumentModel.data_previsao_liberacao <= previsao_to)
+            if filtros_previsao:
+                scoped_query = scoped_query.filter(*filtros_previsao)
 
             if queue == "pendentes":
                 scoped_query = scoped_query.filter(
@@ -1602,6 +1619,9 @@ class PostgresUserDatabase:
             if filtros_envio:
                 scoped_summary_query = scoped_summary_query.filter(*filtros_envio)
 
+            if filtros_previsao:
+                scoped_summary_query = scoped_summary_query.filter(*filtros_previsao)
+
             summary_row = scoped_summary_query.one()
             summary_map = summary_row._mapping if hasattr(summary_row, "_mapping") else {}
 
@@ -1615,12 +1635,19 @@ class PostgresUserDatabase:
                 "filename": DocumentModel.filename,
                 "cpf": DocumentModel.cpf,
                 "status": DocumentModel.validation_status,
+                "previsao": DocumentModel.data_previsao_liberacao,
             }
             sort_column = sort_columns.get(sort_by, DocumentModel.uploaded_at)
-            if sort_dir.lower() == "asc":
-                scoped_query = scoped_query.order_by(sort_column.asc())
+            ordem = sort_column.asc() if sort_dir.lower() == "asc" else sort_column.desc()
+            if sort_by == "previsao":
+                # Centenas de documentos dividem o mesmo dia de previsão: sem
+                # desempate, a paginação por OFFSET repete ou pula linhas entre
+                # uma página e outra. Sem previsão vai para o fim nos dois sentidos.
+                scoped_query = scoped_query.order_by(
+                    ordem.nulls_last(), DocumentModel.uploaded_at.desc(), DocumentModel.id
+                )
             else:
-                scoped_query = scoped_query.order_by(sort_column.desc())
+                scoped_query = scoped_query.order_by(ordem)
 
             if page_size > 0:
                 scoped_query = scoped_query.offset((safe_page - 1) * page_size).limit(page_size)
@@ -1823,6 +1850,7 @@ class PostgresUserDatabase:
                 file_path=file_path,
                 cpf=cpf,
                 patient_name=self._extract_patient_name(result_payload) or "",
+                data_previsao_liberacao=previsao_liberacao_do_payload(result_payload),
                 uploaded_at=datetime.utcnow(),
                 exams_found=exams_found,
                 exams_ocr=exams_ocr,
@@ -1912,6 +1940,9 @@ class PostgresUserDatabase:
                 extracted_name = self._extract_patient_name(result_payload)
                 if extracted_name:
                     doc_model.patient_name = extracted_name
+                # Reprocessar pode trazer outro pedido do BRNET: a previsão
+                # acompanha o payload novo, inclusive quando ele não tem uma.
+                doc_model.data_previsao_liberacao = previsao_liberacao_do_payload(result_payload)
                 if reviewed_by is None and isinstance(result_payload, dict):
                     payload_reviewed_by = result_payload.get("reviewed_by") or result_payload.get("reviewedBy")
                     if payload_reviewed_by:
