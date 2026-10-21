@@ -12,11 +12,25 @@ export type SerieKey = "semanal" | "mensal" | "trimestral";
 /** Um ponto da série geral de documentos. `chave` = primeiro dia do período. */
 export interface PontoSerie {
   chave: string;
+  /** Em ARQUIVO. Alimenta o gráfico de volume e o ranking — carga de trabalho. */
   docs: number;
   pendentes: number;
+  /** Em ARQUIVO, com decisão humana. É a origem da ponte do card de contenção. */
   revisados: number;
   validados: number;
   rejeitados: number;
+  /**
+   * Em CASO: um pedido do BRNET conta uma vez por mais arquivos que receba (ASO
+   * e laudo do mesmo paciente são um caso só); arquivo sem pedido não tem chave
+   * para agrupar e conta como caso próprio. É a unidade dos dois KPIs de cima.
+   */
+  casos: number;
+  /** Casos com decisão humana. Mesma unidade de `casos`. */
+  casos_revisados: number;
+  /** Arquivos revisados cujo BRNET não devolveu pedido — nunca viram pedido. */
+  revisados_sem_pedido: number;
+  /** Arquivos revisados a mais de um pedido já contado (ASO + laudo). */
+  revisados_extras: number;
   /**
    * Prazo pela previsão gravada no processamento, misturando clínica e técnico.
    * O painel não usa mais: ver `prazo_clinica_dia` e `prazo_tecnico_dia`.
@@ -159,6 +173,14 @@ export interface DadosDashboard {
    * pedido, não documento — reenvio não infla a cobertura.
    */
   expedicoes_prontuai_dia: Record<string, number>;
+  /**
+   * Subconjunto de `expedicoes_prontuai_dia`: os pedidos que uma pessoa do time
+   * BR MED conferiu. É o que liga este card ao de "Documentos revisados" — o
+   * revisado está DENTRO do expedido, e o resto saiu com a IA decidindo
+   * sozinha. Sem essa quebra os dois números parecem brigar, e a diferença
+   * entre eles chega a trocar de sinal no meio da semana.
+   */
+  expedicoes_prontuai_revisadas_dia: Record<string, number>;
   /**
    * Primeiro dia (ISO) em que a ligação por pedido existe. Antes dele não há
    * como medir cobertura, e o painel não mostra.

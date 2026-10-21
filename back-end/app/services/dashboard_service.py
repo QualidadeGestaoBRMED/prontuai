@@ -122,17 +122,37 @@ _pedidos_mes: dict[tuple[int, int], dict[int, _Pedido]] = {}
 # permite levar o total de previstos para a tabela "Adoção por clínica".
 # `mode()` resolve o pedido que tem documento de mais de uma clínica (reenvio por
 # outra unidade): vence a que mais enviou.
+#
+# `revisado` responde "alguém do time abriu este pedido?". Mesma definição de
+# revisão do painel (`sql/dashboard_indicadores.sql`), para os dois não
+# divergirem: audit_log de update por ADMIN/CHECKER/MANAGER que terminou em
+# validated/rejected. É `bool_or` porque basta um documento do pedido ter sido
+# conferido — o pedido passou por olho humano.
 _SQL_DOCS_POR_PEDIDO = r"""
-WITH d AS (
+WITH humano AS (
+    SELECT DISTINCT al.resource_id AS document_id
+    FROM audit_logs al
+    JOIN documents d ON d.id = al.resource_id
+    WHERE al.resource = 'documents'
+      AND (al.action = 'documents.update' OR al.action LIKE 'patch:/v1/documents/%')
+      AND al.user_role IN ('ADMIN', 'CHECKER', 'MANAGER')
+      AND al.status_code BETWEEN 200 AND 299
+      AND COALESCE(al.metadata_json::jsonb ->> 'after_status', d.validation_status)
+          IN ('validated', 'rejected')
+),
+d AS (
     SELECT d.created_at, c.name AS clinica,
+           (h.document_id IS NOT NULL) AS revisado,
            CASE WHEN d.result_payload LIKE '{%' AND pg_input_is_valid(d.result_payload, 'jsonb')
                 THEN d.result_payload::jsonb #>> '{brmed_result,pedido_exame_id}' END AS pedido
     FROM documents d
     JOIN clinics c ON c.id = d.clinic_id
+    LEFT JOIN humano h ON h.document_id = d.id
     WHERE c.name NOT IN ('teste', 'testando', 'Clinica Default')
 )
 SELECT pedido::bigint, count(*), min(created_at)::date,
-       mode() WITHIN GROUP (ORDER BY clinica) AS clinica
+       mode() WITHIN GROUP (ORDER BY clinica) AS clinica,
+       bool_or(revisado) AS revisado
 FROM d WHERE pedido ~ '^\d{1,18}$'
 GROUP BY pedido
 """
@@ -520,6 +540,7 @@ def _cruzar_expedicoes(
     hoje: date,
     clinica_por_pedido: Optional[dict[int, str]] = None,
     cadastros_ativos: Optional[dict[str, str]] = None,
+    pedidos_revisados: Optional[set[int]] = None,
 ) -> dict[str, Any]:
     """Liga pedidos do BRNET a documentos do ProntuAI pelo pedido_exame_id.
 
@@ -578,12 +599,14 @@ def _cruzar_expedicoes(
         return {
             "expedicoes_dia": {},
             "expedicoes_prontuai_dia": {},
+            "expedicoes_prontuai_revisadas_dia": {},
             "clinicas_sem_prontuai": None,
             "clinicas_com_prontuai": None,
         }
 
     clinica_por_pedido = clinica_por_pedido or {}
     cadastros_ativos = cadastros_ativos or {}
+    pedidos_revisados = pedidos_revisados or set()
 
     # ── documentos por credenciado, e o cadastro de cada um ───────────────────
     docs_por_credenciado: dict[str, int] = {}
@@ -675,6 +698,11 @@ def _cruzar_expedicoes(
     # cadastros com liberação, para o cadastro sem previsto não sumir da lista.
     atendidos: dict[str, int] = {}
     via_prontuai: dict[str, int] = {}
+    # Subconjunto de `via_prontuai`: os que uma pessoa conferiu. É o que liga o
+    # card de expedições ao de revisados — o revisado está DENTRO do expedido, e
+    # o resto saiu com a IA decidindo sozinha. Sem esta quebra os dois cards
+    # parecem brigar, e a divergência chega a trocar de sinal no meio da semana.
+    via_prontuai_revisado: dict[str, int] = {}
     realizados: set[str] = set()
     for pid, p in pedidos.items():
         # Realizado é pedido EXPEDIDO, datado pelo dia da liberação — é o que a
@@ -695,6 +723,8 @@ def _cruzar_expedicoes(
         atendidos[p.liberacao] = atendidos.get(p.liberacao, 0) + 1
         if processado_no_prontuai:
             via_prontuai[p.liberacao] = via_prontuai.get(p.liberacao, 0) + 1
+            if pid in pedidos_revisados:
+                via_prontuai_revisado[p.liberacao] = via_prontuai_revisado.get(p.liberacao, 0) + 1
         if usa_prontuai(p.credenciado):
             realizados.add(cadastro(p.credenciado))
 
@@ -835,6 +865,7 @@ def _cruzar_expedicoes(
     return {
         "expedicoes_dia": atendidos,
         "expedicoes_prontuai_dia": via_prontuai,
+        "expedicoes_prontuai_revisadas_dia": via_prontuai_revisado,
         # Credenciado sem cadastro e sem previsto não tem por que aparecer.
         "clinicas_sem_prontuai": finalizar(sem, datas_sem, True),
         "clinicas_com_prontuai": finalizar(com, datas_com, False),
@@ -899,11 +930,14 @@ def _consultar() -> dict[str, Any]:
             linha = conn.execute(text(_carregar_sql())).scalar()
             docs_por_pedido: dict[int, int] = {}
             clinica_por_pedido: dict[int, str] = {}
+            pedidos_revisados: set[int] = set()
             primeiro_doc_ligado: Optional[date] = None
-            for pedido, qtd, criado, clinica in conn.execute(text(_SQL_DOCS_POR_PEDIDO)):
+            for pedido, qtd, criado, clinica, revisado in conn.execute(text(_SQL_DOCS_POR_PEDIDO)):
                 docs_por_pedido[int(pedido)] = int(qtd)
                 if clinica:
                     clinica_por_pedido[int(pedido)] = clinica
+                if revisado:
+                    pedidos_revisados.add(int(pedido))
                 if primeiro_doc_ligado is None or criado < primeiro_doc_ligado:
                     primeiro_doc_ligado = criado
             cadastros_ativos = _indexar_cadastros(
@@ -935,7 +969,12 @@ def _consultar() -> dict[str, Any]:
     pedidos = _carregar_pedidos((bruto.get("periodo") or {}).get("doc_mais_antigo"))
     dados.update(
         _cruzar_expedicoes(
-            pedidos, docs_por_pedido, momento.date(), clinica_por_pedido, cadastros_ativos
+            pedidos,
+            docs_por_pedido,
+            momento.date(),
+            clinica_por_pedido,
+            cadastros_ativos,
+            pedidos_revisados,
         )
     )
     dados.update(_cruzar_prazos(pedidos, documentos))
