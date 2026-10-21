@@ -22,7 +22,11 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { CredenciadoBrnetPicker, type CredenciadoBrnet } from "@/components/credenciado-brnet-picker";
+import {
+  CredenciadoBrnetAutocomplete,
+  descreverClinicas,
+  type CredenciadoBrnet,
+} from "@/components/credenciado-brnet-autocomplete";
 import { API_ENDPOINTS } from "@/lib/config";
 import { authFetch } from "@/lib/auth-fetch";
 
@@ -30,10 +34,6 @@ interface Clinic {
   id: string;
   email: string;
   name: string;
-  /** Credenciado do BRNET ("C25414"); null = sem vínculo. */
-  brnet_id?: string | null;
-  city?: string | null;
-  state?: string | null;
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -105,15 +105,20 @@ export default function ClinicsAdminPage() {
   const [emailError, setEmailError] = useState("");
   const [creating, setCreating] = useState(false);
 
-  // Vínculo com o credenciado do BRNET. Na criação, o Gestor sempre escolhe da
-  // lista; "sem vínculo" é só do ADMIN (contas internas, credenciado fora da
-  // rede) — o back-end recusa o resto com 403.
+  // Vínculo com o credenciado do BRNET, só na criação: o nome sugere os
+  // credenciados conforme a digitação, e escolher uma sugestão é o que vincula.
+  // Nome digitado sem escolher fica sem vínculo — permitido só ao ADMIN (contas
+  // internas, credenciado fora da rede); o back-end recusa o Gestor com 403.
   const [credenciados, setCredenciados] = useState<CredenciadoBrnet[]>([]);
   const [carregandoCredenciados, setCarregandoCredenciados] = useState(false);
   const [erroCredenciados, setErroCredenciados] = useState<string | null>(null);
   const [formBrnetId, setFormBrnetId] = useState<string | null>(null);
-  const [semVinculo, setSemVinculo] = useState(false);
-  const [removerVinculo, setRemoverVinculo] = useState(false);
+  const credenciadoEscolhido = formBrnetId
+    ? credenciados.find((c) => c.identificador === formBrnetId)
+    : undefined;
+  // Com credenciado escolhido, o e-mail é opcional: vazio, o back-end grava o
+  // do BRNET; digitado, vence o digitado (o do BRNET pode estar desatualizado).
+  const emailBrnet = credenciadoEscolhido?.email ?? null;
 
   const validateEmail = (email: string) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -231,32 +236,24 @@ export default function ClinicsAdminPage() {
 
   const abrirCriacao = () => {
     setFormBrnetId(null);
-    setSemVinculo(false);
     setFormName("");
     setCreateModalOpen(true);
     carregarCredenciados();
   };
 
-  const escolherNaCriacao = (credenciado: CredenciadoBrnet) => {
-    setFormBrnetId(credenciado.identificador);
-    // O nome sugerido é o rótulo do BRNET; continua editável, porque o vínculo
-    // é pelo identificador e não pelo nome.
-    setFormName(credenciado.nome);
-  };
-
   const handleCreateClinic = async () => {
-    if (!session?.user?.email || !formEmail || !formName) {
+    if (!session?.user?.email || !formName || (!formEmail && !emailBrnet)) {
       toast.error("Preencha todos os campos");
       return;
     }
-    if (!semVinculo && !formBrnetId) {
-      toast.error("Escolha o credenciado do BRNET");
+    if (!ehAdmin && !formBrnetId) {
+      toast.error("Escolha a clínica na lista da rede credenciada do BRNET");
       return;
     }
 
     // Validar formato de email
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(formEmail)) {
+    if (formEmail && !emailRegex.test(formEmail)) {
       toast.error("Email inválido. Use o formato: exemplo@dominio.com");
       return;
     }
@@ -269,9 +266,9 @@ export default function ClinicsAdminPage() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          email: formEmail,
+          ...(formEmail ? { email: formEmail } : {}),
           name: formName,
-          ...(semVinculo ? {} : { brnet_id: formBrnetId }),
+          ...(formBrnetId ? { brnet_id: formBrnetId } : {}),
         }),
       });
 
@@ -302,7 +299,6 @@ export default function ClinicsAdminPage() {
       setFormName("");
       setEmailError("");
       setFormBrnetId(null);
-      setSemVinculo(false);
       fetchClinics();
     } catch (error) {
       console.error("Erro completo:", error);
@@ -325,13 +321,6 @@ export default function ClinicsAdminPage() {
         body: JSON.stringify({
           name: formName,
           is_active: selectedClinic.is_active,
-          // Só manda o que mudou: o back-end confere o credenciado na rede do
-          // BRNET a cada `brnet_id` recebido.
-          ...(removerVinculo
-            ? { remover_vinculo_brnet: true }
-            : formBrnetId && formBrnetId !== (selectedClinic.brnet_id ?? null)
-              ? { brnet_id: formBrnetId }
-              : {}),
         }),
       });
 
@@ -385,10 +374,7 @@ export default function ClinicsAdminPage() {
   const openEditModal = (clinic: Clinic) => {
     setSelectedClinic(clinic);
     setFormName(clinic.name);
-    setFormBrnetId(clinic.brnet_id ?? null);
-    setRemoverVinculo(false);
     setEditModalOpen(true);
-    carregarCredenciados();
     // Só para ADMIN: a seção nem é renderizada para MANAGER, e o back-end
     // responderia 403 (`require_admin`) — pedir à toa só geraria erro no log.
     if (ehAdmin) carregarUsuarios(clinic.id);
@@ -431,9 +417,6 @@ export default function ClinicsAdminPage() {
                       Nome
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                      BRNET
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                       Email
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
@@ -456,9 +439,6 @@ export default function ClinicsAdminPage() {
                           <div className="h-4 bg-gray-200 rounded w-32"></div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="h-4 bg-gray-200 rounded w-16"></div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
                           <div className="h-4 bg-gray-200 rounded w-48"></div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
@@ -477,7 +457,7 @@ export default function ClinicsAdminPage() {
                     ))
                   ) : clinics.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="px-6 py-12 text-center text-gray-500">
+                      <td colSpan={5} className="px-6 py-12 text-center text-gray-500">
                         Nenhuma clínica encontrada
                       </td>
                     </tr>
@@ -486,15 +466,6 @@ export default function ClinicsAdminPage() {
                       <tr key={clinic.id}>
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                           {clinic.name}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm">
-                          {clinic.brnet_id ? (
-                            <span className="font-mono text-gray-700">{clinic.brnet_id}</span>
-                          ) : (
-                            <span className="rounded-full bg-amber-100 px-2 py-1 text-xs text-amber-800">
-                              Sem vínculo
-                            </span>
-                          )}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
                           {clinic.email}
@@ -549,35 +520,42 @@ export default function ClinicsAdminPage() {
             </DialogHeader>
 
             <div className="space-y-4">
-              <div className="space-y-2">
-                <Label>Credenciado no BRNET</Label>
-                {semVinculo ? (
-                  <p className="text-sm text-gray-500">
-                    Clínica sem credenciado no BRNET (conta interna ou credenciado fora da rede).
+              <div className="space-y-1">
+                <Label htmlFor="name">Nome da Clínica</Label>
+                <CredenciadoBrnetAutocomplete
+                  id="name"
+                  value={formName}
+                  onChange={(nome) => {
+                    setFormName(nome);
+                    setFormBrnetId(null);
+                  }}
+                  onEscolher={(c) => {
+                    setFormName(c.nome);
+                    setFormBrnetId(c.identificador);
+                  }}
+                  opcoes={credenciados}
+                  placeholder="Digite cidade ou nome da clínica"
+                />
+                {carregandoCredenciados ? (
+                  <p className="text-xs text-gray-500">Carregando a rede credenciada do BRNET…</p>
+                ) : erroCredenciados ? (
+                  <p className="text-xs text-red-600">{erroCredenciados}</p>
+                ) : credenciadoEscolhido ? (
+                  credenciadoEscolhido.clinicas.length > 0 ? (
+                    <p className="text-xs text-amber-700">
+                      Já existe clínica para este credenciado: {descreverClinicas(credenciadoEscolhido.clinicas)}.
+                      Prefira usar a existente.
+                    </p>
+                  ) : (
+                    <p className="text-xs text-green-700">Clínica da rede credenciada do BRNET.</p>
+                  )
+                ) : formName.trim() ? (
+                  <p className="text-xs text-gray-500">
+                    {ehAdmin
+                      ? "Sem vínculo com o BRNET — escolha um nome da lista ou siga assim para conta interna ou credenciado fora da rede."
+                      : "Escolha a clínica na lista da rede credenciada do BRNET."}
                   </p>
-                ) : (
-                  <CredenciadoBrnetPicker
-                    opcoes={credenciados}
-                    carregando={carregandoCredenciados}
-                    erro={erroCredenciados}
-                    valor={formBrnetId}
-                    onEscolher={escolherNaCriacao}
-                  />
-                )}
-                {ehAdmin && (
-                  <label className="flex items-center gap-2 text-sm text-gray-600">
-                    <input
-                      type="checkbox"
-                      className="size-4"
-                      checked={semVinculo}
-                      onChange={(e) => {
-                        setSemVinculo(e.target.checked);
-                        setFormBrnetId(null);
-                      }}
-                    />
-                    Cadastrar sem vínculo com o BRNET
-                  </label>
-                )}
+                ) : null}
               </div>
 
               <div>
@@ -585,13 +563,23 @@ export default function ClinicsAdminPage() {
                 <Input
                   id="email"
                   type="email"
-                  placeholder="clinica@example.com"
+                  placeholder={emailBrnet ?? "clinica@example.com"}
                   value={formEmail}
                   onChange={handleEmailChange}
                   className={emailError ? "border-red-500" : ""}
                 />
                 {emailError ? (
                   <p className="text-xs text-red-500 mt-1">{emailError}</p>
+                ) : emailBrnet ? (
+                  <div className="mt-1 space-y-0.5 text-xs text-gray-500">
+                    <p>
+                      E-mail no BRNET: <span className="font-medium text-gray-700">{emailBrnet}</span>
+                    </p>
+                    <p>
+                      Se este campo ficar vazio, o e-mail registrado será este. Se estiver desatualizado ou
+                      errado, preencha o campo com o novo.
+                    </p>
+                  </div>
                 ) : (
                   <p className="text-xs text-gray-500 mt-1">
                     Este email será usado para login da clínica
@@ -599,15 +587,6 @@ export default function ClinicsAdminPage() {
                 )}
               </div>
 
-              <div>
-                <Label htmlFor="name">Nome da Clínica</Label>
-                <Input
-                  id="name"
-                  placeholder="Nome completo da clínica"
-                  value={formName}
-                  onChange={(e) => setFormName(e.target.value)}
-                />
-              </div>
             </div>
 
             <DialogFooter>
@@ -623,7 +602,13 @@ export default function ClinicsAdminPage() {
               </Button>
               <Button
                 onClick={handleCreateClinic}
-                disabled={creating || !!emailError || !formEmail || !formName || (!semVinculo && !formBrnetId)}
+                disabled={
+                  creating ||
+                  !!emailError ||
+                  (!formEmail && !emailBrnet) ||
+                  !formName.trim() ||
+                  (!ehAdmin && !formBrnetId)
+                }
               >
                 {creating ? "Criando..." : "Criar Clínica"}
               </Button>
@@ -659,39 +644,6 @@ export default function ClinicsAdminPage() {
                   value={formName}
                   onChange={(e) => setFormName(e.target.value)}
                 />
-              </div>
-
-              <div className="space-y-2">
-                <Label>Credenciado no BRNET</Label>
-                {removerVinculo ? (
-                  <p className="text-sm text-gray-500">
-                    O vínculo será removido ao salvar.{" "}
-                    <button type="button" className="underline" onClick={() => setRemoverVinculo(false)}>
-                      Desfazer
-                    </button>
-                  </p>
-                ) : (
-                  <>
-                    <CredenciadoBrnetPicker
-                      opcoes={credenciados}
-                      carregando={carregandoCredenciados}
-                      erro={erroCredenciados}
-                      valor={formBrnetId}
-                      onEscolher={(c) => setFormBrnetId(c.identificador)}
-                      clinicaAtualId={selectedClinic?.id}
-                    />
-                    {/* Tirar o vínculo é só do ADMIN; o Gestor pode vincular e trocar. */}
-                    {ehAdmin && selectedClinic?.brnet_id && (
-                      <button
-                        type="button"
-                        className="text-xs text-red-600 underline"
-                        onClick={() => setRemoverVinculo(true)}
-                      >
-                        Remover vínculo com o BRNET
-                      </button>
-                    )}
-                  </>
-                )}
               </div>
 
               {/* Usuários vinculados — só ADMIN. MANAGER edita a clínica sem
