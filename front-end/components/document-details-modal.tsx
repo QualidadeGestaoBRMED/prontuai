@@ -17,6 +17,7 @@ import { ProcessResult } from "@/types/process"
 import ExamesComparativoTable from "@/components/exames-comparativo-table"
 import { Archive, Download } from "lucide-react"
 import { useRouter } from "next/navigation"
+import { mensagemReenvio } from "@/lib/reenvio"
 
 interface DocumentDetailsModalProps {
   open: boolean
@@ -69,6 +70,15 @@ export function DocumentDetailsModal({
       return (
         <Badge variant="destructive">
           Documentos Incompletos - Reenviar
+        </Badge>
+      )
+    }
+
+    // Reenvio de prontuário já liberado: não volta para a revisão
+    if (status === "resubmission") {
+      return (
+        <Badge variant="secondary" className="bg-sky-100 text-sky-800 hover:bg-sky-200">
+          Já liberado - Não é preciso reenviar
         </Badge>
       )
     }
@@ -224,6 +234,14 @@ export function DocumentDetailsModal({
                 </p>
               </div>
             </div>
+
+            {/* Reenvio de prontuário já liberado */}
+            {result.status === "resubmission" && result.result.reenvio && (
+              <div className="p-4 border border-sky-200 rounded-lg bg-sky-50">
+                <h4 className="font-semibold text-sky-900 mb-2">Prontuário já liberado</h4>
+                <p className="text-sm text-sky-800">{mensagemReenvio(result.result.reenvio)}</p>
+              </div>
+            )}
 
             {/* Rejection Reason (if rejected) */}
             {result.status === "rejected" && result.rejectionReason && (
