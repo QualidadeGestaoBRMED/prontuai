@@ -296,11 +296,15 @@ async def create_clinic(
     # credenciado que não está na rede. O Gestor escolhe da lista.
     brnet_id = (clinic_data.brnet_id or "").strip() or None
     cidade, uf = clinic_data.city, clinic_data.state
+    email = clinic_data.email
     if brnet_id:
         credenciado = await _credenciado_da_rede(brnet_id)
         brnet_id = credenciado.identificador
         # Cidade e UF vêm da rede, não do formulário: são os do credenciado.
         cidade, uf = credenciado.cidade, credenciado.uf
+        # E-mail: o digitado vence (o da rede pode estar desatualizado); vazio,
+        # fica o do credenciado — é o que a tela avisa embaixo do campo.
+        email = email or credenciado.email
     elif not current_user.tem_papel(UserRole.ADMIN):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -327,6 +331,7 @@ async def create_clinic(
             city=cidade,
             state=uf,
             brnet_id=brnet_id,
+            email=email,
         )
 
         logger.info(f"[CLINICS] Admin {current_user.email} criou clínica {clinic.id} ({clinic.name})")

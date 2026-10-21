@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
 from typing import List, Optional
 from datetime import datetime
 
@@ -14,6 +14,7 @@ class Clinic(BaseModel):
     state: Optional[str] = None
     # Identificador do credenciado no BRNET ("C25414"); None = sem vínculo.
     brnet_id: Optional[str] = None
+    email: Optional[str] = None
     is_active: bool = True
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
@@ -45,6 +46,8 @@ class ClinicCreate(BaseModel):
     city: Optional[str] = None
     state: Optional[str] = None
     brnet_id: Optional[str] = None
+    # Vazio com credenciado escolhido = o e-mail dele na rede do BRNET.
+    email: Optional[EmailStr] = None
 
     class Config:
         json_schema_extra = {
@@ -97,4 +100,5 @@ class CredenciadoBrnetOpcao(BaseModel):
     nome: str
     cidade: Optional[str] = None
     uf: Optional[str] = None
+    email: Optional[str] = None
     clinicas: List[ClinicaVinculada] = []

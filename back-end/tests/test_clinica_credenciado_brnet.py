@@ -29,7 +29,8 @@ from app.services import rede_credenciada_service as servico
 from app.services.rede_credenciada_service import CredenciadoRede, RedeCredenciadaIndisponivel
 
 REDE = [
-    CredenciadoRede(identificador="C4071", nome="TRÊS RIOS - RJ - ASO", cidade="TRÊS RIOS", uf="RJ"),
+    CredenciadoRede(identificador="C4071", nome="TRÊS RIOS - RJ - ASO", cidade="TRÊS RIOS", uf="RJ",
+                    email="aso@exemplo.com.br"),
     CredenciadoRede(identificador="C25414", nome="AÇAILÂNDIA - MA - CLINICA PREVEN", cidade="AÇAILÂNDIA", uf="MA"),
     CredenciadoRede(identificador="C1", nome="RECIFE - PE - QUALITY", cidade="RECIFE", uf="PE"),
     CredenciadoRede(identificador="C2", nome="FORTALEZA - CE - QUALITY", cidade="FORTALEZA", uf="CE"),
@@ -51,6 +52,15 @@ def test_mapear_rede_descarta_item_incompleto_e_ignora_acento_na_ordem():
     assert [c.identificador for c in rede] == ["C25414", "C30155"]
     # CNPJ e e-mail não entram: o CNPJ do credenciado ainda não é adotado.
     assert "cnpj" not in rede[0].model_dump()
+
+
+def test_email_com_varios_enderecos_fica_com_o_primeiro_valido():
+    rede = servico.mapear_rede([
+        {"identificador": "C1", "nome": "A - SP - X", "email": " contato@a.com.br; outro@a.com.br"},
+        {"identificador": "C2", "nome": "B - SP - Y", "email": "sem-arroba; certo@b.com"},
+        {"identificador": "C3", "nome": "C - SP - Z", "email": ""},
+    ])
+    assert [c.email for c in rede] == ["contato@a.com.br", "certo@b.com", None]
 
 
 def test_resposta_que_nao_e_lista_e_recusada():
@@ -105,7 +115,8 @@ class BancoFalso:
 
     def create_clinic(self, **kw):
         self.criada = kw
-        return Clinic(id="nova", name=kw["name"], city=kw["city"], state=kw["state"], brnet_id=kw["brnet_id"])
+        return Clinic(id="nova", name=kw["name"], city=kw["city"], state=kw["state"], brnet_id=kw["brnet_id"],
+                      email=kw["email"])
 
     def update_clinic(self, **kw):
         self.atualizada = kw
@@ -172,6 +183,23 @@ def test_cidade_e_uf_vem_da_rede_e_nao_do_formulario(monkeypatch):
     criar(mod, {"name": "TRÊS RIOS - RJ - ASO", "brnet_id": " C4071 ", "city": "Outra", "state": "SP"}, GESTOR)
     assert banco.criada["brnet_id"] == "C4071"
     assert (banco.criada["city"], banco.criada["state"]) == ("TRÊS RIOS", "RJ")
+
+
+def test_email_vazio_fica_o_do_credenciado_e_digitado_vence(monkeypatch):
+    """É o que a tela avisa embaixo do campo de e-mail."""
+    banco = BancoFalso()
+    mod = carregar(monkeypatch, banco)
+    criar(mod, {"name": "TRÊS RIOS - RJ - ASO", "brnet_id": "C4071"}, GESTOR)
+    assert banco.criada["email"] == "aso@exemplo.com.br"
+    criar(mod, {"name": "TRÊS RIOS - RJ - ASO", "brnet_id": "C4071", "email": "novo@aso.com.br"}, GESTOR)
+    assert banco.criada["email"] == "novo@aso.com.br"
+
+
+def test_sem_credenciado_o_email_e_so_o_digitado(monkeypatch):
+    banco = BancoFalso()
+    mod = carregar(monkeypatch, banco)
+    criar(mod, {"name": "BR MED Teste"}, ADMIN)
+    assert banco.criada["email"] is None
 
 
 def test_credenciado_fora_da_rede_e_recusado(monkeypatch):
@@ -264,3 +292,5 @@ def test_vinculo_antigo_casa_pelo_rotulo_inteiro_e_nunca_pelo_nome_curto():
     assert {c.id for c in plano["sem_par"]} == {"c3", "c4"}
     assert [c.id for c, _ in plano["ja_vinculadas"]] == ["c5"]
     assert set(plano["duplicadas"]) == {"C4071"}
+    # c5 está vinculada mas sem e-mail/cidade/UF: entra para completar.
+    assert [(c.id, cred.identificador) for c, cred in plano["completar"]] == [("c5", "C25414")]
