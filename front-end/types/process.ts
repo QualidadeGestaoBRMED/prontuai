@@ -3,7 +3,17 @@
 export type ProcessStatus = 'processing' | 'completed' | 'error'
 export type ProcessStep = 'upload' | 'ocr' | 'brmed' | 'validation' | 'completed'
 export type DocumentStatus = 'pending' | 'processing' | 'completed' | 'error'
-export type ResultStatus = 'approved' | 'rejected' | 'pending_review'
+// 'resubmission': reenvio de um prontuário já liberado (validation_status
+// 'reenvio' no back-end, migration 015). Não vai para a Checagem; a clínica vê
+// a data em que o original foi liberado.
+export type ResultStatus = 'approved' | 'rejected' | 'pending_review' | 'resubmission'
+
+/** O liberado original de um reenvio, como o back-end grava em `result_payload.reenvio`. */
+export type ReenvioLiberado = {
+  documento_id: string
+  liberado_em: string
+  criterio: 'arquivo' | 'pedido' | 'cpf_empresa'
+}
 export type TabelaComparacaoItem = {
   exame: string
   status: "encontrado" | "faltante" | "parcialmente_encontrado" | "extra_no_ocr"
@@ -94,6 +104,7 @@ export interface ProcessResult {
 
 // Estrutura de resposta do backend (da API existente)
 export interface DocumentProcessingResult {
+  reenvio?: ReenvioLiberado | null
   cpf: string
   cpf_processado?: string
   passaporte_processado?: string | null
