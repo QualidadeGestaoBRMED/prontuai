@@ -9,13 +9,16 @@ do dashboard é atribuído só pelo ADMIN, por decisão de produto).
 
 Clínica: obrigatória quando um dos cargos é SENDER, que é o cargo preso a uma
 clínica. Os demais enxergam todas.
+
+Cargo que outro da lista já contém é recusado: o ADMIN contém todos, e o
+MANAGER contém CHECKER, SENDER e VIEWER (`CARGOS_CONTIDOS` em models/user.py).
 """
 from fastapi import APIRouter, HTTPException, status, Depends
 from typing import List, Optional
 from app.core.auth import require_admin, require_management
 from app.core.database import user_db
 from app.core import metrics
-from app.models.user import User, UserCreate, UserUpdate, UserRole
+from app.models.user import User, UserCreate, UserUpdate, UserRole, cargo_que_contem
 import logging
 
 logger = logging.getLogger(__name__)
@@ -55,6 +58,23 @@ def _assert_manager_cannot_touch_admin(actor: User, target_roles: Optional[List[
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Gestores só podem atribuir as roles CHECKER e SENDER"
         )
+
+
+def _recusar_cargo_contido(papeis: Optional[List[UserRole]]) -> None:
+    """
+    Cargo que outro da lista já contém não entra (ver `CARGOS_CONTIDOS`).
+
+    Vale só para o que está sendo gravado. Quem já tem a sobreposição (dois
+    gestores com Visualizador, em out/2026) continua com ela até a próxima
+    edição — a tela abre com o cargo contido desmarcado, e o salvar o tira.
+    """
+    for papel in papeis or ():
+        dono = cargo_que_contem(papel, papeis)
+        if dono is not None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"O cargo {papel.value} já está incluído em {dono.value}",
+            )
 
 
 def _validar_clinica(clinic_id: Optional[str]):
@@ -135,6 +155,7 @@ async def create_user(
         _exigir_algum_cargo(user_create.roles)
     papeis = user_create.papeis()
     _assert_manager_cannot_touch_admin(admin, papeis)
+    _recusar_cargo_contido(papeis)
     try:
         clinic_id = None
         clinic_name = None
@@ -216,6 +237,7 @@ async def update_user(
     _assert_manager_cannot_touch_admin(admin, papeis)
     if _gestor_sem_admin(admin):
         _assert_manager_can_edit(admin, user_id, user_update)
+    _recusar_cargo_contido(papeis)
 
     alvo = user_db.get_user_by_id(user_id)
     if alvo is None:
