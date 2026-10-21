@@ -48,6 +48,9 @@ class ClinicModel(Base):
     # Credenciado do BRNET ("C25414", migration 014). Índice comum e não único
     # enquanto as clínicas duplicadas não são unificadas — ver a migration.
     brnet_id = Column(String(16), nullable=True, index=True)
+    # E-mail de contato (migration 014): o digitado no cadastro ou, vazio, o do
+    # credenciado na rede do BRNET.
+    email = Column(String, nullable=True)
     is_active = Column(Boolean, nullable=False, default=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
