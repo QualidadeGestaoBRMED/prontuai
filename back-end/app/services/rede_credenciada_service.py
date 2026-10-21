@@ -10,9 +10,12 @@ Contrato medido em out/2026:
   ignora qualquer parâmetro na URL.
 - Cada item: `identificador` ("C25414", único e estável entre chamadas), `nome`
   já no formato do rótulo do BRNET ("RECIFE - PE - QUALIMETRA"), `cidade`, `UF`,
-  e também CNPJ, endereço e e-mail — que este cliente descarta: o CNPJ do
+  `email`, e também CNPJ e endereço — que este cliente descarta: o CNPJ do
   credenciado ainda não é adotado (decisão de out/2026), e o campo `cnpj` da
   clínica alimenta a consulta de exames do BRNET.
+- `email` vem preenchido em todos; em 8 de 583 traz mais de um, separados por
+  ";" — fica o primeiro, que é o que a clínica recebe quando o cadastro deixa o
+  campo de e-mail vazio.
 - A lista parece trazer só a rede atual: 37 credenciados com pedido entre mai e
   out/2026 (3% dos pedidos) não aparecem nela.
 
@@ -21,6 +24,7 @@ e nada faz conta com ele.
 """
 import asyncio
 import logging
+import re
 import time
 import unicodedata
 from typing import Any, Optional
@@ -46,6 +50,7 @@ class CredenciadoRede(BaseModel):
     nome: str
     cidade: Optional[str] = None
     uf: Optional[str] = None
+    email: Optional[str] = None
 
 
 class RedeCredenciadaIndisponivel(Exception):
@@ -61,6 +66,17 @@ def _texto(valor: Any) -> Optional[str]:
         return None
     texto = str(valor).strip()
     return texto or None
+
+
+_EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+
+def _primeiro_email(valor: Any) -> Optional[str]:
+    """O primeiro e-mail válido do campo, que às vezes traz vários ("a@x;b@y")."""
+    for parte in re.split(r"[;,\s]+", _texto(valor) or ""):
+        if _EMAIL.match(parte):
+            return parte
+    return None
 
 
 def mapear_rede(payload: Any) -> list[CredenciadoRede]:
@@ -81,6 +97,7 @@ def mapear_rede(payload: Any) -> list[CredenciadoRede]:
                 nome=nome,
                 cidade=_texto(item.get("cidade")),
                 uf=_texto(item.get("UF")),
+                email=_primeiro_email(item.get("email")),
             )
         )
     # Ordem alfabética sem acento: com acento, "AÇAILÂNDIA" ia para depois de "ACARAU".

@@ -14,8 +14,8 @@ nome inteiro, com a normalização do dashboard (sem acento, sem caixa, travess�
 ativas casam; as que sobram (contas internas, nome curto, credenciado que saiu
 da rede) ficam para vincular à mão na tela de clínicas.
 
-Clínica que já tem vínculo não é tocada. Cidade e UF vêm do credenciado e só
-preenchem o que está vazio. Inativas entram também: reativar uma clínica
+Clínica que já tem vínculo não é tocada. Cidade, UF e e-mail vêm do
+credenciado e só preenchem o que está vazio. Inativas entram também: reativar uma clínica
 vinculada é o caminho certo quando o credenciado volta.
 
 O relatório lista ainda os credenciados com mais de uma clínica — as duplicatas
@@ -53,7 +53,17 @@ def planejar_vinculos(clinicas, rede: list[CredenciadoRede]) -> dict:
     for clinica, credenciado in vincular:
         por_credenciado[credenciado.identificador].append(clinica)
     duplicadas = {k: v for k, v in por_credenciado.items() if len(v) > 1}
-    return {"vincular": vincular, "sem_par": sem_par, "ja_vinculadas": ja_vinculadas, "duplicadas": duplicadas}
+
+    # Já vinculada com cidade, UF ou e-mail vazios: completa pelo credenciado do
+    # vínculo (o e-mail entrou na migration 014 depois dos primeiros vínculos).
+    por_id = {c.identificador: c for c in rede}
+    completar = [
+        (clinica, por_id[brnet_id])
+        for clinica, brnet_id in ja_vinculadas
+        if brnet_id in por_id and not (clinica.city and clinica.state and clinica.email)
+    ]
+    return {"vincular": vincular, "sem_par": sem_par, "ja_vinculadas": ja_vinculadas,
+            "duplicadas": duplicadas, "completar": completar}
 
 
 def _situacao(clinica) -> str:
@@ -72,7 +82,7 @@ async def main() -> int:
     plano = planejar_vinculos(clinicas, rede)
 
     print(f"Rede credenciada: {len(rede)} credenciados · clínicas no ProntuAI: {len(clinicas)}")
-    print(f"  já vinculadas: {len(plano['ja_vinculadas'])}")
+    print(f"  já vinculadas: {len(plano['ja_vinculadas'])} (a completar cidade/UF/e-mail: {len(plano['completar'])})")
     print(f"  a vincular:    {len(plano['vincular'])}")
     print(f"  sem par:       {len(plano['sem_par'])}")
     if plano["sem_par"]:
@@ -90,14 +100,15 @@ async def main() -> int:
         print("\n[dry-run] nada foi gravado. Rode com --aplicar para gravar.")
         return 0
 
-    for clinica, credenciado in plano["vincular"]:
+    for clinica, credenciado in plano["vincular"] + plano["completar"]:
         user_db.update_clinic(
             clinic_id=clinica.id,
             brnet_id=credenciado.identificador,
             city=None if clinica.city else credenciado.cidade,
             state=None if clinica.state else credenciado.uf,
+            email=None if clinica.email else credenciado.email,
         )
-    print(f"\nGravado: {len(plano['vincular'])} clínicas vinculadas.")
+    print(f"\nGravado: {len(plano['vincular'])} clínicas vinculadas, {len(plano['completar'])} completadas.")
     return 0
 
 
