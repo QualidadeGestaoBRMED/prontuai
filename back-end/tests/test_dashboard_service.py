@@ -371,6 +371,7 @@ def test_brnet_indisponivel_esvazia_tudo_sem_inventar():
     assert r == {
         "expedicoes_dia": {},
         "expedicoes_prontuai_dia": {},
+        "expedicoes_prontuai_revisadas_dia": {},
         "clinicas_sem_prontuai": None,
         "clinicas_com_prontuai": None,
     }

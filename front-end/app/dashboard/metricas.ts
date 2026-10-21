@@ -85,9 +85,10 @@ export const ABAS: { id: Aba; label: string }[] = [
 
 // ── textos de apoio ──────────────────────────────────────────────────────────
 const TIPS_KPI: Record<string, string> = {
-  "Documentos enviados": "Prontuários recebidos pela plataforma no período.",
-  "Documentos revisados":
-    "Aprovados ou rejeitados por uma pessoa do time BR MED (checador, gestor ou administrador). A decisão automática da IA não conta.",
+  "Documentos enviados":
+    "Prontuários recebidos no período, contados por caso: ASO e laudo do mesmo pedido somam um só.",
+  "Documentos Revisados pelo time BR MED":
+    "Casos aprovados ou rejeitados por uma pessoa do time BR MED. A decisão automática da IA não conta.",
   "Expedições via ProntuAI":
     "Pedidos atendidos nas credenciadas que tiveram o prontuário processado pelo ProntuAI, ligados pelo número do pedido no BRNET. Meta: 100%.",
 };
@@ -153,7 +154,12 @@ export const COMO_CALCULAMOS: Record<IdIndicador, ComoCalculamos> = {
       {
         titulo: "O que conta",
         texto:
-          "Cada prontuário que uma clínica subiu no ProntuAI é um documento. Reenvio conta de novo: o mesmo prontuário mandado duas vezes são dois envios.",
+          "A unidade é o caso, não o arquivo: vários prontuários do mesmo pedido do BRNET somam um só — ASO e laudo complementar do mesmo paciente é um caso. Arquivo cujo BRNET não devolveu pedido não tem como ser agrupado e conta como caso próprio.",
+      },
+      {
+        titulo: "E o gráfico abaixo?",
+        texto:
+          "O gráfico de volume conta ARQUIVO, não caso, porque mede carga de trabalho — por isso o número dele é maior que o do card. O rótulo do gráfico avisa.",
       },
       {
         titulo: "Em que período cai",
@@ -168,13 +174,13 @@ export const COMO_CALCULAMOS: Record<IdIndicador, ComoCalculamos> = {
     ],
   },
   revisados: {
-    titulo: "Documentos revisados",
+    titulo: "Documentos Revisados pelo time BR MED",
     pergunta: "Quanto do que chegou já passou pela decisão do time BR MED.",
     blocos: [
       {
         titulo: "O que conta",
         texto:
-          "Documento que uma pessoa do time BR MED — checador, gestor ou administrador — aprovou ou rejeitou. A decisão automática da IA não conta: documento aprovado pela IA e ainda não conferido fica fora.",
+          "Caso em que uma pessoa do time BR MED aprovou ou rejeitou ao menos um prontuário. A decisão automática da IA não conta: caso que a IA resolveu e ninguém abriu fica de fora, mesmo já tendo sido liberado. Mesma unidade de Documentos enviados, para o percentual fazer sentido.",
       },
       {
         titulo: "Em que período cai",
@@ -460,7 +466,7 @@ export const COMO_CALCULAMOS: Record<IdIndicador, ComoCalculamos> = {
 /** Qual entrada de `COMO_CALCULAMOS` cada KPI abre — pelo rótulo, como as dicas. */
 const AJUDA_KPI: Record<string, IdIndicador> = {
   "Documentos enviados": "enviados",
-  "Documentos revisados": "revisados",
+  "Documentos Revisados pelo time BR MED": "revisados",
   "Expedições via ProntuAI": "expedicoes",
   Acurácia: "acuracia",
   "Concordância direta": "concordancia",
@@ -880,6 +886,30 @@ export interface VisaoDashboard {
   simulador: { viaProntuaiSemana: number; adesao: number; semana: string } | null;
   /** Rótulo do filtro de período, para os blocos retroativos se situarem. */
   periodoLabel: string;
+  /**
+   * Onde um número está dentro do outro: dos pedidos que passaram pelo ProntuAI,
+   * quantos uma pessoa conferiu e quantos a IA decidiu sozinha. É o que explica
+   * a diferença entre os cards de revisados e de expedições sem falar de unidade
+   * nem de datação — o revisado está DENTRO do expedido. `null` quando o BRNET
+   * não respondeu e não há pedido para repartir. Renderizado no "?" dos dois.
+   */
+  contencao: {
+    via: number;
+    revisadas: number;
+    semRevisor: number;
+    pct: string;
+    /**
+     * A ponte do card de revisados até a parte escura da barra. Cada termo é
+     * medido, menos `datacao`, que é o resíduo entre as duas datações (envio ×
+     * liberação) — é o que sobra depois de tirar as causas conhecidas.
+     */
+    ponte: {
+      casosRevisados: number;
+      semPedido: number;
+      pedidosRevisados: number;
+      datacao: number;
+    };
+  } | null;
 
   kpisAcuracia: Kpi[];
   acuraciaSeries: BarraPercentual[];
@@ -955,8 +985,14 @@ export function calcularVisao({ dados, filtro, comparar, verTodasClinicas }: Opc
     return `${a >= b ? "+" : "-"}${Math.abs(((a - b) / b) * 100).toFixed(0)}%`;
   };
 
-  const enviados = soma(atual, "docs");
-  const revisados = soma(atual, "revisados");
+  // Os dois KPIs de cima contam CASO, não arquivo: ASO e laudo do mesmo pedido
+  // são um caso só. `revisadosArquivos` segue em arquivo porque é a origem da
+  // ponte do card de contenção.
+  const enviados = soma(atual, "casos");
+  const revisados = soma(atual, "casos_revisados");
+  const revisadosArquivos = soma(atual, "revisados");
+  const revisadosSemPedido = soma(atual, "revisados_sem_pedido");
+  const revisadosExtras = soma(atual, "revisados_extras");
   const liberados = soma(atual, "validados");
 
   const bar = (v: number, max: number, h: number) => (v <= 0 ? 0 : Math.max(3, Math.round((v / max) * h)));
@@ -1007,6 +1043,7 @@ export function calcularVisao({ dados, filtro, comparar, verTodasClinicas }: Opc
   // é pedido expedido, não atendido (definição da 1.2).
   const porDia = dados.expedicoes_dia || {};
   const viaPorDia = dados.expedicoes_prontuai_dia || {};
+  const viaRevisadaPorDia = dados.expedicoes_prontuai_revisadas_dia || {};
   const dataDe = (iso?: string) => {
     if (!iso) return null;
     const q = partes(iso);
@@ -1045,6 +1082,14 @@ export function calcularVisao({ dados, filtro, comparar, verTodasClinicas }: Opc
     ? expedicoesEntre(viaPorDia, faixaAnterior.ini, faixaAnterior.fim, ultimoDoc)
     : 0;
   const cobertura = pct(viaProntuai, expEmpresa);
+  // Dos pedidos que passaram pela plataforma, quantos uma pessoa conferiu. É o
+  // que amarra este card ao de revisados: o revisado está dentro do expedido, e
+  // o restante saiu com a IA decidindo sozinha. Sem isso, quem compara os dois
+  // números acha que eles se contradizem.
+  const viaProntuaiRevisada = faixaAtual
+    ? expedicoesEntre(viaRevisadaPorDia, faixaAtual.ini, faixaAtual.fim, ultimoDoc)
+    : 0;
+  const conferidas = pct(viaProntuaiRevisada, viaProntuai);
   // Período que começa antes da ligação é medido só a partir dela: o rótulo diz.
   const cortadoNaLigacao = !!dados.expedicoes_desde && !!atual.length && atual[0].chave < dados.expedicoes_desde;
 
@@ -1066,7 +1111,11 @@ export function calcularVisao({ dados, filtro, comparar, verTodasClinicas }: Opc
       num(cobertura),
       antPct === null ? "" : pp(cobertura, antPct),
       "up",
-      `${fmt(viaProntuai)} de ${fmt(expEmpresa)} expedições${cortadoNaLigacao ? ` desde ${rotuloMes(dados.expedicoes_desde!)}` : ""} · meta 100%`,
+      `${fmt(viaProntuai)} de ${fmt(expEmpresa)} expedições${cortadoNaLigacao ? ` desde ${rotuloMes(dados.expedicoes_desde!)}` : ""}` +
+        // A frase que responde "por que esse número é maior que o de revisados?"
+        // sem falar de unidade nem de datação: ele inclui o que ninguém abriu.
+        // Sem o dado, a frase some em vez de virar outra coisa.
+        (viaProntuaiRevisada ? ` · ${num(conferidas)} já revisadas pelo time` : ""),
     );
   };
 
@@ -1459,11 +1508,11 @@ export function calcularVisao({ dados, filtro, comparar, verTodasClinicas }: Opc
           : "Toda a base, por mês",
 
     kpiPrimary: [
-      kpi("Documentos enviados", fmt(enviados), variacao("docs"), "up", nomePeriodo(cfg.periodo.serie, atual)),
+      kpi("Documentos enviados", fmt(enviados), variacao("casos"), "up", nomePeriodo(cfg.periodo.serie, atual)),
       kpi(
-        "Documentos revisados",
+        "Documentos Revisados pelo time BR MED",
         fmt(revisados),
-        variacao("revisados"),
+        variacao("casos_revisados"),
         "up",
         // O número é só de decisão humana; o rótulo diz de quem, para não ser
         // lido como documento que a IA analisou.
@@ -1543,6 +1592,21 @@ export function calcularVisao({ dados, filtro, comparar, verTodasClinicas }: Opc
       : "—",
 
     periodoLabel: nomePeriodo(cfg.periodo.serie, atual),
+    contencao: viaProntuaiRevisada
+      ? {
+          via: viaProntuai,
+          revisadas: viaProntuaiRevisada,
+          semRevisor: viaProntuai - viaProntuaiRevisada,
+          pct: num(conferidas),
+          ponte: {
+            casosRevisados: revisados,
+            semPedido: revisadosSemPedido,
+            pedidosRevisados: revisadosArquivos - revisadosSemPedido - revisadosExtras,
+            datacao:
+              viaProntuaiRevisada - (revisadosArquivos - revisadosSemPedido - revisadosExtras),
+          },
+        }
+      : null,
 
     usoSemanal,
 
