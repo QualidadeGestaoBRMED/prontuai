@@ -143,16 +143,38 @@ def check_if_migration_needed() -> tuple[bool, list[str]]:
             logger.warning("⚠️  Migration 012 necessária: coluna roles não existe")
             migrations_needed.append("012_add_user_roles.sql")
 
-        # Verificar migration 014: vínculo da clínica com o credenciado do BRNET.
-        # (A 013 está na branch do filtro de previsão de liberação.)
+        # Verificar migration 013: previsão de liberação como coluna
         cursor.execute("""
             SELECT column_name
             FROM information_schema.columns
-            WHERE table_name='clinics' AND column_name='brnet_id'
+            WHERE table_name='documents' AND column_name='data_previsao_liberacao'
         """)
         if not cursor.fetchone():
-            logger.warning("⚠️  Migration 014 necessária: coluna brnet_id não existe")
+            logger.warning("⚠️  Migration 013 necessária: coluna data_previsao_liberacao não existe")
+            migrations_needed.append("013_add_data_previsao_liberacao.sql")
+
+        # Verificar migration 014: vínculo da clínica com o credenciado do BRNET
+        # e e-mail da clínica. Confere as duas colunas: o dev recebeu a 014
+        # antes de a coluna email entrar nela, e os ADD COLUMN IF NOT EXISTS
+        # tornam a reexecução segura.
+        cursor.execute("""
+            SELECT count(*)
+            FROM information_schema.columns
+            WHERE table_name='clinics' AND column_name IN ('brnet_id', 'email')
+        """)
+        if cursor.fetchone()[0] < 2:
+            logger.warning("⚠️  Migration 014 necessária: coluna brnet_id ou email não existe em clinics")
             migrations_needed.append("014_add_clinic_brnet_id.sql")
+
+        # Verificar migration 015: reenvio de prontuário já liberado.
+        cursor.execute("""
+            SELECT count(*)
+            FROM information_schema.columns
+            WHERE table_name='documents' AND column_name IN ('pedido_exame_id', 'reenvio_de')
+        """)
+        if cursor.fetchone()[0] < 2:
+            logger.warning("⚠️  Migration 015 necessária: coluna pedido_exame_id ou reenvio_de não existe")
+            migrations_needed.append("015_add_document_reenvio.sql")
 
         cursor.close()
         conn.close()

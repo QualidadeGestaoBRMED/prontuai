@@ -34,7 +34,9 @@ import { API_ENDPOINTS } from "@/lib/config";
 import { authFetch } from "@/lib/auth-fetch";
 import {
   PRECEDENCIA_PAPEIS,
+  cargoQueContem,
   papeisDoUsuario,
+  semCargosContidos,
   usePermissions,
   type UserRole,
 } from "@/hooks/usePermissions";
@@ -108,6 +110,9 @@ async function mensagemDeErro(response: Response, padrao: string) {
 /**
  * Caixas de marcar dos cargos. O MANAGER só vê os que pode atribuir — os
  * outros nem aparecem, porque o servidor recusaria.
+ *
+ * Cargo que outro marcado já contém aparece marcado e travado, com o nome de
+ * quem o contém, e sai da lista: o servidor também recusaria a combinação.
  */
 function SeletorCargos({
   idPrefixo,
@@ -122,30 +127,44 @@ function SeletorCargos({
 }) {
   const opcoes = podeTodos ? PRECEDENCIA_PAPEIS : PRECEDENCIA_PAPEIS.filter((p) => PAPEIS_DO_GESTOR.includes(p));
   const alternar = (papel: UserRole, marcado: boolean) =>
-    onChange(marcado ? [...value.filter((p) => p !== papel), papel] : value.filter((p) => p !== papel));
+    onChange(
+      marcado
+        ? semCargosContidos([...value.filter((p) => p !== papel), papel])
+        : value.filter((p) => p !== papel),
+    );
 
   return (
     <div>
       <Label>Cargos</Label>
       <div className="mt-2 divide-y rounded-md border">
-        {opcoes.map((papel) => (
-          <label
-            key={papel}
-            htmlFor={`${idPrefixo}-${papel}`}
-            className="flex cursor-pointer items-start gap-3 px-3 py-2.5 hover:bg-gray-50"
-          >
-            <Checkbox
-              id={`${idPrefixo}-${papel}`}
-              checked={value.includes(papel)}
-              onCheckedChange={(v) => alternar(papel, v === true)}
-              className="mt-0.5"
-            />
-            <div>
-              <div className="text-sm font-medium">{roleLabels[papel]}</div>
-              <div className="text-xs text-gray-500">{roleDescriptions[papel]}</div>
-            </div>
-          </label>
-        ))}
+        {opcoes.map((papel) => {
+          const contidoEm = cargoQueContem(papel, value);
+          return (
+            <label
+              key={papel}
+              htmlFor={`${idPrefixo}-${papel}`}
+              className={`flex items-start gap-3 px-3 py-2.5 ${
+                contidoEm ? "cursor-not-allowed bg-gray-50" : "cursor-pointer hover:bg-gray-50"
+              }`}
+            >
+              <Checkbox
+                id={`${idPrefixo}-${papel}`}
+                checked={contidoEm ? true : value.includes(papel)}
+                disabled={!!contidoEm}
+                onCheckedChange={(v) => alternar(papel, v === true)}
+                className="mt-0.5"
+              />
+              <div>
+                <div className={`text-sm font-medium ${contidoEm ? "text-gray-500" : ""}`}>
+                  {roleLabels[papel]}
+                </div>
+                <div className="text-xs text-gray-500">
+                  {contidoEm ? `Já incluído em ${roleLabels[contidoEm]}` : roleDescriptions[papel]}
+                </div>
+              </div>
+            </label>
+          );
+        })}
       </div>
       <p className="mt-1 text-xs text-gray-500">
         Marque um ou mais. O acesso do usuário é a soma dos cargos marcados.
@@ -478,7 +497,9 @@ export default function UsersAdminPage() {
   const openEditModal = (user: User) => {
     setSelectedUser(user);
     setFormName(user.name);
-    setFormRoles(papeisDoUsuario(user));
+    // Quem foi gravado antes da regra (ex.: Gestor + Visualizador) abre já
+    // sem o cargo contido, e salvar o tira de vez.
+    setFormRoles(semCargosContidos(papeisDoUsuario(user)));
     setFormClinicId(user.clinic_id ?? "");
     setEditModalOpen(true);
   };

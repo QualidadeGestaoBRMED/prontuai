@@ -14,6 +14,7 @@ from sqlalchemy import (
     Boolean,
     CheckConstraint,
     Column,
+    Date,
     DateTime,
     Enum as SQLEnum,
     Float,
@@ -48,6 +49,9 @@ class ClinicModel(Base):
     # Credenciado do BRNET ("C25414", migration 014). Índice comum e não único
     # enquanto as clínicas duplicadas não são unificadas — ver a migration.
     brnet_id = Column(String(16), nullable=True, index=True)
+    # E-mail de contato (migration 014): o digitado no cadastro ou, vazio, o do
+    # credenciado na rede do BRNET.
+    email = Column(String, nullable=True)
     is_active = Column(Boolean, nullable=False, default=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -80,7 +84,7 @@ class DocumentModel(Base):
     content_hash = Column(String, nullable=True, index=True)
     filename = Column(String, nullable=False)
     file_path = Column(String, nullable=True)
-    cpf = Column(String, nullable=True)
+    cpf = Column(String, nullable=True, index=True)
     # Extraído de result_payload.patient_name para permitir busca server-side
     patient_name = Column(String, nullable=True, index=True)
     uploaded_at = Column(DateTime, nullable=False, default=datetime.utcnow)
@@ -114,6 +118,17 @@ class DocumentModel(Base):
     # é o que permite o endpoint de visualização responder "arquivado, peça a
     # recuperação" em vez de um 404 indistinguível de arquivo perdido por bug.
     archived_at = Column(DateTime, nullable=True)
+    # Previsão de liberação do pedido no BRNET (migration 013), copiada de
+    # `result_payload` a cada gravação por `previsao_liberacao_do_payload`.
+    # Existe para o filtro da Checagem: ler do JSON custava 5s por consulta.
+    # NULL = pedido sem previsão (12% dos documentos) ou anterior a jun/2026.
+    data_previsao_liberacao = Column(Date, nullable=True)
+    # Pedido de exame no BRNET (migration 015), copiado de `result_payload` a
+    # cada gravação: é a chave da detecção de reenvio.
+    pedido_exame_id = Column(BigInteger, nullable=True, index=True)
+    # Documento já liberado de que este é reenvio; vem com
+    # validation_status = 'reenvio' (app/services/reenvio_service.py).
+    reenvio_de = Column(String, nullable=True, index=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 

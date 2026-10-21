@@ -17,6 +17,12 @@
 
 ALTER TABLE clinics ADD COLUMN IF NOT EXISTS brnet_id VARCHAR(16) NULL;
 
+-- E-mail de contato da clinica. O formulario de cadastro sempre pediu e-mail,
+-- mas a tabela nao tinha a coluna e o back-end descartava o valor. Agora vem
+-- do campo, ou, se ele ficar vazio, do credenciado na rede do BRNET.
+ALTER TABLE clinics ADD COLUMN IF NOT EXISTS email VARCHAR NULL;
+
 CREATE INDEX IF NOT EXISTS ix_clinics_brnet_id ON clinics (brnet_id);
 
+COMMENT ON COLUMN clinics.email IS 'E-mail de contato: o digitado no cadastro ou, vazio, o do credenciado no BRNET';
 COMMENT ON COLUMN clinics.brnet_id IS 'Identificador do credenciado no BRNET (GET /api/rede/credenciada), ex.: C25414';

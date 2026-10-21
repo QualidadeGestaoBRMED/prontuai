@@ -54,8 +54,8 @@ export default function Page() {
     setStatusFilter,
     clinicFilter,
     setClinicFilter,
-    dateFilter,
-    setDateFilter,
+    dataFilter,
+    setDataFilter,
     summaryCounts,
     refresh,
   } = useDocumentsPaged({
@@ -506,8 +506,8 @@ export default function Page() {
                       onChange: setStatusFilter,
                     }}
                     serverDate={{
-                      value: dateFilter,
-                      onChange: setDateFilter,
+                      value: dataFilter,
+                      onChange: setDataFilter,
                     }}
                     serverClinic={
                       canFilterByClinic

@@ -24,6 +24,7 @@ import { authFetch } from '@/lib/auth-fetch'
 import { useAsyncJob } from '@/hooks/use-async-job'
 import { useVisibleInterval } from '@/hooks/use-visible-interval'
 import { Job } from '@/types/job'
+import { mensagemReenvio } from '@/lib/reenvio'
 
 type StartBackgroundProcessingOptions = {
   submittedBy?: string
@@ -602,11 +603,22 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       const approved = results.filter(r => r.status === 'approved').length
       const rejected = results.filter(r => r.status === 'rejected').length
       const pending = results.filter(r => r.status === 'pending_review').length
+      const reenvios = results.filter(r => r.status === 'resubmission')
 
       let message = ''
       let variant: 'success' | 'warning' | 'error' = 'success'
 
-      if (rejected === 0 && pending === 0) {
+      if (reenvios.length > 0 && reenvios.length === results.length) {
+        // Só reenvio: o aviso é a própria mensagem (um documento) ou a contagem.
+        message = reenvios.length === 1 && reenvios[0].result.reenvio
+          ? mensagemReenvio(reenvios[0].result.reenvio)
+          : `${reenvios.length} prontuários já tinham sido liberados. Não é preciso reenviar.`
+        variant = 'warning'
+      } else if (reenvios.length > 0) {
+        message = `${approved} aprovados, ${rejected} rejeitados, ${pending} pendentes, ` +
+          `${reenvios.length} já liberados antes (não era preciso reenviar)`
+        variant = 'warning'
+      } else if (rejected === 0 && pending === 0) {
         message = `Todos os ${approved} documentos foram aprovados!`
         variant = 'success'
       } else if (rejected > 0) {
@@ -757,17 +769,23 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
               result.error_code === "NO_OPEN_EXAM_ORDER"
             )
 
+          // Reenvio de prontuário já liberado não é erro, mesmo quando o BRNET
+          // responde "expedição em aberto não encontrada" — é justamente porque
+          // o pedido já fechou. A clínica vê a data da liberação.
+          const reenvio = result?.reenvio
           updateProcessingDocument(docId, (current) => ({
             ...current,
             stage: 'completed',
             progress: 100,
             displayProgress: 100,
-            statusMessage: backendErrorMessage
+            statusMessage: reenvio
+              ? mensagemReenvio(reenvio)
+              : backendErrorMessage
               ? (hasBusinessRuleRejection
                   ? 'Processamento concluído com rejeição por regra de negócio.'
                   : 'Processamento concluído com erro.')
               : 'Processamento concluído!',
-            error: backendErrorMessage || current.error,
+            error: reenvio ? undefined : backendErrorMessage || current.error,
             result,
           }))
           pollingJobsRef.current.delete(jobId)
@@ -897,18 +915,25 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   useEffect(() => {
     if (processingDocuments.length === 0) return
     const interval = setInterval(() => {
-      setProcessingDocuments((prev) =>
-        prev.map((doc) => {
+      setProcessingDocuments((prev) => {
+        let andou = false
+        const proximo = prev.map((doc) => {
           if (doc.displayProgress === doc.progress) return doc
           const delta = doc.progress - doc.displayProgress
           if (delta <= 0) return doc
+          andou = true
           const step = Math.max(1, Math.ceil(delta / 12))
           return {
             ...doc,
             displayProgress: Math.min(doc.progress, doc.displayProgress + step),
           }
         })
-      )
+        // Sem barra para andar, devolve a MESMA lista: o `map` sempre cria um
+        // array novo, e isso re-renderizava todo consumidor do contexto 5x por
+        // segundo enquanto houvesse documento na lista — inclusive um que ficou
+        // parado no localStorage. Na Checagem, era o calendário piscando.
+        return andou ? proximo : prev
+      })
     }, 200)
 
     return () => clearInterval(interval)
@@ -1006,7 +1031,9 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         patientName,
         uploadedAt: new Date(),
         processedAt: new Date(),
-        status: doc.error
+        status: doc.result?.reenvio
+          ? ('resubmission' as const)
+          : doc.error
           ? ('rejected' as const)
           : examesFaltantes === 0
           ? ('approved' as const)

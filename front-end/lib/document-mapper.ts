@@ -10,6 +10,9 @@ const toDate = (value?: string | null) => {
 const mapStatus = (validationStatus?: string | null): ProcessResult["status"] => {
   if (validationStatus === "validated") return "approved"
   if (validationStatus === "rejected") return "rejected"
+  // Reenvio de prontuário já liberado (migration 015): sem este caso caía em
+  // "pendente", e a clínica via como pendente o que já estava aprovado.
+  if (validationStatus === "reenvio") return "resubmission"
   return "pending_review"
 }
 

@@ -12,12 +12,20 @@ import time
 import json
 import logging
 from typing import List, Optional
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from sqlalchemy import String, cast, create_engine, text, func, or_, and_, case
 from sqlalchemy.orm import sessionmaker, Session, defer
 from app.models.user import User, UserCreate, UserUpdate, UserRole, GLOBAL_READ_ROLES, normalizar_papeis
 from app.models.clinic import Clinic, ClinicCreate, ClinicUpdate
-from app.models.document import Document, DocumentCreate, DocumentUpdate
+from app.models.document import (
+    Document,
+    DocumentCreate,
+    DocumentUpdate,
+    JUSTIFICATIVAS_VAZIAS,
+    analise_do_payload,
+    pedido_exame_id_do_payload,
+    previsao_liberacao_do_payload,
+)
 from app.models.feedback import DocumentFeedback
 from app.models.notification import Notification, NotificationCreate, NotificationUpdate
 from app.models.audit_log import AuditLog, AuditLogCreate
@@ -1178,6 +1186,7 @@ class PostgresUserDatabase:
             city=model.city,
             state=model.state,
             brnet_id=model.brnet_id,
+            email=model.email,
             is_active=model.is_active,
             # `User` aceita os dois como None. Chamar .isoformat() sem checar
             # transformava uma linha com timestamp nulo em 500 — e, na listagem,
@@ -1225,6 +1234,7 @@ class PostgresUserDatabase:
         city: Optional[str] = None,
         state: Optional[str] = None,
         brnet_id: Optional[str] = None,
+        email: Optional[str] = None,
     ) -> Clinic:
         """Cria uma nova clínica."""
         session = self._get_session()
@@ -1240,6 +1250,7 @@ class PostgresUserDatabase:
                 city=city,
                 state=state,
                 brnet_id=brnet_id,
+                email=email,
                 is_active=True,
                 created_at=datetime.utcnow(),
                 updated_at=datetime.utcnow()
@@ -1265,6 +1276,7 @@ class PostgresUserDatabase:
         is_active: Optional[bool] = None,
         brnet_id: Optional[str] = None,
         remover_vinculo_brnet: bool = False,
+        email: Optional[str] = None,
     ) -> Clinic:
         """Atualiza clínica. `brnet_id` None não mexe no vínculo; para tirá-lo, `remover_vinculo_brnet`."""
         session = self._get_session()
@@ -1292,6 +1304,8 @@ class PostgresUserDatabase:
                 clinic_model.brnet_id = None
             elif brnet_id is not None:
                 clinic_model.brnet_id = brnet_id
+            if email is not None:
+                clinic_model.email = email
 
             clinic_model.updated_at = datetime.utcnow()
 
@@ -1369,6 +1383,7 @@ class PostgresUserDatabase:
             quality_score=model.quality_score,
             mandatory_coverage=model.mandatory_coverage,
             archived_at=_as_utc(getattr(model, "archived_at", None)),
+            reenvio_de=getattr(model, "reenvio_de", None),
             storage_filename=(getattr(model, "file_path", None) or "").rsplit("/", 1)[-1] or None,
             created_at=_as_utc(model.created_at),
             updated_at=_as_utc(model.updated_at)
@@ -1473,6 +1488,8 @@ class PostgresUserDatabase:
         filter_clinic_id: Optional[str] = None,
         uploaded_from: Optional[datetime] = None,
         uploaded_to: Optional[datetime] = None,
+        previsao_from: Optional[date] = None,
+        previsao_to: Optional[date] = None,
     ) -> dict:
         """
         Lista documentos paginados com escopo por role e filtros de fila.
@@ -1481,6 +1498,11 @@ class PostgresUserDatabase:
         semiaberto [de, até), em UTC sem fuso — o mesmo formato de
         `uploaded_at`. Quem converte o dia local em instante é o chamador: o
         "dia 15" do revisor começa às 03:00 UTC, e só o browser sabe disso.
+
+        `previsao_from`/`previsao_to` recortam pela previsão de liberação, com
+        as duas pontas inclusas. É data de calendário, sem fuso: não há
+        conversão a fazer. Qualquer uma das pontas pode faltar ("atrasados" é
+        só o `previsao_to`), e documento sem previsão sai do recorte.
         """
         session = self._get_session()
         try:
@@ -1516,11 +1538,22 @@ class PostgresUserDatabase:
             if filtros_envio:
                 scoped_query = scoped_query.filter(*filtros_envio)
 
+            # Previsão de liberação: mesmo raciocínio, entra nos cards também.
+            filtros_previsao = []
+            if previsao_from:
+                filtros_previsao.append(DocumentModel.data_previsao_liberacao >= previsao_from)
+            if previsao_to:
+                filtros_previsao.append(DocumentModel.data_previsao_liberacao <= previsao_to)
+            if filtros_previsao:
+                scoped_query = scoped_query.filter(*filtros_previsao)
+
             if queue == "pendentes":
+                # Reenvio de prontuário já liberado não espera nada da clínica:
+                # fica no Histórico, com o alerta da liberação.
                 scoped_query = scoped_query.filter(
                     or_(
                         DocumentModel.validation_status.is_(None),
-                        DocumentModel.validation_status != "validated",
+                        DocumentModel.validation_status.notin_(("validated", "reenvio")),
                     )
                 )
             elif queue == "checagem":
@@ -1590,6 +1623,9 @@ class PostgresUserDatabase:
             if filtros_envio:
                 scoped_summary_query = scoped_summary_query.filter(*filtros_envio)
 
+            if filtros_previsao:
+                scoped_summary_query = scoped_summary_query.filter(*filtros_previsao)
+
             summary_row = scoped_summary_query.one()
             summary_map = summary_row._mapping if hasattr(summary_row, "_mapping") else {}
 
@@ -1603,12 +1639,19 @@ class PostgresUserDatabase:
                 "filename": DocumentModel.filename,
                 "cpf": DocumentModel.cpf,
                 "status": DocumentModel.validation_status,
+                "previsao": DocumentModel.data_previsao_liberacao,
             }
             sort_column = sort_columns.get(sort_by, DocumentModel.uploaded_at)
-            if sort_dir.lower() == "asc":
-                scoped_query = scoped_query.order_by(sort_column.asc())
+            ordem = sort_column.asc() if sort_dir.lower() == "asc" else sort_column.desc()
+            if sort_by == "previsao":
+                # Centenas de documentos dividem o mesmo dia de previsão: sem
+                # desempate, a paginação por OFFSET repete ou pula linhas entre
+                # uma página e outra. Sem previsão vai para o fim nos dois sentidos.
+                scoped_query = scoped_query.order_by(
+                    ordem.nulls_last(), DocumentModel.uploaded_at.desc(), DocumentModel.id
+                )
             else:
-                scoped_query = scoped_query.order_by(sort_column.desc())
+                scoped_query = scoped_query.order_by(ordem)
 
             if page_size > 0:
                 scoped_query = scoped_query.offset((safe_page - 1) * page_size).limit(page_size)
@@ -1649,6 +1692,192 @@ class PostgresUserDatabase:
         finally:
             session.close()
 
+    def list_revisoes_paged(
+        self,
+        *,
+        page: int = 1,
+        page_size: int = 20,
+        cpf: Optional[str] = None,
+        revisor: Optional[str] = None,
+        status: Optional[str] = None,
+        texto: Optional[str] = None,
+        so_com_justificativa: bool = False,
+    ) -> dict:
+        """
+        Página da tela de Revisões (`/admin/validacoes`), do envio mais recente
+        para o mais antigo.
+
+        A tela baixava `GET /v1/documents` inteiro (12 mil documentos, ~69 MB) e
+        filtrava no navegador — e, como aquela consulta não tem ORDER BY, a lista
+        saía na ordem física das linhas, que terminava num documento de 24/09.
+        Aqui os filtros são os mesmos da tela, só que no banco:
+
+          * `texto` procura no nome do arquivo, nas justificativas e na mensagem
+            da IA. A mensagem mora no payload compacto; o regex isola o valor de
+            `analysis` para a busca não casar com nome de chave do JSON (~1s
+            sobre a tabela inteira, aceitável numa tela só de ADMIN);
+          * `so_com_justificativa` ignora o que está em JUSTIFICATIVAS_VAZIAS.
+            As justificativas vêm das colunas: conferido que nenhum documento
+            tem a do payload sem a da coluna.
+        """
+        session = self._get_session()
+        try:
+            query = session.query(DocumentModel).options(
+                defer(DocumentModel.ocr_markdown), defer(DocumentModel.result_payload)
+            )
+
+            digitos = re.sub(r"\D", "", cpf or "")
+            if digitos:
+                query = query.filter(DocumentModel.cpf.like(f"%{digitos}%"))
+            if revisor and revisor.strip():
+                query = query.filter(DocumentModel.reviewed_by.ilike(f"%{revisor.strip()}%"))
+            if status == "pending":
+                query = query.filter(
+                    or_(DocumentModel.validation_status == "pending", DocumentModel.validation_status.is_(None))
+                )
+            elif status:
+                query = query.filter(DocumentModel.validation_status == status)
+            if texto and texto.strip():
+                like = f"%{texto.strip()}%"
+                analise = func.substring(
+                    DocumentModel.result_payload_compact, r'"analysis":\s*"((?:[^"\\]|\\.)*)"'
+                )
+                query = query.filter(
+                    or_(
+                        DocumentModel.filename.ilike(like),
+                        DocumentModel.approval_reason.ilike(like),
+                        DocumentModel.rejection_reason.ilike(like),
+                        analise.ilike(like),
+                    )
+                )
+            if so_com_justificativa:
+                def _preenchida(coluna):
+                    limpa = func.trim(coluna)
+                    return and_(limpa != "", func.lower(limpa).notin_(sorted(JUSTIFICATIVAS_VAZIAS)))
+
+                query = query.filter(
+                    or_(_preenchida(DocumentModel.approval_reason), _preenchida(DocumentModel.rejection_reason))
+                )
+
+            total_items = query.count()
+            total_pages = max(1, (total_items + page_size - 1) // page_size)
+            safe_page = max(1, min(page, total_pages))
+            models = (
+                query.order_by(DocumentModel.uploaded_at.desc(), DocumentModel.id)
+                .offset((safe_page - 1) * page_size)
+                .limit(page_size)
+                .all()
+            )
+
+            items = []
+            for m in models:
+                try:
+                    compacto = json.loads(m.result_payload_compact) if m.result_payload_compact else None
+                except (TypeError, ValueError):
+                    compacto = None
+                items.append({
+                    "id": m.id,
+                    "filename": m.filename,
+                    "cpf": m.cpf,
+                    "validation_status": m.validation_status,
+                    "uploaded_at": m.uploaded_at,
+                    "reviewed_by": m.reviewed_by,
+                    "reviewed_at": m.reviewed_at,
+                    "confidence_score": m.confidence_score,
+                    "analysis": analise_do_payload(compacto),
+                    "approval_reason": m.approval_reason,
+                    "rejection_reason": m.rejection_reason,
+                })
+
+            return {
+                "items": items,
+                "page": safe_page,
+                "page_size": page_size,
+                "total_items": total_items,
+                "total_pages": total_pages,
+                "has_next": safe_page < total_pages,
+            }
+        finally:
+            session.close()
+
+    def buscar_liberado_anterior(
+        self,
+        *,
+        content_hash: Optional[str],
+        pedido_exame_id: Optional[int],
+        cpf: Optional[str],
+        cnpj_empresa: Optional[str],
+        desde: datetime,
+        antes_de: Optional[datetime] = None,
+    ) -> Optional[dict]:
+        """
+        Documento já liberado de que o novo envio é reenvio, ou None.
+
+        Três critérios, nesta ordem (ver app/services/reenvio_service.py):
+          1. mesmo arquivo (`content_hash`) de um liberado;
+          2. mesmo pedido do BRNET de um liberado;
+          3. sem pedido: liberado do mesmo CPF e da mesma empresa (CNPJ lido do
+             ASO) a partir de `desde`. Com pedido, o critério 3 não vale: o
+             BRNET achou um pedido em aberto, e é outro atendimento.
+
+        "Liberado" é aprovado PELO REVISOR (`validated` com `reviewed_by`) — é o
+        que a clínica vê como "Aprovado". Aprovado só pela IA ela vê como
+        "Aguardando Revisão", e o reenvio dele segue para a Checagem como antes
+        (decisão de out/2026; fica para o complemento com histórico). A data da
+        liberação é a da revisão.
+
+        `antes_de` só serve para reconstruir o histórico (cada envio enxerga o
+        que estava liberado até ele); no envio de verdade tudo é anterior.
+        """
+        session = self._get_session()
+        try:
+            colunas = (
+                DocumentModel.id,
+                DocumentModel.reviewed_at,
+                DocumentModel.created_at,
+                DocumentModel.result_payload_compact,
+            )
+            liberados = (
+                session.query(*colunas)
+                .filter(
+                    DocumentModel.validation_status == "validated",
+                    DocumentModel.reviewed_by.isnot(None),
+                    DocumentModel.reviewed_at.isnot(None),
+                )
+                .order_by(DocumentModel.reviewed_at.desc())
+            )
+            if antes_de:
+                liberados = liberados.filter(DocumentModel.reviewed_at < antes_de)
+
+            def achado(linha, criterio: str) -> dict:
+                return {
+                    "documento_id": linha.id,
+                    # Gravado em UTC sem fuso: o fuso vai explícito para o navegador
+                    # não ler como hora local e trocar o dia perto da meia-noite.
+                    "liberado_em": linha.reviewed_at.replace(tzinfo=timezone.utc).isoformat(),
+                    "criterio": criterio,
+                }
+
+            if content_hash:
+                linha = liberados.filter(DocumentModel.content_hash == content_hash).first()
+                if linha:
+                    return achado(linha, "arquivo")
+            if pedido_exame_id:
+                linha = liberados.filter(DocumentModel.pedido_exame_id == pedido_exame_id).first()
+                return achado(linha, "pedido") if linha else None
+            if cpf and cnpj_empresa:
+                for linha in liberados.filter(DocumentModel.cpf == cpf, DocumentModel.uploaded_at >= desde):
+                    try:
+                        compacto = json.loads(linha.result_payload_compact or "{}")
+                    except (TypeError, ValueError):
+                        continue
+                    cnpj = re.sub(r"\D", "", str(compacto.get("cnpj_processado") or ""))
+                    if cnpj == cnpj_empresa:
+                        return achado(linha, "cpf_empresa")
+            return None
+        finally:
+            session.close()
+
     def create_document(
         self,
         clinic_id: str,
@@ -1671,7 +1900,8 @@ class PostgresUserDatabase:
         rejection_reason: Optional[str] = None,
         confidence_score: Optional[float] = None,
         quality_score: Optional[float] = None,
-        mandatory_coverage: Optional[float] = None
+        mandatory_coverage: Optional[float] = None,
+        reenvio_de: Optional[str] = None,
     ) -> Document:
         """Cria um novo documento."""
         session = self._get_session()
@@ -1703,6 +1933,9 @@ class PostgresUserDatabase:
                 file_path=file_path,
                 cpf=cpf,
                 patient_name=self._extract_patient_name(result_payload) or "",
+                data_previsao_liberacao=previsao_liberacao_do_payload(result_payload),
+                pedido_exame_id=pedido_exame_id_do_payload(result_payload),
+                reenvio_de=reenvio_de,
                 uploaded_at=datetime.utcnow(),
                 exams_found=exams_found,
                 exams_ocr=exams_ocr,
@@ -1792,6 +2025,10 @@ class PostgresUserDatabase:
                 extracted_name = self._extract_patient_name(result_payload)
                 if extracted_name:
                     doc_model.patient_name = extracted_name
+                # Reprocessar pode trazer outro pedido do BRNET: a previsão
+                # acompanha o payload novo, inclusive quando ele não tem uma.
+                doc_model.data_previsao_liberacao = previsao_liberacao_do_payload(result_payload)
+                doc_model.pedido_exame_id = pedido_exame_id_do_payload(result_payload)
                 if reviewed_by is None and isinstance(result_payload, dict):
                     payload_reviewed_by = result_payload.get("reviewed_by") or result_payload.get("reviewedBy")
                     if payload_reviewed_by:

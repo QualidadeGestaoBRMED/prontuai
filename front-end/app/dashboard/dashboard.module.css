@@ -156,3 +156,14 @@
 .tipFim:hover::after {
   transform: scale(1);
 }
+
+/*
+ * Balão largo e alinhado à esquerda, para as notas da ponte em "Onde um número
+ * está dentro do outro". São duas frases explicando POR QUE o termo existe;
+ * nos 220px centralizados do balão padrão elas viram uma coluna estreita e alta
+ * que cobre a própria escada.
+ */
+.tipLargo::after {
+  max-width: 360px;
+  text-align: left;
+}

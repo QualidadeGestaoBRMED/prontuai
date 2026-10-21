@@ -27,6 +27,30 @@ const TITULO = "text-[16.5px] font-semibold text-[#193B4F]";
 const SUB = "mt-[5px] text-[13px] text-[#767A7B]";
 const CABECALHO_TABELA =
   "text-[11.5px] font-medium uppercase tracking-[0.06em] text-[#767A7B]";
+// Botão de seta dos navegadores (semana no card, clínica no modal).
+const BOTAO_NAV =
+  "flex size-[34px] cursor-pointer items-center justify-center text-[#193B4F] transition-colors hover:bg-[#F3F6F8] disabled:cursor-default disabled:text-[#C6CBCE] disabled:hover:bg-transparent";
+
+const CAMINHO_SETA = { esquerda: "M10 4L6 8l4 4", direita: "M6 4l4 4-4 4", baixo: "M4 6l4 4 4-4" };
+
+/**
+ * Seta desenhada, e não caractere: ‹ › e ▼ dependem da fonte de cada sistema e
+ * saíam miúdos e desalinhados — o ▼ do seletor de semana quase sumia.
+ */
+function Seta({ para, className = "size-4" }: { para: keyof typeof CAMINHO_SETA; className?: string }) {
+  return (
+    <svg viewBox="0 0 16 16" aria-hidden="true" className={className}>
+      <path
+        d={CAMINHO_SETA[para]}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
 
 type AbrirAjuda = (id: IdIndicador) => void;
 
@@ -231,26 +255,27 @@ function TabelaUsoSemana({ uso, onAjuda }: { uso: UsoSemanal; onAjuda: AbrirAjud
 
         {/* Navegação por semana. Para trás é o passado, e o passado acaba: os
             botões travam nas pontas em vez de rodarem em círculo. */}
-        <div className="flex items-center gap-1.5 rounded-[10px] border border-[#DFE0E2] bg-white p-1">
+        <div className="flex items-center overflow-hidden rounded-[9px] border border-[#DFE0E2] bg-white">
           <button
             type="button"
             onClick={() => setI((v) => Math.min(v + 1, uso.semanas.length - 1))}
             disabled={i >= uso.semanas.length - 1}
             aria-label="Semana anterior"
-            className="size-[26px] rounded-[7px] text-[13px] text-[#193B4F] transition-colors hover:bg-[#F3F3F3] disabled:text-[#C6CBCE] disabled:hover:bg-transparent"
+            title="Semana anterior"
+            className={BOTAO_NAV}
           >
-            ‹
+            <Seta para="esquerda" />
           </button>
           {/* As setas andam uma semana; a lista pula direto para qualquer
               semana fechada — para comparar com uma semana de três meses
               atrás, eram doze cliques. */}
-          <div className="relative">
+          <div className="relative border-x border-[#DFE0E2]">
             <select
               id="uso-semana"
               value={Math.min(i, uso.semanas.length - 1)}
               onChange={(e) => setI(Number(e.target.value))}
               aria-label="Escolher a semana"
-              className="h-[26px] min-w-[124px] cursor-pointer appearance-none rounded-[7px] bg-transparent pr-6 pl-2 text-center text-[13px] font-medium tabular-nums text-[#193B4F] outline-none transition-colors hover:bg-[#F3F3F3] focus-visible:ring-2 focus-visible:ring-[#7EBFCC]"
+              className="h-[34px] min-w-[136px] cursor-pointer appearance-none bg-transparent pr-8 pl-3 text-[13px] font-medium tabular-nums text-[#193B4F] outline-none transition-colors hover:bg-[#F3F6F8] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#7EBFCC]"
             >
               {uso.semanas.map((s, k) => (
                 <option key={s.iso} value={k}>
@@ -258,11 +283,8 @@ function TabelaUsoSemana({ uso, onAjuda }: { uso: UsoSemanal; onAjuda: AbrirAjud
                 </option>
               ))}
             </select>
-            <span
-              aria-hidden="true"
-              className="pointer-events-none absolute top-1/2 right-2 -translate-y-1/2 text-[8px] text-[#767A7B]"
-            >
-              ▼
+            <span className="pointer-events-none absolute top-1/2 right-2.5 -translate-y-1/2 text-[#193B4F]">
+              <Seta para="baixo" className="size-3.5" />
             </span>
           </div>
           <button
@@ -270,9 +292,10 @@ function TabelaUsoSemana({ uso, onAjuda }: { uso: UsoSemanal; onAjuda: AbrirAjud
             onClick={() => setI((v) => Math.max(v - 1, 0))}
             disabled={i === 0}
             aria-label="Semana seguinte"
-            className="size-[26px] rounded-[7px] text-[13px] text-[#193B4F] transition-colors hover:bg-[#F3F3F3] disabled:text-[#C6CBCE] disabled:hover:bg-transparent"
+            title="Semana seguinte"
+            className={BOTAO_NAV}
           >
-            ›
+            <Seta para="direita" />
           </button>
         </div>
       </div>
@@ -1045,9 +1068,6 @@ function ModalHistoricoFora({
             : "Nenhuma semana do histórico ficou fora do ritmo dela: um volume assim não tem precedente.")
         : null;
 
-  const botaoNav =
-    "flex size-[34px] cursor-pointer items-center justify-center text-[#193B4F] transition-colors hover:bg-[#F3F6F8] disabled:cursor-default disabled:text-[#C6CBCE] disabled:hover:bg-transparent";
-
   return (
     <Dialog open={aberto && !!c} onOpenChange={(v) => !v && onFechar()}>
       {c && (
@@ -1089,11 +1109,9 @@ function ModalHistoricoFora({
                   onClick={() => anterior && onIr(anterior)}
                   aria-label="Clínica anterior"
                   title="Clínica anterior (←)"
-                  className={botaoNav}
+                  className={BOTAO_NAV}
                 >
-                  <svg viewBox="0 0 16 16" aria-hidden="true" className="size-4">
-                    <path d="M10 4L6 8l4 4" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
+                  <Seta para="esquerda" />
                 </button>
                 <span className="min-w-[78px] border-x border-[#DFE0E2] px-2 text-center text-[12.5px] leading-[34px] tabular-nums text-[#767A7B]">
                   {i + 1} de {linhas.length}
@@ -1104,11 +1122,9 @@ function ModalHistoricoFora({
                   onClick={() => proxima && onIr(proxima)}
                   aria-label="Próxima clínica"
                   title="Próxima clínica (→)"
-                  className={botaoNav}
+                  className={BOTAO_NAV}
                 >
-                  <svg viewBox="0 0 16 16" aria-hidden="true" className="size-4">
-                    <path d="M6 4l4 4-4 4" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
+                  <Seta para="direita" />
                 </button>
               </div>
             </div>
@@ -1198,6 +1214,130 @@ function ModalHistoricoFora({
         </DialogContent>
       )}
     </Dialog>
+  );
+}
+
+/**
+ * Onde um número está dentro do outro: a relação entre "Documentos revisados" e
+ * "Expedições via ProntuAI", que as pessoas tentam ler como divergência.
+ *
+ * Fica logo abaixo dos dois cards de propósito — o entendimento tem de estar na
+ * tela, não atrás de um "?" que ninguém abre. A barra mostra que parte do que foi
+ * expedido foi revisado pelo time e parte não. O vocabulário é o mesmo do card
+ * ("revisado pelo time BR MED") em toda a tela: o critério é idêntico, e dar
+ * dois nomes a ele foi o que fez os números parecerem brigar.
+ *
+ * A coluna da esquerda é a ponte até o card de revisados. Os dois NÃO são
+ * aninhados — `pedidos_revisados` é montado sem filtro de data, então um pedido
+ * liberado nesta janela pode ter sido revisado antes dela. Por isso a escada
+ * termina num termo de DATAÇÃO, que é o resíduo depois de tirar as causas
+ * medidas; não o remova achando que é erro de conta. Ver `contencao`.
+ */
+function CartaoContencao({
+  c,
+  onAjuda,
+}: {
+  c: NonNullable<VisaoDashboard["contencao"]>;
+  onAjuda: AbrirAjuda;
+}) {
+  const n = (v: number) => v.toLocaleString("pt-BR");
+  return (
+    <div className={`${CARTAO} px-[22px] pt-5 pb-[20px]`}>
+      <TituloCartao texto="Onde um número está dentro do outro" ajuda="expedicoes" onAjuda={onAjuda} />
+      <div className={SUB}>
+        Os dois medem a mesma fila de trabalho. O que muda é a unidade e o quanto da fila cada um pega.
+      </div>
+
+      <div className="mt-[22px] text-[11px] font-semibold tracking-[0.06em] text-[#767A7B]">
+        PEDIDOS QUE PASSARAM PELO PRONTUAI — {n(c.via)}
+      </div>
+      <div className="mt-2.5 flex h-[58px] overflow-hidden rounded-[6px] border border-[#C9CDD0]">
+        <div
+          className="flex min-w-0 flex-col justify-center bg-[#193B4F] pl-4 text-white"
+          style={{ width: `${(c.revisadas / c.via) * 100}%` }}
+        >
+          <div className="text-[17px] font-bold leading-none tabular-nums">{n(c.revisadas)}</div>
+          <div className="mt-1 truncate text-[11.5px] opacity-85">revisados pelo time BR MED</div>
+        </div>
+        <div
+          className="flex min-w-0 flex-col justify-center bg-[#E3B7A0] pl-4 text-[#5A2D0C]"
+          style={{ width: `${(c.semRevisor / c.via) * 100}%` }}
+        >
+          <div className="text-[17px] font-bold leading-none tabular-nums">{n(c.semRevisor)}</div>
+          <div className="mt-1 truncate text-[11.5px]">sem revisão do time</div>
+        </div>
+      </div>
+
+      <div className="mt-5 grid grid-cols-1 gap-6 border-t border-[#F3F3F3] pt-[18px] md:grid-cols-2 md:gap-7">
+        <div>
+          <div className="text-[13.5px] font-semibold text-[#193B4F]">
+            Como se chega na parte escura, vindo do card de revisados
+          </div>
+          {/* A nota de cada desconto é balão de hover, para a escada ficar
+              legível de longe. O tracejado embaixo do rótulo é a única pista de
+              que há explicação ali — sem ele ninguém passa o mouse. */}
+          <dl className="mt-2.5 flex flex-col gap-1.5 text-[12.5px]">
+            {[
+              { valor: n(c.ponte.casosRevisados), rotulo: "casos revisados pelo time" },
+              {
+                valor: `− ${n(c.ponte.semPedido)}`,
+                rotulo: "sem número de pedido no BRNET",
+                desconto: true,
+                nota: "O BRNET não devolveu pedido para esses prontuários — a consulta falhou ou o paciente não tinha expedição aberta. Foram revisados do mesmo jeito, mas não há pedido a que ligá-los, e a barra só conta pedido.",
+              },
+              { valor: n(c.ponte.pedidosRevisados), rotulo: "pedidos revisados, datados pelo envio" },
+              {
+                valor: `${c.ponte.datacao < 0 ? "−" : "+"} ${n(Math.abs(c.ponte.datacao))}`,
+                rotulo: "datação: liberados na janela, revisados fora dela",
+                desconto: true,
+                nota: "O card Documentos Revisados pelo time BR MED marca o dia em que o prontuário chegou; a barra marca o dia em que o BRNET liberou — que é o mesmo dia da revisão em 93% dos casos. Como a revisão costuma demorar alguns dias depois da chegada, os dois caem em períodos diferentes: prontuário que chegou no fim deste período e foi revisado depois conta só no card; o que chegou antes dele e foi revisado dentro conta só na barra.",
+              },
+              { valor: n(c.revisadas), rotulo: "a parte escura da barra" },
+            ].map((l, i) => (
+              <div key={i} className="flex items-baseline gap-3">
+                <dt
+                  className={`w-[62px] shrink-0 text-right font-medium tabular-nums ${
+                    l.desconto ? "text-[#B4540A]" : "text-[#193B4F]"
+                  }`}
+                >
+                  {l.valor}
+                </dt>
+                <dd className={`min-w-0 leading-[1.45] ${l.desconto ? "text-[#767A7B]" : "text-[#4A5560]"}`}>
+                  {l.nota ? (
+                    <span
+                      className={`${styles.tip} ${styles.tipLargo} cursor-help underline decoration-dotted decoration-[#C9CDD0] underline-offset-[3px]`}
+                      data-tip={l.nota}
+                    >
+                      {l.rotulo}
+                    </span>
+                  ) : (
+                    l.rotulo
+                  )}
+                </dd>
+              </div>
+            ))}
+          </dl>
+        </div>
+        <div>
+          <div className="text-[13.5px] font-semibold text-[#193B4F]">
+            A parte clara ainda não foi revisada
+          </div>
+          <div className="mt-2 text-[13px] leading-[1.55] text-[#4A5560]">
+            <strong className="text-[#193B4F]">{n(c.semRevisor)}</strong> pedidos foram liberados pelo BRNET{" "}
+            <span
+              className={`${styles.tip} ${styles.tipLargo} cursor-help underline decoration-dotted decoration-[#C9CDD0] underline-offset-[3px]`}
+              data-tip="A expedição no BRNET não depende da revisão do time: a IA decide o documento e o pedido segue. A maior parte desses foi aprovada pela IA; uma parte menor nem decisão teve. E não é definitivo — pedido revisado depois migra para a parte escura no próximo recálculo do painel."
+            >
+              sem registro de revisão do time
+            </span>
+            . É o que faz o card de expedições ser maior que o de revisados.
+          </div>
+          <div className="mt-2 text-[12px] leading-[1.5] text-[#767A7B] tabular-nums">
+            {n(c.revisadas)} + {n(c.semRevisor)} = {n(c.via)} · {c.pct} revisados
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -1373,11 +1513,15 @@ export function AbaUtilizacao({
         ))}
       </div>
 
+      {visao.contencao && <CartaoContencao c={visao.contencao} onAjuda={onAjuda} />}
+
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.55fr)_minmax(0,1fr)]">
         {/* Documentos enviados: volume por período, em barra */}
         <div className={`${CARTAO} px-[22px] pt-5 pb-[18px]`}>
           <TituloCartao texto="Documentos enviados" ajuda="enviados" onAjuda={onAjuda} />
-          <div className={SUB}>{visao.graficoLegenda} · volume · último ponto em andamento</div>
+          {/* Em arquivo, e o card de cima em caso: o rótulo diz, senão viram dois
+              números diferentes com o mesmo nome na mesma tela. */}
+          <div className={SUB}>{visao.graficoLegenda} · por arquivo · último ponto em andamento</div>
 
           <div className="relative mt-[22px] h-[268px]">
             <div className="absolute inset-0 flex flex-col justify-between">

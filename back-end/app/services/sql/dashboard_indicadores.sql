@@ -82,6 +82,12 @@ doc AS (
     SELECT
         d.id, d.clinic_id, d.validation_status, d.created_at,
         (h.document_id IS NOT NULL) AS revisado,
+        -- Pedido do BRNET, para a ponte arquivo -> pedido do card "Onde um
+        -- numero esta dentro do outro". NULL quando a consulta ao BRNET falhou:
+        -- o documento e revisado do mesmo jeito, mas nao tem como virar pedido.
+        CASE WHEN (p.payload #>> '{brmed_result,pedido_exame_id}') ~ '^\d{1,18}$'
+             THEN (p.payload #>> '{brmed_result,pedido_exame_id}')
+        END AS pedido,
         CASE WHEN (p.payload #>> '{brmed_result,data_previsao_liberacao}')
                   ~ '^\d{2}/\d{2}/\d{4}$'
              THEN to_date(p.payload #>> '{brmed_result,data_previsao_liberacao}',
@@ -93,6 +99,9 @@ doc AS (
     CROSS JOIN LATERAL (SELECT CASE WHEN d.result_payload LIKE '{%'
                               AND pg_input_is_valid(d.result_payload, 'jsonb')
                          THEN d.result_payload::jsonb END AS payload) p
+    -- Reenvio de prontuário já liberado (migration 015) não conta de novo: o
+    -- liberado original já está na base.
+    WHERE d.validation_status IS DISTINCT FROM 'reenvio'
 ),
 agg AS (
     SELECT
@@ -104,6 +113,22 @@ agg AS (
                            AND (d.validation_status = 'pending'
                              OR d.validation_status IS NULL))              AS pendentes,
         count(*) FILTER (WHERE d.revisado)                                 AS revisados,
+        -- CASO: a unidade dos dois KPIs de cima. Um pedido do BRNET conta uma
+        -- vez por mais arquivos que receba — ASO e laudo do mesmo paciente são
+        -- um caso só. Documento sem pedido não tem chave para agrupar e conta
+        -- como caso próprio: é trabalho real e sumiria se fosse descartado.
+        -- `docs`/`revisados` seguem em ARQUIVO, para o gráfico de volume e o
+        -- ranking de clínicas, que medem carga de trabalho.
+        count(DISTINCT d.pedido) FILTER (WHERE d.pedido IS NOT NULL)
+            + count(*) FILTER (WHERE d.id IS NOT NULL AND d.pedido IS NULL)
+                                                                           AS casos,
+        count(DISTINCT d.pedido) FILTER (WHERE d.pedido IS NOT NULL AND d.revisado)
+            + count(*) FILTER (WHERE d.revisado AND d.pedido IS NULL)
+                                                                           AS casos_revisados,
+        -- Termos da ponte arquivo -> pedido, para o card de contenção.
+        count(*) FILTER (WHERE d.revisado AND d.pedido IS NULL)            AS revisados_sem_pedido,
+        count(*) FILTER (WHERE d.revisado AND d.pedido IS NOT NULL)
+            - count(DISTINCT d.pedido) FILTER (WHERE d.revisado)           AS revisados_extras,
         count(*) FILTER (WHERE d.validation_status = 'validated'
                            AND d.previsao IS NOT NULL
                            AND d.liberado_em < d.previsao)                 AS antecipada,
@@ -582,6 +607,10 @@ SELECT jsonb_pretty(jsonb_build_object(
                    'rejeitados', rejeitados,
                    'pendentes',  pendentes,
                    'revisados',  revisados,
+                   'casos',                casos,
+                   'casos_revisados',      casos_revisados,
+                   'revisados_sem_pedido', revisados_sem_pedido,
+                   'revisados_extras',     revisados_extras,
                    'antecipada', antecipada,
                    'em_dia',     em_dia,
                    'atrasada',   atrasada) ORDER BY p) AS pts
