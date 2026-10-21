@@ -226,7 +226,7 @@ def _in_memory_paged_documents(
         summary_counts[_status_from_validation(doc)] += 1
 
     if queue == DocumentQueue.PENDENTES:
-        filtered = [d for d in filtered if d.validation_status != "validated"]
+        filtered = [d for d in filtered if d.validation_status not in ("validated", "reenvio")]
     elif queue == DocumentQueue.CHECAGEM:
         filtered = [
             d for d in filtered

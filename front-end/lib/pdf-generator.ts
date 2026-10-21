@@ -52,9 +52,11 @@ export function generateResultPDF(result: ProcessResult): void {
 
   // Badge de status
   const statusText = result.status === "approved" ? "APROVADO" :
-                     result.status === "rejected" ? "REJEITADO" : "PENDENTE"
+                     result.status === "rejected" ? "REJEITADO" :
+                     result.status === "resubmission" ? "JÁ LIBERADO" : "PENDENTE"
   const statusColor = result.status === "approved" ? [34, 197, 94] :
-                      result.status === "rejected" ? [239, 68, 68] : [251, 191, 36]
+                      result.status === "rejected" ? [239, 68, 68] :
+                      result.status === "resubmission" ? [14, 116, 144] : [251, 191, 36]
 
   doc.setFillColor(statusColor[0], statusColor[1], statusColor[2])
   doc.setTextColor(255, 255, 255)

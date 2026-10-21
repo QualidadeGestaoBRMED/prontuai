@@ -193,6 +193,8 @@ WHERE c.name NOT IN ('teste', 'testando', 'Clinica Default')
   AND d.result_payload LIKE '{%'
   AND pg_input_is_valid(d.result_payload, 'jsonb')
   AND d.result_payload::jsonb #>> '{brmed_result,pedido_exame_id}' ~ '^\d{1,18}$'
+  -- Reenvio de prontuário já liberado: o pedido já tem a linha do original.
+  AND d.validation_status IS DISTINCT FROM 'reenvio'
 """
 
 # Acurácia por exame, do parecer do revisor no modal de feedback (migration 008).
