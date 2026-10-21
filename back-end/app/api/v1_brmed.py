@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, status, UploadFile, File, Body, Depends, Request
 from fastapi.responses import StreamingResponse
-from app.services import workflow_service, brmed_service, layout_ocr
+from app.services import workflow_service, brmed_service, layout_ocr, reenvio_service
 from app.core.job_manager import job_manager
 from app.core.auth import create_upload_token, require_sender, require_upload_sender, get_current_user
 from app.models.user import User, UserRole
@@ -227,6 +227,12 @@ async def processar_documento_completo_api(
                 validation_status = 'validated' if not resultado.get('validation_result', {}).get('exames_faltantes') and resultado.get('status') == 'success' else 'pending'
                 if resultado.get('status') == 'error':
                     validation_status = 'rejected'
+                reenvio = reenvio_service.liberado_anterior(
+                    user_db, resultado, cpf=cpf, content_hash=content_hash
+                )
+                if reenvio:
+                    validation_status = "reenvio"
+                    resultado["reenvio"] = reenvio
 
                 # Criar documento no banco
                 clinic_id = current_user.clinic_id
@@ -262,7 +268,8 @@ async def processar_documento_completo_api(
                     result_payload=resultado,
                     confidence_score=confidence_score,
                     quality_score=confidence_details.get("quality_score"),
-                    mandatory_coverage=confidence_details.get("mandatory_coverage")
+                    mandatory_coverage=confidence_details.get("mandatory_coverage"),
+                    reenvio_de=reenvio["documento_id"] if reenvio else None,
                 )
 
                 logger.info(f"[DB] Documento salvo com ID: {document.id}")
@@ -765,6 +772,14 @@ async def process_document_background(
             validation_status = 'validated' if not resultado.get('validation_result', {}).get('exames_faltantes') and resultado.get('status') == 'success' else 'pending'
             if resultado.get('status') == 'error':
                 validation_status = 'rejected'
+            # Reenvio de prontuário já liberado: não volta para a Checagem, e o
+            # resultado do job leva a data da liberação para o alerta da clínica.
+            reenvio = reenvio_service.liberado_anterior(
+                user_db, resultado, cpf=cpf, content_hash=content_hash
+            )
+            if reenvio:
+                validation_status = "reenvio"
+                resultado["reenvio"] = reenvio
 
             clinic_id_to_use = clinic_id
             if not clinic_id_to_use:
@@ -799,6 +814,7 @@ async def process_document_background(
                 quality_score=(resultado.get("confidence_details") or {}).get("quality_score"),
                 mandatory_coverage=(resultado.get("confidence_details") or {}).get("mandatory_coverage"),
                 rejection_reason=rejection_reason if validation_status == "rejected" else None,
+                reenvio_de=reenvio["documento_id"] if reenvio else None,
             )
             logger.info(f"[DB] Documento salvo via async com ID: {document.id} (job_id={job_id})")
             _gravar_layout(document.id, layout)

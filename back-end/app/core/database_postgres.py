@@ -23,6 +23,7 @@ from app.models.document import (
     DocumentUpdate,
     JUSTIFICATIVAS_VAZIAS,
     analise_do_payload,
+    pedido_exame_id_do_payload,
     previsao_liberacao_do_payload,
 )
 from app.models.feedback import DocumentFeedback
@@ -1383,6 +1384,7 @@ class PostgresUserDatabase:
             quality_score=model.quality_score,
             mandatory_coverage=model.mandatory_coverage,
             archived_at=_as_utc(getattr(model, "archived_at", None)),
+            reenvio_de=getattr(model, "reenvio_de", None),
             storage_filename=(getattr(model, "file_path", None) or "").rsplit("/", 1)[-1] or None,
             created_at=_as_utc(model.created_at),
             updated_at=_as_utc(model.updated_at)
@@ -1547,10 +1549,12 @@ class PostgresUserDatabase:
                 scoped_query = scoped_query.filter(*filtros_previsao)
 
             if queue == "pendentes":
+                # Reenvio de prontuário já liberado não espera nada da clínica:
+                # fica no Histórico, com o alerta da liberação.
                 scoped_query = scoped_query.filter(
                     or_(
                         DocumentModel.validation_status.is_(None),
-                        DocumentModel.validation_status != "validated",
+                        DocumentModel.validation_status.notin_(("validated", "reenvio")),
                     )
                 )
             elif queue == "checagem":
@@ -1797,6 +1801,84 @@ class PostgresUserDatabase:
         finally:
             session.close()
 
+    def buscar_liberado_anterior(
+        self,
+        *,
+        content_hash: Optional[str],
+        pedido_exame_id: Optional[int],
+        cpf: Optional[str],
+        cnpj_empresa: Optional[str],
+        desde: datetime,
+        antes_de: Optional[datetime] = None,
+    ) -> Optional[dict]:
+        """
+        Documento já liberado de que o novo envio é reenvio, ou None.
+
+        Três critérios, nesta ordem (ver app/services/reenvio_service.py):
+          1. mesmo arquivo (`content_hash`) de um liberado;
+          2. mesmo pedido do BRNET de um liberado;
+          3. sem pedido: liberado do mesmo CPF e da mesma empresa (CNPJ lido do
+             ASO) a partir de `desde`. Com pedido, o critério 3 não vale: o
+             BRNET achou um pedido em aberto, e é outro atendimento.
+
+        "Liberado" é aprovado PELO REVISOR (`validated` com `reviewed_by`) — é o
+        que a clínica vê como "Aprovado". Aprovado só pela IA ela vê como
+        "Aguardando Revisão", e o reenvio dele segue para a Checagem como antes
+        (decisão de out/2026; fica para o complemento com histórico). A data da
+        liberação é a da revisão.
+
+        `antes_de` só serve para reconstruir o histórico (cada envio enxerga o
+        que estava liberado até ele); no envio de verdade tudo é anterior.
+        """
+        session = self._get_session()
+        try:
+            colunas = (
+                DocumentModel.id,
+                DocumentModel.reviewed_at,
+                DocumentModel.created_at,
+                DocumentModel.result_payload_compact,
+            )
+            liberados = (
+                session.query(*colunas)
+                .filter(
+                    DocumentModel.validation_status == "validated",
+                    DocumentModel.reviewed_by.isnot(None),
+                    DocumentModel.reviewed_at.isnot(None),
+                )
+                .order_by(DocumentModel.reviewed_at.desc())
+            )
+            if antes_de:
+                liberados = liberados.filter(DocumentModel.reviewed_at < antes_de)
+
+            def achado(linha, criterio: str) -> dict:
+                return {
+                    "documento_id": linha.id,
+                    # Gravado em UTC sem fuso: o fuso vai explícito para o navegador
+                    # não ler como hora local e trocar o dia perto da meia-noite.
+                    "liberado_em": linha.reviewed_at.replace(tzinfo=timezone.utc).isoformat(),
+                    "criterio": criterio,
+                }
+
+            if content_hash:
+                linha = liberados.filter(DocumentModel.content_hash == content_hash).first()
+                if linha:
+                    return achado(linha, "arquivo")
+            if pedido_exame_id:
+                linha = liberados.filter(DocumentModel.pedido_exame_id == pedido_exame_id).first()
+                return achado(linha, "pedido") if linha else None
+            if cpf and cnpj_empresa:
+                for linha in liberados.filter(DocumentModel.cpf == cpf, DocumentModel.uploaded_at >= desde):
+                    try:
+                        compacto = json.loads(linha.result_payload_compact or "{}")
+                    except (TypeError, ValueError):
+                        continue
+                    cnpj = re.sub(r"\D", "", str(compacto.get("cnpj_processado") or ""))
+                    if cnpj == cnpj_empresa:
+                        return achado(linha, "cpf_empresa")
+            return None
+        finally:
+            session.close()
+
     def create_document(
         self,
         clinic_id: str,
@@ -1819,7 +1901,8 @@ class PostgresUserDatabase:
         rejection_reason: Optional[str] = None,
         confidence_score: Optional[float] = None,
         quality_score: Optional[float] = None,
-        mandatory_coverage: Optional[float] = None
+        mandatory_coverage: Optional[float] = None,
+        reenvio_de: Optional[str] = None,
     ) -> Document:
         """Cria um novo documento."""
         session = self._get_session()
@@ -1852,6 +1935,8 @@ class PostgresUserDatabase:
                 cpf=cpf,
                 patient_name=self._extract_patient_name(result_payload) or "",
                 data_previsao_liberacao=previsao_liberacao_do_payload(result_payload),
+                pedido_exame_id=pedido_exame_id_do_payload(result_payload),
+                reenvio_de=reenvio_de,
                 uploaded_at=datetime.utcnow(),
                 exams_found=exams_found,
                 exams_ocr=exams_ocr,
@@ -1944,6 +2029,7 @@ class PostgresUserDatabase:
                 # Reprocessar pode trazer outro pedido do BRNET: a previsão
                 # acompanha o payload novo, inclusive quando ele não tem uma.
                 doc_model.data_previsao_liberacao = previsao_liberacao_do_payload(result_payload)
+                doc_model.pedido_exame_id = pedido_exame_id_do_payload(result_payload)
                 if reviewed_by is None and isinstance(result_payload, dict):
                     payload_reviewed_by = result_payload.get("reviewed_by") or result_payload.get("reviewedBy")
                     if payload_reviewed_by:
