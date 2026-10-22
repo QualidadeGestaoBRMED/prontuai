@@ -89,7 +89,7 @@ const TIPS_KPI: Record<string, string> = {
   "Análises realizadas":
     "Aprovados ou rejeitados por uma pessoa do time BR MED (checador, gestor ou administrador). A decisão automática da IA não conta.",
   "Análises pendentes":
-    "Envios realizados menos análises realizadas: prontuários que nenhuma pessoa do time BR MED aprovou ou rejeitou, inclusive os que a IA já decidiu sozinha.",
+    "Envios realizados menos análises realizadas: prontuários que nenhuma pessoa do time BR MED aprovou ou rejeitou. Inclui os aprovados automaticamente, os que deram erro no processamento e os que a IA marcou com exame faltante.",
 };
 
 const TIPS_ACC: Record<string, string> = {
@@ -195,7 +195,7 @@ export const COMO_CALCULAMOS: Record<IdIndicador, ComoCalculamos> = {
       {
         titulo: "O que conta",
         texto:
-          "Envios realizados menos análises realizadas, no mesmo período: o prontuário que nenhuma pessoa do time BR MED aprovou ou rejeitou. Entra o que a IA ainda não decidiu e também o que ela já aprovou ou rejeitou sozinha. Parte desses pedidos pode já ter sido liberada no BRNET.",
+          "Envios realizados menos análises realizadas, no mesmo período: o prontuário que nenhuma pessoa do time BR MED aprovou ou rejeitou. São três situações: aprovado automaticamente (não faltou exame), erro no processamento (por exemplo, paciente não encontrado) e exame faltante apontado pela IA. Parte desses pedidos pode já ter sido liberada no BRNET.",
       },
       {
         titulo: "Em que período cai",
@@ -205,7 +205,7 @@ export const COMO_CALCULAMOS: Record<IdIndicador, ComoCalculamos> = {
       {
         titulo: "O subtítulo",
         texto:
-          "Mostra quantos estão sem decisão nenhuma, nem da IA, e quanto o total representa do que foi enviado.",
+          "Mostra quantos a IA marcou com exame faltante e quanto o total representa do que foi enviado. Exame faltante não é rejeitado automaticamente: o prontuário fica parado até alguém do time decidir.",
       },
     ],
   },
@@ -247,7 +247,7 @@ export const COMO_CALCULAMOS: Record<IdIndicador, ComoCalculamos> = {
       {
         titulo: "A variação",
         texto:
-          "Contra o período anterior de mesmo tamanho. \"novo\" é clínica que não tinha enviado nada no período anterior. Passando o mouse, aparecem também quantos documentos dela já foram revisados e quantos foram liberados.",
+          "Contra o período anterior de mesmo tamanho. \"novo\" é clínica que não tinha enviado nada no período anterior. Passando o mouse, aparecem também quantos documentos dela já foram analisados pelo time e quantos estão aprovados.",
       },
     ],
   },
@@ -980,7 +980,9 @@ export function calcularVisao({ dados, filtro, comparar, verTodasClinicas }: Opc
   const revisados = soma(atual, "revisados");
   // Envio que nenhuma pessoa do time aprovou ou rejeitou, decidido ou não pela IA.
   const pendentes = Math.max(0, enviados - revisados);
-  const semDecisao = soma(atual, "pendentes");
+  // Status "pending" é o que a IA processou e marcou com exame faltante: ela
+  // não rejeita sozinha por isso, e o prontuário espera o time.
+  const comFaltante = soma(atual, "pendentes");
   const variacaoPendentes = () => {
     if (!comparavel) return "";
     const b = soma(anterior, "docs") - soma(anterior, "revisados");
@@ -1455,7 +1457,7 @@ export function calcularVisao({ dados, filtro, comparar, verTodasClinicas }: Opc
         variacaoPendentes(),
         // Subir é piorar: mais prontuário chegou sem passar pelo time.
         "down",
-        `${fmt(semDecisao)} sem decisão da IA · ${num(pct(pendentes, enviados))} do que foi enviado`,
+        `${fmt(comFaltante)} com exame faltante · ${num(pct(pendentes, enviados))} do que foi enviado`,
       ),
     ],
 
@@ -1464,7 +1466,7 @@ export function calcularVisao({ dados, filtro, comparar, verTodasClinicas }: Opc
       value: p.docs,
       h: bar(p.docs, maxDocs, 236),
       tip: p.docs
-        ? `${rotuloG(p.chave)} — ${fmt(p.docs)} enviados, ${fmt(p.validados)} liberados, ${fmt(p.rejeitados)} com pendência`
+        ? `${rotuloG(p.chave)} — ${fmt(p.docs)} enviados: ${fmt(p.validados)} aprovados, ${fmt(p.rejeitados)} rejeitados, ${fmt(p.pendentes)} com exame faltante`
         : `${rotuloG(p.chave)} — sem documentos`,
     })),
 
@@ -1513,7 +1515,7 @@ export function calcularVisao({ dados, filtro, comparar, verTodasClinicas }: Opc
         color: CORES_RANK[i] || CORES.agua,
         delta: comparar ? v : "",
         deltaColor: v.startsWith("-") ? NEG : POS,
-        tip: `${c.nome} — ${fmt(c.docs)} enviados${comp}, ${fmt(c.revisados)} revisados, ${fmt(c.validados)} liberados`,
+        tip: `${c.nome} — ${fmt(c.docs)} enviados${comp}, ${fmt(c.revisados)} analisados pelo time, ${fmt(c.validados)} aprovados`,
       };
     }),
 
