@@ -1171,7 +1171,13 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   // quem alimenta a barra de progresso é o polling de job (useAsyncJob).
   useVisibleInterval(fetchNotifications, NOTIFICATIONS_POLL_INTERVAL_MS, Boolean(session?.user?.email))
 
+  // Retomar o polling exige sessão. Os documentos em processamento ficam no
+  // localStorage e sobrevivem ao logout: sem esta guarda, o /login de quem saiu
+  // com documento pendente consultava o job, tomava 401, disparava o logout, e
+  // o logout recarregava o /login — um aviso de sessão expirada por segundo,
+  // sem fim. Com a sessão de volta o polling retoma e o resultado aparece.
   useEffect(() => {
+    if (!session?.user?.email) return
     if (processingDocuments.length === 0) return
 
     processingDocuments.forEach((doc) => {
@@ -1179,7 +1185,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       if (doc.stage === 'completed' || doc.error) return
       startPollingForDocument(doc.id, doc.jobId)
     })
-  }, [processingDocuments, startPollingForDocument])
+  }, [processingDocuments, startPollingForDocument, session?.user?.email])
 
   const value: NotificationContextType = {
     notifications,
