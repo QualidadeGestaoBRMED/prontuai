@@ -1344,9 +1344,9 @@ export function AbaUtilizacao({
       </div>
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.55fr)_minmax(0,1fr)]">
-        {/* Documentos enviados: volume por período, em barra */}
+        {/* Envios realizados: volume por período, em barra */}
         <div className={`${CARTAO} px-[22px] pt-5 pb-[18px]`}>
-          <TituloCartao texto="Documentos enviados" ajuda="enviados" onAjuda={onAjuda} />
+          <TituloCartao texto="Envios realizados" ajuda="enviados" onAjuda={onAjuda} />
           <div className={SUB}>{visao.graficoLegenda} · volume · último ponto em andamento</div>
 
           <div className="relative mt-[22px] h-[268px]">
@@ -1432,8 +1432,8 @@ export function AbaUtilizacao({
       </div>
 
       <div className={`${CARTAO} px-[22px] pt-5 pb-[18px]`}>
-        {/* Mesma conta do KPI "Expedições via ProntuAI", ponto a ponto: o "?"
-            abre a mesma explicação, para as duas não divergirem. */}
+        {/* Cobertura do ProntuAI sobre as expedições, ponto a ponto. O card de
+            expedições saiu da fileira de cima; a conta continua só aqui. */}
         <TituloCartao texto="Cobertura das expedições" ajuda="expedicoes" onAjuda={onAjuda} />
         <div className={SUB}>
           % dos pedidos atendidos nas credenciadas que passaram pelo ProntuAI · meta 100%
