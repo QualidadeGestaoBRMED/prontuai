@@ -41,6 +41,10 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     let fired = false
     const handle = (evento: Event) => {
+      // No /login não há sessão a encerrar: o logout só recarregaria a própria
+      // página, e qualquer chamada que tomasse 401 ao montar viraria loop de
+      // aviso + recarga. Ver o polling de jobs em `hooks/use-notifications.tsx`.
+      if (window.location.pathname === "/login") return
       if (fired) return
       fired = true
       const motivo = (evento as CustomEvent<{ motivo?: string }>).detail?.motivo
