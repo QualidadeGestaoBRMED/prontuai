@@ -57,6 +57,7 @@ export const API_ENDPOINTS = {
   DOCUMENT_VIEW: (id: string) => `${API_PROXY_BASE}/v1/documents/${id}/view`,
   // Parecer do revisor sobre o acerto da IA (GET devolve null se nunca avaliado).
   DOCUMENT_FEEDBACK: (id: string) => `${API_PROXY_BASE}/v1/documents/${id}/feedback`,
+  DOCUMENT_COMPLEMENTO: (id: string) => `${API_PROXY_BASE}/v1/documents/${id}/complemento`,
 
   // Notifications
   NOTIFICATIONS: `${API_PROXY_BASE}/v1/notifications`,

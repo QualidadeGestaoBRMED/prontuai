@@ -1807,6 +1807,7 @@ class PostgresUserDatabase:
         pedido_exame_id: Optional[int],
         cpf: Optional[str],
         cnpj_empresa: Optional[str],
+        clinic_id: Optional[str],
         desde: datetime,
         antes_de: Optional[datetime] = None,
     ) -> Optional[dict]:
@@ -1814,17 +1815,26 @@ class PostgresUserDatabase:
         Documento já liberado de que o novo envio é reenvio, ou None.
 
         Três critérios, nesta ordem (ver app/services/reenvio_service.py):
-          1. mesmo arquivo (`content_hash`) de um liberado;
-          2. mesmo pedido do BRNET de um liberado;
+          1. mesmo arquivo (`content_hash`) de um liberado, de qualquer clínica;
+          2. mesmo pedido do BRNET de um liberado da mesma clínica;
           3. sem pedido: liberado do mesmo CPF e da mesma empresa (CNPJ lido do
-             ASO) a partir de `desde`. Com pedido, o critério 3 não vale: o
-             BRNET achou um pedido em aberto, e é outro atendimento.
+             ASO), da mesma clínica, a partir de `desde`. Com pedido, o critério
+             3 não vale: o BRNET achou um pedido em aberto, e é outro atendimento.
+
+        "Mesma clínica" é o mesmo cadastro ou o mesmo credenciado do BRNET — há
+        credenciado cadastrado duas vezes. Outra clínica com o mesmo pedido ou o
+        mesmo CPF + empresa é outro credenciado da expedição (laboratório,
+        imagem) ou outra unidade, e segue para a Checagem.
 
         "Liberado" é aprovado PELO REVISOR (`validated` com `reviewed_by`) — é o
         que a clínica vê como "Aprovado". Aprovado só pela IA ela vê como
         "Aguardando Revisão", e o reenvio dele segue para a Checagem como antes
         (decisão de out/2026; fica para o complemento com histórico). A data da
         liberação é a da revisão.
+
+        Devolve também os exames lidos e os faltantes de TODOS os liberados que
+        casaram — uma expedição pode ter vários prontuários, e o serviço usa
+        isso para separar complemento de reenvio.
 
         `antes_de` só serve para reconstruir o histórico (cada envio enxerga o
         que estava liberado até ele); no envio de verdade tudo é anterior.
@@ -1834,7 +1844,7 @@ class PostgresUserDatabase:
             colunas = (
                 DocumentModel.id,
                 DocumentModel.reviewed_at,
-                DocumentModel.created_at,
+                DocumentModel.exams_ocr,
                 DocumentModel.result_payload_compact,
             )
             liberados = (
@@ -1849,32 +1859,113 @@ class PostgresUserDatabase:
             if antes_de:
                 liberados = liberados.filter(DocumentModel.reviewed_at < antes_de)
 
-            def achado(linha, criterio: str) -> dict:
+            def compacto(linha) -> dict:
+                try:
+                    dados = json.loads(linha.result_payload_compact or "{}")
+                except (TypeError, ValueError):
+                    return {}
+                return dados if isinstance(dados, dict) else {}
+
+            def achado(linhas: list, criterio: str) -> dict:
+                exames, faltantes = [], []
+                for linha in linhas:
+                    exames.extend(linha.exams_ocr or [])
+                    validacao = compacto(linha).get("validation_result")
+                    if isinstance(validacao, dict):
+                        faltantes.extend(validacao.get("exames_faltantes") or [])
                 return {
-                    "documento_id": linha.id,
+                    "documento_id": linhas[0].id,
                     # Gravado em UTC sem fuso: o fuso vai explícito para o navegador
                     # não ler como hora local e trocar o dia perto da meia-noite.
-                    "liberado_em": linha.reviewed_at.replace(tzinfo=timezone.utc).isoformat(),
+                    "liberado_em": linhas[0].reviewed_at.replace(tzinfo=timezone.utc).isoformat(),
                     "criterio": criterio,
+                    "exames": exames,
+                    "faltantes": faltantes,
                 }
 
             if content_hash:
                 linha = liberados.filter(DocumentModel.content_hash == content_hash).first()
                 if linha:
-                    return achado(linha, "arquivo")
+                    return achado([linha], "arquivo")
+
+            clinicas = self._clinicas_equivalentes(session, clinic_id)
+            if not clinicas:
+                return None
+            da_clinica = liberados.filter(DocumentModel.clinic_id.in_(clinicas))
             if pedido_exame_id:
-                linha = liberados.filter(DocumentModel.pedido_exame_id == pedido_exame_id).first()
-                return achado(linha, "pedido") if linha else None
+                linhas = da_clinica.filter(DocumentModel.pedido_exame_id == pedido_exame_id).all()
+                return achado(linhas, "pedido") if linhas else None
             if cpf and cnpj_empresa:
-                for linha in liberados.filter(DocumentModel.cpf == cpf, DocumentModel.uploaded_at >= desde):
-                    try:
-                        compacto = json.loads(linha.result_payload_compact or "{}")
-                    except (TypeError, ValueError):
-                        continue
-                    cnpj = re.sub(r"\D", "", str(compacto.get("cnpj_processado") or ""))
-                    if cnpj == cnpj_empresa:
-                        return achado(linha, "cpf_empresa")
+                linhas = [
+                    linha
+                    for linha in da_clinica.filter(DocumentModel.cpf == cpf, DocumentModel.uploaded_at >= desde)
+                    if re.sub(r"\D", "", str(compacto(linha).get("cnpj_processado") or "")) == cnpj_empresa
+                ]
+                if linhas:
+                    return achado(linhas, "cpf_empresa")
             return None
+        finally:
+            session.close()
+
+    @staticmethod
+    def _clinicas_equivalentes(session: Session, clinic_id: Optional[str]) -> list[str]:
+        """A clínica e os outros cadastros do mesmo credenciado do BRNET."""
+        if not clinic_id:
+            return []
+        # `clinics.brnet_id` vem da migration 014 (STC-792); sem ela, a clínica
+        # vale só pelo próprio cadastro.
+        coluna_brnet = getattr(ClinicModel, "brnet_id", None)
+        if coluna_brnet is None:
+            return [clinic_id]
+        brnet_id = session.query(coluna_brnet).filter(ClinicModel.id == clinic_id).scalar()
+        if not brnet_id:
+            return [clinic_id]
+        mesmas = [linha.id for linha in session.query(ClinicModel.id).filter(coluna_brnet == brnet_id)]
+        return sorted({clinic_id, *mesmas})
+
+    def desfazer_reenvio(self, document_id: str, *, por: str) -> Optional[Document]:
+        """
+        Devolve à Checagem um documento marcado como reenvio que era complemento.
+
+        O status volta ao que a IA tinha decidido (guardado em
+        `reenvio.status_ia` na hora da marcação), e o aviso sai do resultado
+        para `reenvio_desfeito`, com quem desfez e quando. None se o documento
+        não existe ou não está marcado como reenvio.
+        """
+        session = self._get_session()
+        try:
+            doc_model = session.query(DocumentModel).filter(DocumentModel.id == document_id).first()
+            if not doc_model or doc_model.validation_status != "reenvio":
+                return None
+            try:
+                payload = json.loads(doc_model.result_payload or "{}")
+            except (TypeError, ValueError):
+                payload = {}
+            if not isinstance(payload, dict):
+                payload = {}
+            reenvio = payload.pop("reenvio", None) or {}
+            status_ia = reenvio.get("status_ia")
+            if status_ia not in ("validated", "pending", "rejected"):
+                status_ia = "pending"
+            payload["reenvio_desfeito"] = {
+                **reenvio,
+                "por": por,
+                "em": datetime.utcnow().replace(tzinfo=timezone.utc).isoformat(),
+            }
+
+            doc_model.validation_status = status_ia
+            doc_model.rejection_reason = reenvio.get("motivo_ia") if status_ia == "rejected" else None
+            doc_model.reenvio_de = None
+            doc_model.result_payload = json.dumps(payload, ensure_ascii=False)
+            compact_payload = self._compact_payload_for_storage(payload)
+            doc_model.result_payload_compact = json.dumps(compact_payload, ensure_ascii=False)
+            doc_model.updated_at = datetime.utcnow()
+            session.commit()
+            session.refresh(doc_model)
+            return self._model_to_document(doc_model)
+        except Exception:
+            session.rollback()
+            raise
         finally:
             session.close()
 

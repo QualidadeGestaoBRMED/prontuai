@@ -26,7 +26,7 @@ import { Download, Eye, Search, FileDown } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { ClinicFilter } from "@/components/clinic-filter"
 import type { ClinicOption } from "@/hooks/use-clinic-options"
-import { dataDaLiberacao, mensagemReenvio } from "@/lib/reenvio"
+import { CLASSE_TAG_REENVIO, mensagemReenvio } from "@/lib/reenvio"
 
 type StatusFilter = "all" | "approved" | "rejected" | "pending_review"
 
@@ -210,11 +210,11 @@ export function ResultsTable({
     if (status === "resubmission") {
       return (
         <Badge
-          variant="secondary"
-          className="bg-sky-100 text-sky-800 hover:bg-sky-200"
+          variant="outline"
+          className={CLASSE_TAG_REENVIO}
           title={result.result.reenvio ? mensagemReenvio(result.result.reenvio) : undefined}
         >
-          {result.result.reenvio ? `Já liberado em ${dataDaLiberacao(result.result.reenvio)}` : "Já liberado"}
+          Já liberado
         </Badge>
       )
     }
