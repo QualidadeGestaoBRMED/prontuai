@@ -91,7 +91,6 @@ export function useDadosDashboard(): EstadoDashboard {
           ...corpo,
           expedicoes_dia: corpo.expedicoes_dia ?? {},
           expedicoes_prontuai_dia: corpo.expedicoes_prontuai_dia ?? {},
-          expedicoes_prontuai_revisadas_dia: corpo.expedicoes_prontuai_revisadas_dia ?? {},
           expedicoes_desde: corpo.expedicoes_desde ?? null,
           clinicas_sem_prontuai: corpo.clinicas_sem_prontuai ?? null,
           clinicas_com_prontuai: corpo.clinicas_com_prontuai ?? null,
