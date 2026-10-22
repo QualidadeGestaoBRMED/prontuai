@@ -59,6 +59,7 @@ interface NotificationContextType {
   addProcessResult: (result: ProcessResult) => void
   getResultsByBatchId: (batchId: string) => ProcessResult[]
   updateProcessResultStatus: (id: string, status: 'approved' | 'rejected' | 'pending_review', reviewerEmail: string, rejectionReason?: string, approvalReason?: string) => void
+  replaceProcessResult: (atualizado: ProcessResult) => void
 
   // Estado da UI
   notificationCenterOpen: boolean
@@ -1126,6 +1127,18 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     )
   }, [])
 
+  // Troca o resultado pela versão que o back-end devolveu (ex.: reenvio
+  // devolvido à Checagem como complemento), mantendo o lote e o envio locais.
+  const replaceProcessResult = useCallback((atualizado: ProcessResult) => {
+    setProcessResults(prev =>
+      prev.map(result =>
+        result.id === atualizado.id
+          ? { ...atualizado, batchId: result.batchId, submittedBy: result.submittedBy }
+          : result
+      )
+    )
+  }, [])
+
   // Funções da barra de progresso
   const minimizeProgressBar = useCallback(() => {
     setProgressBarState(prev => ({ ...prev, minimized: true }))
@@ -1221,6 +1234,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     addProcessResult,
     getResultsByBatchId,
     updateProcessResultStatus,
+    replaceProcessResult,
     notificationCenterOpen,
     setNotificationCenterOpen,
     progressBarMinimized,
