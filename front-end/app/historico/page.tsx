@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, Suspense, useMemo, useCallback } from "react"
+import { useState, useEffect, Suspense, useMemo, useCallback, useRef } from "react"
 import { useSearchParams } from "next/navigation"
 import { AppSidebar } from "@/components/app-sidebar"
 import {
@@ -22,6 +22,9 @@ import { ProcessResult } from "@/types/process"
 import { History, Loader2 } from "lucide-react"
 import { downloadDocumentPdf } from "@/lib/document-download"
 import { DocumentoArquivadoError } from "@/lib/document-archive"
+import { authFetch } from "@/lib/auth-fetch"
+import { API_ENDPOINTS } from "@/lib/config"
+import { DocumentApi } from "@/types/document"
 import { toast } from "sonner"
 
 function HistoricoContent() {
@@ -82,17 +85,52 @@ function HistoricoContent() {
     if (!canFilterByClinic) setClinicFilter("all")
   }, [canFilterByClinic, setClinicFilter])
 
-  // Auto-abre modal se viewId for fornecido na URL
+  // Auto-abre o modal quando a URL traz `?viewId=<id do documento>`.
+  //
+  // A lista é paginada (10 por página), então o documento quase nunca está na
+  // página carregada. Antes o efeito só procurava em `sortedResults` e, sem
+  // achar, não fazia nada: o link só abria os 10 documentos mais recentes.
+  // Fora da página, o documento vem de `GET /v1/documents/{id}`, que já
+  // aplica a regra de clínica do SENDER no back-end.
+  //
+  // Abre uma vez por id. Sem essa trava o modal reabria sozinho a cada
+  // atualização da lista depois de fechado, e reatribuir o resultado a cada
+  // render levava ao loop infinito (React #185) que a memoização acima evita.
+  const viewIdAberto = useRef<string | null>(null)
   useEffect(() => {
     const viewId = searchParams.get('viewId')
-    if (!viewId || sortedResults.length === 0) return
-    const result = sortedResults.find(r => r.id === viewId)
-    if (!result) return
-    // Segunda trava, independente da memoização acima: reatribuir o mesmo
-    // documento vira no-op e o React interrompe a cadeia de re-render sozinho.
-    setSelectedResult(prev => (prev?.id === result.id ? prev : result))
-    setDetailsModalOpen(true)
-  }, [searchParams, sortedResults])
+    if (!viewId || viewIdAberto.current === viewId) return
+    const daPagina = sortedResults.find(r => r.id === viewId)
+    if (daPagina) {
+      viewIdAberto.current = viewId
+      setSelectedResult(daPagina)
+      setDetailsModalOpen(true)
+      return
+    }
+    if (loading) return
+    viewIdAberto.current = viewId
+    void (async () => {
+      try {
+        const response = await authFetch(`${API_ENDPOINTS.DOCUMENTS}/${encodeURIComponent(viewId)}`)
+        if (!response.ok) {
+          toast.error(
+            response.status === 404
+              ? "Documento não encontrado."
+              : response.status === 403
+                ? "Você não tem permissão para abrir este documento."
+                : "Não foi possível abrir o documento."
+          )
+          return
+        }
+        const doc = (await response.json()) as DocumentApi
+        setSelectedResult(documentToProcessResult(doc))
+        setDetailsModalOpen(true)
+      } catch (error) {
+        console.error("Falha ao abrir documento do link:", error)
+        toast.error("Não foi possível abrir o documento.")
+      }
+    })()
+  }, [searchParams, sortedResults, loading])
 
   const handleDownloadPDF = useCallback(async (result: ProcessResult) => {
     if (!result?.id) return
