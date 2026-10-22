@@ -14,6 +14,7 @@ from typing import List, Optional, Protocol
 from app.models.audit_log import AuditLog, AuditLogCreate
 from app.models.clinic import Clinic, ClinicCreate, ClinicUpdate
 from app.models.document import Document
+from app.models.abordagem import Abordagem
 from app.models.feedback import DocumentFeedback
 from app.models.notification import Notification, NotificationCreate
 from app.models.user import User, UserRole, UserUpdate
@@ -79,6 +80,17 @@ class UserDatabaseProtocol(Protocol):
         reviewed_by_id: Optional[str] = None,
         reviewed_by_email: Optional[str] = None,
     ) -> DocumentFeedback: ...
+    def list_credenciado_abordagens(self) -> List[Abordagem]: ...
+    def get_credenciado_abordagem(self, credenciado: str) -> Optional[Abordagem]: ...
+    def upsert_credenciado_abordagem(
+        self,
+        credenciado: str,
+        status: str,
+        motivo: Optional[str],
+        atualizado_por_id: Optional[str],
+        atualizado_por_email: Optional[str],
+        atualizado_por_nome: Optional[str],
+    ) -> Abordagem: ...
     def create_audit_log(self, data: AuditLogCreate) -> AuditLog: ...
     def list_audit_logs(
         self,

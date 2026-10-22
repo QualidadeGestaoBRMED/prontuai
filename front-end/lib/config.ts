@@ -75,6 +75,7 @@ export const API_ENDPOINTS = {
 
   // Dashboard de indicadores
   DASHBOARD_INDICADORES: `${API_PROXY_BASE}/v1/dashboard/indicadores`,
+  DASHBOARD_ABORDAGENS: `${API_PROXY_BASE}/v1/dashboard/abordagens`,
 
   // Maintenance
   MAINTENANCE_STATUS: "/api/maintenance-status",

@@ -176,6 +176,16 @@ def check_if_migration_needed() -> tuple[bool, list[str]]:
             logger.warning("⚠️  Migration 015 necessária: coluna pedido_exame_id ou reenvio_de não existe")
             migrations_needed.append("015_add_document_reenvio.sql")
 
+        # Verificar migration 016: status de abordagem das credenciadas sem cadastro
+        cursor.execute("""
+            SELECT table_name
+            FROM information_schema.tables
+            WHERE table_name='credenciado_abordagens'
+        """)
+        if not cursor.fetchone():
+            logger.warning("⚠️  Migration 016 necessária: tabela credenciado_abordagens não existe")
+            migrations_needed.append("016_add_credenciado_abordagens.sql")
+
         cursor.close()
         conn.close()
 

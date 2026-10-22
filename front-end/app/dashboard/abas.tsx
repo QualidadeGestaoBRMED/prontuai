@@ -8,6 +8,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
+import { usePermissions } from "@/hooks/usePermissions";
 
 import type {
   AcuraciaExameVisao,
@@ -20,6 +21,15 @@ import type {
   UsoSemanal,
   VisaoDashboard,
 } from "./metricas";
+import {
+  STATUS_ABORDAGEM,
+  autorEData,
+  infoStatus,
+  ordemStatus,
+  useAbordagens,
+  type Abordagem,
+  type StatusAbordagem,
+} from "./abordagem";
 import styles from "./dashboard.module.css";
 
 const CARTAO ="rounded-[14px] border border-[#DFE0E2] bg-white";
@@ -433,6 +443,9 @@ function Simulador({
   adesao,
   semana,
   onAtalho,
+  recusadas,
+  incluirRecusadas,
+  onIncluirRecusadas,
 }: {
   linhas: LinhaForaProntuai[];
   selecionadas: Set<string>;
@@ -442,6 +455,11 @@ function Simulador({
   adesao: number;
   semana: string;
   onAtalho: (quantas: number | "limpar") => void;
+  /** Quantas da lista estão marcadas como Recusou. */
+  recusadas: number;
+  /** Recusadas ficam fora do Top 5/10/20, a menos que alguém peça. */
+  incluirRecusadas: boolean;
+  onIncluirRecusadas: (incluir: boolean) => void;
 }) {
   const mediaSel = linhas
     .filter((l) => selecionadas.has(l.credenciado))
@@ -455,6 +473,17 @@ function Simulador({
     <div className="mt-4 rounded-[12px] border border-[#DFE0E2] bg-[#FAFBFC] px-[18px] py-4">
       <div className="flex flex-wrap items-center gap-2">
         <div className="mr-auto text-[14px] font-semibold text-[#193B4F]">Simular inclusão</div>
+        {recusadas > 0 && (
+          <label className="mr-1 flex cursor-pointer items-center gap-1.5 text-[12.5px] text-[#767A7B]">
+            <input
+              type="checkbox"
+              checked={incluirRecusadas}
+              onChange={(e) => onIncluirRecusadas(e.target.checked)}
+              className="size-3.5 cursor-pointer accent-[#00AFAA]"
+            />
+            incluir as {recusadas} recusada{recusadas > 1 ? "s" : ""} no Top
+          </label>
+        )}
         {([["Top 5", 5], ["Top 10", 10], ["Top 20", 20]] as [string, number][]).map(([r, q]) => (
           <button key={r} type="button" onClick={() => onAtalho(q)}
                   className="rounded-[8px] border border-[#DFE0E2] bg-white px-3 py-1.5 text-[12.5px] text-[#193B4F] hover:border-[#7EBFCC]">
@@ -516,7 +545,7 @@ function Simulador({
 // As duas precisam ser literais: o Tailwind compila só as classes que encontra
 // no código-fonte. Montar a segunda com `.replace()` sobre a primeira gerava uma
 // classe em runtime que nunca foi compilada, e a linha inteira perdia o grid.
-const COLUNAS_FORA = "grid-cols-[28px_1.7fr_1fr_2fr_1.05fr_1.05fr]";
+const COLUNAS_FORA = "grid-cols-[28px_1.7fr_1fr_2fr_1.05fr_1.05fr_178px]";
 const COLUNAS_FORA_LINHA = "grid-cols-[1.7fr_1fr_2fr_1.05fr_1.05fr]";
 
 /**
@@ -551,6 +580,18 @@ function TabelaForaProntuai({
   const { ordem, ordenarPor } = useOrdem({ col: "previstos", dir: "desc" });
   const [busca, setBusca] = useState("");
   const [marcadas, setMarcadas] = useState<Set<string>>(new Set());
+  // Status de abordagem: lido na hora, fora do cache diário dos indicadores.
+  // Só a gestão altera; quem vê o dashboard enxerga o status, o autor e a data.
+  const { isManagement: podeEditar } = usePermissions();
+  const { porCredenciado, erro: erroCarga, salvar } = useAbordagens();
+  const statusDe = (credenciado: string): StatusAbordagem =>
+    porCredenciado.get(credenciado)?.status ?? "NAO_ABORDADA";
+  const [filtroStatus, setFiltroStatus] = useState<StatusAbordagem | "todos">("todos");
+  const [incluirRecusadas, setIncluirRecusadas] = useState(false);
+  const [erroSalvar, setErroSalvar] = useState<string | null>(null);
+  // Escolher "Recusou" na lista abre o detalhe: a recusa pede motivo, e o
+  // motivo não cabe na célula da tabela.
+  const [recusarEm, setRecusarEm] = useState<string | null>(null);
   // Quem está aberto e se o modal está aberto são estados separados: ao
   // fechar, a clínica continua montada durante a animação de saída, em vez de
   // o conteúdo sumir antes do modal.
@@ -563,13 +604,18 @@ function TabelaForaProntuai({
 
   const termo = semAcento(busca.trim());
   const filtradas = linhas.filter(
-    (l) => !termo || semAcento(l.name).includes(termo) || semAcento(l.local).includes(termo),
+    (l) =>
+      (!termo || semAcento(l.name).includes(termo) || semAcento(l.local).includes(termo)) &&
+      (filtroStatus === "todos" || statusDe(l.credenciado) === filtroStatus),
   );
+  const porStatus = new Map<StatusAbordagem, number>();
+  for (const l of linhas) porStatus.set(statusDe(l.credenciado), (porStatus.get(statusDe(l.credenciado)) ?? 0) + 1);
   const visiveis = ordenar(filtradas, ordem, (l, col) =>
     col === "name" ? l.name
     : col === "local" ? l.local
     : col === "previstos" ? l.previstos
     : col === "regularidade" ? l.regularidade
+    : col === "abordagem" ? ordemStatus(statusDe(l.credenciado))
     : l.media,
   );
 
@@ -577,7 +623,12 @@ function TabelaForaProntuai({
     setMarcadas(
       quantas === "limpar"
         ? new Set()
-        : new Set(visiveis.slice(0, quantas).map((l) => l.credenciado)),
+        : new Set(
+            visiveis
+              .filter((l) => incluirRecusadas || statusDe(l.credenciado) !== "RECUSOU")
+              .slice(0, quantas)
+              .map((l) => l.credenciado),
+          ),
     );
   const alternar = (credenciado: string) =>
     setMarcadas((atual) => {
@@ -586,11 +637,36 @@ function TabelaForaProntuai({
       return proximo;
     });
 
+  const mudarStatus = (credenciado: string, status: StatusAbordagem) => {
+    setErroSalvar(null);
+    if (status === "RECUSOU") {
+      setRecusarEm(credenciado);
+      abrir(credenciado);
+      return;
+    }
+    salvar(credenciado, status).catch((e: unknown) =>
+      setErroSalvar(`Não foi possível salvar o status: ${e instanceof Error ? e.message : String(e)}`),
+    );
+  };
+
   return (
     <>
       <div className="mt-4 flex flex-wrap items-center gap-2.5">
         <CampoBusca valor={busca} onChange={setBusca} placeholder="Buscar clínica ou cidade" />
-        {termo && (
+        <select
+          value={filtroStatus}
+          onChange={(e) => setFiltroStatus(e.target.value as StatusAbordagem | "todos")}
+          aria-label="Filtrar por status de abordagem"
+          className="h-[34px] cursor-pointer rounded-[9px] border border-[#DFE0E2] bg-white px-2.5 text-[13px] text-[#193B4F] outline-none focus:border-[#7EBFCC]"
+        >
+          <option value="todos">Todos os status ({linhas.length})</option>
+          {STATUS_ABORDAGEM.map((s) => (
+            <option key={s.valor} value={s.valor}>
+              {s.rotulo} ({porStatus.get(s.valor) ?? 0})
+            </option>
+          ))}
+        </select>
+        {(termo || filtroStatus !== "todos") && (
           <div className="text-[12.5px] text-[#767A7B]">
             {visiveis.length} de {linhas.length} credenciadas
           </div>
@@ -605,11 +681,20 @@ function TabelaForaProntuai({
           adesao={simulador.adesao}
           semana={simulador.semana}
           onAtalho={aplicarAtalho}
+          recusadas={porStatus.get("RECUSOU") ?? 0}
+          incluirRecusadas={incluirRecusadas}
+          onIncluirRecusadas={setIncluirRecusadas}
         />
       )}
 
+      {(erroCarga || erroSalvar) && (
+        <div className="mt-3 rounded-[9px] border border-[#F2D3CF] bg-[#FBECEA] px-3 py-2 text-[12.5px] text-[#B4453A]">
+          {erroSalvar ?? `Não foi possível carregar os status de abordagem: ${erroCarga}`}
+        </div>
+      )}
+
       <div className="mt-3 max-h-[460px] overflow-auto">
-        <div className="min-w-[920px]">
+        <div className="min-w-[1100px]">
           <div
             className={`sticky top-0 z-10 grid ${COLUNAS_FORA} items-end gap-x-[18px] border-b border-[#DFE0E2] bg-white px-1 pb-2.5`}
           >
@@ -640,6 +725,7 @@ function TabelaForaProntuai({
               onOrdenar={ordenarPor}
               numerica
             />
+            <Th label="Abordagem" sub="quem marcou e quando" col="abordagem" ordem={ordem} onOrdenar={ordenarPor} />
           </div>
           {visiveis.map((c) => (
             <LinhaFora
@@ -648,6 +734,9 @@ function TabelaForaProntuai({
               marcada={marcadas.has(c.credenciado)}
               onMarcar={alternar}
               onAbrir={abrir}
+              abordagem={porCredenciado.get(c.credenciado)}
+              podeEditar={podeEditar}
+              onStatus={mudarStatus}
             />
           ))}
           {!visiveis.length && (
@@ -660,12 +749,22 @@ function TabelaForaProntuai({
         linhas={visiveis}
         credenciado={aberta}
         aberto={modalAberto}
-        onFechar={() => setModalAberto(false)}
+        onFechar={() => {
+          setModalAberto(false);
+          setRecusarEm(null);
+        }}
         onIr={setAberta}
         janelaMedia={janelaMedia}
         janelaPrevistos={janelaPrevistos}
         marcadas={marcadas}
         onMarcar={alternar}
+        abordagem={aberta ? porCredenciado.get(aberta) : undefined}
+        podeEditar={podeEditar}
+        recusarAoAbrir={recusarEm !== null && recusarEm === aberta}
+        onSalvarAbordagem={async (credenciado, status, motivo) => {
+          await salvar(credenciado, status, motivo);
+          setRecusarEm(null);
+        }}
       />
     </>
   );
@@ -681,11 +780,17 @@ function LinhaFora({
   marcada,
   onMarcar,
   onAbrir,
+  abordagem,
+  podeEditar,
+  onStatus,
 }: {
   c: LinhaForaProntuai;
   marcada: boolean;
   onMarcar: (credenciado: string) => void;
   onAbrir: (credenciado: string) => void;
+  abordagem: Abordagem | undefined;
+  podeEditar: boolean;
+  onStatus: (credenciado: string, status: StatusAbordagem) => void;
 }) {
   return (
     <div className={`border-b border-[#F3F3F3] ${marcada ? "bg-[#E6EDF4]" : ""}`}>
@@ -731,6 +836,157 @@ function LinhaFora({
             {c.picoPrevisto && <MarcaPico />}
           </div>
         </button>
+        <CelulaAbordagem c={c} abordagem={abordagem} podeEditar={podeEditar} onStatus={onStatus} />
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Status de abordagem na linha do ranking. Para a gestão é um seletor que grava
+ * na hora; para os demais, só o selo. O autor e a data ficam embaixo, porque a
+ * pergunta seguinte de quem vê "Em contato" é "com quem, e desde quando".
+ */
+function CelulaAbordagem({
+  c,
+  abordagem,
+  podeEditar,
+  onStatus,
+}: {
+  c: LinhaForaProntuai;
+  abordagem: Abordagem | undefined;
+  podeEditar: boolean;
+  onStatus: (credenciado: string, status: StatusAbordagem) => void;
+}) {
+  const info = infoStatus(abordagem?.status ?? "NAO_ABORDADA");
+  const autor = autorEData(abordagem);
+  return (
+    <div
+      className="flex min-w-0 flex-col gap-1 py-2"
+      title={abordagem?.motivo ? `Motivo da recusa: ${abordagem.motivo}` : undefined}
+    >
+      {podeEditar ? (
+        <select
+          value={info.valor}
+          onChange={(e) => onStatus(c.credenciado, e.target.value as StatusAbordagem)}
+          aria-label={`Status de abordagem de ${c.name}`}
+          className="h-[28px] w-full cursor-pointer rounded-[7px] border px-1.5 text-[12.5px] font-medium outline-none focus:border-[#7EBFCC]"
+          style={{ color: info.cor, background: info.fundo, borderColor: info.fundo }}
+        >
+          {STATUS_ABORDAGEM.map((s) => (
+            <option key={s.valor} value={s.valor} style={{ color: "#193B4F", background: "#FFFFFF" }}>
+              {s.rotulo}
+            </option>
+          ))}
+        </select>
+      ) : (
+        <span
+          className="w-fit rounded-[7px] px-2 py-1 text-[12.5px] font-medium"
+          style={{ color: info.cor, background: info.fundo }}
+        >
+          {info.rotulo}
+        </span>
+      )}
+      {autor && <span className="truncate text-[10.5px] leading-tight text-[#9AA3A8]">{autor}</span>}
+    </div>
+  );
+}
+
+/**
+ * O status no detalhe da clínica. É aqui que a recusa ganha o motivo: escolher
+ * "Recusou" na lista abre este modal com a recusa já selecionada.
+ *
+ * O formulário nasce do que está gravado; quem o chama troca a `key` quando a
+ * clínica ou a gravação mudam, e o estado recomeça do banco.
+ */
+function EditorAbordagem({
+  abordagem,
+  podeEditar,
+  recusarAoAbrir,
+  onSalvar,
+}: {
+  abordagem: Abordagem | undefined;
+  podeEditar: boolean;
+  recusarAoAbrir: boolean;
+  onSalvar: (status: StatusAbordagem, motivo: string | null) => Promise<void>;
+}) {
+  const atual = abordagem?.status ?? "NAO_ABORDADA";
+  const [status, setStatus] = useState<StatusAbordagem>(recusarAoAbrir ? "RECUSOU" : atual);
+  const [motivo, setMotivo] = useState(abordagem?.motivo ?? "");
+  const [salvando, setSalvando] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+
+  const recusa = status === "RECUSOU";
+  const mudou = status !== atual || (recusa && motivo.trim() !== (abordagem?.motivo ?? ""));
+  const podeSalvar = mudou && !salvando && (!recusa || motivo.trim().length > 0);
+  const info = infoStatus(atual);
+  const autor = autorEData(abordagem);
+
+  const gravar = async () => {
+    setSalvando(true);
+    setErro(null);
+    try {
+      await onSalvar(status, recusa ? motivo.trim() : null);
+    } catch (e: unknown) {
+      setErro(e instanceof Error ? e.message : String(e));
+      setSalvando(false);
+    }
+  };
+
+  return (
+    <div>
+      <div className={CABECALHO_TABELA}>Abordagem</div>
+      {podeEditar ? (
+        <div className="mt-3 flex flex-col gap-2.5">
+          <select
+            value={status}
+            onChange={(e) => setStatus(e.target.value as StatusAbordagem)}
+            aria-label="Status de abordagem"
+            className="h-[34px] cursor-pointer rounded-[9px] border border-[#DFE0E2] bg-white px-2.5 text-[13px] text-[#193B4F] outline-none focus:border-[#7EBFCC]"
+          >
+            {STATUS_ABORDAGEM.map((s) => (
+              <option key={s.valor} value={s.valor}>
+                {s.rotulo}
+              </option>
+            ))}
+          </select>
+          {recusa && (
+            <textarea
+              value={motivo}
+              onChange={(e) => setMotivo(e.target.value)}
+              maxLength={500}
+              rows={3}
+              autoFocus={recusarAoAbrir}
+              placeholder="Motivo da recusa (obrigatório)"
+              aria-label="Motivo da recusa"
+              className="resize-none rounded-[9px] border border-[#DFE0E2] bg-white px-3 py-2 text-[13px] leading-snug text-[#193B4F] outline-none placeholder:text-[#9AA3A8] focus:border-[#7EBFCC]"
+            />
+          )}
+          <button
+            type="button"
+            disabled={!podeSalvar}
+            onClick={gravar}
+            className="h-[34px] cursor-pointer rounded-[9px] bg-[#193B4F] px-3 text-[13px] font-medium text-white transition-opacity disabled:cursor-default disabled:opacity-35"
+          >
+            {salvando ? "Salvando…" : "Salvar status"}
+          </button>
+          {erro && <div className="text-[12px] leading-snug text-[#B4453A]">{erro}</div>}
+        </div>
+      ) : (
+        <div className="mt-3">
+          <span
+            className="inline-block rounded-[7px] px-2 py-1 text-[12.5px] font-medium"
+            style={{ color: info.cor, background: info.fundo }}
+          >
+            {info.rotulo}
+          </span>
+          {abordagem?.motivo && (
+            <p className="mt-2 text-[13px] leading-snug text-[#5F6B72]">Motivo: {abordagem.motivo}</p>
+          )}
+        </div>
+      )}
+      <div className="mt-2.5 text-[11.5px] leading-snug text-[#9AA3A8]">
+        {autor ? `Última alteração ${autor}` : "Ninguém marcou esta clínica ainda."}
       </div>
     </div>
   );
@@ -1007,6 +1263,10 @@ function ModalHistoricoFora({
   janelaPrevistos,
   marcadas,
   onMarcar,
+  abordagem,
+  podeEditar,
+  recusarAoAbrir,
+  onSalvarAbordagem,
 }: {
   /** A lista como está na tela: mesma busca e mesma ordem. */
   linhas: LinhaForaProntuai[];
@@ -1018,6 +1278,10 @@ function ModalHistoricoFora({
   janelaPrevistos: string;
   marcadas: Set<string>;
   onMarcar: (credenciado: string) => void;
+  abordagem: Abordagem | undefined;
+  podeEditar: boolean;
+  recusarAoAbrir: boolean;
+  onSalvarAbordagem: (credenciado: string, status: StatusAbordagem, motivo: string | null) => Promise<void>;
 }) {
   const i = credenciado === null ? -1 : linhas.findIndex((l) => l.credenciado === credenciado);
   const c = i >= 0 ? linhas[i] : null;
@@ -1033,6 +1297,9 @@ function ModalHistoricoFora({
     if (!aberto) return;
     const aoTeclar = (e: KeyboardEvent) => {
       if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+      // Quem está escrevendo o motivo ou trocando o status usa as setas para
+      // isso, não para pular de clínica.
+      if ((e.target as HTMLElement | null)?.closest?.("input, textarea, select")) return;
       const alvo = e.key === "ArrowLeft" ? anterior : e.key === "ArrowRight" ? proxima : null;
       if (!alvo) return;
       e.preventDefault();
@@ -1166,7 +1433,15 @@ function ModalHistoricoFora({
             </div>
 
             <aside className="flex flex-col gap-6 border-t border-[#EDEFF0] bg-[#FAFBFC] px-6 py-5 lg:overflow-y-auto lg:border-t-0 lg:border-l">
-              <div>
+              <EditorAbordagem
+                key={`${c.credenciado}|${abordagem?.atualizado_em ?? ""}|${recusarAoAbrir ? "recusar" : ""}`}
+                abordagem={abordagem}
+                podeEditar={podeEditar}
+                recusarAoAbrir={recusarAoAbrir}
+                onSalvar={(status, motivo) => onSalvarAbordagem(c.credenciado, status, motivo)}
+              />
+
+              <div className="border-t border-[#EDEFF0] pt-5">
                 <div className={CABECALHO_TABELA}>Previstos por dia</div>
                 <div className="mt-1 text-[11.5px] text-[#9AA3A8]">{janelaPrevistos}</div>
                 {c.datas.length > 0 ? (
