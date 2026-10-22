@@ -105,6 +105,14 @@ export function DocumentDetailsModal({
     onOpenChange(false)
   }
 
+  // No disco e no Drive o arquivo se chama `<id do documento>_<nome>`; o aviso
+  // mostra só o nome. O prefixo é o que impede colisão no Drive: cerca de 6%
+  // dos arquivados dividem o nome com outro documento.
+  const nomeArquivado = result.storageFilename?.replace(
+    /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}_/i,
+    "",
+  )
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="w-[90vw] max-w-6xl max-h-[90vh] p-4">
@@ -158,16 +166,16 @@ export function DocumentDetailsModal({
                 <div className="col-span-2 rounded-lg border bg-muted/30 p-3">
                   <p className="flex items-center gap-2 text-sm font-medium text-foreground">
                     <Archive className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-                    Arquivado no Drive em{" "}
+                    Arquivado em{" "}
                     {format(result.archivedAt, "dd/MM/yyyy", { locale: ptBR })}
                   </p>
                   <p className="mt-1 text-xs text-foreground/80">
-                    O PDF não está mais no servidor. Para recuperá-lo, peça ao setor de
-                    Qualidade e Gestão o arquivo abaixo:
+                    O PDF não está mais disponível para visualização. Para recuperá-lo, entre em
+                    contato com o setor de Qualidade e Gestão e informe o arquivo abaixo:
                   </p>
-                  {result.storageFilename && (
+                  {nomeArquivado && (
                     <p className="mt-2 break-all rounded border bg-background px-2 py-1 font-mono text-xs text-foreground">
-                      {result.storageFilename}
+                      {nomeArquivado}
                     </p>
                   )}
                 </div>
