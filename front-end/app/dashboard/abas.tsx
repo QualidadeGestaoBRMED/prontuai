@@ -1088,7 +1088,7 @@ function GraficoSemanas({
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[11.5px] text-[#767A7B]">
           <ItemLegenda amostra={<span className="h-0 w-4 border-t-[1.5px] border-dashed border-[#B4453A]" />} rotulo="média das 12 semanas" />
           <ItemLegenda amostra={<span className="h-2.5 w-3 rounded-[2px] bg-[#E3F1F4]" />} rotulo="semanas da média" />
-          <ItemLegenda amostra={<span className="size-2.5 rounded-[2px] bg-[#CC851E]" />} rotulo="fora do ritmo dela" />
+          <ItemLegenda amostra={<span className="size-2.5 rounded-[2px] bg-[#CC851E]" />} rotulo="pico" />
           <ItemLegenda amostra={<span className="size-2.5 rounded-[2px]" style={{ background: LISTRA_PARCIAL }} />} rotulo="semana em andamento" />
         </div>
       </div>
@@ -1331,8 +1331,8 @@ function ModalHistoricoFora({
         ? `Mesmo contando só o que já está agendado, os ${c.previstos} previstos passam do dobro do que a média dela ` +
           `faria esperar na janela (${c.esperadoLabel}). ` +
           (picosHistorico
-            ? `No histórico, ${picosHistorico} semana${picosHistorico > 1 ? "s ficaram" : " ficou"} fora do ritmo dela — em laranja no gráfico.`
-            : "Nenhuma semana do histórico ficou fora do ritmo dela: um volume assim não tem precedente.")
+            ? `No histórico, ${picosHistorico} semana${picosHistorico > 1 ? "s foram" : " foi"} pico, em laranja no gráfico.`
+            : "Nenhuma semana do histórico foi pico: um volume assim não tem precedente.")
         : null;
 
   return (
@@ -1665,12 +1665,10 @@ export function AbaUtilizacao({
       </div>
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.55fr)_minmax(0,1fr)]">
-        {/* Documentos enviados: volume por período, em barra */}
+        {/* Envios realizados: volume por período, em barra */}
         <div className={`${CARTAO} px-[22px] pt-5 pb-[18px]`}>
-          <TituloCartao texto="Documentos enviados" ajuda="enviados" onAjuda={onAjuda} />
-          {/* Em arquivo, e o card de cima em caso: o rótulo diz, senão viram dois
-              números diferentes com o mesmo nome na mesma tela. */}
-          <div className={SUB}>{visao.graficoLegenda} · por arquivo · último ponto em andamento</div>
+          <TituloCartao texto="Envios realizados" ajuda="enviados" onAjuda={onAjuda} />
+          <div className={SUB}>{visao.graficoLegenda} · volume · último ponto em andamento</div>
 
           <div className="relative mt-[22px] h-[268px]">
             <div className="absolute inset-0 flex flex-col justify-between">
@@ -1755,8 +1753,8 @@ export function AbaUtilizacao({
       </div>
 
       <div className={`${CARTAO} px-[22px] pt-5 pb-[18px]`}>
-        {/* Mesma conta do KPI "Expedições via ProntuAI", ponto a ponto: o "?"
-            abre a mesma explicação, para as duas não divergirem. */}
+        {/* Cobertura do ProntuAI sobre as expedições, ponto a ponto. O card de
+            expedições saiu da fileira de cima; a conta continua só aqui. */}
         <TituloCartao texto="Cobertura das expedições" ajuda="expedicoes" onAjuda={onAjuda} />
         <div className={SUB}>
           % dos pedidos atendidos nas credenciadas que passaram pelo ProntuAI · meta 100%
