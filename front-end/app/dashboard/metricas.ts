@@ -200,7 +200,7 @@ export const COMO_CALCULAMOS: Record<IdIndicador, ComoCalculamos> = {
       {
         titulo: "Em que período cai",
         texto:
-          "Pela data do envio, como os outros dois cards. O número de um período diminui à medida que o time analisa os prontuários dele, mesmo depois que o período acaba. Por isso o card não mostra variação: o período atual ainda está em análise e o anterior já teve dias de revisão, e a comparação sairia alta mesmo com a fila igual.",
+          "Pela data do envio, como os outros dois cards. O número de um período diminui à medida que o time analisa os prontuários dele, mesmo depois que o período acaba. Por isso a variação tende a sair alta: o período atual ainda está em análise e o anterior já teve dias de revisão, então a comparação sobe mesmo com a fila igual.",
       },
       {
         titulo: "O subtítulo",
@@ -984,6 +984,12 @@ export function calcularVisao({ dados, filtro, comparar, verTodasClinicas }: Opc
   // Status "pending" é o que a IA processou e marcou com exame faltante: ela
   // não rejeita sozinha por isso, e o prontuário espera o time.
   const comFaltante = soma(atual, "pendentes");
+  const variacaoPendentes = () => {
+    if (!comparavel) return "";
+    const b = soma(anterior, "docs") - soma(anterior, "revisados");
+    if (!b) return pendentes ? "novo" : "";
+    return `${pendentes >= b ? "+" : "-"}${Math.abs(((pendentes - b) / b) * 100).toFixed(0)}%`;
+  };
 
   const bar = (v: number, max: number, h: number) => (v <= 0 ? 0 : Math.max(3, Math.round((v / max) * h)));
   const maxDocs = Math.max(1, ...grafico.map((p) => p.docs));
@@ -1449,11 +1455,11 @@ export function calcularVisao({ dados, filtro, comparar, verTodasClinicas }: Opc
       kpi(
         "Análises pendentes",
         fmt(pendentes),
-        // Sem variação: o período atual ainda está sendo analisado e o anterior
-        // já teve dias de revisão, então a comparação sobe quase sempre. Medido
-        // em 22/10: +134% na semana, com a fila igual (211 × 214) no mesmo ponto
-        // das duas semanas.
-        "",
+        variacaoPendentes(),
+        // Subir é piorar: mais prontuário chegou sem passar pelo time. Atenção
+        // ao ler: o período atual ainda está em análise e o anterior já teve
+        // dias de revisão, então a variação tende a sair alta — em 22/10 deu
+        // +134% na semana com a fila igual (211 × 214) no mesmo ponto das duas.
         "down",
         `${fmt(comFaltante)} com exame faltante · ${num(pct(pendentes, enviados))} do que foi enviado`,
       ),
