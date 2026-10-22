@@ -74,6 +74,7 @@ function PageContent() {
     processingDocuments,
     setNotificationCenterOpen,
     processResults,
+    replaceProcessResult,
     progressBarMinimized,
     showProgressBar,
     clearProcessingState,
@@ -426,6 +427,7 @@ function PageContent() {
         onOpenChange={setDetailsModalOpen}
         result={selectedResult}
         onDownloadPDF={selectedResult ? () => handleDownloadPDF(selectedResult) : undefined}
+        onComplemento={replaceProcessResult}
       />
     </SidebarProvider>
     </RequireRole>

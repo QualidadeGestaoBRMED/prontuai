@@ -17,13 +17,17 @@ import { ProcessResult } from "@/types/process"
 import ExamesComparativoTable from "@/components/exames-comparativo-table"
 import { Archive, Download } from "lucide-react"
 import { useRouter } from "next/navigation"
-import { mensagemReenvio } from "@/lib/reenvio"
+import { CLASSE_TAG_REENVIO, enviarComoComplemento, mensagemReenvio } from "@/lib/reenvio"
+import { useState } from "react"
+import { toast } from "sonner"
 
 interface DocumentDetailsModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   result: ProcessResult | null
   onDownloadPDF?: () => void
+  /** Reenvio devolvido à Checagem como complemento; recebe o documento atualizado. */
+  onComplemento?: (atualizado: ProcessResult) => void
 }
 
 export function DocumentDetailsModal({
@@ -31,9 +35,25 @@ export function DocumentDetailsModal({
   onOpenChange,
   result,
   onDownloadPDF,
+  onComplemento,
 }: DocumentDetailsModalProps) {
   const router = useRouter()
+  const [enviandoComplemento, setEnviandoComplemento] = useState(false)
   if (!result) return null
+
+  const handleComplemento = async () => {
+    setEnviandoComplemento(true)
+    try {
+      const atualizado = await enviarComoComplemento(result.id)
+      toast.success("Enviado para revisão.")
+      onComplemento?.(atualizado)
+      onOpenChange(false)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Não foi possível enviar para revisão.")
+    } finally {
+      setEnviandoComplemento(false)
+    }
+  }
 
   const getStatusBadge = (result: ProcessResult) => {
     const { status, reviewedBy } = result
@@ -77,8 +97,8 @@ export function DocumentDetailsModal({
     // Reenvio de prontuário já liberado: não volta para a revisão
     if (status === "resubmission") {
       return (
-        <Badge variant="secondary" className="bg-sky-100 text-sky-800 hover:bg-sky-200">
-          Já liberado - Não é preciso reenviar
+        <Badge variant="outline" className={CLASSE_TAG_REENVIO}>
+          Já liberado
         </Badge>
       )
     }
@@ -240,6 +260,20 @@ export function DocumentDetailsModal({
               <div className="p-4 border border-sky-200 rounded-lg bg-sky-50">
                 <h4 className="font-semibold text-sky-900 mb-2">Prontuário já liberado</h4>
                 <p className="text-sm text-sky-800">{mensagemReenvio(result.result.reenvio)}</p>
+                {onComplemento && (
+                  <div className="mt-3 flex flex-wrap items-center gap-3">
+                    <span className="text-sm text-sky-800">É um complemento, como um laudo que faltou?</span>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="border-sky-300 bg-white text-sky-900 hover:bg-sky-100"
+                      disabled={enviandoComplemento}
+                      onClick={handleComplemento}
+                    >
+                      {enviandoComplemento ? "Enviando..." : "Enviar para revisão"}
+                    </Button>
+                  </div>
+                )}
               </div>
             )}
 

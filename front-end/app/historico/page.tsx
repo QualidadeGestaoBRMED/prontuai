@@ -54,6 +54,7 @@ function HistoricoContent() {
     setStatusFilter,
     clinicFilter,
     setClinicFilter,
+    refresh,
   } = useDocumentsPaged({
     queue: "historico",
     pageSize: 10,
@@ -236,6 +237,7 @@ function HistoricoContent() {
         onDownloadPDF={selectedResult ? () => {
           handleDownloadPDF(selectedResult)
         } : undefined}
+        onComplemento={() => refresh()}
       />
     </SidebarProvider>
   )

@@ -61,6 +61,7 @@ export const API_ENDPOINTS = {
   DOCUMENT_LOCALIZACOES: (id: string) => `${API_PROXY_BASE}/v1/documents/${id}/localizacoes`,
   // Texto do OCR com a posição de cada linha, para a busca no documento.
   DOCUMENT_TEXTO: (id: string) => `${API_PROXY_BASE}/v1/documents/${id}/texto`,
+  DOCUMENT_COMPLEMENTO: (id: string) => `${API_PROXY_BASE}/v1/documents/${id}/complemento`,
 
   // Notifications
   NOTIFICATIONS: `${API_PROXY_BASE}/v1/notifications`,
