@@ -4,7 +4,7 @@ Endpoints para gerenciamento de documentos.
 from fastapi import APIRouter, HTTPException, status, Depends, Query, Request, BackgroundTasks
 from fastapi.responses import FileResponse
 from typing import List, Any
-from app.core.auth import get_current_user, require_admin, require_checker, require_document_reader
+from app.core.auth import get_current_user, require_admin, require_checker, require_document_reader, require_roles
 from app.core.database import user_db
 from app.models.user import User, UserRole, GLOBAL_READ_ROLES
 from app.models.document import (
@@ -505,6 +505,62 @@ async def get_document(document_id: str, current_user: User = Depends(require_do
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Erro ao obter documento: {str(e)}"
         )
+
+
+@router.post("/{document_id}/complemento", response_model=Document)
+async def marcar_como_complemento(
+    document_id: str,
+    request: Request,
+    current_user: User = Depends(
+        require_roles([UserRole.ADMIN, UserRole.MANAGER, UserRole.CHECKER, UserRole.SENDER])
+    ),
+):
+    """
+    Devolve à Checagem um documento marcado como reenvio de prontuário já
+    liberado, quando a clínica ou o revisor dizem que era complemento.
+
+    É a saída para o que a detecção não enxerga: o laudo de um exame que a IA
+    deu como encontrado porque estava listado no ASO. O documento volta ao
+    status que a IA tinha decidido (ver app/services/reenvio_service.py).
+
+    - SENDER: apenas documento da sua clínica
+    - CHECKER/MANAGER/ADMIN: qualquer documento
+    """
+    document = user_db.get_document_by_id(document_id)
+    if not document:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Documento não encontrado")
+    if not current_user.tem_papel(UserRole.ADMIN, UserRole.MANAGER, UserRole.CHECKER):
+        if not current_user.clinic_id or document.clinic_id != current_user.clinic_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Você não tem permissão para acessar este documento",
+            )
+    if document.validation_status != "reenvio":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="O documento não está marcado como reenvio de prontuário já liberado",
+        )
+
+    atualizado = user_db.desfazer_reenvio(document_id, por=current_user.email)
+    if not atualizado:
+        # Outra pessoa desfez entre a leitura e a escrita.
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="O documento não está marcado como reenvio de prontuário já liberado",
+        )
+    request.state.audit = {
+        "action": "documents.reenvio.complemento",
+        "resource": "documents",
+        "resource_id": document_id,
+        "metadata": {"reenvio_de": document.reenvio_de, "status_ia": atualizado.validation_status},
+    }
+    logger.info(
+        "[REENVIO] %s devolveu à Checagem o documento %s (era reenvio de %s)",
+        current_user.email,
+        document_id,
+        document.reenvio_de,
+    )
+    return atualizado
 
 
 @router.get("/{document_id}/view")

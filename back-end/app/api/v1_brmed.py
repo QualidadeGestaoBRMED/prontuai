@@ -216,11 +216,16 @@ async def processar_documento_completo_api(
                 if resultado.get('status') == 'error':
                     validation_status = 'rejected'
                 reenvio = reenvio_service.liberado_anterior(
-                    user_db, resultado, cpf=cpf, content_hash=content_hash
+                    user_db, resultado, cpf=cpf, content_hash=content_hash, clinic_id=current_user.clinic_id
                 )
                 if reenvio:
+                    reenvio_service.marcar(
+                        resultado,
+                        reenvio,
+                        status_ia=validation_status,
+                        motivo_ia=resultado.get("erro") or resultado.get("error"),
+                    )
                     validation_status = "reenvio"
-                    resultado["reenvio"] = reenvio
 
                 # Criar documento no banco
                 clinic_id = current_user.clinic_id
@@ -756,14 +761,6 @@ async def process_document_background(
             validation_status = 'validated' if not resultado.get('validation_result', {}).get('exames_faltantes') and resultado.get('status') == 'success' else 'pending'
             if resultado.get('status') == 'error':
                 validation_status = 'rejected'
-            # Reenvio de prontuário já liberado: não volta para a Checagem, e o
-            # resultado do job leva a data da liberação para o alerta da clínica.
-            reenvio = reenvio_service.liberado_anterior(
-                user_db, resultado, cpf=cpf, content_hash=content_hash
-            )
-            if reenvio:
-                validation_status = "reenvio"
-                resultado["reenvio"] = reenvio
 
             clinic_id_to_use = clinic_id
             if not clinic_id_to_use:
@@ -778,6 +775,17 @@ async def process_document_background(
                     logger.error(f"[DB] Falha ao criar clinica automaticamente (job_id={job_id}): {clinic_error}")
             if not clinic_id_to_use:
                 raise ValueError("clinic_id não encontrado para salvar documento")
+
+            # Reenvio de prontuário já liberado: não volta para a Checagem, e o
+            # resultado do job leva a data da liberação para o alerta da clínica.
+            reenvio = reenvio_service.liberado_anterior(
+                user_db, resultado, cpf=cpf, content_hash=content_hash, clinic_id=clinic_id_to_use
+            )
+            if reenvio:
+                reenvio_service.marcar(
+                    resultado, reenvio, status_ia=validation_status, motivo_ia=rejection_reason
+                )
+                validation_status = "reenvio"
 
             document = user_db.create_document(
                 clinic_id=clinic_id_to_use,
