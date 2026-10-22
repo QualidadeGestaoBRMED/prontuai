@@ -808,7 +808,7 @@ function GraficoSemanas({
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[11.5px] text-[#767A7B]">
           <ItemLegenda amostra={<span className="h-0 w-4 border-t-[1.5px] border-dashed border-[#B4453A]" />} rotulo="média das 12 semanas" />
           <ItemLegenda amostra={<span className="h-2.5 w-3 rounded-[2px] bg-[#E3F1F4]" />} rotulo="semanas da média" />
-          <ItemLegenda amostra={<span className="size-2.5 rounded-[2px] bg-[#CC851E]" />} rotulo="fora do ritmo dela" />
+          <ItemLegenda amostra={<span className="size-2.5 rounded-[2px] bg-[#CC851E]" />} rotulo="pico" />
           <ItemLegenda amostra={<span className="size-2.5 rounded-[2px]" style={{ background: LISTRA_PARCIAL }} />} rotulo="semana em andamento" />
         </div>
       </div>
@@ -1040,8 +1040,8 @@ function ModalHistoricoFora({
         ? `Mesmo contando só o que já está agendado, os ${c.previstos} previstos passam do dobro do que a média dela ` +
           `faria esperar na janela (${c.esperadoLabel}). ` +
           (picosHistorico
-            ? `No histórico, ${picosHistorico} semana${picosHistorico > 1 ? "s ficaram" : " ficou"} fora do ritmo dela — em laranja no gráfico.`
-            : "Nenhuma semana do histórico ficou fora do ritmo dela: um volume assim não tem precedente.")
+            ? `No histórico, ${picosHistorico} semana${picosHistorico > 1 ? "s foram" : " foi"} pico, em laranja no gráfico.`
+            : "Nenhuma semana do histórico foi pico: um volume assim não tem precedente.")
         : null;
 
   const botaoNav =
