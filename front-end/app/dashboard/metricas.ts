@@ -955,30 +955,6 @@ export interface VisaoDashboard {
   simulador: { viaProntuaiSemana: number; adesao: number; semana: string } | null;
   /** Rótulo do filtro de período, para os blocos retroativos se situarem. */
   periodoLabel: string;
-  /**
-   * Onde um número está dentro do outro: dos pedidos que passaram pelo ProntuAI,
-   * quantos uma pessoa conferiu e quantos a IA decidiu sozinha. É o que explica
-   * a diferença entre os cards de revisados e de expedições sem falar de unidade
-   * nem de datação — o revisado está DENTRO do expedido. `null` quando o BRNET
-   * não respondeu e não há pedido para repartir. Renderizado no "?" dos dois.
-   */
-  contencao: {
-    via: number;
-    revisadas: number;
-    semRevisor: number;
-    pct: string;
-    /**
-     * A ponte do card de revisados até a parte escura da barra. Cada termo é
-     * medido, menos `datacao`, que é o resíduo entre as duas datações (envio ×
-     * liberação) — é o que sobra depois de tirar as causas conhecidas.
-     */
-    ponte: {
-      casosRevisados: number;
-      semPedido: number;
-      pedidosRevisados: number;
-      datacao: number;
-    };
-  } | null;
 
   kpisAcuracia: Kpi[];
   acuraciaSeries: BarraPercentual[];
@@ -1067,13 +1043,9 @@ export function calcularVisao({ dados, filtro, comparar, verTodasClinicas }: Opc
   };
 
   // Os dois KPIs de cima contam CASO, não arquivo: ASO e laudo do mesmo pedido
-  // são um caso só. `revisadosArquivos` segue em arquivo porque é a origem da
-  // ponte do card de contenção.
+  // são um caso só.
   const enviados = soma(atual, "casos");
   const revisados = soma(atual, "casos_revisados");
-  const revisadosArquivos = soma(atual, "revisados");
-  const revisadosSemPedido = soma(atual, "revisados_sem_pedido");
-  const revisadosExtras = soma(atual, "revisados_extras");
   const liberados = soma(atual, "validados");
 
   const bar = (v: number, max: number, h: number) => (v <= 0 ? 0 : Math.max(3, Math.round((v / max) * h)));
@@ -1673,22 +1645,6 @@ export function calcularVisao({ dados, filtro, comparar, verTodasClinicas }: Opc
       : "—",
 
     periodoLabel: nomePeriodo(cfg.periodo.serie, atual),
-    contencao: viaProntuaiRevisada
-      ? {
-          via: viaProntuai,
-          revisadas: viaProntuaiRevisada,
-          semRevisor: viaProntuai - viaProntuaiRevisada,
-          pct: num(conferidas),
-          ponte: {
-            casosRevisados: revisados,
-            semPedido: revisadosSemPedido,
-            pedidosRevisados: revisadosArquivos - revisadosSemPedido - revisadosExtras,
-            datacao:
-              viaProntuaiRevisada - (revisadosArquivos - revisadosSemPedido - revisadosExtras),
-          },
-        }
-      : null,
-
     usoSemanal,
 
     simulador: ultimaSemana
