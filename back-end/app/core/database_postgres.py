@@ -27,6 +27,7 @@ from app.models.document import (
     previsao_liberacao_do_payload,
 )
 from app.models.feedback import DocumentFeedback
+from app.models.abordagem import Abordagem
 from app.models.notification import Notification, NotificationCreate, NotificationUpdate
 from app.models.audit_log import AuditLog, AuditLogCreate
 from app.models.exam import (
@@ -53,6 +54,7 @@ from app.core.db.models import (
     ExamVariationModel,
     ExamVariationConflictModel,
     DocumentFeedbackModel,
+    CredenciadoAbordagemModel,
 )
 
 logger = logging.getLogger(__name__)
@@ -2317,6 +2319,81 @@ class PostgresUserDatabase:
                 # Outro escritor criou a linha entre o nosso SELECT e o INSERT.
                 session.rollback()
                 return self._model_to_document_feedback(_gravar(session, False))
+        except Exception:
+            session.rollback()
+            raise
+        finally:
+            session.close()
+
+    # ------------------------------------------------------------------
+    # Abordagem das credenciadas sem cadastro ("Quem vale a pena incluir")
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _model_to_abordagem(model: CredenciadoAbordagemModel) -> Abordagem:
+        return Abordagem(
+            credenciado=model.credenciado,
+            status=model.status,
+            motivo=model.motivo,
+            atualizado_por_email=model.atualizado_por_email,
+            atualizado_por_nome=model.atualizado_por_nome,
+            atualizado_em=model.atualizado_em,
+        )
+
+    def list_credenciado_abordagens(self) -> List[Abordagem]:
+        """Todos os status gravados. São poucas centenas de linhas no máximo:
+        o ranking inteiro, não paginado, é o que a tela precisa."""
+        session = self._get_session()
+        try:
+            return [self._model_to_abordagem(m) for m in session.query(CredenciadoAbordagemModel).all()]
+        finally:
+            session.close()
+
+    def get_credenciado_abordagem(self, credenciado: str) -> Optional[Abordagem]:
+        session = self._get_session()
+        try:
+            model = session.get(CredenciadoAbordagemModel, credenciado)
+            return self._model_to_abordagem(model) if model else None
+        finally:
+            session.close()
+
+    def upsert_credenciado_abordagem(
+        self,
+        credenciado: str,
+        status: str,
+        motivo: Optional[str],
+        atualizado_por_id: Optional[str],
+        atualizado_por_email: Optional[str],
+        atualizado_por_nome: Optional[str],
+    ) -> Abordagem:
+        """
+        Grava o status corrente da credenciada, substituindo o anterior.
+
+        INSERT ... ON CONFLICT, e não SELECT seguido de INSERT como no parecer:
+        a chave é natural (o rótulo), então o próprio Postgres resolve duas
+        pessoas marcando a mesma clínica ao mesmo tempo — vence a última.
+        """
+        from sqlalchemy.dialects.postgresql import insert as pg_insert
+
+        valores = dict(
+            credenciado=credenciado,
+            status=status,
+            motivo=motivo,
+            atualizado_por_id=atualizado_por_id,
+            atualizado_por_email=atualizado_por_email,
+            atualizado_por_nome=atualizado_por_nome,
+            atualizado_em=datetime.utcnow(),
+        )
+        stmt = pg_insert(CredenciadoAbordagemModel).values(**valores)
+        stmt = stmt.on_conflict_do_update(
+            index_elements=[CredenciadoAbordagemModel.credenciado],
+            set_={k: v for k, v in valores.items() if k != "credenciado"},
+        )
+        session = self._get_session()
+        try:
+            session.execute(stmt)
+            session.commit()
+            return self._model_to_abordagem(session.get(CredenciadoAbordagemModel, credenciado))
         except Exception:
             session.rollback()
             raise

@@ -392,3 +392,32 @@ class DocumentFeedbackModel(Base):
             name="ck_document_feedbacks_status",
         ),
     )
+
+
+class CredenciadoAbordagemModel(Base):
+    """
+    Em que pé está a conversa com uma credenciada sem cadastro (migration 016).
+
+    Uma linha por credenciada, chaveada pelo rótulo do BRNET — a API de
+    monitoramento não manda id nem CNPJ. Mudar o status atualiza a linha; o
+    histórico de quem mudou o quê fica no `audit_logs`, como no parecer da
+    checagem. Sem linha = "Não abordada".
+    """
+    __tablename__ = "credenciado_abordagens"
+
+    credenciado = Column(String, primary_key=True)
+    status = Column(String, nullable=False, index=True)
+    # Só na recusa. Texto livre sobre a clínica, não sobre paciente.
+    motivo = Column(Text, nullable=True)
+    atualizado_por_id = Column(String, ForeignKey("users.id"), nullable=True)
+    atualizado_por_email = Column(String, nullable=True)
+    # Gravado junto para a lista mostrar o autor sem juntar com `users`.
+    atualizado_por_nome = Column(String, nullable=True)
+    atualizado_em = Column(DateTime, nullable=False, default=datetime.utcnow)
+
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('NAO_ABORDADA', 'EM_CONTATO', 'AGUARDANDO_RETORNO', 'ACEITOU', 'RECUSOU')",
+            name="ck_credenciado_abordagens_status",
+        ),
+    )

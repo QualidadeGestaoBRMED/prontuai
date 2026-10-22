@@ -334,7 +334,12 @@ export const COMO_CALCULAMOS: Record<IdIndicador, ComoCalculamos> = {
       {
         titulo: "Simulador",
         texto:
-          "Soma a média semanal das clínicas marcadas e multiplica pela adesão da última semana fechada de Quem está usando pouco. O aumento é esse ganho sobre o volume que passou pela plataforma naquela mesma semana. Nada é gravado.",
+          "Soma a média semanal das clínicas marcadas e multiplica pela adesão da última semana fechada de Quem está usando pouco. O aumento é esse ganho sobre o volume que passou pela plataforma naquela mesma semana. O Top 5/10/20 pula as clínicas que recusaram, a menos que se marque para incluí-las. A simulação não grava nada.",
+      },
+      {
+        titulo: "Abordagem",
+        texto:
+          "Em que pé está a conversa com cada clínica: Não abordada, Em contato, Aguardando retorno, Aceitou / em cadastro ou Recusou, que pede o motivo. Fica gravado na hora para todo o time, com quem mudou e quando; administradores e gestores alteram, os demais só veem. A lista filtra por status.",
       },
     ],
   },
