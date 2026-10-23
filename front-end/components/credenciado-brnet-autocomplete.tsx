@@ -1,6 +1,7 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react"
+import { createPortal } from "react-dom"
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
 
@@ -29,6 +30,28 @@ type Props = {
 
 const MIN_CARACTERES = 2
 const MAX_SUGESTOES = 8
+/** Altura das 8 sugestões (36px cada + respiro): a lista inteira cabe sem rolar. */
+const ALTURA_LISTA = 300
+/** Distância mínima entre a lista e a borda da tela. */
+const MARGEM_TELA = 8
+
+/**
+ * Onde a lista fica na tela, colada no campo. Abre para baixo; só sobe quando
+ * embaixo não cabe e em cima há mais espaço.
+ */
+function posicaoDaLista(campo: HTMLElement): CSSProperties {
+  const r = campo.getBoundingClientRect()
+  const abaixo = window.innerHeight - r.bottom - MARGEM_TELA
+  const acima = r.top - MARGEM_TELA
+  const subir = abaixo < ALTURA_LISTA && acima > abaixo
+  return {
+    position: "fixed",
+    left: r.left,
+    width: r.width,
+    maxHeight: Math.min(ALTURA_LISTA, subir ? acima : abaixo),
+    ...(subir ? { bottom: window.innerHeight - r.top + 4 } : { top: r.bottom + 4 }),
+  }
+}
 
 function semAcento(texto: string) {
   return texto.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase()
@@ -58,12 +81,23 @@ export function descreverClinicas(clinicas: CredenciadoBrnet["clinicas"]) {
  * a digitação. Escolher uma sugestão é o que vincula a clínica ao credenciado;
  * o código do BRNET não aparece, mas a busca também o aceita ("C4071").
  *
- * A lista abre por cima dos campos seguintes, dentro do modal — sem popover:
- * popover num Dialog do Radix perde a rolagem para o bloqueio de scroll dele.
+ * A lista sai do modal: vai num portal para o `body`, com posição fixa colada
+ * no campo. Dentro do modal ela ficava presa no `overflow-y-auto` do
+ * DialogContent, que ganhava barra de rolagem e escondia as sugestões.
+ *
+ * Fora do modal valem três cuidados com o Dialog do Radix:
+ * - o portal continua filho do Dialog na árvore do React, então clicar na lista
+ *   não conta como clique fora e o modal não fecha;
+ * - o Dialog põe `pointer-events: none` no `body`, e a lista devolve o `auto`;
+ * - o bloqueio de scroll do Dialog cancela a rolagem de tudo que está fora
+ *   dele. As 8 sugestões cabem sem rolar; quando a tela é baixa e a lista
+ *   encolhe, a roda do mouse rola a lista à mão.
  */
 export function CredenciadoBrnetAutocomplete({ id, value, onChange, onEscolher, opcoes, placeholder }: Props) {
   const [aberto, setAberto] = useState(false)
   const [ativo, setAtivo] = useState(0)
+  const campoRef = useRef<HTMLDivElement>(null)
+  const [posicao, setPosicao] = useState<CSSProperties | null>(null)
 
   const termo = semAcento(value.trim())
   const sugestoes = useMemo(() => {
@@ -74,13 +108,36 @@ export function CredenciadoBrnetAutocomplete({ id, value, onChange, onEscolher, 
   }, [opcoes, termo])
   const mostrar = aberto && sugestoes.length > 0
 
+  // Segue o campo a cada quadro enquanto a lista está aberta. Evento de scroll
+  // e resize não basta: o modal abre com animação de escala, e quem digita
+  // logo ao abrir mediria o campo ainda encolhido. Só re-renderiza quando a
+  // posição muda de fato.
+  useLayoutEffect(() => {
+    if (!mostrar) return
+    let quadro = 0
+    let anterior = ""
+    const atualizar = () => {
+      if (campoRef.current) {
+        const nova = posicaoDaLista(campoRef.current)
+        const chave = JSON.stringify(nova)
+        if (chave !== anterior) {
+          anterior = chave
+          setPosicao(nova)
+        }
+      }
+      quadro = requestAnimationFrame(atualizar)
+    }
+    atualizar()
+    return () => cancelAnimationFrame(quadro)
+  }, [mostrar])
+
   const escolher = (credenciado: CredenciadoBrnet) => {
     onEscolher(credenciado)
     setAberto(false)
   }
 
   return (
-    <div className="relative">
+    <div ref={campoRef}>
       <Input
         id={id}
         value={value}
@@ -114,11 +171,15 @@ export function CredenciadoBrnetAutocomplete({ id, value, onChange, onEscolher, 
           }
         }}
       />
-      {mostrar && (
+      {mostrar && posicao && createPortal(
         <ul
           id={`${id}-sugestoes`}
           role="listbox"
-          className="absolute left-0 right-0 top-full z-50 mt-1 max-h-60 overflow-y-auto rounded-md border bg-white py-1 shadow-lg"
+          style={{ ...posicao, pointerEvents: "auto" }}
+          onWheel={(e) => {
+            e.currentTarget.scrollTop += e.deltaY
+          }}
+          className="z-[60] overflow-y-auto rounded-md border bg-white py-1 shadow-lg"
         >
           {sugestoes.map((o, i) => (
             <li
@@ -143,7 +204,8 @@ export function CredenciadoBrnetAutocomplete({ id, value, onChange, onEscolher, 
               )}
             </li>
           ))}
-        </ul>
+        </ul>,
+        document.body,
       )}
     </div>
   )
