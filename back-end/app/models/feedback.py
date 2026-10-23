@@ -112,12 +112,34 @@ CATEGORIAS: frozenset[str] = CATEGORIAS_EXAME | CATEGORIAS_DOCUMENTO
 # sistema) 51, guia não anexada com os exames no anexo 40, exames de outro ticket
 # ou lançados em duplicidade 18, liberação sem o exame autorizada pelo cliente 16.
 # "Não exigido na grade" tinha 3 e foi para "Outro".
+#
+# Revisão de 23/10/2026, sobre as 1.070 justificativas escritas quando a IA barrou
+# e o revisor liberou: o "voucher não anexado" (44) é a guia, e o rótulo passou a
+# usar a palavra dos revisores. Entraram dois casos que caíam no texto livre, os
+# dois de documento em que a IA para antes de comparar exames:
+#   * CNPJ_DIVERGENTE — o CNPJ do ASO é de outra empresa e o BRNET não acha o
+#     paciente. Em 23 de 129 justificativas que citavam CNPJ, a IA leu certo o
+#     único CNPJ do documento; nas outras ela não leu ou o documento tinha vários,
+#     e aí é erro dela ("Errou", OCR_CNPJ), não motivo externo.
+#   * ATENDIMENTO_NAO_REGISTRADO — o atendimento ainda não estava no BRNET (sem
+#     expedição em aberto) quando a IA consultou.
+# Os dois, aprovados, também deixam de contar como falha técnica no painel: a
+# IA não falhou, o dado de fora é que não batia.
 MOTIVOS_EXTERNOS: frozenset[str] = frozenset({
-    "EXAME_POR_FORA",       # feito em parceiro ou registrado em outro sistema
-    "GUIA_NAO_ANEXADA",     # a clínica não anexou a guia; os exames estão no anexo
-    "OUTRO_TICKET",         # os exames apontados são de outro ticket, ou lançados duas vezes
-    "CLIENTE_AUTORIZOU",    # liberação sem o exame, autorizada pelo cliente
-    "OUTRO",                # contado em `notes`, que aí é obrigatório
+    "EXAME_POR_FORA",               # feito em parceiro ou registrado em outro sistema
+    "GUIA_NAO_ANEXADA",             # a clínica não anexou o voucher/guia; os exames estão no PDF
+    "CNPJ_DIVERGENTE",              # o CNPJ do ASO é de outra empresa
+    "ATENDIMENTO_NAO_REGISTRADO",   # o atendimento ainda não estava registrado no BRNET
+    "OUTRO_TICKET",                 # enviado em duplicidade, ou os exames são de outro ticket
+    "CLIENTE_AUTORIZOU",            # liberação sem o exame, autorizada pelo cliente
+    "OUTRO",                        # contado em `notes`, que aí é obrigatório
+})
+
+# Motivos externos que explicam uma falha técnica: a IA parou porque o dado de
+# fora (empresa, atendimento) não batia, não porque leu errado.
+MOTIVOS_EXTERNOS_DE_FALHA: frozenset[str] = frozenset({
+    "CNPJ_DIVERGENTE",
+    "ATENDIMENTO_NAO_REGISTRADO",
 })
 
 # Status que exigem detalhamento. Sem o "o quê" e o "por quê", um parecer

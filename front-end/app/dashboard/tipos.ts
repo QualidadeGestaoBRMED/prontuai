@@ -53,6 +53,21 @@ export interface PontoAcuracia {
   mot_regra_formal?: number;
   mot_sem_justificativa?: number;
   mot_outro?: number;
+  /**
+   * Falha técnica aprovada com motivo externo de dado de fora (CNPJ de outra
+   * empresa, atendimento ainda fora do BRNET): não é falha da IA.
+   */
+  falha_externa?: number;
+  /** Divergências resolvidas por motivo externo, por código do parecer. */
+  ext_exame_por_fora?: number;
+  ext_guia_nao_anexada?: number;
+  ext_cnpj_divergente?: number;
+  ext_atendimento_nao_registrado?: number;
+  ext_outro_ticket?: number;
+  ext_cliente_autorizou?: number;
+  ext_outro?: number;
+  /** Histórico anterior ao modal, achado por palavra-chave na justificativa. */
+  ext_sem_codigo?: number;
 }
 
 export interface PontoClinica {

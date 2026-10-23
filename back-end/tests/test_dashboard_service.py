@@ -912,3 +912,18 @@ def test_falha_tecnica_fica_fora_e_decisoes_formam_a_adesao():
 
 def test_sem_parecer_nenhum_nao_inventa_serie():
     assert ds._agregar_pareceres([], []) == {"desde": None, "series": {"semanal": {}, "mensal": {}}}
+
+
+# ── motivos externos na consulta do painel ───────────────────────────────────
+
+def test_cada_motivo_externo_tem_coluna_no_painel_e_os_de_falha_estao_no_filtro():
+    """A consulta repete os códigos à mão: motivo novo sem coluna sumiria do bloco."""
+    from app.models.feedback import MOTIVOS_EXTERNOS, MOTIVOS_EXTERNOS_DE_FALHA
+
+    sql = ds._carregar_sql()
+    for motivo in MOTIVOS_EXTERNOS:
+        assert f"j.motivo_externo = '{motivo}')" in sql, motivo
+        assert f"'ext_{motivo.lower()}'" in sql, motivo
+    filtro = sql.split("AS falha_externa")[0].rsplit("count(*)", 1)[1]
+    for motivo in MOTIVOS_EXTERNOS_DE_FALHA:
+        assert f"'{motivo}'" in filtro, motivo

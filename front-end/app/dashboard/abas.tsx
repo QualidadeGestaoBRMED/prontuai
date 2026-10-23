@@ -2124,6 +2124,24 @@ export function AbaAcuracia({ visao, onAjuda }: { visao: VisaoDashboard; onAjuda
               </div>
             ))}
           </div>
+          {/* Não derrubam a acurácia — contam como acerto —, mas explicam por
+              que o revisor contrariou a IA. Pelo código do parecer do modal. */}
+          {visao.motivosExternos.length > 0 && (
+            <div className="mt-[18px] border-t border-[#EDEFF0] pt-3.5">
+              <div className="text-[12.5px] text-[#767A7B]">
+                Resolvidas por motivo externo · {visao.motivosExternosTotal.toLocaleString("pt-BR")} divergências que
+                contam como acerto
+              </div>
+              <ul className="mt-2 flex flex-col gap-1">
+                {visao.motivosExternos.map((m) => (
+                  <li key={m.name} className="flex items-baseline justify-between gap-2.5 text-[13px] text-[#193B4F]">
+                    <span>{m.name}</span>
+                    <span className="font-medium tabular-nums text-[#767A7B]">{m.count}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
           <div className="mt-[18px] rounded-[10px] bg-[#F3F3F3] px-3.5 py-3 text-[12.5px] leading-[1.5] text-[#767A7B]">
             {visao.notaSemJustificativa}
           </div>
