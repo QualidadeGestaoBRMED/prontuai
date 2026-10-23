@@ -1938,8 +1938,8 @@ function LinhaExame({
  * documentos com parecer, e com poucos pareceres ela pesa pouco.
  *
  * A pergunta é "em quais exames o processo tem mais dificuldade, e por quê" —
- * quem lê é o time de desenvolvimento. A tabela fica no essencial, do exame com
- * mais erros ao com menos; o porquê abre no clique, com os documentos para
+ * quem lê é o time de desenvolvimento. A tabela fica no essencial, da menor
+ * acurácia para a maior; o porquê abre no clique, com os documentos para
  * conferir.
  */
 function ModalAcuraciaExame({
@@ -1951,7 +1951,7 @@ function ModalAcuraciaExame({
   aberto: boolean;
   onFechar: () => void;
 }) {
-  const { ordem, ordenarPor } = useOrdem({ col: "erros", dir: "desc" });
+  const { ordem, ordenarPor } = useOrdem({ col: "acuracia", dir: "asc" });
   const visiveis = ordenar(dados.linhas, ordem, (l, col) =>
     col === "exame" ? l.exame
     : col === "documentos" ? l.documentos
@@ -2015,7 +2015,7 @@ function ModalAcuraciaExame({
                 <div className="pl-6">
                   <Th label="Exame" col="exame" ordem={ordem} onOrdenar={ordenarPor} />
                 </div>
-                <Th label="Documentos" col="documentos" ordem={ordem} onOrdenar={ordenarPor} numerica />
+                <Th label="Exames" col="documentos" ordem={ordem} onOrdenar={ordenarPor} numerica />
                 <Th label="Erros" sub="barra = taxa · número = casos" col="erros" ordem={ordem} onOrdenar={ordenarPor} numerica />
                 <Th label="Acurácia" col="acuracia" ordem={ordem} onOrdenar={ordenarPor} numerica />
               </div>
@@ -2031,7 +2031,7 @@ function ModalAcuraciaExame({
                   <div className="px-1 pt-6 pb-2">
                     <div className={CABECALHO_TABELA}>Poucos casos</div>
                     <div className="mt-1 text-[12px] text-[#9AA3A8]">
-                      Menos de {dados.minimo} documentos no período, com erro. Sem percentual: um erro sozinho o derrubaria.
+                      Menos de {dados.minimo} exames no período, com erro. Sem percentual: um erro sozinho o derrubaria.
                     </div>
                   </div>
                   {dados.poucosCasos.map((l) => (
@@ -2049,15 +2049,15 @@ function ModalAcuraciaExame({
           ) : (
             <div className="py-10 text-center text-[13px] text-[#767A7B]">
               {dados.avaliacoes
-                ? `Nenhum exame chegou a ${dados.minimo} documentos neste período, e nenhum teve erro.`
+                ? `Nenhum exame chegou a ${dados.minimo} avaliações neste período, e nenhum teve erro.`
                 : "Nenhum parecer neste período."}
             </div>
           )}
         </div>
 
         <div className="border-t border-[#EDEFF0] px-6 py-3 text-[12px] text-[#9AA3A8]">
-          Clique no exame para ver os motivos e os documentos com erro. Do exame com mais erros ao com menos; no
-          empate, o mais frequente primeiro. Exames com menos de {dados.minimo} documentos e sem erro entram no total,
+          Clique no exame para ver os motivos e os documentos com erro. Da menor acurácia para a maior; no empate,
+          o que tem mais erros primeiro. Exames com menos de {dados.minimo} avaliações e sem erro entram no total,
           mas não na lista{dados.abaixoDoMinimo ? ` (${n(dados.abaixoDoMinimo)} neste período)` : ""}.
         </div>
       </DialogContent>

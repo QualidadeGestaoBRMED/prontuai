@@ -529,7 +529,7 @@ export const COMO_CALCULAMOS: Record<IdIndicador, ComoCalculamos> = {
       {
         titulo: "Em que período cai",
         texto:
-          "Pela data de envio do documento, como a acurácia geral, e segue o filtro de período. A lista vai do exame com mais erros ao com menos; no empate, o mais frequente primeiro. Exame com menos de 5 documentos no período não ganha percentual — um erro sozinho o derrubaria: com erro, aparece em \"Poucos casos\", só com a contagem; sem erro, entra só no total.",
+          "Pela data de envio do documento, como a acurácia geral, e segue o filtro de período. A lista vai da menor acurácia para a maior; no empate, o que tem mais erros primeiro. Exame com menos de 5 avaliações no período não ganha percentual — um erro sozinho o derrubaria: com erro, aparece em \"Poucos casos\", só com a contagem; sem erro, entra só no total.",
       },
     ],
   },
@@ -1849,8 +1849,9 @@ export function calcularVisao({ dados, filtro, comparar, verTodasClinicas }: Opc
       const agora = somar(atual);
       const antes = comparavel ? somar(anterior) : null;
 
-      // Pré-ordenadas por volume: a tela ordena por número de erros com sort
-      // estável, então no empate vem primeiro o exame mais frequente.
+      // Pré-ordenadas por volume e depois por erros: a tela ordena pela menor
+      // acurácia com sort estável, então no empate vem primeiro o que mais erra
+      // e, persistindo, o mais frequente.
       const todas = [...agora.exames.entries()].sort(([, a], [, b]) => b.n - a.n);
       const doMinimo = todas.filter(([, e]) => e.n >= MINIMO_AVALIACOES_EXAME);
       const poucos = todas.filter(([, e]) => e.n < MINIMO_AVALIACOES_EXAME && errosDe(e) > 0);
@@ -1883,11 +1884,11 @@ export function calcularVisao({ dados, filtro, comparar, verTodasClinicas }: Opc
             })),
           acuracia,
           acuraciaLabel: num(acuracia),
-          tip: `${exame} — ${vezes(e.n, "documento", "documentos")}, ${vezes(erros, "erro", "erros")}`,
+          tip: `${exame} — ${vezes(e.n, "exame", "exames")}, ${vezes(erros, "erro", "erros")}`,
         };
       };
       const porErros = (a: LinhaAcuraciaExame, b: LinhaAcuraciaExame) => b.erros - a.erros;
-      const linhas = doMinimo.map(linhaDe).sort(porErros);
+      const linhas = doMinimo.map(linhaDe).sort(porErros).sort((a, b) => a.acuracia - b.acuracia);
       const poucosCasos = poucos.map(linhaDe).sort(porErros);
 
       const acuraciaLabel = agora.acuracia === null ? "—" : num(agora.acuracia);
