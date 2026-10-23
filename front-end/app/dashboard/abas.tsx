@@ -6,15 +6,18 @@
  * barra) vêm do protótipo aprovado e são intencionais.
  */
 import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { ChevronRight } from "lucide-react";
 
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 
 import type {
+  AcuraciaExameVisao,
   BarraPercentual,
   BarraSemana,
   GraficoPrazo,
   IdIndicador,
   Kpi,
+  LinhaAcuraciaExame,
   LinhaForaProntuai,
   UsoSemanal,
   VisaoDashboard,
@@ -1200,8 +1203,26 @@ function ModalHistoricoFora({
   );
 }
 
-function CartaoKpi({ kpi, onAjuda }: { kpi: Kpi; onAjuda: AbrirAjuda }) {
+function CartaoKpi({
+  kpi,
+  onAjuda,
+  onValor,
+}: {
+  kpi: Kpi;
+  onAjuda: AbrirAjuda;
+  /** Torna o número clicável — abre o detalhe por trás dele. */
+  onValor?: () => void;
+}) {
   const ajuda = kpi.ajuda;
+  const valor = (
+    <div
+      className={`whitespace-nowrap text-[36px] font-medium leading-none tracking-[-0.025em] text-[#193B4F] tabular-nums ${
+        onValor ? "transition-colors group-hover:text-[#007891]" : ""
+      }`}
+    >
+      {kpi.value}
+    </div>
+  );
   return (
     <div
       className={`${styles.tip} ${styles.tipBaixo} flex flex-col gap-4 rounded-xl border border-[#DFE0E2] bg-white px-[22px] pt-5 pb-[22px]`}
@@ -1212,9 +1233,20 @@ function CartaoKpi({ kpi, onAjuda }: { kpi: Kpi; onAjuda: AbrirAjuda }) {
         {ajuda && <BotaoAjuda rotulo={kpi.label} onClick={() => onAjuda(ajuda)} />}
       </div>
       <div className="flex flex-col items-start gap-2">
-        <div className="whitespace-nowrap text-[36px] font-medium leading-none tracking-[-0.025em] text-[#193B4F] tabular-nums">
-          {kpi.value}
-        </div>
+        {onValor ? (
+          <button
+            type="button"
+            onClick={onValor}
+            aria-haspopup="dialog"
+            aria-label={`Ver ${kpi.label.toLowerCase()}`}
+            title="Ver por exame"
+            className="group cursor-pointer rounded-[6px] text-left"
+          >
+            {valor}
+          </button>
+        ) : (
+          valor
+        )}
         <div className="whitespace-nowrap text-[13px] font-medium" style={{ color: kpi.deltaColor }}>
           {kpi.delta}
         </div>
@@ -1467,9 +1499,9 @@ export function AbaUtilizacao({
 }
 
 /**
- * Lugar reservado para "Acurácia por exame", ao lado de "Acurácia" e no mesmo
- * tamanho dos KPIs. Sem número até o parecer do revisor no modal de feedback,
- * que diz exame a exame se a IA acertou, passar a alimentar o indicador.
+ * Lugar reservado para "Acurácia por exame" quando o back-end não manda o
+ * indicador (versão anterior a ele, ou a consulta dos pareceres falhou). Mesmo
+ * tamanho dos KPIs, ao lado de "Acurácia".
  */
 function CartaoEmBreve({ label }: { label: string }) {
   return (
@@ -1480,20 +1512,297 @@ function CartaoEmBreve({ label }: { label: string }) {
   );
 }
 
+// Literal pelo mesmo motivo de COLUNAS_FORA: o Tailwind só compila a classe que
+// encontra escrita no código.
+const COLUNAS_EXAME = "grid-cols-[2.6fr_0.8fr_1.6fr_0.7fr]";
+
+/**
+ * O que abre ao clicar no exame: os motivos, com as palavras do modal de
+ * feedback e o que a IA tinha dito, e os documentos em que o erro aconteceu.
+ * "Abrir" leva ao documento no Histórico (`?viewId=`) em outra aba, para
+ * conferir o PDF sem perder a lista.
+ */
+function DetalheErrosExame({ linha }: { linha: LinhaAcuraciaExame }) {
+  return (
+    <div className="mb-3 ml-[26px] grid grid-cols-1 gap-x-10 gap-y-4 rounded-[10px] bg-[#F7F9FA] px-4 py-3.5 text-[12.5px] md:grid-cols-[minmax(0,1fr)_minmax(0,1.7fr)]">
+      <div>
+        <div className={CABECALHO_TABELA}>Motivos</div>
+        <ul className="mt-2 flex flex-col gap-1.5">
+          {linha.motivos.map((m) => (
+            <li key={m.rotulo} className="flex items-baseline gap-2.5 text-[#193B4F]">
+              <span className="w-5 flex-none text-right font-medium tabular-nums">{m.casos}</span>
+              <span>
+                {m.rotulo}
+                {m.contexto && <span className="text-[#9AA3A8]"> · {m.contexto}</span>}
+              </span>
+            </li>
+          ))}
+        </ul>
+      </div>
+      <div>
+        <div className={CABECALHO_TABELA}>Documentos com erro</div>
+        {linha.casos.length ? (
+          <ul className="mt-2 flex flex-col gap-1.5">
+            {linha.casos.map((c, i) => (
+              <li
+                key={`${c.documento}-${i}`}
+                className="grid grid-cols-[2.75rem_minmax(0,1fr)_auto_auto] items-baseline gap-3 text-[#193B4F]"
+              >
+                <span className="tabular-nums text-[#767A7B]">{c.enviadoLabel}</span>
+                <span className="truncate" title={c.clinica}>
+                  {c.clinica}
+                </span>
+                <span className="text-[#767A7B]">{c.motivo}</span>
+                <a
+                  href={`/historico?viewId=${encodeURIComponent(c.documento)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-medium text-[#007891] hover:underline"
+                >
+                  Abrir
+                </a>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <div className="mt-2 text-[#9AA3A8]">O back-end desta versão ainda não manda os documentos.</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Uma linha da lista. Só o exame com erro abre: o detalhe de um exame sem erro
+ * seria vazio. Em "Poucos casos" não há barra nem percentual — só a contagem.
+ */
+function LinhaExame({
+  linha,
+  aberta,
+  onAlternar,
+  semPercentual = false,
+}: {
+  linha: LinhaAcuraciaExame;
+  aberta: boolean;
+  onAlternar: () => void;
+  semPercentual?: boolean;
+}) {
+  const n = (v: number) => v.toLocaleString("pt-BR");
+  // Mesmo invólucro de "Quem está usando pouco": a seta do balão aponta para o
+  // nome só se ele encolher até o texto.
+  const nome = (
+    <span className={`${styles.tip} ${styles.tipNome} min-w-0`} data-tip={linha.tip}>
+      <span className="block truncate">{linha.exame}</span>
+    </span>
+  );
+  return (
+    <div className="border-b border-[#F3F3F3]">
+      <div
+        className={`${styles.linhaTip} grid ${COLUNAS_EXAME} items-center gap-x-[18px] px-1 py-3 text-[13.5px] text-[#193B4F]`}
+      >
+        <div className="min-w-0">
+          {linha.erros ? (
+            <button
+              type="button"
+              onClick={onAlternar}
+              aria-expanded={aberta}
+              className="flex w-full min-w-0 items-center gap-2 text-left hover:text-[#007891]"
+            >
+              <ChevronRight
+                className={`size-4 flex-none text-[#9AA3A8] transition-transform ${aberta ? "rotate-90" : ""}`}
+              />
+              {nome}
+            </button>
+          ) : (
+            <div className="flex min-w-0 pl-6">{nome}</div>
+          )}
+        </div>
+        <div className="tabular-nums text-[#767A7B]">{n(linha.documentos)}</div>
+        {semPercentual ? (
+          <div className="font-medium tabular-nums">{linha.erros}</div>
+        ) : (
+          <div className="flex items-center gap-2.5">
+            <div className="h-[9px] flex-1 overflow-hidden rounded-[4px] bg-[#F3F3F3]">
+              <div className="h-full bg-[#B4453A]" style={{ width: `${linha.pctErro}%` }} />
+            </div>
+            <div className="w-[26px] text-right font-medium tabular-nums">{linha.erros || "—"}</div>
+          </div>
+        )}
+        {semPercentual ? (
+          <div className="text-[#C6CBCE]">—</div>
+        ) : (
+          <div className="font-medium tabular-nums">{linha.acuraciaLabel}</div>
+        )}
+      </div>
+      {aberta && <DetalheErrosExame linha={linha} />}
+    </div>
+  );
+}
+
+/**
+ * A lista de "Acurácia por exame", aberta pelo número do card. Vem do parecer
+ * do revisor no modal de feedback e segue o filtro de período da tela.
+ *
+ * A adesão fica no cabeçalho, junto do número: a acurácia só enxerga os
+ * documentos com parecer, e com poucos pareceres ela pesa pouco.
+ *
+ * A pergunta é "em quais exames o processo tem mais dificuldade, e por quê" —
+ * quem lê é o time de desenvolvimento. A tabela fica no essencial, do exame com
+ * mais erros ao com menos; o porquê abre no clique, com os documentos para
+ * conferir.
+ */
+function ModalAcuraciaExame({
+  dados,
+  aberto,
+  onFechar,
+}: {
+  dados: AcuraciaExameVisao;
+  aberto: boolean;
+  onFechar: () => void;
+}) {
+  const { ordem, ordenarPor } = useOrdem({ col: "erros", dir: "desc" });
+  const visiveis = ordenar(dados.linhas, ordem, (l, col) =>
+    col === "exame" ? l.exame
+    : col === "documentos" ? l.documentos
+    : col === "erros" ? l.erros
+    : l.acuracia,
+  );
+  const [abertos, setAbertos] = useState<Set<string>>(() => new Set());
+  const alternar = (exame: string) =>
+    setAbertos((atual) => {
+      const novo = new Set(atual);
+      if (!novo.delete(exame)) novo.add(exame);
+      return novo;
+    });
+  const n = (v: number) => v.toLocaleString("pt-BR");
+
+  return (
+    <Dialog open={aberto} onOpenChange={(v) => !v && onFechar()}>
+      <DialogContent className="flex max-h-[calc(100dvh-3rem)] flex-col gap-0 overflow-hidden rounded-[16px] border-[#DFE0E2] bg-white p-0 sm:max-w-[980px]">
+        {/* Título e descrição ocupam a largura toda, e os números descem para
+            uma fileira própria: com o total à direita da descrição, os dois
+            disputavam a mesma linha e o número ficava espremido contra o X. */}
+        <div className="border-b border-[#EDEFF0] py-4 pr-14 pl-6">
+          <DialogTitle className="text-[20px] leading-tight font-semibold text-[#193B4F]">
+            Acurácia por exame
+          </DialogTitle>
+          <DialogDescription className="mt-1 text-[13px] leading-[1.5] text-[#767A7B]">
+            Pelo parecer do revisor no modal de feedback · documentos enviados em {dados.periodoLabel}.
+            <span className="block">
+              {dados.adesaoLabel
+                ? `${n(dados.pareceres)} pareceres em ${n(dados.decisoes)} decisões do time BR MED (adesão de ${dados.adesaoLabel}).`
+                : "Nenhuma decisão do time BR MED com parecer neste período."}
+            </span>
+          </DialogDescription>
+
+          <div className="mt-4 flex flex-wrap items-start gap-x-8 gap-y-3">
+            {[
+              { r: "Acurácia", v: dados.acuraciaLabel, cor: "#007891" },
+              { r: "Exames nos pareceres", v: n(dados.avaliacoes) },
+              { r: "Erros", v: n(dados.erros) },
+              { r: "Pareceres", v: n(dados.pareceres) },
+            ].map((x: { r: string; v: string; cor?: string }) => (
+              <div key={x.r} className="flex flex-col gap-1">
+                <div className={CABECALHO_TABELA}>{x.r}</div>
+                <div
+                  className="text-[19px] font-medium leading-none tabular-nums"
+                  style={{ color: x.cor ?? "#193B4F" }}
+                >
+                  {x.v}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-auto px-6">
+          {visiveis.length || dados.poucosCasos.length ? (
+            <div className="min-w-[720px]">
+              <div
+                className={`sticky top-0 z-10 grid ${COLUNAS_EXAME} items-end gap-x-[18px] border-b border-[#DFE0E2] bg-white px-1 pt-3.5 pb-2.5`}
+              >
+                <div className="pl-6">
+                  <Th label="Exame" col="exame" ordem={ordem} onOrdenar={ordenarPor} />
+                </div>
+                <Th label="Documentos" col="documentos" ordem={ordem} onOrdenar={ordenarPor} numerica />
+                <Th label="Erros" sub="barra = taxa · número = casos" col="erros" ordem={ordem} onOrdenar={ordenarPor} numerica />
+                <Th label="Acurácia" col="acuracia" ordem={ordem} onOrdenar={ordenarPor} numerica />
+              </div>
+              {visiveis.map((l) => (
+                <LinhaExame key={l.exame} linha={l} aberta={abertos.has(l.exame)} onAlternar={() => alternar(l.exame)} />
+              ))}
+
+              {/* Abaixo do mínimo, só a contagem: com 1 erro em 2, o percentual
+                  poria o exame no topo da lista sem que isso diga muito. Mas o
+                  erro aconteceu, e quem corrige o motor precisa vê-lo. */}
+              {dados.poucosCasos.length > 0 && (
+                <>
+                  <div className="px-1 pt-6 pb-2">
+                    <div className={CABECALHO_TABELA}>Poucos casos</div>
+                    <div className="mt-1 text-[12px] text-[#9AA3A8]">
+                      Menos de {dados.minimo} documentos no período, com erro. Sem percentual: um erro sozinho o derrubaria.
+                    </div>
+                  </div>
+                  {dados.poucosCasos.map((l) => (
+                    <LinhaExame
+                      key={l.exame}
+                      linha={l}
+                      aberta={abertos.has(l.exame)}
+                      onAlternar={() => alternar(l.exame)}
+                      semPercentual
+                    />
+                  ))}
+                </>
+              )}
+            </div>
+          ) : (
+            <div className="py-10 text-center text-[13px] text-[#767A7B]">
+              {dados.avaliacoes
+                ? `Nenhum exame chegou a ${dados.minimo} documentos neste período, e nenhum teve erro.`
+                : "Nenhum parecer neste período."}
+            </div>
+          )}
+        </div>
+
+        <div className="border-t border-[#EDEFF0] px-6 py-3 text-[12px] text-[#9AA3A8]">
+          Clique no exame para ver os motivos e os documentos com erro. Do exame com mais erros ao com menos; no
+          empate, o mais frequente primeiro. Exames com menos de {dados.minimo} documentos e sem erro entram no total,
+          mas não na lista{dados.abaixoDoMinimo ? ` (${n(dados.abaixoDoMinimo)} neste período)` : ""}.
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export function AbaAcuracia({ visao, onAjuda }: { visao: VisaoDashboard; onAjuda: AbrirAjuda }) {
+  const [examesAberto, setExamesAberto] = useState(false);
   // "Acurácia por exame" entra logo depois de "Acurácia": é o mesmo número
   // aberto por exame, e quem lê um procura o outro do lado.
   const [acuracia, ...demais] = visao.kpisAcuracia;
+  const porExame = visao.acuraciaExame;
 
   return (
     <div className="flex flex-col gap-5 px-[34px] pt-[26px] pb-10">
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
         <CartaoKpi kpi={acuracia} onAjuda={onAjuda} />
-        <CartaoEmBreve label="Acurácia por exame" />
+        {/* Sem o bloco no back-end (versão anterior ao indicador, ou a consulta
+            falhou), o lugar fica reservado em vez de mostrar um zero falso. */}
+        {porExame ? (
+          <CartaoKpi
+            kpi={porExame.kpi}
+            onAjuda={onAjuda}
+            onValor={porExame.avaliacoes ? () => setExamesAberto(true) : undefined}
+          />
+        ) : (
+          <CartaoEmBreve label="Acurácia por exame" />
+        )}
         {demais.map((k) => (
           <CartaoKpi key={k.label} kpi={k} onAjuda={onAjuda} />
         ))}
       </div>
+      {porExame && (
+        <ModalAcuraciaExame dados={porExame} aberto={examesAberto} onFechar={() => setExamesAberto(false)} />
+      )}
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
         <div className={`${CARTAO} px-[22px] pt-5 pb-[18px]`}>
@@ -1524,6 +1833,24 @@ export function AbaAcuracia({ visao, onAjuda }: { visao: VisaoDashboard; onAjuda
               </div>
             ))}
           </div>
+          {/* Não derrubam a acurácia — contam como acerto —, mas explicam por
+              que o revisor contrariou a IA. Pelo código do parecer do modal. */}
+          {visao.motivosExternos.length > 0 && (
+            <div className="mt-[18px] border-t border-[#EDEFF0] pt-3.5">
+              <div className="text-[12.5px] text-[#767A7B]">
+                Resolvidas por motivo externo · {visao.motivosExternosTotal.toLocaleString("pt-BR")} divergências que
+                contam como acerto
+              </div>
+              <ul className="mt-2 flex flex-col gap-1">
+                {visao.motivosExternos.map((m) => (
+                  <li key={m.name} className="flex items-baseline justify-between gap-2.5 text-[13px] text-[#193B4F]">
+                    <span>{m.name}</span>
+                    <span className="font-medium tabular-nums text-[#767A7B]">{m.count}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
           <div className="mt-[18px] rounded-[10px] bg-[#F3F3F3] px-3.5 py-3 text-[12.5px] leading-[1.5] text-[#767A7B]">
             {visao.notaSemJustificativa}
           </div>

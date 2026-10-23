@@ -35,6 +35,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import text
 
 from app.core.config import Settings
+from app.models.feedback import CATEGORIAS_EXAME
 
 logger = logging.getLogger(__name__)
 
@@ -174,6 +175,181 @@ WHERE c.name NOT IN ('teste', 'testando', 'Clinica Default')
   AND pg_input_is_valid(d.result_payload, 'jsonb')
   AND d.result_payload::jsonb #>> '{brmed_result,pedido_exame_id}' ~ '^\d{1,18}$'
 """
+
+# Acurácia por exame, do parecer do revisor no modal de feedback (migration 008).
+# Um documento com parecer por linha. Os exames avaliados são os exigidos pelo
+# BRNET — a lista que o modal mostra ao revisor —, e `comparou` separa o
+# documento em que a IA chegou a julgar os exames da falha técnica, que fica
+# fora como em toda acurácia do painel.
+_SQL_PARECERES_EXAMES = r"""
+SELECT
+    d.created_at,
+    f.status,
+    COALESCE(
+        CASE WHEN cardinality(d.exams_brnet) > 0 THEN to_jsonb(d.exams_brnet) END,
+        p.payload #> '{brmed_result,exames_obrigatorios}'
+    ) AS exames,
+    f.issue_items,
+    jsonb_typeof(p.payload -> 'tabela_comparacao') = 'array' AS comparou,
+    d.id,
+    c.name AS clinica
+FROM document_feedbacks f
+JOIN documents d ON d.id = f.document_id
+JOIN clinics c ON c.id = d.clinic_id
+CROSS JOIN LATERAL (
+    SELECT CASE WHEN d.result_payload LIKE '{%' AND pg_input_is_valid(d.result_payload, 'jsonb')
+                THEN d.result_payload::jsonb END AS payload
+) p
+WHERE c.name NOT IN ('teste', 'testando', 'Clinica Default')
+"""
+
+# Denominador da adesão ao parecer: decisões humanas desde o primeiro parecer
+# gravado (o dia em que o modal entrou) — antes disso não havia como dar parecer,
+# e contar aquelas decisões faria a adesão parecer pior do que é —, MAIS todo
+# documento que tem parecer. Esta segunda parte existe porque o "Avaliar IA"
+# deixa dar parecer em documento decidido antes do modal: sem ela, há parecer
+# fora do denominador e a adesão passa de 100%.
+_SQL_DECISOES_DESDE_O_MODAL = """
+SELECT d.created_at
+FROM documents d
+JOIN clinics c ON c.id = d.clinic_id
+WHERE c.name NOT IN ('teste', 'testando', 'Clinica Default')
+  AND (
+        (d.reviewed_by IS NOT NULL
+         AND d.reviewed_at >= (SELECT min(created_at) FROM document_feedbacks))
+     OR EXISTS (SELECT 1 FROM document_feedbacks f WHERE f.document_id = d.id)
+  )
+"""
+
+# Todo motivo que o revisor marca num exame conta como ERRO daquele exame — as
+# categorias de `CATEGORIAS_EXAME`, que o modal oferece conforme o que a IA disse
+# dele (front-end/types/feedback.ts, OPCOES_EXAME): "Estava no documento", "Com
+# outro nome", "Não estava", "Estava, mas não foi lido", os de qualidade (outra
+# data, ilegível, sem carimbo, validade) e "Não é exigido". Decisão de 23/10/2026:
+# quem acompanha a acurácia é o time de desenvolvimento, e a pergunta é em quais
+# exames o processo inteiro tem dificuldade — inclusive no que a IA ainda não
+# confere e no que vem errado do BRNET. O motivo vai junto para separar na lista.
+#
+# Um exame tem um motivo só no modal; se vierem dois, fica o primeiro desta
+# ordem — os de leitura antes, porque são os que o motor corrige.
+PRIORIDADE_MOTIVO = (
+    "FALTANTE_INCORRETO",
+    "SINONIMO_NAO_RECONHECIDO",
+    "ENCONTRADO_INCORRETO",
+    "EXAME_NAO_RECONHECIDO",
+    "EXTRA_INCORRETO",
+    "EXAME_OUTRA_DATA",
+    "EXAME_ILEGIVEL",
+    "EXAME_SEM_ASSINATURA",
+    "VALIDADE_PERIODICIDADE",
+    "DADO_BRNET",
+    "OUTRO",
+)
+
+
+def _motivo_principal(atual: Optional[str], novo: str) -> str:
+    if atual is None:
+        return novo
+    ordem = {c: i for i, c in enumerate(PRIORIDADE_MOTIVO)}
+    return min(atual, novo, key=lambda c: ordem.get(c, len(ordem)))
+
+
+def _chave_exame(nome: Optional[str]) -> str:
+    """Nome de exame sem acento, sem caixa e com espaços colapsados.
+
+    Diferente de `_chave_nome`, NÃO tira o que está entre parênteses: em nome de
+    exame ele distingue exames diferentes ("AVALIAÇÃO OFTALMOLÓGICA (ACUIDADE
+    VISUAL ...)" tem variantes que não são o mesmo exame).
+    """
+    texto = unicodedata.normalize("NFD", (nome or "").strip().lower())
+    return " ".join("".join(c for c in texto if unicodedata.category(c) != "Mn").split())
+
+
+def _chaves_periodo(criado: datetime) -> dict[str, str]:
+    """Chaves semanal e mensal, no mesmo formato das séries da consulta principal
+    (`date_trunc` sobre `created_at` gravado em UTC): o front soma pelas chaves dos
+    pontos do período escolhido, então as duas pontas precisam concordar."""
+    dia = criado.date()
+    return {
+        "semanal": (dia - timedelta(days=dia.weekday())).isoformat(),
+        "mensal": dia.replace(day=1).isoformat(),
+    }
+
+
+def _agregar_pareceres(pareceres, decisoes) -> dict[str, Any]:
+    """Acurácia por exame a partir dos pareceres do modal de feedback.
+
+    Cada exame exigido de cada documento com parecer é uma AVALIAÇÃO; ela é erro
+    quando o revisor marcou o exame com qualquer motivo (ver `PRIORIDADE_MOTIVO`).
+    Parecer "Acertou" não tem item nenhum: todos os exames do documento contam
+    como acerto. Exame digitado pelo revisor, fora da lista do BRNET ("Estava,
+    mas não foi lido"), entra como uma avaliação com erro: estava no documento e
+    a IA não o leu, que é justamente o que a lista quer mostrar.
+
+    Formato, por granularidade e chave de período:
+        {"pareceres": n, "com_parecer": n', "decisoes": m,
+         "exames": {nome: [avaliações, {motivo: erros}]},
+         "casos": [{"exame", "motivo", "documento", "clinica", "enviado"}]}
+    `casos` é um item por erro, para a lista abrir o exame e levar ao documento.
+    Só id, clínica, data e categoria: a observação do revisor fica de fora porque
+    pode ter nome ou CPF de paciente.
+    `pareceres` são os que entram na acurácia (a IA julgou os exames);
+    `com_parecer` conta também os de falha técnica e é o numerador da adesão,
+    sobre `decisoes`. `desde` é a data de envio do documento mais antigo com
+    parecer — não a do primeiro parecer, porque dá para avaliar documento antigo.
+    """
+    series: dict[str, dict[str, dict[str, Any]]] = {"semanal": {}, "mensal": {}}
+    nome_de: dict[str, str] = {}
+    primeiro: Optional[date] = None
+
+    def bloco(gran: str, chave: str) -> dict[str, Any]:
+        return series[gran].setdefault(
+            chave, {"pareceres": 0, "com_parecer": 0, "decisoes": 0, "exames": {}, "casos": []}
+        )
+
+    for criado, _status, exames, itens, comparou, documento, clinica in pareceres:
+        primeiro = min(primeiro, criado.date()) if primeiro else criado.date()
+        for gran, chave_periodo in _chaves_periodo(criado).items():
+            bloco(gran, chave_periodo)["com_parecer"] += 1
+        if not comparou:
+            continue
+        avaliados: dict[str, str] = {}
+        for nome in exames or []:
+            chave = _chave_exame(nome)
+            if chave and chave not in avaliados:
+                avaliados[chave] = nome_de.setdefault(chave, str(nome).strip())
+        erros: dict[str, str] = {}
+        for item in itens or []:
+            chave = _chave_exame((item or {}).get("exame"))
+            categoria = (item or {}).get("categoria")
+            if not chave or categoria not in CATEGORIAS_EXAME:
+                continue
+            # Digitado pelo revisor: não estava na lista do BRNET, entra aqui.
+            avaliados.setdefault(chave, nome_de.setdefault(chave, str(item["exame"]).strip()))
+            erros[chave] = _motivo_principal(erros.get(chave), categoria)
+        if not avaliados:
+            continue
+        for gran, chave_periodo in _chaves_periodo(criado).items():
+            b = bloco(gran, chave_periodo)
+            b["pareceres"] += 1
+            for chave, nome in avaliados.items():
+                conta = b["exames"].setdefault(nome, [0, {}])
+                conta[0] += 1
+                if chave in erros:
+                    conta[1][erros[chave]] = conta[1].get(erros[chave], 0) + 1
+                    b["casos"].append({
+                        "exame": nome,
+                        "motivo": erros[chave],
+                        "documento": documento,
+                        "clinica": clinica,
+                        "enviado": criado.date().isoformat(),
+                    })
+
+    for (criado,) in decisoes:
+        for gran, chave_periodo in _chaves_periodo(criado).items():
+            bloco(gran, chave_periodo)["decisoes"] += 1
+
+    return {"desde": primeiro.isoformat() if primeiro else None, "series": series}
 
 # (validade, dados): a partir de `validade` o cache é considerado vencido.
 _cache: Optional[tuple[datetime, dict[str, Any]]] = None
@@ -768,6 +944,18 @@ def _consultar() -> dict[str, Any]:
                 (int(pedido), enviado, liberado, prazo_brmed)
                 for pedido, enviado, liberado, prazo_brmed in conn.execute(text(_SQL_PRAZOS), {"fuso": FUSO.key})
             ]
+            # Em savepoint: a acurácia por exame é um card só, e um erro aqui
+            # (base sem a tabela de pareceres, por exemplo) não pode derrubar o
+            # painel inteiro — numa transação abortada, nada mais roda.
+            acuracia_exames: Optional[dict[str, Any]] = None
+            try:
+                with conn.begin_nested():
+                    acuracia_exames = _agregar_pareceres(
+                        conn.execute(text(_SQL_PARECERES_EXAMES)).all(),
+                        conn.execute(text(_SQL_DECISOES_DESDE_O_MODAL)).all(),
+                    )
+            except Exception as exc:  # noqa: BLE001 - o card cai em "Em breve"
+                logger.error("[DASHBOARD] acurácia por exame indisponível: %s", exc)
 
     if not linha:
         raise DashboardIndisponivel("a consulta não devolveu nada")
@@ -783,6 +971,7 @@ def _consultar() -> dict[str, Any]:
     )
     dados.update(_cruzar_prazos(pedidos, documentos))
     dados["expedicoes_desde"] = _primeiro_dia_ligado(primeiro_doc_ligado)
+    dados["acuracia_exames"] = acuracia_exames
     dados["ambiente"] = Settings.APP_ENV
     dados["gerado_em"] = momento.isoformat()
     dados["proxima_atualizacao"] = proxima_virada(momento).isoformat()

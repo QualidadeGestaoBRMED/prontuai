@@ -22,6 +22,11 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  CredenciadoBrnetAutocomplete,
+  descreverClinicas,
+  type CredenciadoBrnet,
+} from "@/components/credenciado-brnet-autocomplete";
 import { API_ENDPOINTS } from "@/lib/config";
 import { authFetch } from "@/lib/auth-fetch";
 
@@ -100,6 +105,21 @@ export default function ClinicsAdminPage() {
   const [emailError, setEmailError] = useState("");
   const [creating, setCreating] = useState(false);
 
+  // Vínculo com o credenciado do BRNET, só na criação: o nome sugere os
+  // credenciados conforme a digitação, e escolher uma sugestão é o que vincula.
+  // Nome digitado sem escolher fica sem vínculo — permitido só ao ADMIN (contas
+  // internas, credenciado fora da rede); o back-end recusa o Gestor com 403.
+  const [credenciados, setCredenciados] = useState<CredenciadoBrnet[]>([]);
+  const [carregandoCredenciados, setCarregandoCredenciados] = useState(false);
+  const [erroCredenciados, setErroCredenciados] = useState<string | null>(null);
+  const [formBrnetId, setFormBrnetId] = useState<string | null>(null);
+  const credenciadoEscolhido = formBrnetId
+    ? credenciados.find((c) => c.identificador === formBrnetId)
+    : undefined;
+  // Com credenciado escolhido, o e-mail é opcional: vazio, o back-end grava o
+  // do BRNET; digitado, vence o digitado (o do BRNET pode estar desatualizado).
+  const emailBrnet = credenciadoEscolhido?.email ?? null;
+
   const validateEmail = (email: string) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!email) {
@@ -173,6 +193,25 @@ export default function ClinicsAdminPage() {
     }
   }, []);
 
+  /**
+   * Rede credenciada do BRNET, a cada abertura de modal: o back-end guarda a
+   * rede por uma hora, mas as clínicas já vinculadas a cada credenciado vêm do
+   * banco, e mudam a cada cadastro.
+   */
+  const carregarCredenciados = useCallback(async () => {
+    setCarregandoCredenciados(true);
+    setErroCredenciados(null);
+    try {
+      const resposta = await authFetch(API_ENDPOINTS.CLINICS_CREDENCIADOS_BRNET);
+      if (!resposta.ok) throw new Error(`HTTP ${resposta.status}`);
+      setCredenciados(await resposta.json());
+    } catch {
+      setErroCredenciados("Não foi possível carregar a rede credenciada do BRNET. Tente de novo em instantes.");
+    } finally {
+      setCarregandoCredenciados(false);
+    }
+  }, []);
+
   const fetchClinics = useCallback(async () => {
     if (!podeCarregar) return;
 
@@ -195,15 +234,26 @@ export default function ClinicsAdminPage() {
     fetchClinics();
   }, [fetchClinics]);
 
+  const abrirCriacao = () => {
+    setFormBrnetId(null);
+    setFormName("");
+    setCreateModalOpen(true);
+    carregarCredenciados();
+  };
+
   const handleCreateClinic = async () => {
-    if (!session?.user?.email || !formEmail || !formName) {
+    if (!session?.user?.email || !formName || (!formEmail && !emailBrnet)) {
       toast.error("Preencha todos os campos");
+      return;
+    }
+    if (!ehAdmin && !formBrnetId) {
+      toast.error("Escolha a clínica na lista da rede credenciada do BRNET");
       return;
     }
 
     // Validar formato de email
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(formEmail)) {
+    if (formEmail && !emailRegex.test(formEmail)) {
       toast.error("Email inválido. Use o formato: exemplo@dominio.com");
       return;
     }
@@ -216,8 +266,9 @@ export default function ClinicsAdminPage() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          email: formEmail,
+          ...(formEmail ? { email: formEmail } : {}),
           name: formName,
+          ...(formBrnetId ? { brnet_id: formBrnetId } : {}),
         }),
       });
 
@@ -247,6 +298,7 @@ export default function ClinicsAdminPage() {
       setFormEmail("");
       setFormName("");
       setEmailError("");
+      setFormBrnetId(null);
       fetchClinics();
     } catch (error) {
       console.error("Erro completo:", error);
@@ -272,7 +324,16 @@ export default function ClinicsAdminPage() {
         }),
       });
 
-      if (!response.ok) throw new Error("Erro ao atualizar clínica");
+      if (!response.ok) {
+        let detalhe = "Erro ao atualizar clínica";
+        try {
+          const corpo = await response.json();
+          if (typeof corpo.detail === "string") detalhe = corpo.detail;
+        } catch {
+          // corpo não-JSON (500): fica a mensagem padrão
+        }
+        throw new Error(detalhe);
+      }
 
       toast.success("Clínica atualizada com sucesso!");
       setEditModalOpen(false);
@@ -280,7 +341,7 @@ export default function ClinicsAdminPage() {
       fetchClinics();
     } catch (error) {
       console.error("Erro:", error);
-      toast.error("Erro ao atualizar clínica");
+      toast.error(error instanceof Error ? error.message : "Erro ao atualizar clínica");
     }
   };
 
@@ -341,7 +402,7 @@ export default function ClinicsAdminPage() {
                 </p>
               </div>
               <Button
-                onClick={() => setCreateModalOpen(true)}
+                onClick={abrirCriacao}
                 className="hover:scale-105 transition-transform"
               >
                 + Nova Clínica
@@ -459,18 +520,66 @@ export default function ClinicsAdminPage() {
             </DialogHeader>
 
             <div className="space-y-4">
+              <div className="space-y-1">
+                <Label htmlFor="name">Nome da Clínica</Label>
+                <CredenciadoBrnetAutocomplete
+                  id="name"
+                  value={formName}
+                  onChange={(nome) => {
+                    setFormName(nome);
+                    setFormBrnetId(null);
+                  }}
+                  onEscolher={(c) => {
+                    setFormName(c.nome);
+                    setFormBrnetId(c.identificador);
+                  }}
+                  opcoes={credenciados}
+                  placeholder="Digite cidade ou nome da clínica"
+                />
+                {carregandoCredenciados ? (
+                  <p className="text-xs text-gray-500">Carregando a rede credenciada do BRNET…</p>
+                ) : erroCredenciados ? (
+                  <p className="text-xs text-red-600">{erroCredenciados}</p>
+                ) : credenciadoEscolhido ? (
+                  credenciadoEscolhido.clinicas.length > 0 ? (
+                    <p className="text-xs text-amber-700">
+                      Já existe clínica para este credenciado: {descreverClinicas(credenciadoEscolhido.clinicas)}.
+                      Prefira usar a existente.
+                    </p>
+                  ) : (
+                    <p className="text-xs text-green-700">Clínica da rede credenciada do BRNET.</p>
+                  )
+                ) : formName.trim() ? (
+                  <p className="text-xs text-gray-500">
+                    {ehAdmin
+                      ? "Sem vínculo com o BRNET — escolha um nome da lista ou siga assim para conta interna ou credenciado fora da rede."
+                      : "Escolha a clínica na lista da rede credenciada do BRNET."}
+                  </p>
+                ) : null}
+              </div>
+
               <div>
                 <Label htmlFor="email">Email</Label>
                 <Input
                   id="email"
                   type="email"
-                  placeholder="clinica@example.com"
+                  placeholder={emailBrnet ?? "clinica@example.com"}
                   value={formEmail}
                   onChange={handleEmailChange}
                   className={emailError ? "border-red-500" : ""}
                 />
                 {emailError ? (
                   <p className="text-xs text-red-500 mt-1">{emailError}</p>
+                ) : emailBrnet ? (
+                  <div className="mt-1 space-y-0.5 text-xs text-gray-500">
+                    <p>
+                      E-mail no BRNET: <span className="font-medium text-gray-700">{emailBrnet}</span>
+                    </p>
+                    <p>
+                      Se este campo ficar vazio, o e-mail registrado será este. Se estiver desatualizado ou
+                      errado, preencha o campo com o novo.
+                    </p>
+                  </div>
                 ) : (
                   <p className="text-xs text-gray-500 mt-1">
                     Este email será usado para login da clínica
@@ -478,15 +587,6 @@ export default function ClinicsAdminPage() {
                 )}
               </div>
 
-              <div>
-                <Label htmlFor="name">Nome da Clínica</Label>
-                <Input
-                  id="name"
-                  placeholder="Nome completo da clínica"
-                  value={formName}
-                  onChange={(e) => setFormName(e.target.value)}
-                />
-              </div>
             </div>
 
             <DialogFooter>
@@ -502,7 +602,13 @@ export default function ClinicsAdminPage() {
               </Button>
               <Button
                 onClick={handleCreateClinic}
-                disabled={creating || !!emailError || !formEmail || !formName}
+                disabled={
+                  creating ||
+                  !!emailError ||
+                  (!formEmail && !emailBrnet) ||
+                  !formName.trim() ||
+                  (!ehAdmin && !formBrnetId)
+                }
               >
                 {creating ? "Criando..." : "Criar Clínica"}
               </Button>

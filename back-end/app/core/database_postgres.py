@@ -1177,6 +1177,8 @@ class PostgresUserDatabase:
             address=model.address,
             city=model.city,
             state=model.state,
+            brnet_id=model.brnet_id,
+            email=model.email,
             is_active=model.is_active,
             # `User` aceita os dois como None. Chamar .isoformat() sem checar
             # transformava uma linha com timestamp nulo em 500 — e, na listagem,
@@ -1222,7 +1224,9 @@ class PostgresUserDatabase:
         phone: Optional[str] = None,
         address: Optional[str] = None,
         city: Optional[str] = None,
-        state: Optional[str] = None
+        state: Optional[str] = None,
+        brnet_id: Optional[str] = None,
+        email: Optional[str] = None,
     ) -> Clinic:
         """Cria uma nova clínica."""
         session = self._get_session()
@@ -1237,6 +1241,8 @@ class PostgresUserDatabase:
                 address=address,
                 city=city,
                 state=state,
+                brnet_id=brnet_id,
+                email=email,
                 is_active=True,
                 created_at=datetime.utcnow(),
                 updated_at=datetime.utcnow()
@@ -1259,9 +1265,12 @@ class PostgresUserDatabase:
         address: Optional[str] = None,
         city: Optional[str] = None,
         state: Optional[str] = None,
-        is_active: Optional[bool] = None
+        is_active: Optional[bool] = None,
+        brnet_id: Optional[str] = None,
+        remover_vinculo_brnet: bool = False,
+        email: Optional[str] = None,
     ) -> Clinic:
-        """Atualiza clínica."""
+        """Atualiza clínica. `brnet_id` None não mexe no vínculo; para tirá-lo, `remover_vinculo_brnet`."""
         session = self._get_session()
         try:
             clinic_model = session.query(ClinicModel).filter(ClinicModel.id == clinic_id).first()
@@ -1283,6 +1292,12 @@ class PostgresUserDatabase:
                 clinic_model.state = state
             if is_active is not None:
                 clinic_model.is_active = is_active
+            if remover_vinculo_brnet:
+                clinic_model.brnet_id = None
+            elif brnet_id is not None:
+                clinic_model.brnet_id = brnet_id
+            if email is not None:
+                clinic_model.email = email
 
             clinic_model.updated_at = datetime.utcnow()
 

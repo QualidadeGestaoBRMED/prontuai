@@ -1,5 +1,5 @@
-from pydantic import BaseModel
-from typing import Optional
+from pydantic import BaseModel, EmailStr
+from typing import List, Optional
 from datetime import datetime
 
 
@@ -12,6 +12,9 @@ class Clinic(BaseModel):
     address: Optional[str] = None
     city: Optional[str] = None
     state: Optional[str] = None
+    # Identificador do credenciado no BRNET ("C25414"); None = sem vínculo.
+    brnet_id: Optional[str] = None
+    email: Optional[str] = None
     is_active: bool = True
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
@@ -31,13 +34,20 @@ class Clinic(BaseModel):
 
 
 class ClinicCreate(BaseModel):
-    """Schema para criação de clínica"""
+    """Schema para criação de clínica.
+
+    `brnet_id` é o credenciado escolhido na rede do BRNET. Sem ele, só ADMIN
+    cadastra (contas internas, credenciado fora da rede).
+    """
     name: str
     cnpj: Optional[str] = None
     phone: Optional[str] = None
     address: Optional[str] = None
     city: Optional[str] = None
     state: Optional[str] = None
+    brnet_id: Optional[str] = None
+    # Vazio com credenciado escolhido = o e-mail dele na rede do BRNET.
+    email: Optional[EmailStr] = None
 
     class Config:
         json_schema_extra = {
@@ -58,6 +68,10 @@ class ClinicUpdate(BaseModel):
     city: Optional[str] = None
     state: Optional[str] = None
     is_active: Optional[bool] = None
+    # Troca o credenciado vinculado. None = não mexe; para tirar o vínculo, use
+    # `remover_vinculo_brnet` (só ADMIN).
+    brnet_id: Optional[str] = None
+    remover_vinculo_brnet: bool = False
 
     class Config:
         json_schema_extra = {
@@ -67,3 +81,24 @@ class ClinicUpdate(BaseModel):
                 "is_active": True
             }
         }
+
+
+class ClinicaVinculada(BaseModel):
+    id: str
+    name: str
+    is_active: bool
+
+
+class CredenciadoBrnetOpcao(BaseModel):
+    """Um credenciado da rede do BRNET, como opção do cadastro de clínica.
+
+    `clinicas` são as clínicas do ProntuAI já vinculadas a ele. Enquanto o
+    vínculo não é único (ver migration 014), a tela usa isso para avisar antes
+    de criar mais uma clínica para o mesmo credenciado.
+    """
+    identificador: str
+    nome: str
+    cidade: Optional[str] = None
+    uf: Optional[str] = None
+    email: Optional[str] = None
+    clinicas: List[ClinicaVinculada] = []

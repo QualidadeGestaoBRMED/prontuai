@@ -778,7 +778,13 @@ export function FeedbackChecagemDialog({ alvo, onClose, onConfirmarDecisao }: Pr
                     </section>
                     {motivoExterno === "OUTRO" && (
                       <section className={ESTILO.passo}>
-                        <p className={ESTILO.pergunta}>Qual foi o motivo?</p>
+                        {/* Dos primeiros "Outro" em produção, 2 de 5 eram erro de
+                            leitura ("IA não reconheceu o CNPJ") — que conta como
+                            acerto se entrar aqui. */}
+                        <p className={ESTILO.pergunta}>
+                          Qual foi o motivo?{" "}
+                          <span className={ESTILO.dica}>se a IA leu algo errado, volte e marque “Errou”</span>
+                        </p>
                         <Textarea
                           autoFocus={!notas}
                           value={notas}

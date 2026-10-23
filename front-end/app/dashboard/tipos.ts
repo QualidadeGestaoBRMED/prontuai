@@ -53,6 +53,21 @@ export interface PontoAcuracia {
   mot_regra_formal?: number;
   mot_sem_justificativa?: number;
   mot_outro?: number;
+  /**
+   * Falha técnica aprovada com motivo externo de dado de fora (CNPJ de outra
+   * empresa, atendimento ainda fora do BRNET): não é falha da IA.
+   */
+  falha_externa?: number;
+  /** Divergências resolvidas por motivo externo, por código do parecer. */
+  ext_exame_por_fora?: number;
+  ext_guia_nao_anexada?: number;
+  ext_cnpj_divergente?: number;
+  ext_atendimento_nao_registrado?: number;
+  ext_outro_ticket?: number;
+  ext_cliente_autorizou?: number;
+  ext_outro?: number;
+  /** Histórico anterior ao modal, achado por palavra-chave na justificativa. */
+  ext_sem_codigo?: number;
 }
 
 export interface PontoClinica {
@@ -190,6 +205,49 @@ export interface DadosDashboard {
    * automática da IA fica de fora.
    */
   prazo_tecnico_dia: Record<string, Prazos>;
+  /**
+   * Acurácia por exame, do parecer do revisor no modal de feedback. Ausente num
+   * back-end anterior ao indicador e null quando a consulta falhou — nos dois
+   * casos o card mostra "Em breve". Ver `dashboard_service._agregar_pareceres`.
+   */
+  acuracia_exames?: AcuraciaExamesDados | null;
+}
+
+/** Um período (semana ou mês, mesma chave das outras séries) da acurácia por exame. */
+export interface BlocoAcuraciaExames {
+  /** Pareceres que entram na acurácia: a IA chegou a julgar os exames. */
+  pareceres: number;
+  /** Todos os pareceres, inclusive de falha técnica — numerador da adesão. */
+  com_parecer: number;
+  /** Decisões humanas desde que o modal existe, mais as que têm parecer. */
+  decisoes: number;
+  /**
+   * Por exame: [avaliações, erros por categoria do parecer]. Back-end anterior a
+   * 23/10/2026 manda [avaliações, falta indevida, presença indevida].
+   */
+  exames: Record<string, [number, Record<string, number>] | [number, number, number]>;
+  /** Um item por erro, para abrir o exame na lista. Ausente no back-end anterior. */
+  casos?: CasoErroExame[];
+}
+
+/** Um erro apontado pelo revisor: o exame, o motivo e o documento onde foi. */
+export interface CasoErroExame {
+  exame: string;
+  /** Categoria do parecer (`types/feedback.ts`, CATEGORIAS_EXAME). */
+  motivo: string;
+  documento: string;
+  clinica: string;
+  /** Data de envio do documento, ISO. */
+  enviado: string;
+}
+
+export interface AcuraciaExamesDados {
+  /**
+   * Data de envio (ISO) do documento mais antigo com parecer — o começo da
+   * série. Não é a data do primeiro parecer: dá para avaliar documento antigo.
+   */
+  desde: string | null;
+  series: Partial<Record<SerieKey, Record<string, BlocoAcuraciaExames>>>;
 }
 
 /** [antecipado, no dia, atrasado]. */

@@ -6,7 +6,10 @@
  * conta aqui é o que permite trocar a origem dos dados (JSON estático hoje,
  * consulta no back-end depois) sem mexer na tela.
  */
+import { CATEGORIAS_EXAME, MOTIVOS_EXTERNOS, OPCOES_EXAME, type MotivoExterno } from "@/types/feedback";
+
 import type {
+  CasoErroExame,
   ClinicaDados,
   CredenciadoPrevisto,
   DadosDashboard,
@@ -101,6 +104,8 @@ const TIPS_ACC: Record<string, string> = {
     "A IA liberou e o revisor barrou. É o erro com consequência: sem revisão, o documento teria passado.",
   "Falhas técnicas":
     "A IA não conseguiu ler o CPF/CNPJ ou achar o paciente. Não é julgamento, por isso fica fora da acurácia.",
+  "Acurácia por exame":
+    "Do parecer do revisor no modal de feedback: exame a exame, onde a IA errou. Clique no número para ver por exame.",
 };
 
 /**
@@ -133,7 +138,8 @@ export type IdIndicador =
   | "derrubadas"
   | "falhas"
   | "motivos"
-  | "matriz";
+  | "matriz"
+  | "acuraciaExame";
 
 export interface ComoCalculamos {
   titulo: string;
@@ -437,6 +443,11 @@ export const COMO_CALCULAMOS: Record<IdIndicador, ComoCalculamos> = {
         texto:
           "Não houve veredito para comparar com o do revisor. O número é acompanhado à parte, como medida da leitura dos documentos. A variação para baixo é a boa.",
       },
+      {
+        titulo: "O que não conta como falha",
+        texto:
+          "Quando o revisor libera e marca no parecer que o CNPJ do ASO é de outra empresa, ou que o atendimento ainda não estava registrado no BRNET, a IA não falhou: leu certo, e o dado de fora é que não batia. Esses casos saem do número.",
+      },
     ],
   },
   motivos: {
@@ -447,6 +458,11 @@ export const COMO_CALCULAMOS: Record<IdIndicador, ComoCalculamos> = {
         titulo: "O que entra",
         texto:
           "Só as divergências que derrubam a acurácia: a IA aprovou e o revisor rejeitou, ou a IA apontou falta e o revisor liberou. Motivo externo e falha técnica ficam fora.",
+      },
+      {
+        titulo: "Resolvidas por motivo externo",
+        texto:
+          "Abaixo das barras, as divergências em que o revisor marcou no parecer que a decisão mudou por algo fora do documento — exame feito em outro sistema, voucher não anexado, CNPJ de outra empresa, atendimento ainda fora do BRNET, duplicidade, autorização do cliente. Contam como acerto, por isso não estão nas barras. \"Justificativa escrita antes do modal\" é o histórico reconhecido por palavra-chave.",
       },
       {
         titulo: "Como cada uma é classificada",
@@ -476,6 +492,42 @@ export const COMO_CALCULAMOS: Record<IdIndicador, ComoCalculamos> = {
       },
     ],
   },
+  acuraciaExame: {
+    titulo: "Acurácia por exame",
+    pergunta: "Em quais exames o processo tem mais dificuldade, e por quê, segundo o revisor.",
+    blocos: [
+      {
+        titulo: "De onde vem",
+        texto:
+          "Do parecer que o revisor dá no modal de feedback da Checagem. Para cada exame, ele diz se a IA acertou e, quando não, o motivo. É ele quem diz, exame a exame — nada é deduzido da decisão sobre o documento.",
+      },
+      {
+        titulo: "A conta",
+        texto:
+          "Na lista, \"Documentos\" é em quantos documentos com parecer o exame era exigido pelo BRNET — ou foi digitado pelo revisor (\"Estava, mas não foi lido\"). É erro quando o revisor marcou qualquer motivo no exame. Acurácia = documentos sem erro ÷ documentos, somando todos os exames.",
+      },
+      {
+        titulo: "Os motivos",
+        texto:
+          "Clique no nome do exame para ver os motivos, com as palavras que o revisor marcou no modal, e os documentos em que o erro aconteceu, com o link para abrir cada um. Todos os motivos baixam a acurácia, inclusive os que a IA ainda não confere (outra data, ilegível, sem carimbo) e a exigência errada do BRNET.",
+      },
+      {
+        titulo: "O que fica de fora",
+        texto:
+          "O documento em que a IA não chegou a julgar os exames (falha técnica) e os problemas do documento inteiro, como nome ou CPF lidos errado — esses não têm exame.",
+      },
+      {
+        titulo: "A amostra",
+        texto:
+          "Só entram documentos com parecer. Por isso a adesão aparece junto: pareceres sobre as decisões do time BR MED desde que o modal existe. Com poucos pareceres o número pesa pouco. E o \"Acertou\" já vem marcado quando a IA e o revisor decidem igual, o que pode esconder parte dos erros.",
+      },
+      {
+        titulo: "Em que período cai",
+        texto:
+          "Pela data de envio do documento, como a acurácia geral, e segue o filtro de período. A lista vai do exame com mais erros ao com menos; no empate, o mais frequente primeiro. Exame com menos de 5 documentos no período não ganha percentual — um erro sozinho o derrubaria: com erro, aparece em \"Poucos casos\", só com a contagem; sem erro, entra só no total.",
+      },
+    ],
+  },
 };
 
 /** Qual entrada de `COMO_CALCULAMOS` cada KPI abre — pelo rótulo, como as dicas. */
@@ -487,6 +539,7 @@ const AJUDA_KPI: Record<string, IdIndicador> = {
   "Concordância direta": "concordancia",
   "Aprovações derrubadas": "derrubadas",
   "Falhas técnicas": "falhas",
+  "Acurácia por exame": "acuraciaExame",
 };
 
 // ── formatação e datas ───────────────────────────────────────────────────────
@@ -845,6 +898,60 @@ export interface LinhaForaProntuai {
   tip: string;
 }
 
+/** Um motivo de erro de um exame, com as palavras que o revisor clicou no modal. */
+export interface MotivoErroExame {
+  rotulo: string;
+  /** O que a IA tinha dito do exame quando o revisor marcou isso. */
+  contexto: string;
+  casos: number;
+}
+
+/** Um documento em que o exame deu erro — a linha que leva ao PDF. */
+export interface CasoErroExameVisao {
+  documento: string;
+  clinica: string;
+  enviadoLabel: string;
+  motivo: string;
+}
+
+/** Uma linha da lista de "Acurácia por exame" (modal aberto pelo número do card). */
+export interface LinhaAcuraciaExame {
+  exame: string;
+  /** Documentos com parecer em que o exame era exigido (ou foi apontado). */
+  documentos: number;
+  erros: number;
+  /** Largura da barra de erro, em % da linha. */
+  pctErro: number;
+  /** Do motivo mais frequente ao menos; aberto ao clicar no exame. */
+  motivos: MotivoErroExame[];
+  /** Mais recente primeiro. */
+  casos: CasoErroExameVisao[];
+  acuracia: number;
+  acuraciaLabel: string;
+  tip: string;
+}
+
+/** "Acurácia por exame", do parecer do modal de feedback, no período escolhido. */
+export interface AcuraciaExameVisao {
+  kpi: Kpi;
+  /** Exames com pelo menos `minimo` documentos. */
+  linhas: LinhaAcuraciaExame[];
+  /** Abaixo do mínimo, mas com erro: aparecem à parte, sem percentual. */
+  poucosCasos: LinhaAcuraciaExame[];
+  minimo: number;
+  /** Exames abaixo do mínimo e sem erro: entram no total, não na lista. */
+  abaixoDoMinimo: number;
+  /** Soma, por exame, dos documentos em que ele era exigido — a base da acurácia. */
+  avaliacoes: number;
+  erros: number;
+  pareceres: number;
+  decisoes: number;
+  /** Pareceres ÷ decisões; null sem decisão no período. */
+  adesaoLabel: string | null;
+  acuraciaLabel: string;
+  periodoLabel: string;
+}
+
 export interface LinhaMatriz {
   name: string;
   vol: string;
@@ -906,8 +1013,16 @@ export interface VisaoDashboard {
   acuraciaSeries: BarraPercentual[];
   fatorPrincipal: string;
   penteFino: FatorPenteFino[];
+  /** Divergências resolvidas por motivo externo, por motivo, maior primeiro. */
+  motivosExternos: { name: string; count: number }[];
+  motivosExternosTotal: number;
   notaSemJustificativa: string;
   porTipo: LinhaMatriz[];
+  /**
+   * null num back-end sem o indicador (o card mostra "Em breve"). Com o
+   * indicador e sem parecer no período, vem com zeros e o card mostra "—".
+   */
+  acuraciaExame: AcuraciaExameVisao | null;
 }
 
 export interface OpcoesVisao {
@@ -915,6 +1030,27 @@ export interface OpcoesVisao {
   filtro: FiltroPeriodo;
   comparar: boolean;
   verTodasClinicas: boolean;
+}
+
+/**
+ * "Acurácia por exame": exame com menos avaliações que isto no período não ganha
+ * percentual — com poucos casos, um erro sozinho o derrubaria. Se teve erro, vai
+ * para "Poucos casos", só com a contagem; se não teve, entra só no total.
+ */
+const MINIMO_AVALIACOES_EXAME = 5;
+
+// O motivo com as palavras do modal de feedback (`CATEGORIAS_EXAME`) e, ao lado, o
+// que a IA tinha dito do exame — a opção só aparece ao revisor naquela situação
+// (`OPCOES_EXAME`): "Não estava" sozinho não diz que a IA deu o exame como achado.
+const CONTEXTO_OPCAO: Record<keyof typeof OPCOES_EXAME, string> = {
+  faltante: "a IA apontou falta",
+  encontrado: "a IA deu como encontrado",
+  avulso: "fora da lista do BRNET",
+};
+const ROTULO_MOTIVO: Record<string, string> = Object.fromEntries(CATEGORIAS_EXAME.map((c) => [c.valor, c.rotulo]));
+const CONTEXTO_MOTIVO: Record<string, string> = {};
+for (const [situacao, opcoes] of Object.entries(OPCOES_EXAME) as [keyof typeof OPCOES_EXAME, { categoria: string }[]][]) {
+  for (const o of opcoes) CONTEXTO_MOTIVO[o.categoria] ??= CONTEXTO_OPCAO[situacao];
 }
 
 /** Escala do gráfico de acurácia: a métrica vive na faixa alta e 0–100 achataria. */
@@ -1370,8 +1506,11 @@ export function calcularVisao({ dados, filtro, comparar, verTodasClinicas }: Opc
   // falha_aprovou) e divergia do número exibido.
   const riscoRealDe = (arr: PontoAcuracia[]) =>
     soma(arr, "div_aprovou") - soma(arr, "div_aprovou_jeitinho");
+  // A falha aprovada por CNPJ de outra empresa ou atendimento ainda fora do
+  // BRNET não é da IA — o dado de fora é que não batia — e sai da conta.
   const falhasDe = (arr: PontoAcuracia[]) =>
-    soma(arr, "falha_rejeitou") + soma(arr, "falha_aprovou");
+    soma(arr, "falha_rejeitou") + soma(arr, "falha_aprovou") - soma(arr, "falha_externa");
+  const falhaExterna = soma(accAtual, "falha_externa");
   const riscoReal = riscoRealDe(accAtual);
   const divRejeitou = soma(accAtual, "div_rejeitou") - soma(accAtual, "div_rejeitou_jeitinho");
   const falhasTecnicas = falhasDe(accAtual);
@@ -1409,6 +1548,25 @@ export function calcularVisao({ dados, filtro, comparar, verTodasClinicas }: Opc
   )
     .filter((f) => f[1] > 0)
     .sort((a, b) => b[1] - a[1]);
+
+  // Divergências resolvidas por motivo externo, pelo código do parecer. Não
+  // derrubam a acurácia — contam como acerto —, mas dizem por que a decisão
+  // mudou. Rótulos do próprio modal, para quem lê reconhecer a opção.
+  const CAMPO_MOTIVO_EXTERNO: Record<MotivoExterno, keyof PontoAcuracia> = {
+    EXAME_POR_FORA: "ext_exame_por_fora",
+    GUIA_NAO_ANEXADA: "ext_guia_nao_anexada",
+    CNPJ_DIVERGENTE: "ext_cnpj_divergente",
+    ATENDIMENTO_NAO_REGISTRADO: "ext_atendimento_nao_registrado",
+    OUTRO_TICKET: "ext_outro_ticket",
+    CLIENTE_AUTORIZOU: "ext_cliente_autorizou",
+    OUTRO: "ext_outro",
+  };
+  const motivosExternos = [
+    ...MOTIVOS_EXTERNOS.map((m) => ({ name: m.rotulo, count: soma(accAtual, CAMPO_MOTIVO_EXTERNO[m.codigo]) })),
+    { name: "Justificativa escrita antes do modal", count: soma(accAtual, "ext_sem_codigo") },
+  ]
+    .filter((m) => m.count > 0)
+    .sort((a, b) => b.count - a.count);
 
   const totalFatores = fatores.reduce((a, f) => a + f[1], 0);
   const maiorFator = fatores.length ? fatores[0] : null;
@@ -1579,7 +1737,9 @@ export function calcularVisao({ dados, filtro, comparar, verTodasClinicas }: Opc
         fmt(falhasTecnicas),
         varAcc(falhasDe),
         "down",
-        "não leu CPF/CNPJ · fora da conta de acurácia",
+        falhaExterna
+          ? `não leu CPF/CNPJ · sem ${fmt(falhaExterna)} de CNPJ ou atendimento de fora`
+          : "não leu CPF/CNPJ · fora da conta de acurácia",
       ),
     ],
 
@@ -1611,6 +1771,9 @@ export function calcularVisao({ dados, filtro, comparar, verTodasClinicas }: Opc
       tip: `${name} — ${fmt(count)} casos, ${Math.round(pct(count, totalFatores))}% das divergências`,
     })),
 
+    motivosExternos,
+    motivosExternosTotal: jeitinhoTotal,
+
     notaSemJustificativa: !temMotivos
       ? "Rode a versão atualizada da consulta para trazer a classificação dos motivos e a contagem de decisões sem justificativa."
       : semJustDiv
@@ -1626,5 +1789,126 @@ export function calcularVisao({ dados, filtro, comparar, verTodasClinicas }: Opc
       peso: Math.round(pct(count, Math.max(1, ...situacoes.map((s) => s[1])))),
       cor,
     })),
+
+    acuraciaExame: (() => {
+      const fonte = dados.acuracia_exames;
+      if (!fonte) return null;
+      const blocos = fonte.series?.[cfg.periodo.serie] ?? {};
+
+      // Soma pelos MESMOS pontos do período dos outros indicadores: as chaves
+      // são as da série principal (segunda-feira da semana, dia 1 do mês).
+      type ContaExame = { n: number; motivos: Map<string, number>; casos: CasoErroExame[] };
+      const errosDe = (e: ContaExame) => [...e.motivos.values()].reduce((s, v) => s + v, 0);
+
+      const somar = (pontos: PontoSerie[]) => {
+        let pareceres = 0;
+        let comParecer = 0;
+        let decisoes = 0;
+        const exames = new Map<string, ContaExame>();
+        const conta = (nome: string) => {
+          const e: ContaExame = exames.get(nome) ?? { n: 0, motivos: new Map(), casos: [] };
+          exames.set(nome, e);
+          return e;
+        };
+        const anotar = (e: ContaExame, motivo: string, casos: number) => {
+          if (casos) e.motivos.set(motivo, (e.motivos.get(motivo) ?? 0) + casos);
+        };
+        for (const p of pontos) {
+          const b = blocos[p.chave];
+          if (!b) continue;
+          pareceres += b.pareceres;
+          comParecer += b.com_parecer;
+          decisoes += b.decisoes;
+          for (const [nome, [n, motivos, presenca]] of Object.entries(b.exames)) {
+            const e = conta(nome);
+            e.n += n;
+            if (typeof motivos === "number") {
+              // Back-end anterior aos motivos: só falta e presença indevidas.
+              anotar(e, "FALTANTE_INCORRETO", motivos);
+              anotar(e, "ENCONTRADO_INCORRETO", presenca ?? 0);
+            } else {
+              for (const [categoria, casos] of Object.entries(motivos)) anotar(e, categoria, casos);
+            }
+          }
+          for (const caso of b.casos ?? []) conta(caso.exame).casos.push(caso);
+        }
+        let avaliacoes = 0;
+        let erros = 0;
+        exames.forEach((e) => {
+          avaliacoes += e.n;
+          erros += errosDe(e);
+        });
+        const acuracia = avaliacoes ? ((avaliacoes - erros) / avaliacoes) * 100 : null;
+        return { pareceres, comParecer, decisoes, exames, avaliacoes, erros, acuracia };
+      };
+
+      const agora = somar(atual);
+      const antes = comparavel ? somar(anterior) : null;
+
+      // Pré-ordenadas por volume: a tela ordena por número de erros com sort
+      // estável, então no empate vem primeiro o exame mais frequente.
+      const todas = [...agora.exames.entries()].sort(([, a], [, b]) => b.n - a.n);
+      const doMinimo = todas.filter(([, e]) => e.n >= MINIMO_AVALIACOES_EXAME);
+      const poucos = todas.filter(([, e]) => e.n < MINIMO_AVALIACOES_EXAME && errosDe(e) > 0);
+      // A barra é a TAXA de erro, na escala do exame que mais erra: com a
+      // acurácia toda perto de 100%, uma barra de acurácia sairia cheia em
+      // todas as linhas.
+      const maiorTaxa = Math.max(0, ...doMinimo.map(([, e]) => errosDe(e) / e.n)) || 1;
+      const vezes = (n: number, um: string, varios: string) => `${fmt(n)} ${n === 1 ? um : varios}`;
+
+      const rotulo = (categoria: string) => ROTULO_MOTIVO[categoria] ?? "Outro";
+      const linhaDe = ([exame, e]: [string, ContaExame]): LinhaAcuraciaExame => {
+        const erros = errosDe(e);
+        const acuracia = ((e.n - erros) / e.n) * 100;
+        const motivos = [...e.motivos.entries()]
+          .sort(([, a], [, b]) => b - a)
+          .map(([categoria, casos]) => ({ rotulo: rotulo(categoria), contexto: CONTEXTO_MOTIVO[categoria] ?? "", casos }));
+        return {
+          exame,
+          documentos: e.n,
+          erros,
+          pctErro: Math.min(100, (erros / e.n / maiorTaxa) * 100),
+          motivos,
+          casos: [...e.casos]
+            .sort((a, b) => b.enviado.localeCompare(a.enviado))
+            .map((c) => ({
+              documento: c.documento,
+              clinica: c.clinica,
+              enviadoLabel: `${c.enviado.slice(8, 10)}/${c.enviado.slice(5, 7)}`,
+              motivo: rotulo(c.motivo),
+            })),
+          acuracia,
+          acuraciaLabel: num(acuracia),
+          tip: `${exame} — ${vezes(e.n, "documento", "documentos")}, ${vezes(erros, "erro", "erros")}`,
+        };
+      };
+      const porErros = (a: LinhaAcuraciaExame, b: LinhaAcuraciaExame) => b.erros - a.erros;
+      const linhas = doMinimo.map(linhaDe).sort(porErros);
+      const poucosCasos = poucos.map(linhaDe).sort(porErros);
+
+      const acuraciaLabel = agora.acuracia === null ? "—" : num(agora.acuracia);
+      return {
+        kpi: kpiAcc(
+          "Acurácia por exame",
+          acuraciaLabel,
+          antes && agora.acuracia !== null && antes.acuracia !== null ? pp(agora.acuracia, antes.acuracia) : "",
+          "up",
+          agora.avaliacoes
+            ? `${fmt(agora.avaliacoes)} exames em ${fmt(agora.pareceres)} pareceres`
+            : "nenhum parecer no período",
+        ),
+        linhas,
+        poucosCasos,
+        minimo: MINIMO_AVALIACOES_EXAME,
+        abaixoDoMinimo: agora.exames.size - doMinimo.length - poucos.length,
+        avaliacoes: agora.avaliacoes,
+        erros: agora.erros,
+        pareceres: agora.pareceres,
+        decisoes: agora.decisoes,
+        adesaoLabel: agora.decisoes ? num(pct(agora.comParecer, agora.decisoes)) : null,
+        acuraciaLabel,
+        periodoLabel: nomePeriodo(cfg.periodo.serie, atual),
+      };
+    })(),
   };
 }
