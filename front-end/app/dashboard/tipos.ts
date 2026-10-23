@@ -206,8 +206,24 @@ export interface BlocoAcuraciaExames {
   com_parecer: number;
   /** Decisões humanas desde que o modal existe, mais as que têm parecer. */
   decisoes: number;
-  /** Por exame exigido: [avaliações, falta indevida, presença indevida]. */
-  exames: Record<string, [number, number, number]>;
+  /**
+   * Por exame: [avaliações, erros por categoria do parecer]. Back-end anterior a
+   * 23/10/2026 manda [avaliações, falta indevida, presença indevida].
+   */
+  exames: Record<string, [number, Record<string, number>] | [number, number, number]>;
+  /** Um item por erro, para abrir o exame na lista. Ausente no back-end anterior. */
+  casos?: CasoErroExame[];
+}
+
+/** Um erro apontado pelo revisor: o exame, o motivo e o documento onde foi. */
+export interface CasoErroExame {
+  exame: string;
+  /** Categoria do parecer (`types/feedback.ts`, CATEGORIAS_EXAME). */
+  motivo: string;
+  documento: string;
+  clinica: string;
+  /** Data de envio do documento, ISO. */
+  enviado: string;
 }
 
 export interface AcuraciaExamesDados {
