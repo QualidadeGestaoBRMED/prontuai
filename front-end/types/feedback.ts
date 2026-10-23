@@ -217,16 +217,40 @@ export const OPCOES_EXAME: Record<
  * `CATEGORIAS_DOCUMENTO` lê todo `valor:` que vem depois dela neste arquivo.
  */
 export const MOTIVOS_EXTERNOS: Array<{ codigo: MotivoExterno; rotulo: string; frase: string }> = [
-  { codigo: "EXAME_POR_FORA", rotulo: "Exame feito por fora", frase: "Exame feito por fora, em parceiro ou outro sistema." },
-  { codigo: "GUIA_NAO_ANEXADA", rotulo: "Só faltou a guia", frase: "A clínica não anexou a guia, mas os exames estão no anexo." },
-  { codigo: "OUTRO_TICKET", rotulo: "De outro ticket ou duplicado", frase: "Os exames apontados são de outro ticket ou foram lançados duas vezes." },
-  { codigo: "CLIENTE_AUTORIZOU", rotulo: "Cliente autorizou sem o exame", frase: "Liberado sem o exame, autorizado pelo cliente." },
+  {
+    codigo: "EXAME_POR_FORA",
+    rotulo: "Exame feito em outro sistema ou parceiro",
+    frase: "Exame feito por fora, em parceiro ou outro sistema.",
+  },
+  {
+    codigo: "GUIA_NAO_ANEXADA",
+    rotulo: "Clínica não anexou o voucher, mas os exames estão no PDF",
+    frase: "A clínica não anexou a guia (voucher), mas os exames estão no anexo.",
+  },
+  {
+    codigo: "CNPJ_DIVERGENTE",
+    rotulo: "CNPJ do ASO é de outra empresa",
+    frase: "O CNPJ do ASO é de outra empresa; o paciente foi conferido no BRNET.",
+  },
+  {
+    codigo: "ATENDIMENTO_NAO_REGISTRADO",
+    rotulo: "Atendimento ainda não registrado no BRNET",
+    frase: "O atendimento ainda não estava registrado no BRNET quando o documento foi lido.",
+  },
+  {
+    codigo: "OUTRO_TICKET",
+    rotulo: "Enviado em duplicidade ou de outro ticket",
+    frase: "Os exames apontados são de outro ticket ou foram lançados duas vezes.",
+  },
+  { codigo: "CLIENTE_AUTORIZOU", rotulo: "Cliente autorizou liberar sem o exame", frase: "Liberado sem o exame, autorizado pelo cliente." },
   { codigo: "OUTRO", rotulo: "Outro", frase: "" },
 ];
 
 export type MotivoExterno =
   | "EXAME_POR_FORA"
   | "GUIA_NAO_ANEXADA"
+  | "CNPJ_DIVERGENTE"
+  | "ATENDIMENTO_NAO_REGISTRADO"
   | "OUTRO_TICKET"
   | "CLIENTE_AUTORIZOU"
   | "OUTRO";
