@@ -6,7 +6,7 @@
  * conta aqui é o que permite trocar a origem dos dados (JSON estático hoje,
  * consulta no back-end depois) sem mexer na tela.
  */
-import { CATEGORIAS_EXAME, OPCOES_EXAME } from "@/types/feedback";
+import { CATEGORIAS_EXAME, MOTIVOS_EXTERNOS, OPCOES_EXAME, type MotivoExterno } from "@/types/feedback";
 
 import type {
   CasoErroExame,
@@ -443,6 +443,11 @@ export const COMO_CALCULAMOS: Record<IdIndicador, ComoCalculamos> = {
         texto:
           "Não houve veredito para comparar com o do revisor. O número é acompanhado à parte, como medida da leitura dos documentos. A variação para baixo é a boa.",
       },
+      {
+        titulo: "O que não conta como falha",
+        texto:
+          "Quando o revisor libera e marca no parecer que o CNPJ do ASO é de outra empresa, ou que o atendimento ainda não estava registrado no BRNET, a IA não falhou: leu certo, e o dado de fora é que não batia. Esses casos saem do número.",
+      },
     ],
   },
   motivos: {
@@ -453,6 +458,11 @@ export const COMO_CALCULAMOS: Record<IdIndicador, ComoCalculamos> = {
         titulo: "O que entra",
         texto:
           "Só as divergências que derrubam a acurácia: a IA aprovou e o revisor rejeitou, ou a IA apontou falta e o revisor liberou. Motivo externo e falha técnica ficam fora.",
+      },
+      {
+        titulo: "Resolvidas por motivo externo",
+        texto:
+          "Abaixo das barras, as divergências em que o revisor marcou no parecer que a decisão mudou por algo fora do documento — exame feito em outro sistema, voucher não anexado, CNPJ de outra empresa, atendimento ainda fora do BRNET, duplicidade, autorização do cliente. Contam como acerto, por isso não estão nas barras. \"Justificativa escrita antes do modal\" é o histórico reconhecido por palavra-chave.",
       },
       {
         titulo: "Como cada uma é classificada",
@@ -1003,6 +1013,9 @@ export interface VisaoDashboard {
   acuraciaSeries: BarraPercentual[];
   fatorPrincipal: string;
   penteFino: FatorPenteFino[];
+  /** Divergências resolvidas por motivo externo, por motivo, maior primeiro. */
+  motivosExternos: { name: string; count: number }[];
+  motivosExternosTotal: number;
   notaSemJustificativa: string;
   porTipo: LinhaMatriz[];
   /**
@@ -1493,8 +1506,11 @@ export function calcularVisao({ dados, filtro, comparar, verTodasClinicas }: Opc
   // falha_aprovou) e divergia do número exibido.
   const riscoRealDe = (arr: PontoAcuracia[]) =>
     soma(arr, "div_aprovou") - soma(arr, "div_aprovou_jeitinho");
+  // A falha aprovada por CNPJ de outra empresa ou atendimento ainda fora do
+  // BRNET não é da IA — o dado de fora é que não batia — e sai da conta.
   const falhasDe = (arr: PontoAcuracia[]) =>
-    soma(arr, "falha_rejeitou") + soma(arr, "falha_aprovou");
+    soma(arr, "falha_rejeitou") + soma(arr, "falha_aprovou") - soma(arr, "falha_externa");
+  const falhaExterna = soma(accAtual, "falha_externa");
   const riscoReal = riscoRealDe(accAtual);
   const divRejeitou = soma(accAtual, "div_rejeitou") - soma(accAtual, "div_rejeitou_jeitinho");
   const falhasTecnicas = falhasDe(accAtual);
@@ -1532,6 +1548,25 @@ export function calcularVisao({ dados, filtro, comparar, verTodasClinicas }: Opc
   )
     .filter((f) => f[1] > 0)
     .sort((a, b) => b[1] - a[1]);
+
+  // Divergências resolvidas por motivo externo, pelo código do parecer. Não
+  // derrubam a acurácia — contam como acerto —, mas dizem por que a decisão
+  // mudou. Rótulos do próprio modal, para quem lê reconhecer a opção.
+  const CAMPO_MOTIVO_EXTERNO: Record<MotivoExterno, keyof PontoAcuracia> = {
+    EXAME_POR_FORA: "ext_exame_por_fora",
+    GUIA_NAO_ANEXADA: "ext_guia_nao_anexada",
+    CNPJ_DIVERGENTE: "ext_cnpj_divergente",
+    ATENDIMENTO_NAO_REGISTRADO: "ext_atendimento_nao_registrado",
+    OUTRO_TICKET: "ext_outro_ticket",
+    CLIENTE_AUTORIZOU: "ext_cliente_autorizou",
+    OUTRO: "ext_outro",
+  };
+  const motivosExternos = [
+    ...MOTIVOS_EXTERNOS.map((m) => ({ name: m.rotulo, count: soma(accAtual, CAMPO_MOTIVO_EXTERNO[m.codigo]) })),
+    { name: "Justificativa escrita antes do modal", count: soma(accAtual, "ext_sem_codigo") },
+  ]
+    .filter((m) => m.count > 0)
+    .sort((a, b) => b.count - a.count);
 
   const totalFatores = fatores.reduce((a, f) => a + f[1], 0);
   const maiorFator = fatores.length ? fatores[0] : null;
@@ -1702,7 +1737,9 @@ export function calcularVisao({ dados, filtro, comparar, verTodasClinicas }: Opc
         fmt(falhasTecnicas),
         varAcc(falhasDe),
         "down",
-        "não leu CPF/CNPJ · fora da conta de acurácia",
+        falhaExterna
+          ? `não leu CPF/CNPJ · sem ${fmt(falhaExterna)} de CNPJ ou atendimento de fora`
+          : "não leu CPF/CNPJ · fora da conta de acurácia",
       ),
     ],
 
@@ -1733,6 +1770,9 @@ export function calcularVisao({ dados, filtro, comparar, verTodasClinicas }: Opc
       pct: Math.round(pct(count, maiorFator ? maiorFator[1] : 1)),
       tip: `${name} — ${fmt(count)} casos, ${Math.round(pct(count, totalFatores))}% das divergências`,
     })),
+
+    motivosExternos,
+    motivosExternosTotal: jeitinhoTotal,
 
     notaSemJustificativa: !temMotivos
       ? "Rode a versão atualizada da consulta para trazer a classificação dos motivos e a contagem de decisões sem justificativa."

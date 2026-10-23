@@ -167,6 +167,9 @@ julgamento AS (
                 THEN true
             ELSE false
         END AS jeitinho,
+        -- O motivo externo como codigo, quando veio do modal; NULL no historico
+        -- classificado por palavra-chave.
+        fb.motivo_externo,
         motivo,
         ex.falta_exame_nomeado,
         ex.cita_exame_brnet,
@@ -350,6 +353,38 @@ acc AS (
         count(*) FILTER (WHERE j.ia_status = 'rejected' AND j.humano_status = 'validated')  AS falha_aprovou,
         count(*) FILTER (WHERE j.ia_status = 'rejected' AND j.humano_status = 'validated'
                            AND (j.jeitinho OR j.sem_motivo))                                AS falha_aprovou_ok,
+        -- A IA parou porque o dado de fora nao batia (CNPJ de outra empresa,
+        -- atendimento ainda fora do BRNET) e o revisor confirmou no parecer:
+        -- nao e falha da IA. Ver MOTIVOS_EXTERNOS_DE_FALHA em app/models/feedback.py.
+        count(*) FILTER (WHERE j.ia_status = 'rejected' AND j.humano_status = 'validated'
+                           AND j.motivo_externo IN ('CNPJ_DIVERGENTE', 'ATENDIMENTO_NAO_REGISTRADO'))
+                                                                                            AS falha_externa,
+        -- Divergencias resolvidas por motivo externo, por codigo do parecer.
+        -- `ext_sem_codigo` e o historico anterior ao modal, achado por palavra-chave.
+        count(*) FILTER (WHERE ((j.ia_status = 'validated' AND j.humano_status = 'rejected')
+                             OR (j.ia_status = 'pending' AND j.humano_status = 'validated'))
+                           AND j.jeitinho AND j.motivo_externo = 'EXAME_POR_FORA')          AS ext_exame_por_fora,
+        count(*) FILTER (WHERE ((j.ia_status = 'validated' AND j.humano_status = 'rejected')
+                             OR (j.ia_status = 'pending' AND j.humano_status = 'validated'))
+                           AND j.jeitinho AND j.motivo_externo = 'GUIA_NAO_ANEXADA')        AS ext_guia_nao_anexada,
+        count(*) FILTER (WHERE ((j.ia_status = 'validated' AND j.humano_status = 'rejected')
+                             OR (j.ia_status = 'pending' AND j.humano_status = 'validated'))
+                           AND j.jeitinho AND j.motivo_externo = 'CNPJ_DIVERGENTE')         AS ext_cnpj_divergente,
+        count(*) FILTER (WHERE ((j.ia_status = 'validated' AND j.humano_status = 'rejected')
+                             OR (j.ia_status = 'pending' AND j.humano_status = 'validated'))
+                           AND j.jeitinho AND j.motivo_externo = 'ATENDIMENTO_NAO_REGISTRADO') AS ext_atendimento_nao_registrado,
+        count(*) FILTER (WHERE ((j.ia_status = 'validated' AND j.humano_status = 'rejected')
+                             OR (j.ia_status = 'pending' AND j.humano_status = 'validated'))
+                           AND j.jeitinho AND j.motivo_externo = 'OUTRO_TICKET')            AS ext_outro_ticket,
+        count(*) FILTER (WHERE ((j.ia_status = 'validated' AND j.humano_status = 'rejected')
+                             OR (j.ia_status = 'pending' AND j.humano_status = 'validated'))
+                           AND j.jeitinho AND j.motivo_externo = 'CLIENTE_AUTORIZOU')       AS ext_cliente_autorizou,
+        count(*) FILTER (WHERE ((j.ia_status = 'validated' AND j.humano_status = 'rejected')
+                             OR (j.ia_status = 'pending' AND j.humano_status = 'validated'))
+                           AND j.jeitinho AND j.motivo_externo = 'OUTRO')                   AS ext_outro,
+        count(*) FILTER (WHERE ((j.ia_status = 'validated' AND j.humano_status = 'rejected')
+                             OR (j.ia_status = 'pending' AND j.humano_status = 'validated'))
+                           AND j.jeitinho AND j.motivo_externo IS NULL)                     AS ext_sem_codigo,
 
         -- por que a acuracia nao esta maior
         count(*) FILTER (WHERE j.categoria = 'exame_nao_detectado') AS mot_exame_nao_detectado,
@@ -600,6 +635,15 @@ SELECT jsonb_pretty(jsonb_build_object(
                    'falha_rejeitou',        falha_rejeitou,
                    'falha_aprovou',         falha_aprovou,
                    'falha_aprovou_ok',      falha_aprovou_ok,
+                   'falha_externa',         falha_externa,
+                   'ext_exame_por_fora',    ext_exame_por_fora,
+                   'ext_guia_nao_anexada',  ext_guia_nao_anexada,
+                   'ext_cnpj_divergente',   ext_cnpj_divergente,
+                   'ext_atendimento_nao_registrado', ext_atendimento_nao_registrado,
+                   'ext_outro_ticket',      ext_outro_ticket,
+                   'ext_cliente_autorizou', ext_cliente_autorizou,
+                   'ext_outro',             ext_outro,
+                   'ext_sem_codigo',        ext_sem_codigo,
                    'mot_exame_nao_detectado', mot_exame_nao_detectado,
                    'mot_regra_formal',      mot_regra_formal,
                    'mot_matching_ia',       mot_matching_ia,
