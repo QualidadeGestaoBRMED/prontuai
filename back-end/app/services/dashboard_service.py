@@ -35,6 +35,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import text
 
 from app.core.config import Settings
+from app.models.feedback import CATEGORIAS_EXAME
 
 logger = logging.getLogger(__name__)
 
@@ -189,7 +190,9 @@ SELECT
         p.payload #> '{brmed_result,exames_obrigatorios}'
     ) AS exames,
     f.issue_items,
-    jsonb_typeof(p.payload -> 'tabela_comparacao') = 'array' AS comparou
+    jsonb_typeof(p.payload -> 'tabela_comparacao') = 'array' AS comparou,
+    d.id,
+    c.name AS clinica
 FROM document_feedbacks f
 JOIN documents d ON d.id = f.document_id
 JOIN clinics c ON c.id = d.clinic_id
@@ -218,18 +221,37 @@ WHERE c.name NOT IN ('teste', 'testando', 'Clinica Default')
   )
 """
 
-# O que o parecer conta como ERRO da IA no reconhecimento de um exame exigido.
-# As categorias são as que o revisor escolhe no modal (front-end/types/feedback.ts,
-# OPCOES_EXAME) conforme o que a IA disse do exame:
-#   * falta indevida — a IA disse "faltante" e o revisor marcou "Estava no
-#     documento" ou "Com outro nome";
-#   * presença indevida — a IA disse "encontrado" e o revisor marcou "Não estava".
-# Ficam FORA: "Não é exigido" (DADO_BRNET, o erro é da exigência do BRNET, não
-# da IA) e os problemas de qualidade do exame — outra data, ilegível, sem
-# carimbo, validade. A IA ainda não confere essas coisas, e se elas entram na
-# conta é decisão de produto em aberto (20/10/2026); mudar é mexer só aqui.
-FALTA_INDEVIDA = frozenset({"FALTANTE_INCORRETO", "SINONIMO_NAO_RECONHECIDO"})
-PRESENCA_INDEVIDA = frozenset({"ENCONTRADO_INCORRETO"})
+# Todo motivo que o revisor marca num exame conta como ERRO daquele exame — as
+# categorias de `CATEGORIAS_EXAME`, que o modal oferece conforme o que a IA disse
+# dele (front-end/types/feedback.ts, OPCOES_EXAME): "Estava no documento", "Com
+# outro nome", "Não estava", "Estava, mas não foi lido", os de qualidade (outra
+# data, ilegível, sem carimbo, validade) e "Não é exigido". Decisão de 23/10/2026:
+# quem acompanha a acurácia é o time de desenvolvimento, e a pergunta é em quais
+# exames o processo inteiro tem dificuldade — inclusive no que a IA ainda não
+# confere e no que vem errado do BRNET. O motivo vai junto para separar na lista.
+#
+# Um exame tem um motivo só no modal; se vierem dois, fica o primeiro desta
+# ordem — os de leitura antes, porque são os que o motor corrige.
+PRIORIDADE_MOTIVO = (
+    "FALTANTE_INCORRETO",
+    "SINONIMO_NAO_RECONHECIDO",
+    "ENCONTRADO_INCORRETO",
+    "EXAME_NAO_RECONHECIDO",
+    "EXTRA_INCORRETO",
+    "EXAME_OUTRA_DATA",
+    "EXAME_ILEGIVEL",
+    "EXAME_SEM_ASSINATURA",
+    "VALIDADE_PERIODICIDADE",
+    "DADO_BRNET",
+    "OUTRO",
+)
+
+
+def _motivo_principal(atual: Optional[str], novo: str) -> str:
+    if atual is None:
+        return novo
+    ordem = {c: i for i, c in enumerate(PRIORIDADE_MOTIVO)}
+    return min(atual, novo, key=lambda c: ordem.get(c, len(ordem)))
 
 
 def _chave_exame(nome: Optional[str]) -> str:
@@ -258,14 +280,19 @@ def _agregar_pareceres(pareceres, decisoes) -> dict[str, Any]:
     """Acurácia por exame a partir dos pareceres do modal de feedback.
 
     Cada exame exigido de cada documento com parecer é uma AVALIAÇÃO; ela é erro
-    quando o revisor marcou o exame com uma categoria de `FALTA_INDEVIDA` ou
-    `PRESENCA_INDEVIDA`. Parecer "Acertou" não tem item nenhum: todos os exames
-    do documento contam como acerto. Exame digitado pelo revisor, fora da lista
-    do BRNET, não entra — a conta é sobre os exames exigidos.
+    quando o revisor marcou o exame com qualquer motivo (ver `PRIORIDADE_MOTIVO`).
+    Parecer "Acertou" não tem item nenhum: todos os exames do documento contam
+    como acerto. Exame digitado pelo revisor, fora da lista do BRNET ("Estava,
+    mas não foi lido"), entra como uma avaliação com erro: estava no documento e
+    a IA não o leu, que é justamente o que a lista quer mostrar.
 
     Formato, por granularidade e chave de período:
         {"pareceres": n, "com_parecer": n', "decisoes": m,
-         "exames": {nome: [avaliações, falta, presença]}}
+         "exames": {nome: [avaliações, {motivo: erros}]},
+         "casos": [{"exame", "motivo", "documento", "clinica", "enviado"}]}
+    `casos` é um item por erro, para a lista abrir o exame e levar ao documento.
+    Só id, clínica, data e categoria: a observação do revisor fica de fora porque
+    pode ter nome ou CPF de paciente.
     `pareceres` são os que entram na acurácia (a IA julgou os exames);
     `com_parecer` conta também os de falha técnica e é o numerador da adesão,
     sobre `decisoes`. `desde` é a data de envio do documento mais antigo com
@@ -277,42 +304,46 @@ def _agregar_pareceres(pareceres, decisoes) -> dict[str, Any]:
 
     def bloco(gran: str, chave: str) -> dict[str, Any]:
         return series[gran].setdefault(
-            chave, {"pareceres": 0, "com_parecer": 0, "decisoes": 0, "exames": {}}
+            chave, {"pareceres": 0, "com_parecer": 0, "decisoes": 0, "exames": {}, "casos": []}
         )
 
-    for criado, _status, exames, itens, comparou in pareceres:
+    for criado, _status, exames, itens, comparou, documento, clinica in pareceres:
         primeiro = min(primeiro, criado.date()) if primeiro else criado.date()
         for gran, chave_periodo in _chaves_periodo(criado).items():
             bloco(gran, chave_periodo)["com_parecer"] += 1
         if not comparou:
             continue
-        exigidos: dict[str, str] = {}
+        avaliados: dict[str, str] = {}
         for nome in exames or []:
             chave = _chave_exame(nome)
-            if chave and chave not in exigidos:
-                exigidos[chave] = nome_de.setdefault(chave, str(nome).strip())
-        if not exigidos:
-            continue
+            if chave and chave not in avaliados:
+                avaliados[chave] = nome_de.setdefault(chave, str(nome).strip())
         erros: dict[str, str] = {}
         for item in itens or []:
             chave = _chave_exame((item or {}).get("exame"))
             categoria = (item or {}).get("categoria")
-            if chave not in exigidos:
+            if not chave or categoria not in CATEGORIAS_EXAME:
                 continue
-            if categoria in FALTA_INDEVIDA:
-                erros[chave] = "falta"
-            elif categoria in PRESENCA_INDEVIDA:
-                erros.setdefault(chave, "presenca")
+            # Digitado pelo revisor: não estava na lista do BRNET, entra aqui.
+            avaliados.setdefault(chave, nome_de.setdefault(chave, str(item["exame"]).strip()))
+            erros[chave] = _motivo_principal(erros.get(chave), categoria)
+        if not avaliados:
+            continue
         for gran, chave_periodo in _chaves_periodo(criado).items():
             b = bloco(gran, chave_periodo)
             b["pareceres"] += 1
-            for chave, nome in exigidos.items():
-                conta = b["exames"].setdefault(nome, [0, 0, 0])
+            for chave, nome in avaliados.items():
+                conta = b["exames"].setdefault(nome, [0, {}])
                 conta[0] += 1
-                if erros.get(chave) == "falta":
-                    conta[1] += 1
-                elif erros.get(chave) == "presenca":
-                    conta[2] += 1
+                if chave in erros:
+                    conta[1][erros[chave]] = conta[1].get(erros[chave], 0) + 1
+                    b["casos"].append({
+                        "exame": nome,
+                        "motivo": erros[chave],
+                        "documento": documento,
+                        "clinica": clinica,
+                        "enviado": criado.date().isoformat(),
+                    })
 
     for (criado,) in decisoes:
         for gran, chave_periodo in _chaves_periodo(criado).items():

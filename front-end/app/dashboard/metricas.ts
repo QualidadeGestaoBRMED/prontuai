@@ -6,7 +6,10 @@
  * conta aqui é o que permite trocar a origem dos dados (JSON estático hoje,
  * consulta no back-end depois) sem mexer na tela.
  */
+import { CATEGORIAS_EXAME, OPCOES_EXAME } from "@/types/feedback";
+
 import type {
+  CasoErroExame,
   ClinicaDados,
   CredenciadoPrevisto,
   DadosDashboard,
@@ -481,22 +484,27 @@ export const COMO_CALCULAMOS: Record<IdIndicador, ComoCalculamos> = {
   },
   acuraciaExame: {
     titulo: "Acurácia por exame",
-    pergunta: "Em quais exames da grade a IA mais erra, segundo o revisor.",
+    pergunta: "Em quais exames o processo tem mais dificuldade, e por quê, segundo o revisor.",
     blocos: [
       {
         titulo: "De onde vem",
         texto:
-          "Do parecer que o revisor dá no modal de feedback da Checagem. Para cada exame exigido pelo BRNET, ele diz se a IA acertou e, quando errou, de que jeito. É ele quem diz, exame a exame — nada é deduzido da decisão sobre o documento.",
+          "Do parecer que o revisor dá no modal de feedback da Checagem. Para cada exame, ele diz se a IA acertou e, quando não, o motivo. É ele quem diz, exame a exame — nada é deduzido da decisão sobre o documento.",
       },
       {
         titulo: "A conta",
         texto:
-          "Cada exame exigido de cada documento com parecer é uma avaliação. É erro quando o revisor marcou o exame como \"Estava no documento\" ou \"Com outro nome\" numa falta que a IA apontou (falta indevida), ou como \"Não estava\" num exame que a IA deu como encontrado (presença indevida). Acurácia = avaliações sem erro ÷ avaliações.",
+          "Na lista, \"Documentos\" é em quantos documentos com parecer o exame era exigido pelo BRNET — ou foi digitado pelo revisor (\"Estava, mas não foi lido\"). É erro quando o revisor marcou qualquer motivo no exame. Acurácia = documentos sem erro ÷ documentos, somando todos os exames.",
       },
       {
-        titulo: "O que fica de fora, por enquanto",
+        titulo: "Os motivos",
         texto:
-          "Os problemas de qualidade do exame — de outra data, ilegível, sem carimbo, fora da validade: a IA ainda não confere essas coisas, e se eles entram na conta está em definição. \"Não é exigido\" é erro da exigência do BRNET, não da IA. Também ficam fora o exame digitado pelo revisor, que não estava na lista do BRNET, e o documento em que a IA não chegou a julgar os exames (falha técnica).",
+          "Clique no nome do exame para ver os motivos, com as palavras que o revisor marcou no modal, e os documentos em que o erro aconteceu, com o link para abrir cada um. Todos os motivos baixam a acurácia, inclusive os que a IA ainda não confere (outra data, ilegível, sem carimbo) e a exigência errada do BRNET.",
+      },
+      {
+        titulo: "O que fica de fora",
+        texto:
+          "O documento em que a IA não chegou a julgar os exames (falha técnica) e os problemas do documento inteiro, como nome ou CPF lidos errado — esses não têm exame.",
       },
       {
         titulo: "A amostra",
@@ -506,7 +514,7 @@ export const COMO_CALCULAMOS: Record<IdIndicador, ComoCalculamos> = {
       {
         titulo: "Em que período cai",
         texto:
-          "Pela data de envio do documento, como a acurácia geral, e segue o filtro de período. Exames com menos de 20 avaliações no período entram no total, mas não na lista: com tão poucos casos, um erro sozinho derruba o percentual.",
+          "Pela data de envio do documento, como a acurácia geral, e segue o filtro de período. A lista vai do exame com mais erros ao com menos; no empate, o mais frequente primeiro. Exame com menos de 5 documentos no período não ganha percentual — um erro sozinho o derrubaria: com erro, aparece em \"Poucos casos\", só com a contagem; sem erro, entra só no total.",
       },
     ],
   },
@@ -880,32 +888,52 @@ export interface LinhaForaProntuai {
   tip: string;
 }
 
+/** Um motivo de erro de um exame, com as palavras que o revisor clicou no modal. */
+export interface MotivoErroExame {
+  rotulo: string;
+  /** O que a IA tinha dito do exame quando o revisor marcou isso. */
+  contexto: string;
+  casos: number;
+}
+
+/** Um documento em que o exame deu erro — a linha que leva ao PDF. */
+export interface CasoErroExameVisao {
+  documento: string;
+  clinica: string;
+  enviadoLabel: string;
+  motivo: string;
+}
+
 /** Uma linha da lista de "Acurácia por exame" (modal aberto pelo número do card). */
 export interface LinhaAcuraciaExame {
   exame: string;
-  avaliacoes: number;
-  faltaIndevida: number;
-  presencaIndevida: number;
+  /** Documentos com parecer em que o exame era exigido (ou foi apontado). */
+  documentos: number;
   erros: number;
+  /** Largura da barra de erro, em % da linha. */
+  pctErro: number;
+  /** Do motivo mais frequente ao menos; aberto ao clicar no exame. */
+  motivos: MotivoErroExame[];
+  /** Mais recente primeiro. */
+  casos: CasoErroExameVisao[];
   acuracia: number;
   acuraciaLabel: string;
-  /** Largura de cada segmento da barra de erro, em % da linha. */
-  pctFalta: number;
-  pctPresenca: number;
   tip: string;
 }
 
 /** "Acurácia por exame", do parecer do modal de feedback, no período escolhido. */
 export interface AcuraciaExameVisao {
   kpi: Kpi;
-  /** Só exames com pelo menos `minimo` avaliações. */
+  /** Exames com pelo menos `minimo` documentos. */
   linhas: LinhaAcuraciaExame[];
+  /** Abaixo do mínimo, mas com erro: aparecem à parte, sem percentual. */
+  poucosCasos: LinhaAcuraciaExame[];
   minimo: number;
-  /** Exames que ficaram fora da lista por volume baixo (entram no total). */
+  /** Exames abaixo do mínimo e sem erro: entram no total, não na lista. */
   abaixoDoMinimo: number;
+  /** Soma, por exame, dos documentos em que ele era exigido — a base da acurácia. */
   avaliacoes: number;
-  faltaIndevida: number;
-  presencaIndevida: number;
+  erros: number;
   pareceres: number;
   decisoes: number;
   /** Pareceres ÷ decisões; null sem decisão no período. */
@@ -992,11 +1020,25 @@ export interface OpcoesVisao {
 }
 
 /**
- * "Acurácia por exame": exame com menos avaliações que isto no período entra no
- * total, mas não na lista — com poucos casos, um erro sozinho derruba o
- * percentual e o exame vai parar no topo sem motivo.
+ * "Acurácia por exame": exame com menos avaliações que isto no período não ganha
+ * percentual — com poucos casos, um erro sozinho o derrubaria. Se teve erro, vai
+ * para "Poucos casos", só com a contagem; se não teve, entra só no total.
  */
-const MINIMO_AVALIACOES_EXAME = 20;
+const MINIMO_AVALIACOES_EXAME = 5;
+
+// O motivo com as palavras do modal de feedback (`CATEGORIAS_EXAME`) e, ao lado, o
+// que a IA tinha dito do exame — a opção só aparece ao revisor naquela situação
+// (`OPCOES_EXAME`): "Não estava" sozinho não diz que a IA deu o exame como achado.
+const CONTEXTO_OPCAO: Record<keyof typeof OPCOES_EXAME, string> = {
+  faltante: "a IA apontou falta",
+  encontrado: "a IA deu como encontrado",
+  avulso: "fora da lista do BRNET",
+};
+const ROTULO_MOTIVO: Record<string, string> = Object.fromEntries(CATEGORIAS_EXAME.map((c) => [c.valor, c.rotulo]));
+const CONTEXTO_MOTIVO: Record<string, string> = {};
+for (const [situacao, opcoes] of Object.entries(OPCOES_EXAME) as [keyof typeof OPCOES_EXAME, { categoria: string }[]][]) {
+  for (const o of opcoes) CONTEXTO_MOTIVO[o.categoria] ??= CONTEXTO_OPCAO[situacao];
+}
 
 /** Escala do gráfico de acurácia: a métrica vive na faixa alta e 0–100 achataria. */
 const PISO_ACC = 70;
@@ -1715,67 +1757,94 @@ export function calcularVisao({ dados, filtro, comparar, verTodasClinicas }: Opc
 
       // Soma pelos MESMOS pontos do período dos outros indicadores: as chaves
       // são as da série principal (segunda-feira da semana, dia 1 do mês).
+      type ContaExame = { n: number; motivos: Map<string, number>; casos: CasoErroExame[] };
+      const errosDe = (e: ContaExame) => [...e.motivos.values()].reduce((s, v) => s + v, 0);
+
       const somar = (pontos: PontoSerie[]) => {
         let pareceres = 0;
         let comParecer = 0;
         let decisoes = 0;
-        const exames = new Map<string, [number, number, number]>();
+        const exames = new Map<string, ContaExame>();
+        const conta = (nome: string) => {
+          const e: ContaExame = exames.get(nome) ?? { n: 0, motivos: new Map(), casos: [] };
+          exames.set(nome, e);
+          return e;
+        };
+        const anotar = (e: ContaExame, motivo: string, casos: number) => {
+          if (casos) e.motivos.set(motivo, (e.motivos.get(motivo) ?? 0) + casos);
+        };
         for (const p of pontos) {
           const b = blocos[p.chave];
           if (!b) continue;
           pareceres += b.pareceres;
           comParecer += b.com_parecer;
           decisoes += b.decisoes;
-          for (const [nome, [n, f, pr]] of Object.entries(b.exames)) {
-            const e = exames.get(nome) ?? [0, 0, 0];
-            e[0] += n;
-            e[1] += f;
-            e[2] += pr;
-            exames.set(nome, e);
+          for (const [nome, [n, motivos, presenca]] of Object.entries(b.exames)) {
+            const e = conta(nome);
+            e.n += n;
+            if (typeof motivos === "number") {
+              // Back-end anterior aos motivos: só falta e presença indevidas.
+              anotar(e, "FALTANTE_INCORRETO", motivos);
+              anotar(e, "ENCONTRADO_INCORRETO", presenca ?? 0);
+            } else {
+              for (const [categoria, casos] of Object.entries(motivos)) anotar(e, categoria, casos);
+            }
           }
+          for (const caso of b.casos ?? []) conta(caso.exame).casos.push(caso);
         }
         let avaliacoes = 0;
-        let falta = 0;
-        let presenca = 0;
-        exames.forEach(([n, f, pr]) => {
-          avaliacoes += n;
-          falta += f;
-          presenca += pr;
+        let erros = 0;
+        exames.forEach((e) => {
+          avaliacoes += e.n;
+          erros += errosDe(e);
         });
-        const acuracia = avaliacoes ? ((avaliacoes - falta - presenca) / avaliacoes) * 100 : null;
-        return { pareceres, comParecer, decisoes, exames, avaliacoes, falta, presenca, acuracia };
+        const acuracia = avaliacoes ? ((avaliacoes - erros) / avaliacoes) * 100 : null;
+        return { pareceres, comParecer, decisoes, exames, avaliacoes, erros, acuracia };
       };
 
       const agora = somar(atual);
       const antes = comparavel ? somar(anterior) : null;
 
-      const doMinimo = [...agora.exames.entries()].filter(([, [n]]) => n >= MINIMO_AVALIACOES_EXAME);
+      // Pré-ordenadas por volume: a tela ordena por número de erros com sort
+      // estável, então no empate vem primeiro o exame mais frequente.
+      const todas = [...agora.exames.entries()].sort(([, a], [, b]) => b.n - a.n);
+      const doMinimo = todas.filter(([, e]) => e.n >= MINIMO_AVALIACOES_EXAME);
+      const poucos = todas.filter(([, e]) => e.n < MINIMO_AVALIACOES_EXAME && errosDe(e) > 0);
       // A barra é a TAXA de erro, na escala do exame que mais erra: com a
       // acurácia toda perto de 100%, uma barra de acurácia sairia cheia em
       // todas as linhas.
-      const maiorTaxa = Math.max(0, ...doMinimo.map(([, [n, f, pr]]) => (f + pr) / n)) || 1;
+      const maiorTaxa = Math.max(0, ...doMinimo.map(([, e]) => errosDe(e) / e.n)) || 1;
       const vezes = (n: number, um: string, varios: string) => `${fmt(n)} ${n === 1 ? um : varios}`;
 
-      const linhas: LinhaAcuraciaExame[] = doMinimo.map(([exame, [n, f, pr]]) => {
-        const erros = f + pr;
-        const acuracia = ((n - erros) / n) * 100;
+      const rotulo = (categoria: string) => ROTULO_MOTIVO[categoria] ?? "Outro";
+      const linhaDe = ([exame, e]: [string, ContaExame]): LinhaAcuraciaExame => {
+        const erros = errosDe(e);
+        const acuracia = ((e.n - erros) / e.n) * 100;
+        const motivos = [...e.motivos.entries()]
+          .sort(([, a], [, b]) => b - a)
+          .map(([categoria, casos]) => ({ rotulo: rotulo(categoria), contexto: CONTEXTO_MOTIVO[categoria] ?? "", casos }));
         return {
           exame,
-          avaliacoes: n,
-          faltaIndevida: f,
-          presencaIndevida: pr,
+          documentos: e.n,
           erros,
+          pctErro: Math.min(100, (erros / e.n / maiorTaxa) * 100),
+          motivos,
+          casos: [...e.casos]
+            .sort((a, b) => b.enviado.localeCompare(a.enviado))
+            .map((c) => ({
+              documento: c.documento,
+              clinica: c.clinica,
+              enviadoLabel: `${c.enviado.slice(8, 10)}/${c.enviado.slice(5, 7)}`,
+              motivo: rotulo(c.motivo),
+            })),
           acuracia,
           acuraciaLabel: num(acuracia),
-          pctFalta: (f / n / maiorTaxa) * 100,
-          pctPresenca: (pr / n / maiorTaxa) * 100,
-          tip: erros
-            ? `${exame} — ${vezes(n, "avaliação", "avaliações")}: ` +
-              `${vezes(f, "falta apontada que estava no documento", "faltas apontadas que estavam no documento")}, ` +
-              `${vezes(pr, "exame dado como presente que não estava", "exames dados como presentes que não estavam")}`
-            : `${exame} — ${vezes(n, "avaliação", "avaliações")}, nenhum erro apontado`,
+          tip: `${exame} — ${vezes(e.n, "documento", "documentos")}, ${vezes(erros, "erro", "erros")}`,
         };
-      });
+      };
+      const porErros = (a: LinhaAcuraciaExame, b: LinhaAcuraciaExame) => b.erros - a.erros;
+      const linhas = doMinimo.map(linhaDe).sort(porErros);
+      const poucosCasos = poucos.map(linhaDe).sort(porErros);
 
       const acuraciaLabel = agora.acuracia === null ? "—" : num(agora.acuracia);
       return {
@@ -1789,11 +1858,11 @@ export function calcularVisao({ dados, filtro, comparar, verTodasClinicas }: Opc
             : "nenhum parecer no período",
         ),
         linhas,
+        poucosCasos,
         minimo: MINIMO_AVALIACOES_EXAME,
-        abaixoDoMinimo: agora.exames.size - doMinimo.length,
+        abaixoDoMinimo: agora.exames.size - doMinimo.length - poucos.length,
         avaliacoes: agora.avaliacoes,
-        faltaIndevida: agora.falta,
-        presencaIndevida: agora.presenca,
+        erros: agora.erros,
         pareceres: agora.pareceres,
         decisoes: agora.decisoes,
         adesaoLabel: agora.decisoes ? num(pct(agora.comParecer, agora.decisoes)) : null,
