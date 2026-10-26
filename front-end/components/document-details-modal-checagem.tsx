@@ -14,7 +14,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { ProcessResult } from "@/types/process"
+import { ProcessResult, TabelaComparacaoItem } from "@/types/process"
 import ExamesComparativoTable from "@/components/exames-comparativo-table"
 import { cn } from "@/lib/utils"
 
@@ -305,6 +305,7 @@ export function DocumentDetailsModalChecagem({
                             </div>
                           ) : null
                         ))}
+                        <EvidenciasExames tabela={result.result.tabela_comparacao} />
                       </div>
                     </details>
                   </div>
@@ -319,7 +320,7 @@ export function DocumentDetailsModalChecagem({
 
                 {Array.isArray(result.result.tabela_comparacao) && result.result.tabela_comparacao.length > 0 && (
                   <div className="mb-6">
-                    <ExamesComparativoTable tabela={result.result.tabela_comparacao} />
+                    <ExamesComparativoTable tabela={result.result.tabela_comparacao} mostrarEvidencia />
                   </div>
                 )}
               </div>
@@ -503,6 +504,7 @@ export function DocumentDetailsModalChecagem({
                               </div>
                             ) : null
                           ))}
+                          <EvidenciasExames tabela={result.result.tabela_comparacao} />
                         </div>
                       </details>
                     </div>
@@ -517,7 +519,7 @@ export function DocumentDetailsModalChecagem({
 
                   {Array.isArray(result.result.tabela_comparacao) && result.result.tabela_comparacao.length > 0 && (
                     <div className="mb-6">
-                      <ExamesComparativoTable tabela={result.result.tabela_comparacao} />
+                      <ExamesComparativoTable tabela={result.result.tabela_comparacao} mostrarEvidencia />
                     </div>
                   )}
                 </div>
@@ -590,5 +592,39 @@ export function DocumentDetailsModalChecagem({
       </Dialog>
 
     </>
+  )
+}
+
+/**
+ * Linha do documento de onde o nome de cada exame foi lido. O exame que só
+ * aparece na lista de procedimentos do ASO vem primeiro, em âmbar, com o aviso
+ * de que não há resultado no PDF. Documento antigo, sem `linha_origem`, não
+ * mostra nada.
+ */
+function EvidenciasExames({ tabela }: { tabela?: TabelaComparacaoItem[] }) {
+  const itens = (Array.isArray(tabela) ? tabela : [])
+    .filter((item) => item.linha_origem?.trim())
+    .sort((a, b) => Number(b.evidencia === "so_lista") - Number(a.evidencia === "so_lista"))
+  if (!itens.length) return null
+  return (
+    <div className="text-sm">
+      <p className="font-medium">Exames</p>
+      <ul className="list-disc ml-5">
+        {itens.map((item, idx) =>
+          item.evidencia === "so_lista" ? (
+            <li key={`exame-${idx}`} className="text-yellow-500">
+              {item.exame} · Linha de origem:{" "}
+              <span className="font-mono break-words">{item.linha_origem?.trim()}</span>. Nenhum resultado
+              encontrado no PDF.
+            </li>
+          ) : (
+            <li key={`exame-${idx}`} className="text-muted-foreground">
+              {item.exame} · Linha de origem:{" "}
+              <span className="font-mono break-words">{item.linha_origem?.trim()}</span>
+            </li>
+          ),
+        )}
+      </ul>
+    </div>
   )
 }

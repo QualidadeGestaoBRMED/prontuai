@@ -8,6 +8,19 @@ export type TabelaComparacaoItem = {
   exame: string
   status: "encontrado" | "faltante" | "parcialmente_encontrado" | "extra_no_ocr"
   justificativa: string
+  /**
+   * Só em exame de laboratório "encontrado". "so_lista": o nome só aparece na
+   * lista de procedimentos do ASO, sem resultado no PDF. Documento antigo não
+   * traz o campo.
+   */
+  evidencia?: "so_lista" | "com_resultado"
+  /** Linha do documento de onde o nome do exame foi lido (até 160 caracteres). */
+  linha_origem?: string
+  /**
+   * No item "so_lista", a justificativa original da comparação ("foi encontrado
+   * na lista…"), guardada quando `justificativa` passa a explicar o "só na lista".
+   */
+  justificativa_comparacao?: string
 }
 
 export type FieldCheck = {
