@@ -19,6 +19,14 @@ import { TabelaComparacaoItem } from "@/types/process"
 // Define as props do componente, que agora recebe a tabela de comparação
 export interface ExamesComparativoTableProps {
   tabela: TabelaComparacaoItem[];
+  /**
+   * Mostra o status "Só na lista do ASO" no lugar de "Encontrado" quando o nome
+   * do exame só aparece na lista de procedimentos do ASO, sem resultado no PDF.
+   * É só exibição: a decisão da IA não muda. A linha de origem fica nas
+   * Evidências do modal. Só a tela do revisor liga; a da clínica e o chat
+   * seguem como antes. Documento antigo, sem os campos, renderiza igual.
+   */
+  mostrarEvidencia?: boolean;
 }
 
 // Função auxiliar para obter o ícone e a cor com base no status do exame
@@ -48,9 +56,23 @@ function getConformidade(status: TabelaComparacaoItem['status']) {
   }
 }
 
+// Status exibido para o exame encontrado só na lista do ASO. A IA continua
+// dando o exame como encontrado; a tela avisa o revisor para conferir no PDF.
+const SO_NA_LISTA = {
+  label: "Só na lista do ASO",
+  icon: <AlertTriangleIcon className="inline-flex stroke-yellow-500" size={16} />,
+  color: "text-yellow-500",
+};
+
 // Componente da tabela de comparação de exames
-export default function ExamesComparativoTable({ tabela = [] }: ExamesComparativoTableProps) {
-  // Ordena os exames: primeiro os "encontrados", depois os "faltantes", depois os "extras"
+export default function ExamesComparativoTable({ tabela = [], mostrarEvidencia = false }: ExamesComparativoTableProps) {
+  const ehSoLista = (item: TabelaComparacaoItem) =>
+    mostrarEvidencia && item.evidencia === "so_lista";
+
+  // Ordena os exames: primeiro os "encontrados", depois os "faltantes", depois os "extras".
+  // Com a evidência ligada, os "só na lista do ASO" abrem o grupo dos encontrados
+  // (continuam encontrados, mas são os que o revisor precisa conferir no PDF).
+  // O sort é estável: fora isso, a ordem do back-end se mantém.
   const sortedExames = [...tabela].sort((a, b) => {
     const getStatusOrder = (status: TabelaComparacaoItem['status']) => {
       switch (status) {
@@ -64,7 +86,9 @@ export default function ExamesComparativoTable({ tabela = [] }: ExamesComparativ
           return 4;
       }
     };
-    return getStatusOrder(a.status) - getStatusOrder(b.status);
+    const porStatus = getStatusOrder(a.status) - getStatusOrder(b.status);
+    if (porStatus !== 0) return porStatus;
+    return Number(ehSoLista(b)) - Number(ehSoLista(a));
   });
 
   return (
@@ -79,7 +103,7 @@ export default function ExamesComparativoTable({ tabela = [] }: ExamesComparativ
         </TableHeader>
         <TableBody>
           {sortedExames.map((item, index) => {
-            const conf = getConformidade(item.status);
+            const conf = ehSoLista(item) ? SO_NA_LISTA : getConformidade(item.status);
             return (
               <TableRow key={`${item.exame}-${index}`}>
                 <TableCell className="font-medium align-top">

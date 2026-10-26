@@ -15,10 +15,13 @@ _MARKDOWN_PREFIX = r"[ \t]*(?:#{1,6}[ \t]*)?"
 _NAME_PATTERNS = (
     # Cabeçalho de ficha clínica. É especialmente confiável porque delimita o
     # nome entre dois campos conhecidos, mesmo quando o OCR omite os dois-pontos.
+    # "Nome Completo" é rótulo, não começo do nome: sem excluí-lo aqui, a linha
+    # "Nome Completo: FULANO ... Empresa: ..." virava o nome "Completo: FULANO"
+    # (17 documentos de jul a out/2026). O rótulo tem padrão próprio abaixo.
     _NamePattern(
         re.compile(
             rf"(?im)^{_MARKDOWN_PREFIX}nome\s+"
-            r"(?!(?:[/:\-]|do\s+paciente\b))(?P<value>.+?)\s+"
+            r"(?!(?:[/:\-]|do\s+paciente\b|completo\b))(?P<value>.+?)\s+"
             r"(?:empresa|company)\s*:?[ \t]"
         ),
         6,
@@ -27,6 +30,14 @@ _NAME_PATTERNS = (
     _NamePattern(
         re.compile(
             rf"(?im)^{_MARKDOWN_PREFIX}nome\s+do\s+paciente\s*:\s*(?P<value>[^\n\r]+)"
+        ),
+        5,
+        4,
+    ),
+    _NamePattern(
+        re.compile(
+            rf"(?im)^{_MARKDOWN_PREFIX}nome\s+completo(?:\s*/\s*full\s*name)?\s*:?[ \t]*"
+            r"(?P<value>[^\n\r]+)"
         ),
         5,
         4,
@@ -61,6 +72,13 @@ _TRAILING_FIELD = re.compile(
     r"(?:\s*:[ \t]*|[ \t]+(?=\d)).*"
     r")$"
 )
+# Valor que já começa com o rótulo de outro campo: o "Nome:" veio vazio e o OCR
+# juntou na mesma linha o campo seguinte ("Nome: Empresa: ACME LTDA"). Aceitar
+# punha o nome da empresa no lugar do paciente.
+_OUTRO_CAMPO = re.compile(
+    r"(?i)^(?:empresa|company|raz[aã]o\s+social|cnpj|cpf|matr[ií]cula|"
+    r"fun[cç][aã]o|function|cargo|setor|section)\b\s*:?"
+)
 _INVALID_VALUES = {
     "NOME",
     "NAME",
@@ -89,6 +107,8 @@ def _name_key(value: str) -> str:
 
 def _clean_candidate(value: str) -> Optional[str]:
     candidate = re.sub(r"\s+", " ", value or "").strip()
+    if _OUTRO_CAMPO.match(candidate):
+        return None
     candidate = _TRAILING_FIELD.sub("", candidate)
     candidate = candidate.strip(" #-*_|/:;,.\t")
 
