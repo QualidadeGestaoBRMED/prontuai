@@ -120,3 +120,37 @@ Nome: Lindem berg da Costa Bernardo Idade: 38
 )
 def test_rejects_empty_or_non_name_values(markdown):
     assert extract_patient_name_from_markdown(markdown) is None
+
+
+# "Nome Completo" é rótulo. Antes, o padrão "Nome ... Empresa" o tratava como
+# começo do nome e devolvia "Completo: FULANO" (17 documentos de jul a out/2026).
+@pytest.mark.parametrize(
+    "markdown",
+    [
+        "Nome Completo: MARIA EDUARDA DA SILVA Empresa: ACME SERVIÇOS LTDA.\n",
+        "Nome Completo: MARIA EDUARDA DA SILVA\nEmpresa: ACME SERVIÇOS LTDA.\n",
+        "## Nome completo:MARIA EDUARDA DA SILVA\n",
+        "Nome Completo / Full Name: MARIA EDUARDA DA SILVA\n",
+    ],
+)
+def test_nome_completo_e_rotulo_nao_parte_do_nome(markdown):
+    assert extract_patient_name_from_markdown(markdown) == "MARIA EDUARDA DA SILVA"
+
+
+# "Nome:" vazio com o campo seguinte colado na mesma linha: o valor é da
+# empresa, não do paciente.
+@pytest.mark.parametrize(
+    "markdown",
+    [
+        "Nome: Empresa: ACME SERVIÇOS LTDA.\n",
+        "Nome: Empresa\n",
+        "Nome: CPF: 111.444.777-35\n",
+    ],
+)
+def test_nao_aceita_outro_campo_como_nome(markdown):
+    assert extract_patient_name_from_markdown(markdown) is None
+
+
+def test_campo_vazio_nao_esconde_o_nome_do_paciente():
+    markdown = "Nome: Empresa: ACME SERVIÇOS LTDA.\nPaciente: MARIA EDUARDA DA SILVA\n"
+    assert extract_patient_name_from_markdown(markdown) == "MARIA EDUARDA DA SILVA"
