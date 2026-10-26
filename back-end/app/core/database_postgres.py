@@ -28,6 +28,7 @@ from app.models.document import (
 )
 from app.models.feedback import DocumentFeedback
 from app.models.abordagem import Abordagem
+from app.models.normalidade import AjusteFaixa
 from app.models.notification import Notification, NotificationCreate, NotificationUpdate
 from app.models.audit_log import AuditLog, AuditLogCreate
 from app.models.exam import (
@@ -55,6 +56,7 @@ from app.core.db.models import (
     ExamVariationConflictModel,
     DocumentFeedbackModel,
     CredenciadoAbordagemModel,
+    FaixaNormalidadeModel,
 )
 
 logger = logging.getLogger(__name__)
@@ -2394,6 +2396,80 @@ class PostgresUserDatabase:
             session.execute(stmt)
             session.commit()
             return self._model_to_abordagem(session.get(CredenciadoAbordagemModel, credenciado))
+        except Exception:
+            session.rollback()
+            raise
+        finally:
+            session.close()
+
+    # ------------------------------------------------------------------
+    # Ajuste das faixas de referência da normalidade de exames
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _model_to_ajuste_faixa(model: FaixaNormalidadeModel) -> AjusteFaixa:
+        return AjusteFaixa(
+            parametro=model.parametro,
+            minimo=model.minimo,
+            maximo=model.maximo,
+            atualizado_por_email=model.atualizado_por_email,
+            atualizado_por_nome=model.atualizado_por_nome,
+            atualizado_em=model.atualizado_em,
+        )
+
+    def list_faixas_normalidade(self) -> List[AjusteFaixa]:
+        """Os ajustes gravados; uma linha por parâmetro, uma dúzia no máximo."""
+        session = self._get_session()
+        try:
+            return [self._model_to_ajuste_faixa(m) for m in session.query(FaixaNormalidadeModel).all()]
+        finally:
+            session.close()
+
+    def upsert_faixa_normalidade(
+        self,
+        parametro: str,
+        minimo: Optional[float],
+        maximo: Optional[float],
+        atualizado_por_id: Optional[str],
+        atualizado_por_email: Optional[str],
+        atualizado_por_nome: Optional[str],
+    ) -> AjusteFaixa:
+        """Grava a faixa do parâmetro, substituindo o ajuste anterior. Mesmo
+        INSERT ... ON CONFLICT da abordagem: a chave é natural."""
+        from sqlalchemy.dialects.postgresql import insert as pg_insert
+
+        valores = dict(
+            parametro=parametro,
+            minimo=minimo,
+            maximo=maximo,
+            atualizado_por_id=atualizado_por_id,
+            atualizado_por_email=atualizado_por_email,
+            atualizado_por_nome=atualizado_por_nome,
+            atualizado_em=datetime.utcnow(),
+        )
+        stmt = pg_insert(FaixaNormalidadeModel).values(**valores)
+        stmt = stmt.on_conflict_do_update(
+            index_elements=[FaixaNormalidadeModel.parametro],
+            set_={k: v for k, v in valores.items() if k != "parametro"},
+        )
+        session = self._get_session()
+        try:
+            session.execute(stmt)
+            session.commit()
+            return self._model_to_ajuste_faixa(session.get(FaixaNormalidadeModel, parametro))
+        except Exception:
+            session.rollback()
+            raise
+        finally:
+            session.close()
+
+    def delete_faixa_normalidade(self, parametro: str) -> bool:
+        """Apaga o ajuste: o parâmetro volta à faixa padrão do código."""
+        session = self._get_session()
+        try:
+            apagadas = session.query(FaixaNormalidadeModel).filter(FaixaNormalidadeModel.parametro == parametro).delete()
+            session.commit()
+            return bool(apagadas)
         except Exception:
             session.rollback()
             raise

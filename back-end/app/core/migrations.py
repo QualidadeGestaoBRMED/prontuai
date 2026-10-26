@@ -186,6 +186,16 @@ def check_if_migration_needed() -> tuple[bool, list[str]]:
             logger.warning("⚠️  Migration 016 necessária: tabela credenciado_abordagens não existe")
             migrations_needed.append("016_add_credenciado_abordagens.sql")
 
+        # Verificar migration 017: ajuste das faixas de referência da normalidade
+        cursor.execute("""
+            SELECT table_name
+            FROM information_schema.tables
+            WHERE table_name='faixas_normalidade'
+        """)
+        if not cursor.fetchone():
+            logger.warning("⚠️  Migration 017 necessária: tabela faixas_normalidade não existe")
+            migrations_needed.append("017_add_faixas_normalidade.sql")
+
         cursor.close()
         conn.close()
 

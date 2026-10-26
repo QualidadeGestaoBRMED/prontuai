@@ -15,6 +15,7 @@ from app.models.audit_log import AuditLog, AuditLogCreate
 from app.models.clinic import Clinic, ClinicCreate, ClinicUpdate
 from app.models.document import Document
 from app.models.abordagem import Abordagem
+from app.models.normalidade import AjusteFaixa
 from app.models.feedback import DocumentFeedback
 from app.models.notification import Notification, NotificationCreate
 from app.models.user import User, UserRole, UserUpdate
@@ -91,6 +92,17 @@ class UserDatabaseProtocol(Protocol):
         atualizado_por_email: Optional[str],
         atualizado_por_nome: Optional[str],
     ) -> Abordagem: ...
+    def list_faixas_normalidade(self) -> List[AjusteFaixa]: ...
+    def upsert_faixa_normalidade(
+        self,
+        parametro: str,
+        minimo: Optional[float],
+        maximo: Optional[float],
+        atualizado_por_id: Optional[str],
+        atualizado_por_email: Optional[str],
+        atualizado_por_nome: Optional[str],
+    ) -> AjusteFaixa: ...
+    def delete_faixa_normalidade(self, parametro: str) -> bool: ...
     def create_audit_log(self, data: AuditLogCreate) -> AuditLog: ...
     def list_audit_logs(
         self,

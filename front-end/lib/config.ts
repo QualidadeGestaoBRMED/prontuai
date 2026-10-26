@@ -58,6 +58,12 @@ export const API_ENDPOINTS = {
   // Parecer do revisor sobre o acerto da IA (GET devolve null se nunca avaliado).
   DOCUMENT_FEEDBACK: (id: string) => `${API_PROXY_BASE}/v1/documents/${id}/feedback`,
   DOCUMENT_COMPLEMENTO: (id: string) => `${API_PROXY_BASE}/v1/documents/${id}/complemento`,
+  // Valores lidos no laudo e a situação de cada um (normal / acima / abaixo).
+  DOCUMENT_NORMALIDADE: (id: string) => `${API_PROXY_BASE}/v1/documents/${id}/normalidade`,
+
+  // Faixas de referência da normalidade (tela de Normalidade)
+  NORMALIDADE_FAIXAS: `${API_PROXY_BASE}/v1/normalidade/faixas`,
+  NORMALIDADE_FAIXA: (parametro: string) => `${API_PROXY_BASE}/v1/normalidade/faixas/${parametro}`,
 
   // Notifications
   NOTIFICATIONS: `${API_PROXY_BASE}/v1/notifications`,

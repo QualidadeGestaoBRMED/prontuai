@@ -15,6 +15,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import { TabelaComparacaoItem } from "@/types/process"
+import { ParametroLido, SituacaoParametro } from "@/types/normalidade"
 
 // Define as props do componente, que agora recebe a tabela de comparação
 export interface ExamesComparativoTableProps {
@@ -27,6 +28,54 @@ export interface ExamesComparativoTableProps {
    * seguem como antes. Documento antigo, sem os campos, renderiza igual.
    */
   mostrarEvidencia?: boolean;
+  /**
+   * Liga a coluna "Normalidade": os valores lidos no laudo para cada exame, por
+   * nome do exame. Sem a prop, a tabela fica como antes (chat, tela da clínica).
+   * `carregando` mostra a coluna vazia enquanto a leitura não chega.
+   */
+  normalidade?: { carregando: boolean; porExame: Record<string, ParametroLido[]> };
+}
+
+const SITUACAO: Record<SituacaoParametro, { label: string; className: string }> = {
+  acima: { label: "▲ Acima", className: "bg-red-100 text-red-700 border-red-300" },
+  abaixo: { label: "▼ Abaixo", className: "bg-amber-100 text-amber-700 border-amber-300" },
+  alterado: { label: "Alterado", className: "bg-red-100 text-red-700 border-red-300" },
+  normal: { label: "Normal", className: "bg-emerald-100 text-emerald-700 border-emerald-300" },
+  sem_resultado: { label: "Não lido", className: "bg-slate-100 text-slate-600 border-slate-300" },
+};
+
+export const foraDaFaixa = (p: ParametroLido) =>
+  p.situacao === "acima" || p.situacao === "abaixo" || p.situacao === "alterado";
+
+function CelulaNormalidade({ item, parametros, carregando }: {
+  item: TabelaComparacaoItem; parametros?: ParametroLido[]; carregando: boolean
+}) {
+  if (item.status === "faltante") return <span className="text-muted-foreground">—</span>;
+  if (carregando) return <span className="text-xs text-muted-foreground">Lendo…</span>;
+  if (!parametros?.length) return <span className="text-xs text-muted-foreground">Não se aplica</span>;
+  return (
+    <div className="flex flex-col gap-1.5">
+      {parametros.map((p) => {
+        const sit = SITUACAO[p.situacao];
+        return (
+          <div key={p.chave} className="text-xs leading-tight">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="text-muted-foreground">{p.nome}</span>
+              {p.valor_texto && (
+                <span className="font-semibold text-foreground">
+                  {p.valor_texto}{p.unidade ? ` ${p.unidade}` : ""}
+                </span>
+              )}
+              <span className={`rounded border px-1.5 py-px text-[11px] font-medium ${sit.className}`}>{sit.label}</span>
+            </div>
+            <div className="text-[11px] text-muted-foreground">
+              {p.situacao === "sem_resultado" ? "Valor não encontrado no PDF" : `Ref.: ${p.referencia}`}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
 // Função auxiliar para obter o ícone e a cor com base no status do exame
@@ -65,9 +114,11 @@ const SO_NA_LISTA = {
 };
 
 // Componente da tabela de comparação de exames
-export default function ExamesComparativoTable({ tabela = [], mostrarEvidencia = false }: ExamesComparativoTableProps) {
+export default function ExamesComparativoTable({ tabela = [], mostrarEvidencia = false, normalidade }: ExamesComparativoTableProps) {
   const ehSoLista = (item: TabelaComparacaoItem) =>
     mostrarEvidencia && item.evidencia === "so_lista";
+  const temAlterado = (item: TabelaComparacaoItem) =>
+    Boolean(normalidade?.porExame[item.exame]?.some(foraDaFaixa));
 
   // Ordena os exames: primeiro os "encontrados", depois os "faltantes", depois os "extras".
   // Com a evidência ligada, os "só na lista do ASO" abrem o grupo dos encontrados
@@ -88,7 +139,8 @@ export default function ExamesComparativoTable({ tabela = [], mostrarEvidencia =
     };
     const porStatus = getStatusOrder(a.status) - getStatusOrder(b.status);
     if (porStatus !== 0) return porStatus;
-    return Number(ehSoLista(b)) - Number(ehSoLista(a));
+    // Com a normalidade ligada, os de valor fora da faixa vêm logo depois.
+    return (Number(ehSoLista(b)) - Number(ehSoLista(a))) || (Number(temAlterado(b)) - Number(temAlterado(a)));
   });
 
   return (
@@ -96,17 +148,21 @@ export default function ExamesComparativoTable({ tabela = [], mostrarEvidencia =
       <Table className="w-full">
         <TableHeader>
           <TableRow>
-            <TableHead className="w-2/5">Exame Previsto</TableHead>
-            <TableHead className="w-1/5 text-center">Status</TableHead>
-            <TableHead className="w-2/5 text-left">Justificativa</TableHead>
+            <TableHead className={normalidade ? "w-[30%]" : "w-2/5"}>Exame Previsto</TableHead>
+            <TableHead className={normalidade ? "w-[15%] text-center" : "w-1/5 text-center"}>Status</TableHead>
+            {normalidade && <TableHead className="w-[38%] text-left">Normalidade</TableHead>}
+            <TableHead className={normalidade ? "w-[17%] text-left" : "w-2/5 text-left"}>Justificativa</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {sortedExames.map((item, index) => {
             const conf = ehSoLista(item) ? SO_NA_LISTA : getConformidade(item.status);
             return (
-              <TableRow key={`${item.exame}-${index}`}>
-                <TableCell className="font-medium align-top">
+              <TableRow
+                key={`${item.exame}-${index}`}
+                className={temAlterado(item) ? "shadow-[inset_3px_0_0_0_rgb(220_38_38)]" : undefined}
+              >
+                <TableCell className="font-medium align-top whitespace-normal">
                   {item.exame}
                 </TableCell>
                 <TableCell className={`text-center font-medium align-top ${conf.color}`}>
@@ -115,6 +171,15 @@ export default function ExamesComparativoTable({ tabela = [], mostrarEvidencia =
                     <span className="text-xs mt-1">{conf.label}</span>
                   </div>
                 </TableCell>
+                {normalidade && (
+                  <TableCell className="align-top whitespace-normal">
+                    <CelulaNormalidade
+                      item={item}
+                      parametros={normalidade.porExame[item.exame]}
+                      carregando={normalidade.carregando}
+                    />
+                  </TableCell>
+                )}
                 <TableCell className="text-sm text-muted-foreground align-top">
                   <Tooltip>
                     <TooltipTrigger asChild>
