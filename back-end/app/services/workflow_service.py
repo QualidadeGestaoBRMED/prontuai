@@ -5,7 +5,7 @@ import unicodedata
 from typing import Dict, Any, Optional, List
 from fastapi import UploadFile
 from app.services import ocr_service, brmed_service, validacao_service
-from app.services import exam_catalog_source, laudo_evidencia
+from app.services import exam_catalog_source, laudo_evidencia, evidencia_laboratorio
 from app.core.config import settings
 from app.core import metrics
 from app.core.pii import mask_cpf, mask_identifier, mask_name
@@ -42,6 +42,9 @@ MAX_SIMILARITY_TERM_LENGTH = 180
 # como alta — o documento continua seguindo o fluxo normal, só deixa de parecer
 # certo. Ver `_paginas_insuficientes`.
 TETO_CONFIANCA_POUCAS_PAGINAS = 70
+# Teto da confiança quando algum exame de laboratório dado como encontrado só
+# aparece na lista do ASO, sem resultado perto do nome. Ver `evidencia_laboratorio`.
+TETO_CONFIANCA_SO_LISTA = 70
 MAX_SIMILARS_PER_ENTRY = 40
 
 
@@ -1231,6 +1234,25 @@ async def _processar_documento_completo_impl(
             )
             _log_event("laudo_evidencia", run_id=run_id, mudancas=mudancas_laudo)
 
+    # Selo de evidência por exame encontrado: laboratório cujo nome só está na lista
+    # do ASO, sem resultado perto, sai "so_lista". NÃO muda status, faltantes nem
+    # validation_status — só grava no item e limita a confiança mais abaixo.
+    exames_so_lista: list[str] = []
+    if not resultado_validacao.get("erro") and evidencia_laboratorio.HABILITADA:
+        try:
+            exames_so_lista = evidencia_laboratorio.anotar_comparativo(
+                resultado_validacao.get("exames_comparativo", []),
+                markdown_content or "",
+                exam_catalog_source.sinonimos_de,
+            )
+        except Exception as e:
+            # Selo é informativo: falha aqui não pode derrubar a validação.
+            logger.warning(f"[WORKFLOW] Evidência de laboratório falhou: {type(e).__name__}: {e}")
+            exames_so_lista = []
+        if exames_so_lista:
+            # Só nomes de exame: a linha de origem pode ter dado do paciente.
+            _log_event("exames_so_lista", run_id=run_id, quantos=len(exames_so_lista), exames=exames_so_lista)
+
     # Documento exigido pela empresa, fora da grade do BRNET: entra como faltante
     # para o documento ir à checagem. Fica fora da `tabela_comparacao`, que é só
     # dos exames exigidos. Ver `_falta_kit_vix`.
@@ -1290,6 +1312,8 @@ async def _processar_documento_completo_impl(
     poucas_paginas = _paginas_insuficientes(paginas_documento, len(exames_brnet or []))
     if poucas_paginas:
         confiabilidade_score = min(confiabilidade_score, TETO_CONFIANCA_POUCAS_PAGINAS)
+    if exames_so_lista:
+        confiabilidade_score = min(confiabilidade_score, TETO_CONFIANCA_SO_LISTA)
 
     confidence_details = {
         "score": confiabilidade_score,
@@ -1303,6 +1327,8 @@ async def _processar_documento_completo_impl(
     }
     if falta_kit_vix:
         confidence_details["kit_vix_ausente"] = True
+    if exames_so_lista:
+        confidence_details["exames_so_lista"] = exames_so_lista
     if poucas_paginas:
         _log_event(
             "paginas_insuficientes",
