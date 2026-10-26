@@ -421,3 +421,28 @@ class CredenciadoAbordagemModel(Base):
             name="ck_credenciado_abordagens_status",
         ),
     )
+
+
+class FaixaNormalidadeModel(Base):
+    """
+    Ajuste da faixa de referência de um parâmetro de exame (migration 017).
+
+    Os parâmetros e a faixa padrão estão no código
+    (`app/services/normalidade_exames.py`); aqui fica só o que alguém mudou na
+    tela. Sem linha = vale o padrão. Restaurar o padrão apaga a linha, e o
+    histórico de quem mudou o quê fica no `audit_logs`.
+    """
+    __tablename__ = "faixas_normalidade"
+
+    parametro = Column(String, primary_key=True)
+    minimo = Column(Float, nullable=True)
+    maximo = Column(Float, nullable=True)
+    atualizado_por_id = Column(String, ForeignKey("users.id"), nullable=True)
+    atualizado_por_email = Column(String, nullable=True)
+    atualizado_por_nome = Column(String, nullable=True)
+    atualizado_em = Column(DateTime, nullable=False, default=datetime.utcnow)
+
+    __table_args__ = (
+        CheckConstraint("minimo IS NOT NULL OR maximo IS NOT NULL", name="ck_faixas_normalidade_limite"),
+        CheckConstraint("minimo IS NULL OR maximo IS NULL OR minimo <= maximo", name="ck_faixas_normalidade_ordem"),
+    )

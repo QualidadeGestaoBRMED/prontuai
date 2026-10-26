@@ -15,7 +15,7 @@ import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { ProcessResult, TabelaComparacaoItem } from "@/types/process"
-import ExamesComparativoTable from "@/components/exames-comparativo-table"
+import { ComparacaoDetalhada } from "@/components/comparacao-detalhada"
 import { cn } from "@/lib/utils"
 
 interface DocumentDetailsModalChecagemProps {
@@ -314,16 +314,11 @@ export function DocumentDetailsModalChecagem({
 
               <Separator />
 
-              {/* Detailed Comparison Table */}
-              <div>
-                <h4 className="font-semibold mb-3">Comparação Detalhada</h4>
-
-                {Array.isArray(result.result.tabela_comparacao) && result.result.tabela_comparacao.length > 0 && (
-                  <div className="mb-6">
-                    <ExamesComparativoTable tabela={result.result.tabela_comparacao} mostrarEvidencia />
-                  </div>
-                )}
-              </div>
+              {/* Detailed Comparison Table, com a coluna de normalidade */}
+              <ComparacaoDetalhada
+                documentId={result.id}
+                tabela={Array.isArray(result.result.tabela_comparacao) ? result.result.tabela_comparacao : []}
+              />
                 </div>
               </ScrollArea>
 
@@ -513,16 +508,11 @@ export function DocumentDetailsModalChecagem({
 
                 <Separator />
 
-                {/* Detailed Comparison Table */}
-                <div>
-                  <h4 className="font-semibold mb-3">Comparação Detalhada</h4>
-
-                  {Array.isArray(result.result.tabela_comparacao) && result.result.tabela_comparacao.length > 0 && (
-                    <div className="mb-6">
-                      <ExamesComparativoTable tabela={result.result.tabela_comparacao} mostrarEvidencia />
-                    </div>
-                  )}
-                </div>
+                {/* Detailed Comparison Table, com a coluna de normalidade */}
+                <ComparacaoDetalhada
+                  documentId={result.id}
+                  tabela={Array.isArray(result.result.tabela_comparacao) ? result.result.tabela_comparacao : []}
+                />
               </div>
             </ScrollArea>
           )}
