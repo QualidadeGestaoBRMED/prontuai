@@ -57,7 +57,7 @@ export const API_ENDPOINTS = {
   DOCUMENT_VIEW: (id: string) => `${API_PROXY_BASE}/v1/documents/${id}/view`,
   // Parecer do revisor sobre o acerto da IA (GET devolve null se nunca avaliado).
   DOCUMENT_FEEDBACK: (id: string) => `${API_PROXY_BASE}/v1/documents/${id}/feedback`,
-  // Onde cada exame da Comparação Detalhada aparece no PDF (página e caixa).
+  // Onde cada exame e cada campo da checklist aparecem no PDF (página e caixa).
   DOCUMENT_LOCALIZACOES: (id: string) => `${API_PROXY_BASE}/v1/documents/${id}/localizacoes`,
   // Texto do OCR com a posição de cada linha, para a busca no documento.
   DOCUMENT_TEXTO: (id: string) => `${API_PROXY_BASE}/v1/documents/${id}/texto`,

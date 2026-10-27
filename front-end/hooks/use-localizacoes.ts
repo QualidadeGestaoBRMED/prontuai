@@ -7,7 +7,7 @@ import { API_ENDPOINTS } from "@/lib/config"
 import { LinhaTexto, Localizacao, LocalizacoesDocumento, TextoDocumento } from "@/types/localizacao"
 
 export type Localizacoes = {
-  /** Por nome do exame da Comparação Detalhada. */
+  /** Por nome do exame (previsto no BRNET ou além do previsto). */
   porExame: Record<string, Localizacao[]>
   /** Por `field` da Checklist de Campos. */
   porCampo: Record<string, Localizacao[]>
@@ -16,7 +16,7 @@ export type Localizacoes = {
 const VAZIO: Localizacoes = { porExame: {}, porCampo: {} }
 
 /**
- * Onde cada exame da Comparação Detalhada e cada campo da Checklist de Campos
+ * Onde cada exame da lista de exames e cada campo da Checklist de Campos
  * aparecem no PDF.
  *
  * Vazio enquanto carrega, para documento sem posição gravada (processado antes

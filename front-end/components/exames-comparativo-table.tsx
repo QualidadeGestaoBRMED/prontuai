@@ -40,10 +40,16 @@ export interface ExamesComparativoTableProps {
     ativo?: { exame: string; indice: number } | null;
     onLocalizar: (exame: string) => void;
   };
+  /**
+   * Para a tabela dos exames além do previsto no BRNET: o cabeçalho da primeira
+   * coluna e o status no lugar de "Extra no OCR". Sem eles, fica como antes.
+   */
+  rotuloColunaExame?: string;
+  rotuloExtra?: string;
 }
 
 // Função auxiliar para obter o ícone e a cor com base no status do exame
-function getConformidade(status: TabelaComparacaoItem['status']) {
+function getConformidade(status: TabelaComparacaoItem['status'], rotuloExtra = "Extra no OCR") {
   switch (status) {
     case "encontrado":
       return { 
@@ -59,7 +65,7 @@ function getConformidade(status: TabelaComparacaoItem['status']) {
       };
     case "extra_no_ocr":
       return { 
-        label: "Extra no OCR", 
+        label: rotuloExtra, 
         icon: <AlertTriangleIcon className="inline-flex stroke-yellow-500" size={16} />, 
         color: "text-yellow-500" 
       };
@@ -108,7 +114,13 @@ export function ordenarComparativo(tabela: TabelaComparacaoItem[], mostrarEviden
   });
 }
 
-export default function ExamesComparativoTable({ tabela = [], mostrarEvidencia = false, localizar }: ExamesComparativoTableProps) {
+export default function ExamesComparativoTable({
+  tabela = [],
+  mostrarEvidencia = false,
+  localizar,
+  rotuloColunaExame = "Exame Previsto",
+  rotuloExtra,
+}: ExamesComparativoTableProps) {
   const ehSoLista = (item: TabelaComparacaoItem) =>
     mostrarEvidencia && item.evidencia === "so_lista";
   const sortedExames = ordenarComparativo(tabela, mostrarEvidencia);
@@ -118,14 +130,14 @@ export default function ExamesComparativoTable({ tabela = [], mostrarEvidencia =
       <Table className="w-full">
         <TableHeader>
           <TableRow>
-            <TableHead className="w-2/5">Exame Previsto</TableHead>
+            <TableHead className="w-2/5">{rotuloColunaExame}</TableHead>
             <TableHead className="w-1/5 text-center">Status</TableHead>
             <TableHead className="w-2/5 text-left">Justificativa</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {sortedExames.map((item, index) => {
-            const conf = ehSoLista(item) ? SO_NA_LISTA : getConformidade(item.status);
+            const conf = ehSoLista(item) ? SO_NA_LISTA : getConformidade(item.status, rotuloExtra);
             const localizavel = Boolean(localizar?.porExame[item.exame]);
             const selecionado = localizar?.ativo?.exame === item.exame;
             return (

@@ -16,19 +16,19 @@ import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { FieldCheck, ProcessResult, TabelaComparacaoItem } from "@/types/process"
-import ExamesComparativoTable, { ordenarComparativo } from "@/components/exames-comparativo-table"
+import ExamesComparativoTable, { ExamesComparativoTableProps, ordenarComparativo } from "@/components/exames-comparativo-table"
 import { ControleNavegacao, Destaque, VisualizadorPdf } from "@/components/visualizador-pdf"
 import { TagNovo } from "@/components/tag-novo"
 import { carregarTextoDocumento, useLocalizacoes } from "@/hooks/use-localizacoes"
 import { cn } from "@/lib/utils"
 
-// O que o destaque no PDF aponta: um exame da Comparação Detalhada ou um campo
-// da Checklist de Campos.
+// O que o destaque no PDF aponta: um exame (previsto no BRNET ou além do
+// previsto) ou um campo da Checklist de Campos.
 type Alvo = { tipo: "exame" | "campo"; nome: string }
 
 /**
  * Item da Checklist de Campos. Com ocorrência no PDF, o item inteiro é o atalho
- * até ela — como a linha do exame na Comparação Detalhada; clicar de novo passa
+ * até ela — como a linha do exame na lista de exames; clicar de novo passa
  * para a próxima. Sem ocorrência (documento antigo, campo não encontrado), fica
  * como era.
  */
@@ -70,6 +70,73 @@ function ItemChecklist({
     >
       {conteudo}
     </button>
+  )
+}
+
+/**
+ * Os exames da comparação em duas partes, na linguagem de quem confere a grade
+ * do BRNET: os **previstos no BRNET** (o que está na timeline do atendimento) e,
+ * numa seção à parte e fechada, os que vieram no prontuário **além do previsto**.
+ * Antes ficava tudo numa tabela só ("Comparação Detalhada"), e o "Extra no OCR"
+ * no meio dos previstos confundia a conferência.
+ *
+ * A seção dos além do previsto abre sozinha quando o destaque no PDF chega num
+ * deles (pelo botão que passa de exame em exame), para a linha selecionada não
+ * ficar escondida.
+ */
+function ExamesDaComparacao({
+  tabela,
+  localizar,
+}: {
+  tabela: TabelaComparacaoItem[]
+  localizar?: ExamesComparativoTableProps["localizar"]
+}) {
+  const previstos = tabela.filter((item) => item.status !== "extra_no_ocr")
+  const alem = tabela.filter((item) => item.status === "extra_no_ocr")
+  const [alemAberto, setAlemAberto] = useState(false)
+  const ativo = localizar?.ativo?.exame
+  useEffect(() => {
+    if (ativo && alem.some((item) => item.exame === ativo)) setAlemAberto(true)
+    // `alem` muda de identidade a cada render; o que importa é o exame ativo.
+  }, [ativo]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  return (
+    <div>
+      <h4 className={cn("font-semibold", localizar ? "mb-1" : "mb-3")}>Exames previstos no BRNET</h4>
+      {localizar && (
+        <p className="mb-3 flex items-center gap-2 text-xs text-muted-foreground">
+          Clique no exame para vê-lo no documento.
+          <TagNovo />
+        </p>
+      )}
+      {previstos.length > 0 && (
+        <div className="mb-4">
+          <ExamesComparativoTable tabela={previstos} mostrarEvidencia localizar={localizar} />
+        </div>
+      )}
+      {alem.length > 0 && (
+        <details
+          className="mb-6 rounded-lg border"
+          open={alemAberto}
+          onToggle={(e) => setAlemAberto(e.currentTarget.open)}
+        >
+          <summary className="cursor-pointer px-3 py-2 text-sm font-medium">
+            Exames além do previsto no BRNET ({alem.length})
+            <span className="block text-xs font-normal text-muted-foreground">
+              Vieram no prontuário, mas não estão previstos no BRNET para este atendimento.
+            </span>
+          </summary>
+          <div className="border-t px-1 pb-1">
+            <ExamesComparativoTable
+              tabela={alem}
+              localizar={localizar}
+              rotuloColunaExame="Exame no prontuário"
+              rotuloExtra="Além do previsto"
+            />
+          </div>
+        </details>
+      )}
+    </div>
   )
 }
 
@@ -145,7 +212,8 @@ export function DocumentDetailsModalChecagem({
   const irPara = (alvo: Alvo) => mostrarOcorrencia(alvo, destaque && ehOAlvo(alvo) ? destaque.indice + 1 : 0)
   // O botão flutuante do visualizador: à esquerda, o exame (ou campo) entre os
   // que têm ocorrência no PDF, na mesma sequência da tela — exames na ordem da
-  // Comparação Detalhada, campos na da Checklist; à direita, as ocorrências do
+  // lista (previstos no BRNET, depois os além do previsto), campos na da
+  // Checklist; à direita, as ocorrências do
   // trecho, quando há mais de uma.
   const fieldChecks = result.result.analysis_details?.field_checks ?? []
   const sequencia = (tipo: Alvo["tipo"]) =>
@@ -438,22 +506,11 @@ export function DocumentDetailsModalChecagem({
 
               <Separator />
 
-              {/* Detailed Comparison Table */}
-              <div>
-                <h4 className={cn("font-semibold", localizar ? "mb-1" : "mb-3")}>Comparação Detalhada</h4>
-                {localizar && (
-                  <p className="mb-3 flex items-center gap-2 text-xs text-muted-foreground">
-                    Clique no exame para vê-lo no documento.
-                    <TagNovo />
-                  </p>
-                )}
-
-                {Array.isArray(result.result.tabela_comparacao) && result.result.tabela_comparacao.length > 0 && (
-                  <div className="mb-6">
-                    <ExamesComparativoTable tabela={result.result.tabela_comparacao} mostrarEvidencia localizar={localizar} />
-                  </div>
-                )}
-              </div>
+              {/* Exames previstos no BRNET e, à parte, os além do previsto */}
+              <ExamesDaComparacao
+                tabela={Array.isArray(result.result.tabela_comparacao) ? result.result.tabela_comparacao : []}
+                localizar={localizar}
+              />
                 </div>
               </ScrollArea>
 
@@ -647,22 +704,11 @@ export function DocumentDetailsModalChecagem({
 
                 <Separator />
 
-                {/* Detailed Comparison Table */}
-                <div>
-                  <h4 className={cn("font-semibold", localizar ? "mb-1" : "mb-3")}>Comparação Detalhada</h4>
-                  {localizar && (
-                    <p className="mb-3 flex items-center gap-2 text-xs text-muted-foreground">
-                      Clique no exame para vê-lo no documento.
-                      <TagNovo />
-                    </p>
-                  )}
-
-                  {Array.isArray(result.result.tabela_comparacao) && result.result.tabela_comparacao.length > 0 && (
-                    <div className="mb-6">
-                      <ExamesComparativoTable tabela={result.result.tabela_comparacao} mostrarEvidencia localizar={localizar} />
-                    </div>
-                  )}
-                </div>
+                {/* Exames previstos no BRNET e, à parte, os além do previsto */}
+                <ExamesDaComparacao
+                  tabela={Array.isArray(result.result.tabela_comparacao) ? result.result.tabela_comparacao : []}
+                  localizar={localizar}
+                />
               </div>
             </ScrollArea>
           )}
