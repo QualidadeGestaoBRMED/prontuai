@@ -111,7 +111,7 @@ function ExamesDaComparacao({
 
   return (
     <div>
-      <h4 className={cn("font-semibold", localizar ? "mb-1" : "mb-3")}>Exames previstos no BRNET</h4>
+      <h4 className={cn("font-semibold", localizar ? "mb-1" : "mb-3")}>Exames previstos no BR NET</h4>
       {localizar && (
         <p className="mb-3 flex items-center gap-2 text-xs text-muted-foreground">
           Clique no exame para vê-lo no documento.
@@ -130,9 +130,9 @@ function ExamesDaComparacao({
           onToggle={(e) => setAlemAberto(e.currentTarget.open)}
         >
           <summary className="cursor-pointer px-3 py-2 text-sm font-medium">
-            Exames além do previsto no BRNET ({alem.length})
+            Exames além do previsto no BR NET ({alem.length})
             <span className="block text-xs font-normal text-muted-foreground">
-              Vieram no prontuário, mas não estão previstos no BRNET para este atendimento.
+              Vieram no prontuário, mas não estão previstos no BR NET para este atendimento.
             </span>
           </summary>
           <div className="border-t px-1 pb-1">
@@ -515,7 +515,7 @@ export function DocumentDetailsModalChecagem({
 
               <Separator />
 
-              {/* Exames previstos no BRNET e, à parte, os além do previsto */}
+              {/* Exames previstos no BR NET e, à parte, os além do previsto */}
               <ExamesDaComparacao
                 tabela={Array.isArray(result.result.tabela_comparacao) ? result.result.tabela_comparacao : []}
                 localizar={localizar}
@@ -713,7 +713,7 @@ export function DocumentDetailsModalChecagem({
 
                 <Separator />
 
-                {/* Exames previstos no BRNET e, à parte, os além do previsto */}
+                {/* Exames previstos no BR NET e, à parte, os além do previsto */}
                 <ExamesDaComparacao
                   tabela={Array.isArray(result.result.tabela_comparacao) ? result.result.tabela_comparacao : []}
                   localizar={localizar}
