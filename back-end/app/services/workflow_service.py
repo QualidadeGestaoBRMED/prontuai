@@ -5,7 +5,7 @@ import unicodedata
 from typing import Dict, Any, Optional, List
 from fastapi import UploadFile
 from app.services import ocr_service, brmed_service, validacao_service
-from app.services import exam_catalog_source, laudo_evidencia, evidencia_laboratorio
+from app.services import exam_catalog_source, laudo_evidencia, evidencia_laboratorio, layout_ocr
 from app.core.config import settings
 from app.core import metrics
 from app.core.pii import mask_cpf, mask_identifier, mask_name
@@ -1126,6 +1126,9 @@ async def _processar_documento_completo_impl(
         metrics.DOCUMENTOS_PROCESSADOS.add(1, {"status": "error", **clinica_labels})
         metrics.WORKFLOW_DURACAO.record(time.perf_counter() - start_total)
         return {
+            # Posição das linhas no PDF. Sai daqui antes de gravar o payload:
+            # ver `layout_ocr.separar`.
+            layout_ocr.CHAVE_RESULTADO: ocr_resultado.get("layout"),
             "status": "error",
             "cpf": cpf_fallback,
             "cpf_processado": cpf_fallback,
@@ -1354,6 +1357,9 @@ async def _processar_documento_completo_impl(
 
     # Prepara o objeto de resposta final para o frontend
     resposta_final = {
+        # Posição das linhas no PDF. Sai daqui antes de gravar o payload: ver
+        # `layout_ocr.separar`.
+        layout_ocr.CHAVE_RESULTADO: ocr_resultado.get("layout"),
         "run_id": run_id,
         "cpf_processado": cpf_final if cpf_final else "Não encontrado",
         "cpf": cpf_final if cpf_final else "Não encontrado",  # Apelido para compatibilidade

@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, status, UploadFile, File, Body, Depends, Request
 from fastapi.responses import StreamingResponse
-from app.services import workflow_service, brmed_service
+from app.services import workflow_service, brmed_service, layout_ocr
 from app.core.job_manager import job_manager
 from app.core.auth import create_upload_token, require_sender, require_upload_sender, get_current_user
 from app.models.user import User, UserRole
@@ -90,6 +90,17 @@ def _get_clinic_cnpj(clinic_id: str | None) -> str | None:
     except Exception as exc:
         logger.warning(f"[CLINIC] Falha ao obter CNPJ da clínica {clinic_id}: {exc}")
         return None
+
+
+def _gravar_layout(document_id: str, layout: dict | None) -> None:
+    """Grava a posição das linhas do OCR no PDF (ver `layout_ocr`). Falha aqui
+    só tira da checagem o atalho até o exame; o documento já está salvo."""
+    if not layout:
+        return
+    try:
+        user_db.save_document_layout(document_id, layout)
+    except Exception as e:
+        logger.warning(f"[DB] Layout do OCR não gravado para {document_id}: {type(e).__name__}")
 
 
 def _get_clinic_name(clinic_id: str | None) -> str | None:
@@ -197,6 +208,7 @@ async def processar_documento_completo_api(
             clinic_id=current_user.clinic_id,
             clinic_name=_get_clinic_name(current_user.clinic_id),
         )
+        layout = layout_ocr.separar(resultado)
         logger.info(f"[REQUEST] Processamento concluído com sucesso para: {arquivo.filename}")
 
         # Salvar documento no banco de dados
@@ -255,6 +267,7 @@ async def processar_documento_completo_api(
 
                 logger.info(f"[DB] Documento salvo com ID: {document.id}")
                 resultado['document_id'] = document.id
+                _gravar_layout(document.id, layout)
                 try:
                     set_audit_context(
                         {
@@ -374,6 +387,8 @@ async def processar_documento_stream_api(
                 clinic_id=current_user.clinic_id,
                 clinic_name=_get_clinic_name(current_user.clinic_id),
             )
+
+            layout_ocr.separar(resultado)
 
             # Yield todos os eventos coletados
             for event in progress_events:
@@ -728,6 +743,7 @@ async def process_document_background(
             clinic_id=clinic_id,
             clinic_name=clinic_name,
         )
+        layout = layout_ocr.separar(resultado)
 
         # Salvar documento no banco
         try:
@@ -785,6 +801,7 @@ async def process_document_background(
                 rejection_reason=rejection_reason if validation_status == "rejected" else None,
             )
             logger.info(f"[DB] Documento salvo via async com ID: {document.id} (job_id={job_id})")
+            _gravar_layout(document.id, layout)
             try:
                 resultado["document_id"] = document.id
             except Exception:

@@ -40,6 +40,7 @@ from app.services.patient_name_extractor import extract_patient_name_from_markdo
 from app.core import metrics
 from app.core.pii import mask_cpf, mask_identifier, mask_name
 from app.core import pii_redaction
+from app.services import layout_ocr
 
 logger = logging.getLogger(__name__)
 
@@ -817,13 +818,15 @@ def _detect_document_text_with_retry(document_bytes: bytes, context: str) -> dic
     raise RuntimeError(f"Textract síncrono falhou sem erro explícito ({context})")
 
 
-def processar_arquivo_textract_sincrono(file_path: str) -> str:
+def processar_arquivo_textract_sincrono(file_path: str, layout: Optional[list] = None) -> str:
     """
     Processa documento via AWS Textract usando API síncrona (DetectDocumentText).
     Muito mais rápido (15-30s) mas limitado a arquivos de até 5MB.
 
     Args:
         file_path: Caminho absoluto do arquivo no disco
+        layout: Quando passada, recebe as linhas com a posição na página
+            (`layout_ocr.linhas_textract`).
 
     Returns:
         str: Conteúdo em formato markdown
@@ -869,6 +872,8 @@ def processar_arquivo_textract_sincrono(file_path: str) -> str:
         # Converter para markdown. A API síncrona só aceita documento de uma
         # página (imagem), então ele é a página 1.
         markdown = textract_to_markdown(response, pagina=1)
+        if layout is not None:
+            layout.extend(layout_ocr.linhas_textract(response, pagina=1))
         logger.info(f"[OCR] Conversão concluída. Markdown gerado: {len(markdown)} caracteres")
 
         return markdown
@@ -903,10 +908,14 @@ def processar_arquivo_textract_sincrono(file_path: str) -> str:
 def processar_pdf_textract_sincrono_por_pagina(
     file_path: str,
     progress_hook: Optional[Callable[[str], None]] = None,
+    layout: Optional[list] = None,
 ) -> str:
     """
     Processa PDF página a página usando Textract síncrono.
     Útil para evitar fila do Textract assíncrono.
+
+    `layout`, quando passada, recebe as linhas com a posição na página
+    (`layout_ocr.linhas_textract`).
     """
     logger.info(f"[OCR] Processando PDF por pagina com Textract (Síncrono): {file_path}")
 
@@ -950,6 +959,8 @@ def processar_pdf_textract_sincrono_por_pagina(
                 context=f"pagina={idx}/{total_pages} size={tamanho_mb:.2f}MB",
             )
             markdown_parts.append(textract_to_markdown(response, pagina=idx))
+            if layout is not None:
+                layout.extend(layout_ocr.linhas_textract(response, pagina=idx))
             if settings.TEXTRACT_SYNC_PAGE_DELAY_SECONDS > 0 and idx < total_pages:
                 time.sleep(settings.TEXTRACT_SYNC_PAGE_DELAY_SECONDS)
 
@@ -976,7 +987,8 @@ def processar_pdf_textract_sincrono_por_pagina(
 
 def processar_arquivo_textract(
     file_path: str,
-    progress_hook: Optional[Callable[[str], None]] = None
+    progress_hook: Optional[Callable[[str], None]] = None,
+    layout: Optional[list] = None,
 ) -> str:
     """
     Processa documento via AWS Textract usando API assíncrona (StartDocumentTextDetection).
@@ -984,6 +996,8 @@ def processar_arquivo_textract(
 
     Args:
         file_path: Caminho absoluto do arquivo no disco
+        layout: Quando passada, recebe as linhas com a posição na página
+            (`layout_ocr.linhas_textract`).
 
     Returns:
         str: Conteúdo em formato markdown
@@ -1130,6 +1144,8 @@ def processar_arquivo_textract(
         t_conv = time.perf_counter()
         logger.info(f"[OCR] Convertendo {len(all_blocks)} blocos em markdown...")
         markdown = textract_to_markdown({'Blocks': all_blocks})
+        if layout is not None:
+            layout.extend(layout_ocr.linhas_textract({'Blocks': all_blocks}))
 
         logger.info(f"[OCR] Conversão concluída em {time.perf_counter() - t_conv:.2f}s. Markdown gerado: {len(markdown)} caracteres")
         return markdown
@@ -1487,6 +1503,11 @@ async def _ocr_pipeline_impl(file, salvar_markdown=True, progress_hook: Optional
 
     logger.info(f"[OCR] Iniciando conversão com {motor_ocr} para: {file.filename}")
 
+    # Posição de cada linha na página, para a checagem levar ao exame no PDF.
+    # Cada fallback recomeça do zero: a tentativa que falhou pode ter deixado
+    # páginas pela metade, e o layout precisa casar 1:1 com o markdown final.
+    layout: list = []
+
     try:
         # Feature Toggle: escolher motor de OCR
         if usar_textract:
@@ -1496,20 +1517,24 @@ async def _ocr_pipeline_impl(file, salvar_markdown=True, progress_hook: Optional
                     markdown = await asyncio.to_thread(
                         processar_pdf_textract_sincrono_por_pagina,
                         temp_path,
-                        progress_hook
+                        progress_hook,
+                        layout,
                     )
                 elif file_size <= 5 * 1024 * 1024:
                     markdown = await asyncio.to_thread(
                         processar_arquivo_textract_sincrono,
-                        temp_path
+                        temp_path,
+                        layout,
                     )
                 else:
                     markdown = await asyncio.to_thread(
                         processar_arquivo_textract,
                         temp_path,
-                        progress_hook
+                        progress_hook,
+                        layout,
                     )
             except ClientError as e:
+                layout.clear()
                 error_code = e.response.get('Error', {}).get('Code')
                 if error_code == 'UnsupportedDocumentException':
                     logger.warning(
@@ -1518,18 +1543,22 @@ async def _ocr_pipeline_impl(file, salvar_markdown=True, progress_hook: Optional
                     markdown = await asyncio.to_thread(
                         processar_arquivo_textract,
                         temp_path,
-                        progress_hook
+                        progress_hook,
+                        layout,
                     )
                 else:
                     raise
             except ValueError as e:
+                layout.clear()
                 logger.warning(f"[OCR] {e} Fallback para modo assincrono.")
                 markdown = await asyncio.to_thread(
                     processar_arquivo_textract,
                     temp_path,
-                    progress_hook
+                    progress_hook,
+                    layout,
                 )
             except TimeoutError as e:
+                layout.clear()
                 metrics.TEXTRACT_TIMEOUT.add(1)
                 if settings.TEXTRACT_FALLBACK_TO_LOCAL:
                     logger.warning(f"[OCR] {e}. Fallback para OCR local (Docling).")
@@ -1544,6 +1573,7 @@ async def _ocr_pipeline_impl(file, salvar_markdown=True, progress_hook: Optional
                 else:
                     raise
             except (EndpointConnectionError, BotoCoreError) as e:
+                layout.clear()
                 if settings.TEXTRACT_FALLBACK_TO_LOCAL:
                     logger.warning(f"[OCR] Falha de conexão Textract: {e}. Fallback para OCR local (Docling).")
                     if progress_hook:
@@ -1628,6 +1658,9 @@ async def _ocr_pipeline_impl(file, salvar_markdown=True, progress_hook: Optional
         "patient_name": patient_name,
         "exames": exames_extraidos,
         "markdown_content": markdown,  # Adiciona o markdown para o orquestrador usar
+        # Só o Textract dá posição; Docling sai sem layout. Não vai para o
+        # payload do documento: quem grava separa (ver `layout_ocr`).
+        "layout": layout_ocr.montar(layout),
     }
 
     if "erro" in exames_info:
