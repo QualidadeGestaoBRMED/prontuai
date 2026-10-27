@@ -60,7 +60,7 @@ export const API_ENDPOINTS = {
   DOCUMENT_COMPLEMENTO: (id: string) => `${API_PROXY_BASE}/v1/documents/${id}/complemento`,
   // Valores lidos no laudo e a situação de cada um (normal / acima / abaixo).
   DOCUMENT_NORMALIDADE: (id: string) => `${API_PROXY_BASE}/v1/documents/${id}/normalidade`,
-  // Onde cada exame da Comparação Detalhada (e cada valor lido) aparece no PDF.
+  // Onde cada exame e cada campo da checklist aparecem no PDF (página e caixa).
   DOCUMENT_LOCALIZACOES: (id: string) => `${API_PROXY_BASE}/v1/documents/${id}/localizacoes`,
   // Texto do OCR com a posição de cada linha, para a busca no documento.
   DOCUMENT_TEXTO: (id: string) => `${API_PROXY_BASE}/v1/documents/${id}/texto`,

@@ -50,6 +50,12 @@ export interface ExamesComparativoTableProps {
     onLocalizar: (exame: string) => void;
     onLocalizarValor?: (exame: string, parametro: ParametroLido) => void;
   };
+  /**
+   * Para a tabela dos exames além do previsto no BRNET: o cabeçalho da primeira
+   * coluna e o status no lugar de "Extra no OCR". Sem eles, fica como antes.
+   */
+  rotuloColunaExame?: string;
+  rotuloExtra?: string;
 }
 
 const SITUACAO: Record<SituacaoParametro, { label: string; className: string }> = {
@@ -92,8 +98,8 @@ function CelulaNormalidade({ item, parametros, carregando, onLocalizar, ativo }:
                   title="Ver o valor no documento"
                   className={cn(
                     "rounded-sm px-0.5 font-semibold underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30",
-                    // Mesmo contorno do trecho no PDF.
-                    ativo === p.chave ? "text-primary ring-2 ring-[#007891]" : "text-foreground hover:text-primary",
+                    // Mesmo marca-texto do trecho no PDF.
+                    ativo === p.chave ? "bg-yellow-300/80 text-foreground" : "text-foreground hover:text-primary",
                   )}
                 >
                   {p.valor_texto}{p.unidade ? ` ${p.unidade}` : ""}
@@ -116,7 +122,7 @@ function CelulaNormalidade({ item, parametros, carregando, onLocalizar, ativo }:
 }
 
 // Função auxiliar para obter o ícone e a cor com base no status do exame
-function getConformidade(status: TabelaComparacaoItem['status']) {
+function getConformidade(status: TabelaComparacaoItem['status'], rotuloExtra = "Extra no OCR") {
   switch (status) {
     case "encontrado":
       return { 
@@ -132,7 +138,7 @@ function getConformidade(status: TabelaComparacaoItem['status']) {
       };
     case "extra_no_ocr":
       return { 
-        label: "Extra no OCR", 
+        label: rotuloExtra, 
         icon: <AlertTriangleIcon className="inline-flex stroke-yellow-500" size={16} />, 
         color: "text-yellow-500" 
       };
@@ -151,41 +157,63 @@ const SO_NA_LISTA = {
 };
 
 // Componente da tabela de comparação de exames
-export default function ExamesComparativoTable({ tabela = [], mostrarEvidencia = false, normalidade, localizar }: ExamesComparativoTableProps) {
+/**
+ * A ordem em que a tabela mostra os exames: primeiro os "encontrados", depois os
+ * "faltantes", depois os "extras". Com a evidência ligada, os "só na lista do ASO"
+ * abrem o grupo dos encontrados (continuam encontrados, mas são os que o revisor
+ * precisa conferir no PDF); com a normalidade, os de valor fora da faixa vêm logo
+ * depois. O sort é estável: fora isso, a ordem do back-end se mantém. Exportada
+ * para quem precisa seguir a mesma sequência — o botão que passa de exame em
+ * exame no PDF.
+ */
+export function ordenarComparativo(
+  tabela: TabelaComparacaoItem[],
+  mostrarEvidencia = false,
+  normalidade?: Record<string, ParametroLido[]>,
+): TabelaComparacaoItem[] {
+  const ehSoLista = (item: TabelaComparacaoItem) =>
+    mostrarEvidencia && item.evidencia === "so_lista";
+  const temAlterado = (item: TabelaComparacaoItem) =>
+    Boolean(normalidade?.[item.exame]?.some(foraDaFaixa));
+  const getStatusOrder = (status: TabelaComparacaoItem['status']) => {
+    switch (status) {
+      case "encontrado":
+        return 1;
+      case "faltante":
+        return 2;
+      case "extra_no_ocr":
+        return 3;
+      default:
+        return 4;
+    }
+  };
+  return [...tabela].sort((a, b) => {
+    const porStatus = getStatusOrder(a.status) - getStatusOrder(b.status);
+    if (porStatus !== 0) return porStatus;
+    return (Number(ehSoLista(b)) - Number(ehSoLista(a))) || (Number(temAlterado(b)) - Number(temAlterado(a)));
+  });
+}
+
+export default function ExamesComparativoTable({
+  tabela = [],
+  mostrarEvidencia = false,
+  normalidade,
+  localizar,
+  rotuloColunaExame = "Exame Previsto",
+  rotuloExtra,
+}: ExamesComparativoTableProps) {
   const ehSoLista = (item: TabelaComparacaoItem) =>
     mostrarEvidencia && item.evidencia === "so_lista";
   const temAlterado = (item: TabelaComparacaoItem) =>
     Boolean(normalidade?.porExame[item.exame]?.some(foraDaFaixa));
-
-  // Ordena os exames: primeiro os "encontrados", depois os "faltantes", depois os "extras".
-  // Com a evidência ligada, os "só na lista do ASO" abrem o grupo dos encontrados
-  // (continuam encontrados, mas são os que o revisor precisa conferir no PDF).
-  // O sort é estável: fora isso, a ordem do back-end se mantém.
-  const sortedExames = [...tabela].sort((a, b) => {
-    const getStatusOrder = (status: TabelaComparacaoItem['status']) => {
-      switch (status) {
-        case "encontrado":
-          return 1;
-        case "faltante":
-          return 2;
-        case "extra_no_ocr":
-          return 3;
-        default:
-          return 4;
-      }
-    };
-    const porStatus = getStatusOrder(a.status) - getStatusOrder(b.status);
-    if (porStatus !== 0) return porStatus;
-    // Com a normalidade ligada, os de valor fora da faixa vêm logo depois.
-    return (Number(ehSoLista(b)) - Number(ehSoLista(a))) || (Number(temAlterado(b)) - Number(temAlterado(a)));
-  });
+  const sortedExames = ordenarComparativo(tabela, mostrarEvidencia, normalidade?.porExame);
 
   return (
     <TooltipProvider>
       <Table className="w-full">
         <TableHeader>
           <TableRow>
-            <TableHead className={normalidade ? "w-[30%]" : "w-2/5"}>Exame Previsto</TableHead>
+            <TableHead className={normalidade ? "w-[30%]" : "w-2/5"}>{rotuloColunaExame}</TableHead>
             <TableHead className={normalidade ? "w-[15%] text-center" : "w-1/5 text-center"}>Status</TableHead>
             {normalidade && <TableHead className="w-[38%] text-left">Normalidade</TableHead>}
             <TableHead className={normalidade ? "w-[17%] text-left" : "w-2/5 text-left"}>Justificativa</TableHead>
@@ -193,7 +221,7 @@ export default function ExamesComparativoTable({ tabela = [], mostrarEvidencia =
         </TableHeader>
         <TableBody>
           {sortedExames.map((item, index) => {
-            const conf = ehSoLista(item) ? SO_NA_LISTA : getConformidade(item.status);
+            const conf = ehSoLista(item) ? SO_NA_LISTA : getConformidade(item.status, rotuloExtra);
             const localizavel = Boolean(localizar?.porExame[item.exame]);
             const selecionado = localizar?.ativo?.exame === item.exame;
             return (

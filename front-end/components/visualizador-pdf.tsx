@@ -23,22 +23,32 @@ function carregarPdfjs(): Promise<Pdfjs> {
 }
 
 /**
- * Trecho a destacar: cada caixa ganha um contorno, sem preenchimento por cima
- * do texto. `chave` muda a cada clique, para repetir o mesmo destaque.
+ * Trecho a destacar: cada caixa ganha o amarelo de marca-texto por cima do
+ * texto. `chave` muda a cada clique, para repetir o mesmo destaque.
  */
 export type Destaque = Localizacao & { chave: number }
 
-/** Quando o trecho aparece mais de uma vez: o botão flutuante passa entre eles. */
-export type NavegacaoOcorrencias = {
+/**
+ * Um controle do botão flutuante, "‹ rótulo ›": passar entre as ocorrências do
+ * trecho, ou de um exame (campo) para o seguinte.
+ */
+export type ControleNavegacao = {
   rotulo: string
+  /** Tooltip do rótulo (o nome do exame ou campo). */
+  dica?: string
+  /** Para leitor de tela: "Ocorrência anterior" / "Próxima ocorrência". */
+  rotuloAnterior: string
+  rotuloProximo: string
   onAnterior: () => void
-  onProxima: () => void
+  onProximo: () => void
 }
 
 type Tamanho = { largura: number; altura: number }
 
-// Folga do contorno em volta da caixa, em px: a caixa do Textract encosta no texto.
-const FOLGA = 3
+// Folga do marca-texto em volta da caixa, em px: a caixa do Textract encosta no
+// texto. Mais larga que alta, como o traço de uma caneta.
+const FOLGA_X = 2
+const FOLGA_Y = 1
 // Acima disso a busca para de listar: termo curto demais casa o documento todo.
 const MAX_RESULTADOS = 500
 
@@ -115,11 +125,14 @@ type EstadoTexto = "ocioso" | "carregando" | "pronto" | "indisponivel"
  * isso que o atalho "clicar no exame e ver onde ele está" precisa.
  *
  * Mesmo visual do leitor de antes: o documento inteiro numa rolagem só, cada
- * página na largura toda, sobre o cinza-escuro do leitor.
+ * página na largura toda, sobre o cinza-escuro do leitor. O trecho destacado
+ * ganha amarelo de marca-texto.
  *
- * A busca ("Buscar no documento", também pelo Ctrl+F) procura no texto que o
- * OCR leu, que `carregarTexto` traz com a posição de cada linha: PDF escaneado
- * não tem texto próprio, e a busca do navegador não acha nada nele. Sem essa
+ * A busca fica recolhida numa lupa no canto: o clique na lupa ou o Ctrl+F
+ * abre o campo "Buscar no documento", e o Ctrl+F de novo (ou o ✕) fecha e
+ * limpa. Sempre aberta, ela confundia quem revisa. Procura no texto que o OCR
+ * leu, que `carregarTexto` traz com a posição de cada linha: PDF escaneado não
+ * tem texto próprio, e a busca do navegador não acha nada nele. Sem essa
  * leitura gravada (documento antigo), procura no texto do próprio PDF, quando
  * ele tem.
  *
@@ -137,14 +150,15 @@ export function VisualizadorPdf({
   url,
   titulo,
   destaque,
-  ocorrencias,
+  navegacao,
   carregarTexto,
 }: {
   arquivo: Blob | null
   url: string
   titulo: string
   destaque?: Destaque | null
-  ocorrencias?: NavegacaoOcorrencias | null
+  /** Controles do botão flutuante; vazio, o botão não aparece. */
+  navegacao?: ControleNavegacao[]
   /** Texto do OCR com a posição de cada linha; null quando não há. */
   carregarTexto?: () => Promise<LinhaTexto[] | null>
 }) {
@@ -160,6 +174,10 @@ export function VisualizadorPdf({
   const carregarTextoRef = useRef(carregarTexto)
   carregarTextoRef.current = carregarTexto
   const [busca, setBusca] = useState("")
+  const [buscaAberta, setBuscaAberta] = useState(false)
+  // O atalho do teclado é registrado uma vez só; lê o estado por aqui.
+  const buscaAbertaRef = useRef(buscaAberta)
+  buscaAbertaRef.current = buscaAberta
   const [estadoTexto, setEstadoTexto] = useState<EstadoTexto>("ocioso")
   const [linhasTexto, setLinhasTexto] = useState<LinhaTexto[]>([])
   const [atual, setAtual] = useState(0)
@@ -172,6 +190,7 @@ export function VisualizadorPdf({
     setPaginas([])
     setFalhou(false)
     setBusca("")
+    setBuscaAberta(false)
     setEstadoTexto("ocioso")
     setLinhasTexto([])
     ;(async () => {
@@ -283,13 +302,28 @@ export function VisualizadorPdf({
     if (resultados.length) setAtual((i) => (i + delta + resultados.length) % resultados.length)
   }
 
-  // Ctrl+F abre esta busca: a do navegador não acha nada no PDF desenhado.
+  // Fechar limpa: as marcações da busca somem junto com o campo.
+  const fecharBusca = () => {
+    setBusca("")
+    setBuscaAberta(false)
+  }
+
+  // Ao abrir, o cursor já vai para o campo.
+  useEffect(() => {
+    if (buscaAberta) campoBusca.current?.focus()
+  }, [buscaAberta])
+
+  // Ctrl+F abre e fecha esta busca: a do navegador não acha nada no PDF desenhado.
   useEffect(() => {
     const aoTeclar = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "f") {
         e.preventDefault()
-        campoBusca.current?.focus()
-        campoBusca.current?.select()
+        if (buscaAbertaRef.current) {
+          setBusca("")
+          setBuscaAberta(false)
+        } else {
+          setBuscaAberta(true)
+        }
       }
     }
     window.addEventListener("keydown", aoTeclar)
@@ -314,58 +348,69 @@ export function VisualizadorPdf({
   return (
     <div ref={setRaiz} className="relative h-full overflow-auto bg-[#525659]" aria-label={titulo}>
       {documento && (
-        // Altura zero: a caixa flutua sobre as páginas sem empurrá-las para baixo.
+        // Altura zero: a lupa e a caixa flutuam sobre as páginas sem empurrá-las para baixo.
         <div className="sticky top-0 z-30 h-0">
-          <div className="absolute right-3 top-2 flex items-center gap-1 rounded-md border bg-white/95 py-1 pl-2 pr-1 text-xs shadow-md">
-            <SearchIcon className="size-3.5 shrink-0 text-muted-foreground" />
-            <input
-              ref={campoBusca}
-              value={busca}
-              onChange={(e) => {
-                setBusca(e.target.value)
-                void prepararTexto()
-              }}
-              onFocus={() => void prepararTexto()}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault()
-                  irPara(e.shiftKey ? -1 : 1)
-                }
-              }}
-              placeholder="Buscar no documento"
+          {!buscaAberta ? (
+            <button
+              type="button"
+              onClick={() => setBuscaAberta(true)}
+              title="Buscar no documento (Ctrl+F)"
               aria-label="Buscar no documento"
-              className="w-40 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
-            />
-            {situacaoBusca && <span className="whitespace-nowrap px-1 tabular-nums text-muted-foreground">{situacaoBusca}</span>}
-            <button
-              type="button"
-              onClick={() => irPara(-1)}
-              disabled={!resultados.length}
-              className="rounded p-0.5 hover:bg-muted disabled:opacity-30"
-              aria-label="Resultado anterior"
+              className="absolute right-3 top-2 grid size-8 place-items-center rounded-full border bg-white/95 text-muted-foreground shadow-md hover:text-foreground"
             >
-              <ChevronUpIcon className="size-4" />
+              <SearchIcon className="size-4" />
             </button>
-            <button
-              type="button"
-              onClick={() => irPara(1)}
-              disabled={!resultados.length}
-              className="rounded p-0.5 hover:bg-muted disabled:opacity-30"
-              aria-label="Próximo resultado"
-            >
-              <ChevronDownIcon className="size-4" />
-            </button>
-            {busca && (
+          ) : (
+            <div className="absolute right-3 top-2 flex items-center gap-1 rounded-md border bg-white/95 py-1 pl-2 pr-1 text-xs shadow-md">
+              <SearchIcon className="size-3.5 shrink-0 text-muted-foreground" />
+              <input
+                ref={campoBusca}
+                value={busca}
+                onChange={(e) => {
+                  setBusca(e.target.value)
+                  void prepararTexto()
+                }}
+                onFocus={() => void prepararTexto()}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault()
+                    irPara(e.shiftKey ? -1 : 1)
+                  }
+                }}
+                placeholder="Buscar no documento"
+                aria-label="Buscar no documento"
+                className="w-40 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+              />
+              {situacaoBusca && <span className="whitespace-nowrap px-1 tabular-nums text-muted-foreground">{situacaoBusca}</span>}
               <button
                 type="button"
-                onClick={() => setBusca("")}
+                onClick={() => irPara(-1)}
+                disabled={!resultados.length}
+                className="rounded p-0.5 hover:bg-muted disabled:opacity-30"
+                aria-label="Resultado anterior"
+              >
+                <ChevronUpIcon className="size-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => irPara(1)}
+                disabled={!resultados.length}
+                className="rounded p-0.5 hover:bg-muted disabled:opacity-30"
+                aria-label="Próximo resultado"
+              >
+                <ChevronDownIcon className="size-4" />
+              </button>
+              <button
+                type="button"
+                onClick={fecharBusca}
+                title="Fechar busca (Ctrl+F)"
                 className="rounded p-0.5 hover:bg-muted"
-                aria-label="Limpar busca"
+                aria-label="Fechar busca"
               >
                 <XIcon className="size-4" />
               </button>
-            )}
-          </div>
+            </div>
+          )}
         </div>
       )}
       {!documento || !escala ? (
@@ -381,55 +426,63 @@ export function VisualizadorPdf({
             <PaginaPdf key={i} documento={documento} numero={i + 1} escala={escala} tamanho={tamanho} raiz={raiz}>
               {destaque?.pagina === i + 1 &&
                 destaque.caixas.map((c, j) => (
-                  <Contorno key={`d-${destaque.chave}-${j}`} caixa={c} className="border-2 border-[#007891]" />
+                  <MarcaTexto key={`d-${destaque.chave}-${j}`} caixa={c} forte />
                 ))}
               {resultados.map((r, j) =>
                 r.pagina === i + 1 ? (
-                  <Contorno
-                    key={`b-${j}`}
-                    caixa={r.caixa}
-                    className={j === atual ? "border-2 border-[#007891]" : "border border-[#007891]/45"}
-                  />
+                  <MarcaTexto key={`b-${j}`} caixa={r.caixa} forte={j === atual} />
                 ) : null,
               )}
             </PaginaPdf>
           ))}
         </div>
       )}
-      {documento && ocorrencias && (
+      {documento && !!navegacao?.length && (
         <div className="sticky bottom-3 z-30 mx-auto flex w-fit items-center gap-1 rounded-md bg-slate-900/85 p-1 text-xs tabular-nums text-white shadow-lg">
-          <button
-            type="button"
-            onClick={ocorrencias.onAnterior}
-            className="rounded p-1 hover:bg-white/15"
-            aria-label="Ocorrência anterior"
-          >
-            <ChevronLeftIcon className="size-4" />
-          </button>
-          <span className="px-2 text-center">{ocorrencias.rotulo}</span>
-          <button
-            type="button"
-            onClick={ocorrencias.onProxima}
-            className="rounded p-1 hover:bg-white/15"
-            aria-label="Próxima ocorrência"
-          >
-            <ChevronRightIcon className="size-4" />
-          </button>
+          {navegacao.map((controle, i) => (
+            <div key={controle.rotuloProximo} className={`flex items-center gap-1 ${i ? "border-l border-white/20 pl-1" : ""}`}>
+              <button
+                type="button"
+                onClick={controle.onAnterior}
+                className="rounded p-1 hover:bg-white/15"
+                aria-label={controle.rotuloAnterior}
+              >
+                <ChevronLeftIcon className="size-4" />
+              </button>
+              <span className="max-w-56 truncate px-2 text-center" title={controle.dica ?? controle.rotulo}>
+                {controle.rotulo}
+              </span>
+              <button
+                type="button"
+                onClick={controle.onProximo}
+                className="rounded p-1 hover:bg-white/15"
+                aria-label={controle.rotuloProximo}
+              >
+                <ChevronRightIcon className="size-4" />
+              </button>
+            </div>
+          ))}
         </div>
       )}
     </div>
   )
 }
 
-function Contorno({ caixa, className }: { caixa: Caixa; className: string }) {
+/**
+ * Amarelo de marca-texto sobre o trecho. O `mix-blend-multiply` tinge o papel
+ * e deixa a tinta escura por baixo, como uma caneta — e não uma caixa por cima
+ * do texto. `forte` para o trecho atual; o fraco marca os demais resultados da
+ * busca.
+ */
+function MarcaTexto({ caixa, forte = false }: { caixa: Caixa; forte?: boolean }) {
   return (
     <div
-      className={`pointer-events-none absolute rounded-[3px] ${className}`}
+      className={`pointer-events-none absolute rounded-[2px] mix-blend-multiply ${forte ? "bg-yellow-300/80" : "bg-yellow-200/50"}`}
       style={{
-        top: `calc(${caixa.y * 100}% - ${FOLGA}px)`,
-        left: `calc(${caixa.x * 100}% - ${FOLGA}px)`,
-        width: `calc(${caixa.w * 100}% + ${2 * FOLGA}px)`,
-        height: `calc(${caixa.h * 100}% + ${2 * FOLGA}px)`,
+        top: `calc(${caixa.y * 100}% - ${FOLGA_Y}px)`,
+        left: `calc(${caixa.x * 100}% - ${FOLGA_X}px)`,
+        width: `calc(${caixa.w * 100}% + ${2 * FOLGA_X}px)`,
+        height: `calc(${caixa.h * 100}% + ${2 * FOLGA_Y}px)`,
       }}
     />
   )
