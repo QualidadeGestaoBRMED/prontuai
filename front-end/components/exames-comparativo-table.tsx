@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react"
 import { CheckIcon, XIcon, InfoIcon, AlertTriangleIcon } from "lucide-react"
 
 import {
@@ -208,6 +209,17 @@ export default function ExamesComparativoTable({
     Boolean(normalidade?.porExame[item.exame]?.some(foraDaFaixa));
   const sortedExames = ordenarComparativo(tabela, mostrarEvidencia, normalidade?.porExame);
 
+  // Quem passa de exame em exame pelo botão do PDF não está olhando a lista: ela
+  // rola junto, para a linha do exame em foco ficar à vista.
+  const corpo = useRef<HTMLTableSectionElement>(null);
+  const exameAtivo = localizar?.ativo?.exame;
+  useEffect(() => {
+    if (!exameAtivo) return;
+    corpo.current
+      ?.querySelector('tr[aria-selected="true"]')
+      ?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }, [exameAtivo]);
+
   return (
     <TooltipProvider>
       <Table className="w-full">
@@ -219,7 +231,7 @@ export default function ExamesComparativoTable({
             <TableHead className={normalidade ? "w-[17%] text-left" : "w-2/5 text-left"}>Justificativa</TableHead>
           </TableRow>
         </TableHeader>
-        <TableBody>
+        <TableBody ref={corpo}>
           {sortedExames.map((item, index) => {
             const conf = ehSoLista(item) ? SO_NA_LISTA : getConformidade(item.status, rotuloExtra);
             const localizavel = Boolean(localizar?.porExame[item.exame]);

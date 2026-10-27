@@ -63,7 +63,8 @@ export function useNormalidade(documentId?: string | null): EstadoNormalidade {
  *
  * A seção dos além do previsto abre sozinha quando o destaque no PDF chega num
  * deles (pelo botão que passa de exame em exame), para a linha selecionada não
- * ficar escondida.
+ * ficar escondida. Abre já no render em que o destaque chega, e não num efeito
+ * depois: a tabela rola até a linha em seguida, e a linha precisa estar à vista.
  *
  * `localizar` liga o atalho até o PDF: a linha do exame e o valor lido levam
  * ao trecho no documento (ver `ExamesComparativoTable`).
@@ -81,10 +82,11 @@ export function ComparacaoDetalhada({
   const alem = tabela.filter((item) => item.status === "extra_no_ocr")
   const [alemAberto, setAlemAberto] = useState(false)
   const ativo = localizar?.ativo?.exame
-  useEffect(() => {
+  const [ativoAnterior, setAtivoAnterior] = useState(ativo)
+  if (ativo !== ativoAnterior) {
+    setAtivoAnterior(ativo)
     if (ativo && alem.some((item) => item.exame === ativo)) setAlemAberto(true)
-    // `alem` muda de identidade a cada render; o que importa é o exame ativo.
-  }, [ativo]) // eslint-disable-line react-hooks/exhaustive-deps
+  }
 
   const normalidade =
     estado.fase === "indisponivel"

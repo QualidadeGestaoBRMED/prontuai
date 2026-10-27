@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import { CheckIcon, XIcon, Download, Loader2, MessageSquareIcon } from "lucide-react"
@@ -45,6 +45,12 @@ function ItemChecklist({
   selecionado: boolean
   onLocalizar: () => void
 }) {
+  // Como a lista de exames: ao passar de campo em campo pelo botão do PDF, a
+  // checklist rola até o campo em foco.
+  const botao = useRef<HTMLButtonElement>(null)
+  useEffect(() => {
+    if (selecionado) botao.current?.scrollIntoView({ block: "nearest", behavior: "smooth" })
+  }, [selecionado])
   const conteudo = (
     <>
       <span className="text-sm">{item.label}</span>
@@ -61,6 +67,7 @@ function ItemChecklist({
   }
   return (
     <button
+      ref={botao}
       type="button"
       onClick={onLocalizar}
       aria-pressed={selecionado}
