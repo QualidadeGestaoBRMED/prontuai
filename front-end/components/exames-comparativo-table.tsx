@@ -15,6 +15,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import { TabelaComparacaoItem } from "@/types/process"
+import { cn } from "@/lib/utils"
 
 // Define as props do componente, que agora recebe a tabela de comparação
 export interface ExamesComparativoTableProps {
@@ -27,6 +28,18 @@ export interface ExamesComparativoTableProps {
    * seguem como antes. Documento antigo, sem os campos, renderiza igual.
    */
   mostrarEvidencia?: boolean;
+  /**
+   * Liga o atalho até o PDF, como a lista de registros da Triagem BR NET: a
+   * linha do exame é o registro, e clicar nela destaca no documento onde ele
+   * aparece. `porExame` diz quantas ocorrências cada exame tem; clicar de novo
+   * na mesma linha passa para a próxima. Exame sem ocorrência não é clicável.
+   * Sem a prop, a tabela fica como antes (chat, tela da clínica).
+   */
+  localizar?: {
+    porExame: Record<string, number>;
+    ativo?: { exame: string; indice: number } | null;
+    onLocalizar: (exame: string) => void;
+  };
 }
 
 // Função auxiliar para obter o ícone e a cor com base no status do exame
@@ -65,7 +78,7 @@ const SO_NA_LISTA = {
 };
 
 // Componente da tabela de comparação de exames
-export default function ExamesComparativoTable({ tabela = [], mostrarEvidencia = false }: ExamesComparativoTableProps) {
+export default function ExamesComparativoTable({ tabela = [], mostrarEvidencia = false, localizar }: ExamesComparativoTableProps) {
   const ehSoLista = (item: TabelaComparacaoItem) =>
     mostrarEvidencia && item.evidencia === "so_lista";
 
@@ -104,10 +117,27 @@ export default function ExamesComparativoTable({ tabela = [], mostrarEvidencia =
         <TableBody>
           {sortedExames.map((item, index) => {
             const conf = ehSoLista(item) ? SO_NA_LISTA : getConformidade(item.status);
+            const localizavel = Boolean(localizar?.porExame[item.exame]);
+            const selecionado = localizar?.ativo?.exame === item.exame;
             return (
-              <TableRow key={`${item.exame}-${index}`}>
-                <TableCell className="font-medium align-top">
-                  {item.exame}
+              <TableRow
+                key={`${item.exame}-${index}`}
+                onClick={localizavel ? () => localizar?.onLocalizar(item.exame) : undefined}
+                aria-selected={localizavel ? selecionado : undefined}
+                className={cn(
+                  localizavel && "cursor-pointer",
+                  selecionado && "bg-cyan-50/70 shadow-[inset_2px_0_0_0_var(--primary)] hover:bg-cyan-50/70",
+                ) || undefined}
+              >
+                <TableCell className={cn("font-medium align-top whitespace-normal", selecionado && "text-primary")}>
+                  {localizavel ? (
+                    // Só para o teclado: o clique é da linha inteira.
+                    <button type="button" className="text-left rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30">
+                      {item.exame}
+                    </button>
+                  ) : (
+                    item.exame
+                  )}
                 </TableCell>
                 <TableCell className={`text-center font-medium align-top ${conf.color}`}>
                   <div className="flex flex-col items-center justify-center gap-1">

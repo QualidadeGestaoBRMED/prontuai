@@ -1,5 +1,6 @@
 "use client"
 
+import { useEffect, useState } from "react"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import { CheckIcon, XIcon, Download, Loader2, MessageSquareIcon } from "lucide-react"
@@ -16,6 +17,9 @@ import { Separator } from "@/components/ui/separator"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { ProcessResult, TabelaComparacaoItem } from "@/types/process"
 import ExamesComparativoTable from "@/components/exames-comparativo-table"
+import { Destaque, VisualizadorPdf } from "@/components/visualizador-pdf"
+import { TagNovo } from "@/components/tag-novo"
+import { carregarTextoDocumento, useLocalizacoes } from "@/hooks/use-localizacoes"
 import { cn } from "@/lib/utils"
 
 interface DocumentDetailsModalChecagemProps {
@@ -30,6 +34,11 @@ interface DocumentDetailsModalChecagemProps {
   onSolicitarDecisao?: (decisao: "aprovado" | "rejeitado") => void
   onViewDocument?: () => void
   documentUrl?: string | null
+  /**
+   * O PDF já baixado. O visualizador lê os bytes daqui; a URL fica para o
+   * "Abrir em nova aba". Ver `VisualizadorPdf`.
+   */
+  documentBlob?: Blob | null
   /** Avisa o cronômetro de revisão que o PDF foi aberto fora da aba. */
   onAbrirPdfExterno?: () => void
   documentLoading?: boolean
@@ -54,18 +63,50 @@ export function DocumentDetailsModalChecagem({
   onSolicitarDecisao,
   onViewDocument,
   documentUrl,
+  documentBlob,
   onAbrirPdfExterno,
   documentLoading,
   onAvaliarIA,
   somenteLeitura = false,
 }: DocumentDetailsModalChecagemProps) {
+  // Atalho "clicar no exame e ir até ele no PDF". Os hooks vêm antes do
+  // `return null` abaixo: a ordem deles não pode depender de haver documento.
+  const localizacoes = useLocalizacoes(open ? result?.id : null)
+  const [destaque, setDestaque] = useState<(Destaque & { exame: string; indice: number }) | null>(null)
+  useEffect(() => setDestaque(null), [result?.id])
+
   if (!result) return null
   const showPreview = Boolean(documentUrl || documentLoading)
-  const previewSrc = documentUrl
-    ? (documentUrl.includes("#")
-        ? `${documentUrl}&toolbar=0&navpanes=0&scrollbar=0`
-        : `${documentUrl}#toolbar=0&navpanes=0&scrollbar=0`)
-    : ""
+
+  // Vai à ocorrência `indice` do exame (dá a volta nas pontas). Sem o PDF na
+  // tela, abre: o visualizador aplica o destaque quando o documento carregar.
+  const mostrarOcorrencia = (exame: string, indice: number) => {
+    const ocorrencias = localizacoes[exame]
+    if (!ocorrencias?.length) return
+    const i = (indice + ocorrencias.length) % ocorrencias.length
+    setDestaque({ ...ocorrencias[i], exame, indice: i, chave: Date.now() })
+    if (!documentUrl && !documentLoading) onViewDocument?.()
+  }
+  // Clicar de novo no mesmo exame passa para a próxima ocorrência.
+  const irParaExame = (exame: string) =>
+    mostrarOcorrencia(exame, destaque?.exame === exame ? destaque.indice + 1 : 0)
+  // O botão flutuante do visualizador, quando o exame aparece mais de uma vez.
+  const totalOcorrencias = destaque ? localizacoes[destaque.exame]?.length ?? 0 : 0
+  const navegacaoOcorrencias =
+    destaque && totalOcorrencias > 1
+      ? {
+          rotulo: `ocorrência ${destaque.indice + 1} de ${totalOcorrencias}`,
+          onAnterior: () => mostrarOcorrencia(destaque.exame, destaque.indice - 1),
+          onProxima: () => mostrarOcorrencia(destaque.exame, destaque.indice + 1),
+        }
+      : null
+  const localizar = Object.keys(localizacoes).length
+    ? {
+        porExame: Object.fromEntries(Object.entries(localizacoes).map(([exame, o]) => [exame, o.length])),
+        ativo: destaque,
+        onLocalizar: irParaExame,
+      }
+    : undefined
   const highlightLiberacao = (text?: string | null) => {
     if (!text) return null
     const phrase = "Liberação concedida"
@@ -316,11 +357,17 @@ export function DocumentDetailsModalChecagem({
 
               {/* Detailed Comparison Table */}
               <div>
-                <h4 className="font-semibold mb-3">Comparação Detalhada</h4>
+                <h4 className={cn("font-semibold", localizar ? "mb-1" : "mb-3")}>Comparação Detalhada</h4>
+                {localizar && (
+                  <p className="mb-3 flex items-center gap-2 text-xs text-muted-foreground">
+                    Clique no exame para vê-lo no documento.
+                    <TagNovo />
+                  </p>
+                )}
 
                 {Array.isArray(result.result.tabela_comparacao) && result.result.tabela_comparacao.length > 0 && (
                   <div className="mb-6">
-                    <ExamesComparativoTable tabela={result.result.tabela_comparacao} mostrarEvidencia />
+                    <ExamesComparativoTable tabela={result.result.tabela_comparacao} mostrarEvidencia localizar={localizar} />
                   </div>
                 )}
               </div>
@@ -345,10 +392,13 @@ export function DocumentDetailsModalChecagem({
                 </div>
                 <div className="h-[70vh] rounded-lg border bg-muted/20 overflow-hidden">
                   {documentUrl ? (
-                    <iframe
-                      title={`Documento ${result.filename}`}
-                      src={previewSrc}
-                      className="h-full w-full"
+                    <VisualizadorPdf
+                      arquivo={documentBlob ?? null}
+                      url={documentUrl}
+                      titulo={`Documento ${result.filename}`}
+                      destaque={destaque}
+                      ocorrencias={navegacaoOcorrencias}
+                      carregarTexto={() => carregarTextoDocumento(result.id)}
                     />
                   ) : (
                     <div className="h-full flex items-center justify-center text-sm text-muted-foreground px-6 text-center">
@@ -515,11 +565,17 @@ export function DocumentDetailsModalChecagem({
 
                 {/* Detailed Comparison Table */}
                 <div>
-                  <h4 className="font-semibold mb-3">Comparação Detalhada</h4>
+                  <h4 className={cn("font-semibold", localizar ? "mb-1" : "mb-3")}>Comparação Detalhada</h4>
+                  {localizar && (
+                    <p className="mb-3 flex items-center gap-2 text-xs text-muted-foreground">
+                      Clique no exame para vê-lo no documento.
+                      <TagNovo />
+                    </p>
+                  )}
 
                   {Array.isArray(result.result.tabela_comparacao) && result.result.tabela_comparacao.length > 0 && (
                     <div className="mb-6">
-                      <ExamesComparativoTable tabela={result.result.tabela_comparacao} mostrarEvidencia />
+                      <ExamesComparativoTable tabela={result.result.tabela_comparacao} mostrarEvidencia localizar={localizar} />
                     </div>
                   )}
                 </div>
