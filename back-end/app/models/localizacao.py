@@ -28,6 +28,13 @@ class LocalizacaoExame(BaseModel):
     ocorrencias: List[Localizacao]
 
 
+class LocalizacaoCampo(BaseModel):
+    """Um campo da Checklist de Campos (CPF, nome, data, CRM, assinatura) e as
+    linhas que o comprovam — as mesmas que a checklist mostra como evidência."""
+    campo: str
+    ocorrencias: List[Localizacao]
+
+
 class LinhaTexto(BaseModel):
     """Uma linha do texto lido pelo OCR e a caixa dela na página."""
     pagina: int
@@ -53,3 +60,4 @@ class LocalizacoesDocumento(BaseModel):
     # ou pelo OCR local): a tela segue sem o atalho.
     disponivel: bool
     exames: List[LocalizacaoExame] = []
+    campos: List[LocalizacaoCampo] = []
