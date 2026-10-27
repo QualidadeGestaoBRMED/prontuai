@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import { CheckIcon, XIcon, Download, Loader2, MessageSquareIcon } from "lucide-react"
@@ -43,6 +43,12 @@ function ItemChecklist({
   selecionado: boolean
   onLocalizar: () => void
 }) {
+  // Como a lista de exames: ao passar de campo em campo pelo botão do PDF, a
+  // checklist rola até o campo em foco.
+  const botao = useRef<HTMLButtonElement>(null)
+  useEffect(() => {
+    if (selecionado) botao.current?.scrollIntoView({ block: "nearest", behavior: "smooth" })
+  }, [selecionado])
   const conteudo = (
     <>
       <span className="text-sm">{item.label}</span>
@@ -59,6 +65,7 @@ function ItemChecklist({
   }
   return (
     <button
+      ref={botao}
       type="button"
       onClick={onLocalizar}
       aria-pressed={selecionado}
@@ -82,7 +89,8 @@ function ItemChecklist({
  *
  * A seção dos além do previsto abre sozinha quando o destaque no PDF chega num
  * deles (pelo botão que passa de exame em exame), para a linha selecionada não
- * ficar escondida.
+ * ficar escondida. Abre já no render em que o destaque chega, e não num efeito
+ * depois: a tabela rola até a linha em seguida, e a linha precisa estar à vista.
  */
 function ExamesDaComparacao({
   tabela,
@@ -95,10 +103,11 @@ function ExamesDaComparacao({
   const alem = tabela.filter((item) => item.status === "extra_no_ocr")
   const [alemAberto, setAlemAberto] = useState(false)
   const ativo = localizar?.ativo?.exame
-  useEffect(() => {
+  const [ativoAnterior, setAtivoAnterior] = useState(ativo)
+  if (ativo !== ativoAnterior) {
+    setAtivoAnterior(ativo)
     if (ativo && alem.some((item) => item.exame === ativo)) setAlemAberto(true)
-    // `alem` muda de identidade a cada render; o que importa é o exame ativo.
-  }, [ativo]) // eslint-disable-line react-hooks/exhaustive-deps
+  }
 
   return (
     <div>
