@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/tooltip"
 import { TabelaComparacaoItem } from "@/types/process"
 import { ParametroLido, SituacaoParametro } from "@/types/normalidade"
+import { cn } from "@/lib/utils"
 
 // Define as props do componente, que agora recebe a tabela de comparação
 export interface ExamesComparativoTableProps {
@@ -34,6 +35,21 @@ export interface ExamesComparativoTableProps {
    * `carregando` mostra a coluna vazia enquanto a leitura não chega.
    */
   normalidade?: { carregando: boolean; porExame: Record<string, ParametroLido[]> };
+  /**
+   * Liga o atalho até o PDF, como a lista de registros da Triagem BR NET: a
+   * linha do exame é o registro, e clicar nela destaca no documento onde ele
+   * aparece. `porExame` diz quantas ocorrências cada exame tem; clicar de novo
+   * na mesma linha passa para a próxima. Exame sem ocorrência não é clicável.
+   * Com `onLocalizarValor`, o valor lido na coluna Normalidade leva ao número
+   * no laudo. Sem a prop, a tabela fica como antes (chat, tela da clínica).
+   */
+  localizar?: {
+    porExame: Record<string, number>;
+    /** O destaque na tela: um exame (e a ocorrência) ou um valor dele. */
+    ativo?: { exame: string; indice: number; parametro?: string } | null;
+    onLocalizar: (exame: string) => void;
+    onLocalizarValor?: (exame: string, parametro: ParametroLido) => void;
+  };
 }
 
 const SITUACAO: Record<SituacaoParametro, { label: string; className: string }> = {
@@ -47,8 +63,12 @@ const SITUACAO: Record<SituacaoParametro, { label: string; className: string }> 
 export const foraDaFaixa = (p: ParametroLido) =>
   p.situacao === "acima" || p.situacao === "abaixo" || p.situacao === "alterado";
 
-function CelulaNormalidade({ item, parametros, carregando }: {
-  item: TabelaComparacaoItem; parametros?: ParametroLido[]; carregando: boolean
+function CelulaNormalidade({ item, parametros, carregando, onLocalizar, ativo }: {
+  item: TabelaComparacaoItem; parametros?: ParametroLido[]; carregando: boolean;
+  /** Leva ao valor no PDF. Sem ela, ou sem posição do valor, o valor é texto. */
+  onLocalizar?: (parametro: ParametroLido) => void;
+  /** `chave` do parâmetro destacado no PDF agora. */
+  ativo?: string | null;
 }) {
   if (item.status === "faltante") return <span className="text-muted-foreground">—</span>;
   if (carregando) return <span className="text-xs text-muted-foreground">Lendo…</span>;
@@ -61,11 +81,28 @@ function CelulaNormalidade({ item, parametros, carregando }: {
           <div key={p.chave} className="text-xs leading-tight">
             <div className="flex flex-wrap items-center gap-1.5">
               <span className="text-muted-foreground">{p.nome}</span>
-              {p.valor_texto && (
+              {p.valor_texto && (p.localizacao && onLocalizar ? (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    // O valor tem destaque próprio; não deixa a linha tratar o clique.
+                    e.stopPropagation()
+                    onLocalizar(p)
+                  }}
+                  title="Ver o valor no documento"
+                  className={cn(
+                    "rounded-sm px-0.5 font-semibold underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30",
+                    // Mesmo contorno do trecho no PDF.
+                    ativo === p.chave ? "text-primary ring-2 ring-[#007891]" : "text-foreground hover:text-primary",
+                  )}
+                >
+                  {p.valor_texto}{p.unidade ? ` ${p.unidade}` : ""}
+                </button>
+              ) : (
                 <span className="font-semibold text-foreground">
                   {p.valor_texto}{p.unidade ? ` ${p.unidade}` : ""}
                 </span>
-              )}
+              ))}
               <span className={`rounded border px-1.5 py-px text-[11px] font-medium ${sit.className}`}>{sit.label}</span>
             </div>
             <div className="text-[11px] text-muted-foreground">
@@ -114,7 +151,7 @@ const SO_NA_LISTA = {
 };
 
 // Componente da tabela de comparação de exames
-export default function ExamesComparativoTable({ tabela = [], mostrarEvidencia = false, normalidade }: ExamesComparativoTableProps) {
+export default function ExamesComparativoTable({ tabela = [], mostrarEvidencia = false, normalidade, localizar }: ExamesComparativoTableProps) {
   const ehSoLista = (item: TabelaComparacaoItem) =>
     mostrarEvidencia && item.evidencia === "so_lista";
   const temAlterado = (item: TabelaComparacaoItem) =>
@@ -157,13 +194,29 @@ export default function ExamesComparativoTable({ tabela = [], mostrarEvidencia =
         <TableBody>
           {sortedExames.map((item, index) => {
             const conf = ehSoLista(item) ? SO_NA_LISTA : getConformidade(item.status);
+            const localizavel = Boolean(localizar?.porExame[item.exame]);
+            const selecionado = localizar?.ativo?.exame === item.exame;
             return (
               <TableRow
                 key={`${item.exame}-${index}`}
-                className={temAlterado(item) ? "shadow-[inset_3px_0_0_0_rgb(220_38_38)]" : undefined}
+                onClick={localizavel ? () => localizar?.onLocalizar(item.exame) : undefined}
+                aria-selected={localizavel ? selecionado : undefined}
+                className={cn(
+                  localizavel && "cursor-pointer",
+                  temAlterado(item) && "shadow-[inset_3px_0_0_0_rgb(220_38_38)]",
+                  selecionado && "bg-cyan-50/70 hover:bg-cyan-50/70",
+                  selecionado && !temAlterado(item) && "shadow-[inset_2px_0_0_0_var(--primary)]",
+                ) || undefined}
               >
-                <TableCell className="font-medium align-top whitespace-normal">
-                  {item.exame}
+                <TableCell className={cn("font-medium align-top whitespace-normal", selecionado && "text-primary")}>
+                  {localizavel ? (
+                    // Só para o teclado: o clique é da linha inteira.
+                    <button type="button" className="text-left rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30">
+                      {item.exame}
+                    </button>
+                  ) : (
+                    item.exame
+                  )}
                 </TableCell>
                 <TableCell className={`text-center font-medium align-top ${conf.color}`}>
                   <div className="flex flex-col items-center justify-center gap-1">
@@ -177,6 +230,12 @@ export default function ExamesComparativoTable({ tabela = [], mostrarEvidencia =
                       item={item}
                       parametros={normalidade.porExame[item.exame]}
                       carregando={normalidade.carregando}
+                      onLocalizar={
+                        localizar?.onLocalizarValor
+                          ? (p) => localizar.onLocalizarValor?.(item.exame, p)
+                          : undefined
+                      }
+                      ativo={localizar?.ativo?.exame === item.exame ? localizar.ativo.parametro : null}
                     />
                   </TableCell>
                 )}

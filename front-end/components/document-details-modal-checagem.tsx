@@ -1,5 +1,6 @@
 "use client"
 
+import { useEffect, useState } from "react"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import { CheckIcon, XIcon, Download, Loader2, MessageSquareIcon } from "lucide-react"
@@ -15,7 +16,10 @@ import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { ProcessResult, TabelaComparacaoItem } from "@/types/process"
+import { ParametroLido } from "@/types/normalidade"
 import { ComparacaoDetalhada } from "@/components/comparacao-detalhada"
+import { Destaque, VisualizadorPdf } from "@/components/visualizador-pdf"
+import { carregarTextoDocumento, useLocalizacoes } from "@/hooks/use-localizacoes"
 import { cn } from "@/lib/utils"
 
 interface DocumentDetailsModalChecagemProps {
@@ -30,6 +34,11 @@ interface DocumentDetailsModalChecagemProps {
   onSolicitarDecisao?: (decisao: "aprovado" | "rejeitado") => void
   onViewDocument?: () => void
   documentUrl?: string | null
+  /**
+   * O PDF já baixado. O visualizador lê os bytes daqui; a URL fica para o
+   * "Abrir em nova aba". Ver `VisualizadorPdf`.
+   */
+  documentBlob?: Blob | null
   /** Avisa o cronômetro de revisão que o PDF foi aberto fora da aba. */
   onAbrirPdfExterno?: () => void
   documentLoading?: boolean
@@ -54,18 +63,66 @@ export function DocumentDetailsModalChecagem({
   onSolicitarDecisao,
   onViewDocument,
   documentUrl,
+  documentBlob,
   onAbrirPdfExterno,
   documentLoading,
   onAvaliarIA,
   somenteLeitura = false,
 }: DocumentDetailsModalChecagemProps) {
+  // Atalho "clicar no exame e ir até ele no PDF". Os hooks vêm antes do
+  // `return null` abaixo: a ordem deles não pode depender de haver documento.
+  const localizacoes = useLocalizacoes(open ? result?.id : null)
+  // `parametro` quando o destaque é um valor da coluna Normalidade.
+  const [destaque, setDestaque] = useState<
+    (Destaque & { exame: string; indice: number; parametro?: string }) | null
+  >(null)
+  useEffect(() => setDestaque(null), [result?.id])
+
   if (!result) return null
   const showPreview = Boolean(documentUrl || documentLoading)
-  const previewSrc = documentUrl
-    ? (documentUrl.includes("#")
-        ? `${documentUrl}&toolbar=0&navpanes=0&scrollbar=0`
-        : `${documentUrl}#toolbar=0&navpanes=0&scrollbar=0`)
-    : ""
+
+  // Vai à ocorrência `indice` do exame (dá a volta nas pontas). Sem o PDF na
+  // tela, abre: o visualizador aplica o destaque quando o documento carregar.
+  const mostrarOcorrencia = (exame: string, indice: number) => {
+    const ocorrencias = localizacoes[exame]
+    if (!ocorrencias?.length) return
+    const i = (indice + ocorrencias.length) % ocorrencias.length
+    setDestaque({ ...ocorrencias[i], exame, indice: i, chave: Date.now() })
+    if (!documentUrl && !documentLoading) onViewDocument?.()
+  }
+  // Clicar de novo no mesmo exame passa para a próxima ocorrência.
+  const irParaExame = (exame: string) =>
+    mostrarOcorrencia(exame, destaque?.exame === exame && !destaque.parametro ? destaque.indice + 1 : 0)
+  // O botão flutuante do visualizador, quando o exame aparece mais de uma vez.
+  const totalOcorrencias = destaque && !destaque.parametro ? localizacoes[destaque.exame]?.length ?? 0 : 0
+  const navegacaoOcorrencias =
+    destaque && totalOcorrencias > 1
+      ? {
+          rotulo: `ocorrência ${destaque.indice + 1} de ${totalOcorrencias}`,
+          onAnterior: () => mostrarOcorrencia(destaque.exame, destaque.indice - 1),
+          onProxima: () => mostrarOcorrencia(destaque.exame, destaque.indice + 1),
+        }
+      : null
+  // O valor lido na coluna Normalidade: leva ao número no laudo, com o nome do
+  // parâmetro destacado junto.
+  const irParaValor = (exame: string, parametro: ParametroLido) => {
+    if (!parametro.localizacao) return
+    // Contorna o valor e o nome do parâmetro.
+    setDestaque({
+      ...parametro.localizacao,
+      exame,
+      indice: -1,
+      parametro: parametro.chave,
+      chave: Date.now(),
+    })
+    if (!documentUrl && !documentLoading) onViewDocument?.()
+  }
+  const localizar = {
+    porExame: Object.fromEntries(Object.entries(localizacoes).map(([exame, o]) => [exame, o.length])),
+    ativo: destaque,
+    onLocalizar: irParaExame,
+    onLocalizarValor: irParaValor,
+  }
   const highlightLiberacao = (text?: string | null) => {
     if (!text) return null
     const phrase = "Liberação concedida"
@@ -318,6 +375,7 @@ export function DocumentDetailsModalChecagem({
               <ComparacaoDetalhada
                 documentId={result.id}
                 tabela={Array.isArray(result.result.tabela_comparacao) ? result.result.tabela_comparacao : []}
+                localizar={localizar}
               />
                 </div>
               </ScrollArea>
@@ -340,10 +398,13 @@ export function DocumentDetailsModalChecagem({
                 </div>
                 <div className="h-[70vh] rounded-lg border bg-muted/20 overflow-hidden">
                   {documentUrl ? (
-                    <iframe
-                      title={`Documento ${result.filename}`}
-                      src={previewSrc}
-                      className="h-full w-full"
+                    <VisualizadorPdf
+                      arquivo={documentBlob ?? null}
+                      url={documentUrl}
+                      titulo={`Documento ${result.filename}`}
+                      destaque={destaque}
+                      ocorrencias={navegacaoOcorrencias}
+                      carregarTexto={() => carregarTextoDocumento(result.id)}
                     />
                   ) : (
                     <div className="h-full flex items-center justify-center text-sm text-muted-foreground px-6 text-center">
@@ -512,6 +573,7 @@ export function DocumentDetailsModalChecagem({
                 <ComparacaoDetalhada
                   documentId={result.id}
                   tabela={Array.isArray(result.result.tabela_comparacao) ? result.result.tabela_comparacao : []}
+                  localizar={localizar}
                 />
               </div>
             </ScrollArea>
