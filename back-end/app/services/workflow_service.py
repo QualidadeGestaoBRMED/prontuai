@@ -407,41 +407,110 @@ def _buscar_evidencias(termo: str, linhas: list[tuple[str, str]]) -> list[str]:
             break
     return evidencias
 
+# Regras da Checklist de Campos. Ficam fora de `_avaliar_campos` porque a rota de
+# localização (`app/api/v1/localizacao.py`) as aplica de novo sobre as linhas do
+# PDF para levar o revisor ao trecho: o clique tem de achar as mesmas linhas que
+# a checklist achou, e não uma cópia parecida das regras.
+_CAMPO_CPF = re.compile(r"\b\d{3}[.\s]?\d{3}[.\s]?\d{3}[-\s]?\d{2}\b|\b[A-Z]{2}/\d{11}\b")
+_CAMPO_DATA = re.compile(r"\b\d{2}[/-]\d{2}[/-]\d{2,4}\b")
+_CAMPO_CRM = re.compile(r"\bCRM\b|\bCRBM\b|\bCREMEC\b|\bCRO\b", re.IGNORECASE)
+_CAMPO_ASSINATURA = ("ASSINATURA", "ASSINADO", "CARIMBO", "RUBRICA")
+# O número do conselho logo depois da sigla: "CRM 52.12345-6", "CRM/RJ 123456".
+_NUMERO_CONSELHO = re.compile(r"[\s:./\-A-Z]{0,6}\d[\d.\-/]*", re.IGNORECASE)
+_TRECHO_ASSINATURA = re.compile(r"assinatura|assinado|carimbo|rubrica|_{3,}", re.IGNORECASE)
+# Linhas que cada campo guarda como evidência.
+LIMITE_EVIDENCIAS_CAMPO = 3
+
+
+def linhas_dos_campos(
+    linhas: list[tuple[str, str]],
+    patient_name: Optional[str] = None,
+) -> list[tuple[str, str, list[int]]]:
+    """
+    Para cada campo da checklist, na ordem da tela: (campo, rótulo, índices em
+    `linhas` das que o comprovam), até `LIMITE_EVIDENCIAS_CAMPO`. `linhas` são
+    pares (texto, texto normalizado por `_normalizar_busca`).
+    """
+    nome = f" {_normalizar_busca(patient_name)} " if patient_name else ""
+    regras = [("cpf", "CPF", lambda texto, normalizado: bool(_CAMPO_CPF.search(texto)))]
+    if patient_name:
+        regras.append((
+            "nome_paciente", "Nome do paciente",
+            lambda texto, normalizado: bool(nome.strip()) and nome in f" {normalizado} ",
+        ))
+    regras += [
+        ("data", "Data", lambda texto, normalizado: bool(_CAMPO_DATA.search(texto))),
+        ("crm_medico", "CRM do medico", lambda texto, normalizado: bool(_CAMPO_CRM.search(texto))),
+        ("assinatura", "Assinatura/Carimbo", lambda texto, normalizado: (
+            any(termo in normalizado for termo in _CAMPO_ASSINATURA) or "___" in texto
+        )),
+    ]
+    campos = []
+    for campo, rotulo, casa in regras:
+        indices = [i for i, (texto, normalizado) in enumerate(linhas) if casa(texto, normalizado)]
+        campos.append((campo, rotulo, indices[:LIMITE_EVIDENCIAS_CAMPO]))
+    return campos
+
+
+def _trecho_normalizado(texto: str, alvo: str) -> Optional[tuple[int, int]]:
+    """Onde `alvo` (já em `_normalizar_busca`) está em `texto`, como palavra inteira,
+    em posições do texto original."""
+    normalizado, mapa = "", []
+    for i, c in enumerate(texto):
+        for n in unicodedata.normalize("NFKD", c):
+            if unicodedata.combining(n):
+                continue
+            # Igual a `_normalizar_busca`: só A-Z e 0-9 ficam; o resto vira espaço.
+            n = n.upper() if re.fullmatch(r"[A-Za-z0-9]", n) else " "
+            if n == " " and normalizado.endswith(" "):
+                continue
+            normalizado += n
+            mapa.append(i)
+    m = re.search(rf"(?<![A-Z0-9]){re.escape(alvo)}(?![A-Z0-9])", normalizado)
+    return (mapa[m.start()], mapa[m.end() - 1] + 1) if m else None
+
+
+def trecho_do_campo(campo: str, texto: str, patient_name: Optional[str] = None) -> Optional[tuple[int, int]]:
+    """
+    Onde, na linha, está o que faz o campo contar como encontrado: o número do
+    CPF, a data, a sigla do conselho com o número, a palavra da assinatura (ou a
+    linha de assinar), o nome. None quando não dá para apontar — a tela destaca
+    a linha inteira.
+    """
+    if campo == "cpf":
+        m = _CAMPO_CPF.search(texto)
+        return m.span() if m else None
+    if campo == "data":
+        m = _CAMPO_DATA.search(texto)
+        return m.span() if m else None
+    if campo == "crm_medico":
+        m = _CAMPO_CRM.search(texto)
+        if not m:
+            return None
+        numero = _NUMERO_CONSELHO.match(texto, m.end())
+        return (m.start(), numero.end() if numero else m.end())
+    if campo == "assinatura":
+        m = _TRECHO_ASSINATURA.search(texto)
+        return m.span() if m else None
+    if campo == "nome_paciente" and patient_name:
+        return _trecho_normalizado(texto, _normalizar_busca(patient_name))
+    return None
+
+
 def _avaliar_campos(
     markdown: str,
     linhas: list[tuple[str, str]],
     patient_name: Optional[str] = None
 ) -> list[Dict[str, Any]]:
     checks = []
-
-    def add_check(field: str, label: str, evidencias: list[str]):
+    for campo, rotulo, indices in linhas_dos_campos(linhas, patient_name):
+        evidencias = [linhas[i][0] for i in indices]
         checks.append({
-            "field": field,
-            "label": label,
+            "field": campo,
+            "label": rotulo,
             "found": bool(evidencias),
             "evidence": evidencias,
         })
-
-    cpf_regex = re.compile(r"\b\d{3}[.\s]?\d{3}[.\s]?\d{3}[-\s]?\d{2}\b|\b[A-Z]{2}/\d{11}\b")
-    data_regex = re.compile(r"\b\d{2}[/-]\d{2}[/-]\d{2,4}\b")
-    crm_regex = re.compile(r"\bCRM\b|\bCRBM\b|\bCREMEC\b|\bCRO\b", re.IGNORECASE)
-
-    evidencias_cpf = [linha for linha, _ in linhas if cpf_regex.search(linha)]
-    evidencias_data = [linha for linha, _ in linhas if data_regex.search(linha)]
-    evidencias_crm = [linha for linha, _ in linhas if crm_regex.search(linha)]
-    evidencias_assinatura = [
-        linha for linha, normalizado in linhas
-        if "ASSINATURA" in normalizado or "ASSINADO" in normalizado or "CARIMBO" in normalizado
-        or "RUBRICA" in normalizado or "___" in linha
-    ]
-
-    add_check("cpf", "CPF", evidencias_cpf[:3])
-    if patient_name:
-        add_check("nome_paciente", "Nome do paciente", _buscar_evidencias(patient_name, linhas))
-    add_check("data", "Data", evidencias_data[:3])
-    add_check("crm_medico", "CRM do medico", evidencias_crm[:3])
-    add_check("assinatura", "Assinatura/Carimbo", evidencias_assinatura[:3])
-
     return checks
 
 def _avaliar_qualidade(markdown: str, linhas: list[tuple[str, str]]) -> Dict[str, Any]:

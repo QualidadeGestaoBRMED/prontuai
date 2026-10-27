@@ -4,7 +4,8 @@ Onde cada exame da Comparação Detalhada aparece no PDF.
 - `GET /documents/{id}/localizacoes`: para cada exame da tabela de comparação,
   as linhas do documento onde ele aparece (página e caixa), na ordem em que a
   tela deve oferecer. O revisor clica no exame e o visualizador rola até lá,
-  com a linha destacada.
+  com a linha destacada. Traz também os campos da Checklist de Campos (CPF,
+  nome, data, CRM, assinatura), com as mesmas linhas que a checklist achou.
 - `GET /documents/{id}/texto`: o texto lido pelo OCR, linha a linha, com a
   posição na página. É o que a busca do visualizador usa: PDF escaneado não tem
   texto próprio, e a busca do navegador não acha nada nele.
@@ -47,6 +48,28 @@ def _termos_do_exame(*nomes: str | None) -> set[str]:
     return termos
 
 
+def _localizar_campos(linhas: list[layout_ocr.LinhaPosicionada], patient_name: str | None) -> list[dict]:
+    """
+    Onde está cada campo da Checklist de Campos. Aplica as regras da própria
+    checklist (`workflow_service.linhas_dos_campos`) às linhas pareadas com o
+    PDF, na mesma ordem: as ocorrências são as linhas que a checklist mostra como
+    evidência. A caixa é a do trecho que casou (o número do CPF, a data, o CRM
+    com o número), ou a linha inteira quando não dá para apontar.
+    """
+    pares = [(linha.texto, workflow_service._normalizar_busca(linha.texto)) for linha in linhas]
+    campos = []
+    for campo, _rotulo, indices in workflow_service.linhas_dos_campos(pares, patient_name):
+        ocorrencias = []
+        for i in indices:
+            linha = linhas[i]
+            trecho = workflow_service.trecho_do_campo(campo, linha.texto, patient_name)
+            caixa = layout_ocr.caixa_do_trecho(linha, *trecho) if trecho else linha.caixa
+            ocorrencias.append({"pagina": linha.pagina, "caixas": [layout_ocr.caixa_json(caixa)]})
+        if ocorrencias:
+            campos.append({"campo": campo, "ocorrencias": ocorrencias})
+    return campos
+
+
 @router.get("/documents/{document_id}/localizacoes", response_model=LocalizacoesDocumento)
 def localizacoes_do_documento(
     document_id: str,
@@ -77,12 +100,13 @@ def localizacoes_do_documento(
             )
             if ocorrencias:
                 exames.append({"exame": exame, "ocorrencias": ocorrencias})
+        campos = _localizar_campos(linhas, payload.get("patient_name"))
     except Exception as e:
         # Navegação é apoio: falha aqui não pode travar a checagem. Só o tipo do
         # erro vai para o log; a mensagem pode carregar trecho do documento.
         logger.warning(f"[LOCALIZACAO] Falhou no documento {document_id}: {type(e).__name__}")
         return LocalizacoesDocumento(disponivel=False)
-    return LocalizacoesDocumento(disponivel=True, exames=exames)
+    return LocalizacoesDocumento(disponivel=True, exames=exames, campos=campos)
 
 
 @router.get("/documents/{document_id}/texto", response_model=TextoDocumento)

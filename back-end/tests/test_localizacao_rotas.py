@@ -123,3 +123,53 @@ def test_localizacoes_poe_o_laudo_antes_da_lista_do_aso(monkeypatch):
 def test_sender_fica_de_fora(monkeypatch):
     rota = carregar(monkeypatch, BancoFalso())
     assert UserRole.SENDER not in rota._LEITORES
+
+
+# ── Checklist de Campos ────────────────────────────────────────────────────
+
+FICHA = _resposta(
+    ("Nome: FULANO DE TAL", 0.10),
+    ("CPF: 123.456.789-09", 0.12),
+    ("Data do exame: 10/10/2026", 0.14),
+    ("CRM 52.12345-6 Dr. Medico", 0.16),
+    ("Assinatura do medico: ____", 0.18),
+)
+MARKDOWN_FICHA = textract_to_markdown(FICHA, pagina=1)
+LAYOUT_FICHA = layout_ocr.montar(layout_ocr.linhas_textract(FICHA, pagina=1))
+
+
+def _caixa(c):
+    return (round(c.x, 2), round(c.y, 2), round(c.w, 2))
+
+
+def test_campos_apontam_o_trecho_que_a_checklist_achou(monkeypatch):
+    documento = types.SimpleNamespace(
+        ocr_markdown=MARKDOWN_FICHA,
+        result_payload={"tabela_comparacao": [], "patient_name": "Fulano de Tál"},
+    )
+    rota = carregar(monkeypatch, BancoFalso(documento, LAYOUT_FICHA))
+    campos = {c.campo: c.ocorrencias for c in rota.localizacoes_do_documento("doc-1", current_user=usuario()).campos}
+    assert list(campos) == ["cpf", "nome_paciente", "data", "crm_medico", "assinatura"]
+    # Cada palavra tem 0,01 por letra e 0,01 de espaço, a partir de x = 0,1.
+    assert _caixa(campos["cpf"][0].caixas[0]) == (0.15, 0.12, 0.14)          # "123.456.789-09"
+    assert _caixa(campos["nome_paciente"][0].caixas[0]) == (0.16, 0.10, 0.13)  # "FULANO DE TAL", sem o acento
+    assert _caixa(campos["data"][0].caixas[0]) == (0.25, 0.14, 0.10)         # "10/10/2026"
+    assert _caixa(campos["crm_medico"][0].caixas[0]) == (0.10, 0.16, 0.14)   # "CRM 52.12345-6"
+    assert _caixa(campos["assinatura"][0].caixas[0]) == (0.10, 0.18, 0.10)   # "Assinatura"
+
+
+def test_campos_sao_as_mesmas_linhas_da_checklist():
+    from app.services import workflow_service as ws
+    linhas = ws._extrair_linhas_markdown(MARKDOWN_FICHA)
+    checklist = {c["field"]: c["evidence"] for c in ws._avaliar_campos(MARKDOWN_FICHA, linhas, "Fulano de Tál")}
+    pares = [(t, ws._normalizar_busca(t)) for t, _ in linhas]
+    for campo, _rotulo, indices in ws.linhas_dos_campos(pares, "Fulano de Tál"):
+        assert [pares[i][0] for i in indices] == checklist[campo]
+
+
+def test_crm_sem_numero_fica_so_com_a_sigla():
+    from app.services.workflow_service import trecho_do_campo
+    assert trecho_do_campo("crm_medico", "CRM do medico") == (0, 3)
+    assert trecho_do_campo("crm_medico", "CRM/RJ 123456 - Dr.") == (0, 13)
+    assert trecho_do_campo("assinatura", "Data ____________") == (5, 17)
+    assert trecho_do_campo("nome_paciente", "Paciente: FULANO DE TAL", "Fulano") == (10, 16)
