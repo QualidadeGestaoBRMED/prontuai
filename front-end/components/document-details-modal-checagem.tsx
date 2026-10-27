@@ -16,8 +16,8 @@ import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { FieldCheck, ProcessResult, TabelaComparacaoItem } from "@/types/process"
-import ExamesComparativoTable from "@/components/exames-comparativo-table"
-import { Destaque, VisualizadorPdf } from "@/components/visualizador-pdf"
+import ExamesComparativoTable, { ordenarComparativo } from "@/components/exames-comparativo-table"
+import { ControleNavegacao, Destaque, VisualizadorPdf } from "@/components/visualizador-pdf"
 import { TagNovo } from "@/components/tag-novo"
 import { carregarTextoDocumento, useLocalizacoes } from "@/hooks/use-localizacoes"
 import { cn } from "@/lib/utils"
@@ -143,16 +143,44 @@ export function DocumentDetailsModalChecagem({
   }
   // Clicar de novo no mesmo exame (ou campo) passa para a próxima ocorrência.
   const irPara = (alvo: Alvo) => mostrarOcorrencia(alvo, destaque && ehOAlvo(alvo) ? destaque.indice + 1 : 0)
-  // O botão flutuante do visualizador, quando o trecho aparece mais de uma vez.
-  const totalOcorrencias = destaque ? ocorrenciasDe(destaque.alvo)?.length ?? 0 : 0
-  const navegacaoOcorrencias =
-    destaque && totalOcorrencias > 1
-      ? {
-          rotulo: `ocorrência ${destaque.indice + 1} de ${totalOcorrencias}`,
-          onAnterior: () => mostrarOcorrencia(destaque.alvo, destaque.indice - 1),
-          onProxima: () => mostrarOcorrencia(destaque.alvo, destaque.indice + 1),
-        }
-      : null
+  // O botão flutuante do visualizador: à esquerda, o exame (ou campo) entre os
+  // que têm ocorrência no PDF, na mesma sequência da tela — exames na ordem da
+  // Comparação Detalhada, campos na da Checklist; à direita, as ocorrências do
+  // trecho, quando há mais de uma.
+  const fieldChecks = result.result.analysis_details?.field_checks ?? []
+  const sequencia = (tipo: Alvo["tipo"]) =>
+    tipo === "exame"
+      ? [...new Set(ordenarComparativo(Array.isArray(result.result.tabela_comparacao) ? result.result.tabela_comparacao : [], true).map((i) => i.exame))]
+          .filter((exame) => localizacoes.porExame[exame]?.length)
+      : fieldChecks.map((c) => c.field).filter((campo) => localizacoes.porCampo[campo]?.length)
+  const navegacao: ControleNavegacao[] = []
+  if (destaque) {
+    const { tipo, nome } = destaque.alvo
+    const itens = sequencia(tipo)
+    const posicao = itens.indexOf(nome)
+    if (posicao >= 0 && itens.length > 1) {
+      const vizinho = (passo: number) => ({ tipo, nome: itens[(posicao + passo + itens.length) % itens.length] })
+      navegacao.push({
+        rotulo: `${tipo} ${posicao + 1} de ${itens.length}`,
+        // O nome fica no tooltip: o rótulo mostra só a posição, como a ocorrência.
+        dica: tipo === "exame" ? nome : fieldChecks.find((c) => c.field === nome)?.label ?? nome,
+        rotuloAnterior: tipo === "exame" ? "Exame anterior" : "Campo anterior",
+        rotuloProximo: tipo === "exame" ? "Próximo exame" : "Próximo campo",
+        onAnterior: () => mostrarOcorrencia(vizinho(-1), 0),
+        onProximo: () => mostrarOcorrencia(vizinho(1), 0),
+      })
+    }
+    const total = ocorrenciasDe(destaque.alvo)?.length ?? 0
+    if (total > 1) {
+      navegacao.push({
+        rotulo: `ocorrência ${destaque.indice + 1} de ${total}`,
+        rotuloAnterior: "Ocorrência anterior",
+        rotuloProximo: "Próxima ocorrência",
+        onAnterior: () => mostrarOcorrencia(destaque.alvo, destaque.indice - 1),
+        onProximo: () => mostrarOcorrencia(destaque.alvo, destaque.indice + 1),
+      })
+    }
+  }
   const localizar = Object.keys(localizacoes.porExame).length
     ? {
         porExame: Object.fromEntries(Object.entries(localizacoes.porExame).map(([exame, o]) => [exame, o.length])),
@@ -452,7 +480,7 @@ export function DocumentDetailsModalChecagem({
                       url={documentUrl}
                       titulo={`Documento ${result.filename}`}
                       destaque={destaque}
-                      ocorrencias={navegacaoOcorrencias}
+                      navegacao={navegacao}
                       carregarTexto={() => carregarTextoDocumento(result.id)}
                     />
                   ) : (

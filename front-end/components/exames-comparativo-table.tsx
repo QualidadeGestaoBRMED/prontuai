@@ -78,31 +78,40 @@ const SO_NA_LISTA = {
 };
 
 // Componente da tabela de comparação de exames
-export default function ExamesComparativoTable({ tabela = [], mostrarEvidencia = false, localizar }: ExamesComparativoTableProps) {
+/**
+ * A ordem em que a tabela mostra os exames: primeiro os "encontrados", depois os
+ * "faltantes", depois os "extras". Com a evidência ligada, os "só na lista do ASO"
+ * abrem o grupo dos encontrados (continuam encontrados, mas são os que o revisor
+ * precisa conferir no PDF). O sort é estável: fora isso, a ordem do back-end se
+ * mantém. Exportada para quem precisa seguir a mesma sequência — o botão que
+ * passa de exame em exame no PDF.
+ */
+export function ordenarComparativo(tabela: TabelaComparacaoItem[], mostrarEvidencia = false): TabelaComparacaoItem[] {
   const ehSoLista = (item: TabelaComparacaoItem) =>
     mostrarEvidencia && item.evidencia === "so_lista";
-
-  // Ordena os exames: primeiro os "encontrados", depois os "faltantes", depois os "extras".
-  // Com a evidência ligada, os "só na lista do ASO" abrem o grupo dos encontrados
-  // (continuam encontrados, mas são os que o revisor precisa conferir no PDF).
-  // O sort é estável: fora isso, a ordem do back-end se mantém.
-  const sortedExames = [...tabela].sort((a, b) => {
-    const getStatusOrder = (status: TabelaComparacaoItem['status']) => {
-      switch (status) {
-        case "encontrado":
-          return 1;
-        case "faltante":
-          return 2;
-        case "extra_no_ocr":
-          return 3;
-        default:
-          return 4;
-      }
-    };
+  const getStatusOrder = (status: TabelaComparacaoItem['status']) => {
+    switch (status) {
+      case "encontrado":
+        return 1;
+      case "faltante":
+        return 2;
+      case "extra_no_ocr":
+        return 3;
+      default:
+        return 4;
+    }
+  };
+  return [...tabela].sort((a, b) => {
     const porStatus = getStatusOrder(a.status) - getStatusOrder(b.status);
     if (porStatus !== 0) return porStatus;
     return Number(ehSoLista(b)) - Number(ehSoLista(a));
   });
+}
+
+export default function ExamesComparativoTable({ tabela = [], mostrarEvidencia = false, localizar }: ExamesComparativoTableProps) {
+  const ehSoLista = (item: TabelaComparacaoItem) =>
+    mostrarEvidencia && item.evidencia === "so_lista";
+  const sortedExames = ordenarComparativo(tabela, mostrarEvidencia);
 
   return (
     <TooltipProvider>

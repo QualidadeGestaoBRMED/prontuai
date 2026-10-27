@@ -23,22 +23,32 @@ function carregarPdfjs(): Promise<Pdfjs> {
 }
 
 /**
- * Trecho a destacar: cada caixa ganha um contorno, sem preenchimento por cima
- * do texto. `chave` muda a cada clique, para repetir o mesmo destaque.
+ * Trecho a destacar: cada caixa ganha o amarelo de marca-texto por cima do
+ * texto. `chave` muda a cada clique, para repetir o mesmo destaque.
  */
 export type Destaque = Localizacao & { chave: number }
 
-/** Quando o trecho aparece mais de uma vez: o botão flutuante passa entre eles. */
-export type NavegacaoOcorrencias = {
+/**
+ * Um controle do botão flutuante, "‹ rótulo ›": passar entre as ocorrências do
+ * trecho, ou de um exame (campo) para o seguinte.
+ */
+export type ControleNavegacao = {
   rotulo: string
+  /** Tooltip do rótulo (o nome do exame ou campo). */
+  dica?: string
+  /** Para leitor de tela: "Ocorrência anterior" / "Próxima ocorrência". */
+  rotuloAnterior: string
+  rotuloProximo: string
   onAnterior: () => void
-  onProxima: () => void
+  onProximo: () => void
 }
 
 type Tamanho = { largura: number; altura: number }
 
-// Folga do contorno em volta da caixa, em px: a caixa do Textract encosta no texto.
-const FOLGA = 3
+// Folga do marca-texto em volta da caixa, em px: a caixa do Textract encosta no
+// texto. Mais larga que alta, como o traço de uma caneta.
+const FOLGA_X = 2
+const FOLGA_Y = 1
 // Acima disso a busca para de listar: termo curto demais casa o documento todo.
 const MAX_RESULTADOS = 500
 
@@ -115,7 +125,8 @@ type EstadoTexto = "ocioso" | "carregando" | "pronto" | "indisponivel"
  * isso que o atalho "clicar no exame e ver onde ele está" precisa.
  *
  * Mesmo visual do leitor de antes: o documento inteiro numa rolagem só, cada
- * página na largura toda, sobre o cinza-escuro do leitor.
+ * página na largura toda, sobre o cinza-escuro do leitor. O trecho destacado
+ * ganha amarelo de marca-texto.
  *
  * A busca ("Buscar no documento", também pelo Ctrl+F) procura no texto que o
  * OCR leu, que `carregarTexto` traz com a posição de cada linha: PDF escaneado
@@ -137,14 +148,15 @@ export function VisualizadorPdf({
   url,
   titulo,
   destaque,
-  ocorrencias,
+  navegacao,
   carregarTexto,
 }: {
   arquivo: Blob | null
   url: string
   titulo: string
   destaque?: Destaque | null
-  ocorrencias?: NavegacaoOcorrencias | null
+  /** Controles do botão flutuante; vazio, o botão não aparece. */
+  navegacao?: ControleNavegacao[]
   /** Texto do OCR com a posição de cada linha; null quando não há. */
   carregarTexto?: () => Promise<LinhaTexto[] | null>
 }) {
@@ -381,55 +393,63 @@ export function VisualizadorPdf({
             <PaginaPdf key={i} documento={documento} numero={i + 1} escala={escala} tamanho={tamanho} raiz={raiz}>
               {destaque?.pagina === i + 1 &&
                 destaque.caixas.map((c, j) => (
-                  <Contorno key={`d-${destaque.chave}-${j}`} caixa={c} className="border-2 border-[#007891]" />
+                  <MarcaTexto key={`d-${destaque.chave}-${j}`} caixa={c} forte />
                 ))}
               {resultados.map((r, j) =>
                 r.pagina === i + 1 ? (
-                  <Contorno
-                    key={`b-${j}`}
-                    caixa={r.caixa}
-                    className={j === atual ? "border-2 border-[#007891]" : "border border-[#007891]/45"}
-                  />
+                  <MarcaTexto key={`b-${j}`} caixa={r.caixa} forte={j === atual} />
                 ) : null,
               )}
             </PaginaPdf>
           ))}
         </div>
       )}
-      {documento && ocorrencias && (
+      {documento && !!navegacao?.length && (
         <div className="sticky bottom-3 z-30 mx-auto flex w-fit items-center gap-1 rounded-md bg-slate-900/85 p-1 text-xs tabular-nums text-white shadow-lg">
-          <button
-            type="button"
-            onClick={ocorrencias.onAnterior}
-            className="rounded p-1 hover:bg-white/15"
-            aria-label="Ocorrência anterior"
-          >
-            <ChevronLeftIcon className="size-4" />
-          </button>
-          <span className="px-2 text-center">{ocorrencias.rotulo}</span>
-          <button
-            type="button"
-            onClick={ocorrencias.onProxima}
-            className="rounded p-1 hover:bg-white/15"
-            aria-label="Próxima ocorrência"
-          >
-            <ChevronRightIcon className="size-4" />
-          </button>
+          {navegacao.map((controle, i) => (
+            <div key={controle.rotuloProximo} className={`flex items-center gap-1 ${i ? "border-l border-white/20 pl-1" : ""}`}>
+              <button
+                type="button"
+                onClick={controle.onAnterior}
+                className="rounded p-1 hover:bg-white/15"
+                aria-label={controle.rotuloAnterior}
+              >
+                <ChevronLeftIcon className="size-4" />
+              </button>
+              <span className="max-w-56 truncate px-2 text-center" title={controle.dica ?? controle.rotulo}>
+                {controle.rotulo}
+              </span>
+              <button
+                type="button"
+                onClick={controle.onProximo}
+                className="rounded p-1 hover:bg-white/15"
+                aria-label={controle.rotuloProximo}
+              >
+                <ChevronRightIcon className="size-4" />
+              </button>
+            </div>
+          ))}
         </div>
       )}
     </div>
   )
 }
 
-function Contorno({ caixa, className }: { caixa: Caixa; className: string }) {
+/**
+ * Amarelo de marca-texto sobre o trecho. O `mix-blend-multiply` tinge o papel
+ * e deixa a tinta escura por baixo, como uma caneta — e não uma caixa por cima
+ * do texto. `forte` para o trecho atual; o fraco marca os demais resultados da
+ * busca.
+ */
+function MarcaTexto({ caixa, forte = false }: { caixa: Caixa; forte?: boolean }) {
   return (
     <div
-      className={`pointer-events-none absolute rounded-[3px] ${className}`}
+      className={`pointer-events-none absolute rounded-[2px] mix-blend-multiply ${forte ? "bg-yellow-300/80" : "bg-yellow-200/50"}`}
       style={{
-        top: `calc(${caixa.y * 100}% - ${FOLGA}px)`,
-        left: `calc(${caixa.x * 100}% - ${FOLGA}px)`,
-        width: `calc(${caixa.w * 100}% + ${2 * FOLGA}px)`,
-        height: `calc(${caixa.h * 100}% + ${2 * FOLGA}px)`,
+        top: `calc(${caixa.y * 100}% - ${FOLGA_Y}px)`,
+        left: `calc(${caixa.x * 100}% - ${FOLGA_X}px)`,
+        width: `calc(${caixa.w * 100}% + ${2 * FOLGA_X}px)`,
+        height: `calc(${caixa.h * 100}% + ${2 * FOLGA_Y}px)`,
       }}
     />
   )
