@@ -101,7 +101,7 @@ export function ComparacaoDetalhada({
   return (
     <div>
       <h4 className={`font-semibold flex flex-wrap items-center gap-2 ${localizar && comPosicao ? "mb-1" : "mb-3"}`}>
-        Exames previstos no BRNET
+        Exames previstos no BR NET
         {alterados > 0 && (
           <span className="rounded-md border border-red-300 bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">
             {alterados} {alterados === 1 ? "valor fora da faixa" : "valores fora da faixa"}
@@ -126,9 +126,9 @@ export function ComparacaoDetalhada({
           onToggle={(e) => setAlemAberto(e.currentTarget.open)}
         >
           <summary className="cursor-pointer px-3 py-2 text-sm font-medium">
-            Exames além do previsto no BRNET ({alem.length})
+            Exames além do previsto no BR NET ({alem.length})
             <span className="block text-xs font-normal text-muted-foreground">
-              Vieram no prontuário, mas não estão previstos no BRNET para este atendimento.
+              Vieram no prontuário, mas não estão previstos no BR NET para este atendimento.
             </span>
           </summary>
           <div className="border-t px-1 pb-1">

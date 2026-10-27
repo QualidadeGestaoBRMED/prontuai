@@ -471,7 +471,7 @@ export function DocumentDetailsModalChecagem({
 
               <Separator />
 
-              {/* Exames previstos no BRNET e, à parte, os além do previsto, com a coluna de normalidade */}
+              {/* Exames previstos no BR NET e, à parte, os além do previsto, com a coluna de normalidade */}
               <ComparacaoDetalhada tabela={tabela} estado={normalidade} localizar={localizar} />
                 </div>
               </ScrollArea>
@@ -666,7 +666,7 @@ export function DocumentDetailsModalChecagem({
 
                 <Separator />
 
-                {/* Exames previstos no BRNET e, à parte, os além do previsto, com a coluna de normalidade */}
+                {/* Exames previstos no BR NET e, à parte, os além do previsto, com a coluna de normalidade */}
                 <ComparacaoDetalhada tabela={tabela} estado={normalidade} localizar={localizar} />
               </div>
             </ScrollArea>
