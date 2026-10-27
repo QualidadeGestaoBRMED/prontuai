@@ -128,9 +128,11 @@ type EstadoTexto = "ocioso" | "carregando" | "pronto" | "indisponivel"
  * página na largura toda, sobre o cinza-escuro do leitor. O trecho destacado
  * ganha amarelo de marca-texto.
  *
- * A busca ("Buscar no documento", também pelo Ctrl+F) procura no texto que o
- * OCR leu, que `carregarTexto` traz com a posição de cada linha: PDF escaneado
- * não tem texto próprio, e a busca do navegador não acha nada nele. Sem essa
+ * A busca fica recolhida numa lupa no canto: o clique na lupa ou o Ctrl+F
+ * abre o campo "Buscar no documento", e o Ctrl+F de novo (ou o ✕) fecha e
+ * limpa. Sempre aberta, ela confundia quem revisa. Procura no texto que o OCR
+ * leu, que `carregarTexto` traz com a posição de cada linha: PDF escaneado não
+ * tem texto próprio, e a busca do navegador não acha nada nele. Sem essa
  * leitura gravada (documento antigo), procura no texto do próprio PDF, quando
  * ele tem.
  *
@@ -172,6 +174,10 @@ export function VisualizadorPdf({
   const carregarTextoRef = useRef(carregarTexto)
   carregarTextoRef.current = carregarTexto
   const [busca, setBusca] = useState("")
+  const [buscaAberta, setBuscaAberta] = useState(false)
+  // O atalho do teclado é registrado uma vez só; lê o estado por aqui.
+  const buscaAbertaRef = useRef(buscaAberta)
+  buscaAbertaRef.current = buscaAberta
   const [estadoTexto, setEstadoTexto] = useState<EstadoTexto>("ocioso")
   const [linhasTexto, setLinhasTexto] = useState<LinhaTexto[]>([])
   const [atual, setAtual] = useState(0)
@@ -184,6 +190,7 @@ export function VisualizadorPdf({
     setPaginas([])
     setFalhou(false)
     setBusca("")
+    setBuscaAberta(false)
     setEstadoTexto("ocioso")
     setLinhasTexto([])
     ;(async () => {
@@ -295,13 +302,28 @@ export function VisualizadorPdf({
     if (resultados.length) setAtual((i) => (i + delta + resultados.length) % resultados.length)
   }
 
-  // Ctrl+F abre esta busca: a do navegador não acha nada no PDF desenhado.
+  // Fechar limpa: as marcações da busca somem junto com o campo.
+  const fecharBusca = () => {
+    setBusca("")
+    setBuscaAberta(false)
+  }
+
+  // Ao abrir, o cursor já vai para o campo.
+  useEffect(() => {
+    if (buscaAberta) campoBusca.current?.focus()
+  }, [buscaAberta])
+
+  // Ctrl+F abre e fecha esta busca: a do navegador não acha nada no PDF desenhado.
   useEffect(() => {
     const aoTeclar = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "f") {
         e.preventDefault()
-        campoBusca.current?.focus()
-        campoBusca.current?.select()
+        if (buscaAbertaRef.current) {
+          setBusca("")
+          setBuscaAberta(false)
+        } else {
+          setBuscaAberta(true)
+        }
       }
     }
     window.addEventListener("keydown", aoTeclar)
@@ -326,58 +348,69 @@ export function VisualizadorPdf({
   return (
     <div ref={setRaiz} className="relative h-full overflow-auto bg-[#525659]" aria-label={titulo}>
       {documento && (
-        // Altura zero: a caixa flutua sobre as páginas sem empurrá-las para baixo.
+        // Altura zero: a lupa e a caixa flutuam sobre as páginas sem empurrá-las para baixo.
         <div className="sticky top-0 z-30 h-0">
-          <div className="absolute right-3 top-2 flex items-center gap-1 rounded-md border bg-white/95 py-1 pl-2 pr-1 text-xs shadow-md">
-            <SearchIcon className="size-3.5 shrink-0 text-muted-foreground" />
-            <input
-              ref={campoBusca}
-              value={busca}
-              onChange={(e) => {
-                setBusca(e.target.value)
-                void prepararTexto()
-              }}
-              onFocus={() => void prepararTexto()}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault()
-                  irPara(e.shiftKey ? -1 : 1)
-                }
-              }}
-              placeholder="Buscar no documento"
+          {!buscaAberta ? (
+            <button
+              type="button"
+              onClick={() => setBuscaAberta(true)}
+              title="Buscar no documento (Ctrl+F)"
               aria-label="Buscar no documento"
-              className="w-40 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
-            />
-            {situacaoBusca && <span className="whitespace-nowrap px-1 tabular-nums text-muted-foreground">{situacaoBusca}</span>}
-            <button
-              type="button"
-              onClick={() => irPara(-1)}
-              disabled={!resultados.length}
-              className="rounded p-0.5 hover:bg-muted disabled:opacity-30"
-              aria-label="Resultado anterior"
+              className="absolute right-3 top-2 grid size-8 place-items-center rounded-full border bg-white/95 text-muted-foreground shadow-md hover:text-foreground"
             >
-              <ChevronUpIcon className="size-4" />
+              <SearchIcon className="size-4" />
             </button>
-            <button
-              type="button"
-              onClick={() => irPara(1)}
-              disabled={!resultados.length}
-              className="rounded p-0.5 hover:bg-muted disabled:opacity-30"
-              aria-label="Próximo resultado"
-            >
-              <ChevronDownIcon className="size-4" />
-            </button>
-            {busca && (
+          ) : (
+            <div className="absolute right-3 top-2 flex items-center gap-1 rounded-md border bg-white/95 py-1 pl-2 pr-1 text-xs shadow-md">
+              <SearchIcon className="size-3.5 shrink-0 text-muted-foreground" />
+              <input
+                ref={campoBusca}
+                value={busca}
+                onChange={(e) => {
+                  setBusca(e.target.value)
+                  void prepararTexto()
+                }}
+                onFocus={() => void prepararTexto()}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault()
+                    irPara(e.shiftKey ? -1 : 1)
+                  }
+                }}
+                placeholder="Buscar no documento"
+                aria-label="Buscar no documento"
+                className="w-40 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+              />
+              {situacaoBusca && <span className="whitespace-nowrap px-1 tabular-nums text-muted-foreground">{situacaoBusca}</span>}
               <button
                 type="button"
-                onClick={() => setBusca("")}
+                onClick={() => irPara(-1)}
+                disabled={!resultados.length}
+                className="rounded p-0.5 hover:bg-muted disabled:opacity-30"
+                aria-label="Resultado anterior"
+              >
+                <ChevronUpIcon className="size-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => irPara(1)}
+                disabled={!resultados.length}
+                className="rounded p-0.5 hover:bg-muted disabled:opacity-30"
+                aria-label="Próximo resultado"
+              >
+                <ChevronDownIcon className="size-4" />
+              </button>
+              <button
+                type="button"
+                onClick={fecharBusca}
+                title="Fechar busca (Ctrl+F)"
                 className="rounded p-0.5 hover:bg-muted"
-                aria-label="Limpar busca"
+                aria-label="Fechar busca"
               >
                 <XIcon className="size-4" />
               </button>
-            )}
-          </div>
+            </div>
+          )}
         </div>
       )}
       {!documento || !escala ? (
