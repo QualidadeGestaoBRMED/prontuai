@@ -57,6 +57,7 @@ from app.core.db.models import (
     DocumentFeedbackModel,
     CredenciadoAbordagemModel,
     FaixaNormalidadeModel,
+    DocumentoLayoutModel,
 )
 
 logger = logging.getLogger(__name__)
@@ -2241,6 +2242,41 @@ class PostgresUserDatabase:
             created_at=model.created_at,
             updated_at=model.updated_at,
         )
+
+    # ------------------------------------------------------------------
+    # Posição das linhas do OCR no PDF (ver app/services/layout_ocr.py)
+    # ------------------------------------------------------------------
+
+    def save_document_layout(self, document_id: str, layout: dict) -> None:
+        """Grava o layout do documento. Reprocessar substitui o anterior."""
+        from sqlalchemy.dialects.postgresql import insert as pg_insert
+
+        stmt = pg_insert(DocumentoLayoutModel).values(
+            document_id=document_id, layout=layout, criado_em=datetime.utcnow()
+        )
+        stmt = stmt.on_conflict_do_update(
+            index_elements=[DocumentoLayoutModel.document_id],
+            set_={"layout": stmt.excluded.layout, "criado_em": stmt.excluded.criado_em},
+        )
+        session = self._get_session()
+        try:
+            session.execute(stmt)
+            session.commit()
+        except Exception:
+            session.rollback()
+            raise
+        finally:
+            session.close()
+
+    def get_document_layout(self, document_id: str) -> Optional[dict]:
+        """O layout do documento, ou None quando ele não tem (lido antes da
+        migração 018 ou pelo OCR local)."""
+        session = self._get_session()
+        try:
+            model = session.get(DocumentoLayoutModel, document_id)
+            return model.layout if model else None
+        finally:
+            session.close()
 
     def get_document_feedback(self, document_id: str) -> Optional[DocumentFeedback]:
         """Parecer do documento, ou None quando ele nunca foi avaliado."""

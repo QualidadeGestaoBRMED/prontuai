@@ -2,6 +2,8 @@
  * Normalidade e alteração de exames. Espelho de back-end/app/models/normalidade.py.
  */
 
+import { Localizacao } from "@/types/localizacao"
+
 export type SituacaoParametro = "normal" | "acima" | "abaixo" | "alterado" | "sem_resultado"
 
 /** Valor de um parâmetro (glicose, hemoglobina...) lido no laudo do documento. */
@@ -15,6 +17,8 @@ export type ParametroLido = {
   /** Faixa em vigor, já formatada ("70 a 99 mg/dL"). */
   referencia: string
   situacao: SituacaoParametro
+  /** Onde o valor está no PDF (valor e nome do parâmetro). Sem layout do OCR, null. */
+  localizacao?: Localizacao | null
 }
 
 export type NormalidadeItem = {

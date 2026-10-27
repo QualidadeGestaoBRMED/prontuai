@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react"
 import { CheckIcon, XIcon, InfoIcon, AlertTriangleIcon } from "lucide-react"
 
 import {
@@ -16,6 +17,7 @@ import {
 } from "@/components/ui/tooltip"
 import { TabelaComparacaoItem } from "@/types/process"
 import { ParametroLido, SituacaoParametro } from "@/types/normalidade"
+import { cn } from "@/lib/utils"
 
 // Define as props do componente, que agora recebe a tabela de comparação
 export interface ExamesComparativoTableProps {
@@ -34,6 +36,27 @@ export interface ExamesComparativoTableProps {
    * `carregando` mostra a coluna vazia enquanto a leitura não chega.
    */
   normalidade?: { carregando: boolean; porExame: Record<string, ParametroLido[]> };
+  /**
+   * Liga o atalho até o PDF, como a lista de registros da Triagem BR NET: a
+   * linha do exame é o registro, e clicar nela destaca no documento onde ele
+   * aparece. `porExame` diz quantas ocorrências cada exame tem; clicar de novo
+   * na mesma linha passa para a próxima. Exame sem ocorrência não é clicável.
+   * Com `onLocalizarValor`, o valor lido na coluna Normalidade leva ao número
+   * no laudo. Sem a prop, a tabela fica como antes (chat, tela da clínica).
+   */
+  localizar?: {
+    porExame: Record<string, number>;
+    /** O destaque na tela: um exame (e a ocorrência) ou um valor dele. */
+    ativo?: { exame: string; indice: number; parametro?: string } | null;
+    onLocalizar: (exame: string) => void;
+    onLocalizarValor?: (exame: string, parametro: ParametroLido) => void;
+  };
+  /**
+   * Para a tabela dos exames além do previsto no BRNET: o cabeçalho da primeira
+   * coluna e o status no lugar de "Extra no OCR". Sem eles, fica como antes.
+   */
+  rotuloColunaExame?: string;
+  rotuloExtra?: string;
 }
 
 const SITUACAO: Record<SituacaoParametro, { label: string; className: string }> = {
@@ -47,8 +70,12 @@ const SITUACAO: Record<SituacaoParametro, { label: string; className: string }> 
 export const foraDaFaixa = (p: ParametroLido) =>
   p.situacao === "acima" || p.situacao === "abaixo" || p.situacao === "alterado";
 
-function CelulaNormalidade({ item, parametros, carregando }: {
-  item: TabelaComparacaoItem; parametros?: ParametroLido[]; carregando: boolean
+function CelulaNormalidade({ item, parametros, carregando, onLocalizar, ativo }: {
+  item: TabelaComparacaoItem; parametros?: ParametroLido[]; carregando: boolean;
+  /** Leva ao valor no PDF. Sem ela, ou sem posição do valor, o valor é texto. */
+  onLocalizar?: (parametro: ParametroLido) => void;
+  /** `chave` do parâmetro destacado no PDF agora. */
+  ativo?: string | null;
 }) {
   if (item.status === "faltante") return <span className="text-muted-foreground">—</span>;
   if (carregando) return <span className="text-xs text-muted-foreground">Lendo…</span>;
@@ -61,11 +88,28 @@ function CelulaNormalidade({ item, parametros, carregando }: {
           <div key={p.chave} className="text-xs leading-tight">
             <div className="flex flex-wrap items-center gap-1.5">
               <span className="text-muted-foreground">{p.nome}</span>
-              {p.valor_texto && (
+              {p.valor_texto && (p.localizacao && onLocalizar ? (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    // O valor tem destaque próprio; não deixa a linha tratar o clique.
+                    e.stopPropagation()
+                    onLocalizar(p)
+                  }}
+                  title="Ver o valor no documento"
+                  className={cn(
+                    "rounded-sm px-0.5 font-semibold underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30",
+                    // Mesmo marca-texto do trecho no PDF.
+                    ativo === p.chave ? "bg-yellow-300/80 text-foreground" : "text-foreground hover:text-primary",
+                  )}
+                >
+                  {p.valor_texto}{p.unidade ? ` ${p.unidade}` : ""}
+                </button>
+              ) : (
                 <span className="font-semibold text-foreground">
                   {p.valor_texto}{p.unidade ? ` ${p.unidade}` : ""}
                 </span>
-              )}
+              ))}
               <span className={`rounded border px-1.5 py-px text-[11px] font-medium ${sit.className}`}>{sit.label}</span>
             </div>
             <div className="text-[11px] text-muted-foreground">
@@ -79,7 +123,7 @@ function CelulaNormalidade({ item, parametros, carregando }: {
 }
 
 // Função auxiliar para obter o ícone e a cor com base no status do exame
-function getConformidade(status: TabelaComparacaoItem['status']) {
+function getConformidade(status: TabelaComparacaoItem['status'], rotuloExtra = "Extra no OCR") {
   switch (status) {
     case "encontrado":
       return { 
@@ -95,7 +139,7 @@ function getConformidade(status: TabelaComparacaoItem['status']) {
       };
     case "extra_no_ocr":
       return { 
-        label: "Extra no OCR", 
+        label: rotuloExtra, 
         icon: <AlertTriangleIcon className="inline-flex stroke-yellow-500" size={16} />, 
         color: "text-yellow-500" 
       };
@@ -114,56 +158,105 @@ const SO_NA_LISTA = {
 };
 
 // Componente da tabela de comparação de exames
-export default function ExamesComparativoTable({ tabela = [], mostrarEvidencia = false, normalidade }: ExamesComparativoTableProps) {
+/**
+ * A ordem em que a tabela mostra os exames: primeiro os "encontrados", depois os
+ * "faltantes", depois os "extras". Com a evidência ligada, os "só na lista do ASO"
+ * abrem o grupo dos encontrados (continuam encontrados, mas são os que o revisor
+ * precisa conferir no PDF); com a normalidade, os de valor fora da faixa vêm logo
+ * depois. O sort é estável: fora isso, a ordem do back-end se mantém. Exportada
+ * para quem precisa seguir a mesma sequência — o botão que passa de exame em
+ * exame no PDF.
+ */
+export function ordenarComparativo(
+  tabela: TabelaComparacaoItem[],
+  mostrarEvidencia = false,
+  normalidade?: Record<string, ParametroLido[]>,
+): TabelaComparacaoItem[] {
+  const ehSoLista = (item: TabelaComparacaoItem) =>
+    mostrarEvidencia && item.evidencia === "so_lista";
+  const temAlterado = (item: TabelaComparacaoItem) =>
+    Boolean(normalidade?.[item.exame]?.some(foraDaFaixa));
+  const getStatusOrder = (status: TabelaComparacaoItem['status']) => {
+    switch (status) {
+      case "encontrado":
+        return 1;
+      case "faltante":
+        return 2;
+      case "extra_no_ocr":
+        return 3;
+      default:
+        return 4;
+    }
+  };
+  return [...tabela].sort((a, b) => {
+    const porStatus = getStatusOrder(a.status) - getStatusOrder(b.status);
+    if (porStatus !== 0) return porStatus;
+    return (Number(ehSoLista(b)) - Number(ehSoLista(a))) || (Number(temAlterado(b)) - Number(temAlterado(a)));
+  });
+}
+
+export default function ExamesComparativoTable({
+  tabela = [],
+  mostrarEvidencia = false,
+  normalidade,
+  localizar,
+  rotuloColunaExame = "Exame Previsto",
+  rotuloExtra,
+}: ExamesComparativoTableProps) {
   const ehSoLista = (item: TabelaComparacaoItem) =>
     mostrarEvidencia && item.evidencia === "so_lista";
   const temAlterado = (item: TabelaComparacaoItem) =>
     Boolean(normalidade?.porExame[item.exame]?.some(foraDaFaixa));
+  const sortedExames = ordenarComparativo(tabela, mostrarEvidencia, normalidade?.porExame);
 
-  // Ordena os exames: primeiro os "encontrados", depois os "faltantes", depois os "extras".
-  // Com a evidência ligada, os "só na lista do ASO" abrem o grupo dos encontrados
-  // (continuam encontrados, mas são os que o revisor precisa conferir no PDF).
-  // O sort é estável: fora isso, a ordem do back-end se mantém.
-  const sortedExames = [...tabela].sort((a, b) => {
-    const getStatusOrder = (status: TabelaComparacaoItem['status']) => {
-      switch (status) {
-        case "encontrado":
-          return 1;
-        case "faltante":
-          return 2;
-        case "extra_no_ocr":
-          return 3;
-        default:
-          return 4;
-      }
-    };
-    const porStatus = getStatusOrder(a.status) - getStatusOrder(b.status);
-    if (porStatus !== 0) return porStatus;
-    // Com a normalidade ligada, os de valor fora da faixa vêm logo depois.
-    return (Number(ehSoLista(b)) - Number(ehSoLista(a))) || (Number(temAlterado(b)) - Number(temAlterado(a)));
-  });
+  // Quem passa de exame em exame pelo botão do PDF não está olhando a lista: ela
+  // rola junto, para a linha do exame em foco ficar à vista.
+  const corpo = useRef<HTMLTableSectionElement>(null);
+  const exameAtivo = localizar?.ativo?.exame;
+  useEffect(() => {
+    if (!exameAtivo) return;
+    corpo.current
+      ?.querySelector('tr[aria-selected="true"]')
+      ?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }, [exameAtivo]);
 
   return (
     <TooltipProvider>
       <Table className="w-full">
         <TableHeader>
           <TableRow>
-            <TableHead className={normalidade ? "w-[30%]" : "w-2/5"}>Exame Previsto</TableHead>
+            <TableHead className={normalidade ? "w-[30%]" : "w-2/5"}>{rotuloColunaExame}</TableHead>
             <TableHead className={normalidade ? "w-[15%] text-center" : "w-1/5 text-center"}>Status</TableHead>
             {normalidade && <TableHead className="w-[38%] text-left">Normalidade</TableHead>}
             <TableHead className={normalidade ? "w-[17%] text-left" : "w-2/5 text-left"}>Justificativa</TableHead>
           </TableRow>
         </TableHeader>
-        <TableBody>
+        <TableBody ref={corpo}>
           {sortedExames.map((item, index) => {
-            const conf = ehSoLista(item) ? SO_NA_LISTA : getConformidade(item.status);
+            const conf = ehSoLista(item) ? SO_NA_LISTA : getConformidade(item.status, rotuloExtra);
+            const localizavel = Boolean(localizar?.porExame[item.exame]);
+            const selecionado = localizar?.ativo?.exame === item.exame;
             return (
               <TableRow
                 key={`${item.exame}-${index}`}
-                className={temAlterado(item) ? "shadow-[inset_3px_0_0_0_rgb(220_38_38)]" : undefined}
+                onClick={localizavel ? () => localizar?.onLocalizar(item.exame) : undefined}
+                aria-selected={localizavel ? selecionado : undefined}
+                className={cn(
+                  localizavel && "cursor-pointer",
+                  temAlterado(item) && "shadow-[inset_3px_0_0_0_rgb(220_38_38)]",
+                  selecionado && "bg-cyan-50/70 hover:bg-cyan-50/70",
+                  selecionado && !temAlterado(item) && "shadow-[inset_2px_0_0_0_var(--primary)]",
+                ) || undefined}
               >
-                <TableCell className="font-medium align-top whitespace-normal">
-                  {item.exame}
+                <TableCell className={cn("font-medium align-top whitespace-normal", selecionado && "text-primary")}>
+                  {localizavel ? (
+                    // Só para o teclado: o clique é da linha inteira.
+                    <button type="button" className="text-left rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30">
+                      {item.exame}
+                    </button>
+                  ) : (
+                    item.exame
+                  )}
                 </TableCell>
                 <TableCell className={`text-center font-medium align-top ${conf.color}`}>
                   <div className="flex flex-col items-center justify-center gap-1">
@@ -177,6 +270,12 @@ export default function ExamesComparativoTable({ tabela = [], mostrarEvidencia =
                       item={item}
                       parametros={normalidade.porExame[item.exame]}
                       carregando={normalidade.carregando}
+                      onLocalizar={
+                        localizar?.onLocalizarValor
+                          ? (p) => localizar.onLocalizarValor?.(item.exame, p)
+                          : undefined
+                      }
+                      ativo={localizar?.ativo?.exame === item.exame ? localizar.ativo.parametro : null}
                     />
                   </TableCell>
                 )}

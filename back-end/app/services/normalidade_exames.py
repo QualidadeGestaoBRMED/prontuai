@@ -38,8 +38,11 @@ from __future__ import annotations
 import os
 import re
 import unicodedata
+from bisect import bisect_right
 from dataclasses import dataclass
 from typing import Any, Iterable, Optional
+
+from app.services import layout_ocr
 
 # Desliga a leitura sem deploy de código: NORMALIDADE_EXAMES=false.
 HABILITADA = os.getenv("NORMALIDADE_EXAMES", "true").strip().lower() not in ("0", "false", "nao", "no")
@@ -223,7 +226,8 @@ def _referencia_antes(jan: str, inicio: int) -> bool:
     return bool(_COMPARACAO_PERTO.intersection(jan[:inicio].split()[-3:]))
 
 
-def _valor_numerico(p: Parametro, jan: str) -> Optional[tuple[float, str]]:
+def _valor_numerico(p: Parametro, jan: str) -> Optional[tuple[float, str, int, int]]:
+    """(valor, como exibir, início e fim do número na janela)."""
     lo, hi = p.plausivel
     if p.milhar:
         m = re.search(rf"{_NUMERO}(\s*(?:MIL\b|X\s?10\s?\^?\s?3|X\s?10E3))?", jan)
@@ -241,16 +245,17 @@ def _valor_numerico(p: Parametro, jan: str) -> Optional[tuple[float, str]]:
             texto = _fmt(valor)
         elif not (_MILHAR.fullmatch(texto) or _UNIDADE_CONTAGEM.match(depois)):
             return None
-        return (valor, texto) if lo <= valor <= hi else None
+        return (valor, texto, m.start(1), m.end(1)) if lo <= valor <= hi else None
     for m in re.finditer(rf"{_NUMERO}\s*(?:{p.unidade_rx})", jan):
         if _referencia_antes(jan, m.start()):
             continue
         valor = _numero(m.group(1))
-        return (valor, m.group(1)) if lo <= valor <= hi else None
+        return (valor, m.group(1), m.start(1), m.end(1)) if lo <= valor <= hi else None
     return None
 
 
-def _valor_qualitativo(jan: str) -> Optional[str]:
+def _valor_qualitativo(jan: str) -> Optional[tuple[str, int, int]]:
+    """(como exibir, início e fim do resultado na janela)."""
     # Quando a janela tem "RESULTADO", a resposta vem depois dele; antes pode
     # estar a faixa ("Valor de referência: Não reagente").
     pos = jan.find("RESULTADO")
@@ -260,7 +265,7 @@ def _valor_qualitativo(jan: str) -> Optional[str]:
     titulo = (m.group(2) or "").strip()
     palavra = m.group(1).replace("-", " ")
     texto = {"NAO REAGENTE": "Não reagente", "NEGATIVO": "Negativo", "REAGENTE": "Reagente", "POSITIVO": "Positivo"}[palavra]
-    return f"{texto} {titulo}".strip()
+    return f"{texto} {titulo}".strip(), m.start(), m.end()
 
 
 @dataclass
@@ -270,11 +275,39 @@ class Leitura:
     unidade: str
     valor: Optional[float]
     valor_texto: str
+    # Onde o nome do parâmetro e o valor estão no texto normalizado, para achar
+    # o trecho no PDF (`localizar_leitura`). Fim exclusivo.
+    nome_em: tuple[int, int] = (0, 0)
+    valor_em: tuple[int, int] = (0, 0)
 
 
-def ler_valores(markdown: str) -> dict[str, Leitura]:
-    """O primeiro resultado legível de cada parâmetro no documento."""
-    norm = re.sub(r" {2,}", " ", _DATA.sub(" ", normalizar(markdown)))
+def _texto_normalizado(markdown: str) -> tuple[str, list[tuple[int, int]]]:
+    """
+    O markdown normalizado numa linha só, como a leitura procura, e onde cada
+    linha do markdown começa nele: [(início no texto, índice da linha)].
+
+    Normaliza linha a linha e junta com espaço. Dá o mesmo texto que normalizar
+    o markdown inteiro de uma vez — conferido nos 3.000 documentos mais recentes
+    da cópia de produção de 23/10/2026, sem nenhuma diferença —, mas sabendo de
+    que linha veio cada posição. É o que liga a leitura à caixa da linha no PDF.
+    """
+    partes: list[str] = []
+    inicios: list[tuple[int, int]] = []
+    tamanho = 0
+    for indice, linha in enumerate((markdown or "").split("\n")):
+        trecho = re.sub(r" {2,}", " ", _DATA.sub(" ", normalizar(linha))).strip()
+        if not trecho:
+            continue
+        if partes:
+            tamanho += 1  # o espaço que junta as linhas
+        inicios.append((tamanho, indice))
+        partes.append(trecho)
+        tamanho += len(trecho)
+    return " ".join(partes), inicios
+
+
+def _ler(markdown: str) -> tuple[dict[str, Leitura], str, list[tuple[int, int]]]:
+    norm, inicios = _texto_normalizado(markdown)
     fronteiras = [m.start() for m in _RX_FRONTEIRA.finditer(norm)]
     leituras: dict[str, Leitura] = {}
     for chave, p in PARAMETROS.items():
@@ -285,16 +318,127 @@ def ler_valores(markdown: str) -> dict[str, Leitura]:
             proxima = next((f for f in fronteiras if f >= ini), len(norm))
             jan = norm[ini:min(ini + JANELA, proxima)]
             if p.qualitativo:
-                texto = _valor_qualitativo(jan)
-                if texto:
-                    leituras[chave] = Leitura(chave, p.nome, p.unidade, None, texto)
+                achado = _valor_qualitativo(jan)
+                if achado:
+                    texto, a, b = achado
+                    leituras[chave] = Leitura(chave, p.nome, p.unidade, None, texto, m.span(), (ini + a, ini + b))
                     break
                 continue
             achado = _valor_numerico(p, jan)
             if achado:
-                leituras[chave] = Leitura(chave, p.nome, p.unidade, achado[0], achado[1])
+                valor, texto, a, b = achado
+                leituras[chave] = Leitura(chave, p.nome, p.unidade, valor, texto, m.span(), (ini + a, ini + b))
                 break
-    return leituras
+    return leituras, norm, inicios
+
+
+def ler_valores(markdown: str) -> dict[str, Leitura]:
+    """O primeiro resultado legível de cada parâmetro no documento."""
+    return _ler(markdown)[0]
+
+
+# ---------------------------------------------------------------------------
+# Onde a leitura está no PDF
+# ---------------------------------------------------------------------------
+
+def _pedacos(texto: str) -> list[tuple[str, int, int]]:
+    """As palavras de uma linha original já normalizadas, cada uma com o trecho
+    (início, fim) de onde veio no texto original."""
+    pedacos = []
+    for m in re.finditer(r"\S+", texto):
+        for parte in normalizar(m.group()).split():
+            pedacos.append((parte.rstrip(".,:;"), m.start(), m.end()))
+    return pedacos
+
+
+def _casa(pedaco: str, alvo: str, primeiro: bool) -> bool:
+    """O pedaço é o alvo. O primeiro do trecho aceita a unidade colada ("96MG/DL"),
+    nunca outro número ("960") nem data ("22/10/2026")."""
+    pedaco, alvo = pedaco.rstrip(".,:;"), alvo.rstrip(".,:;")
+    if not alvo:
+        return False
+    if pedaco == alvo:
+        return True
+    return primeiro and pedaco.startswith(alvo) and (pedaco[len(alvo)].isalpha() or pedaco[len(alvo)] == "%")
+
+
+def _trecho_na_linha(
+    linha: layout_ocr.LinhaPosicionada, alvo: list[str], antes: str
+) -> Optional[tuple[int, int]]:
+    """
+    Onde a sequência `alvo` (palavras normalizadas) está no texto original da
+    linha. Se aparece mais de uma vez, vale a mesma ocorrência que a leitura
+    usou: `antes` é o texto normalizado da linha até a posição lida, e conta
+    quantas vezes o alvo já tinha aparecido.
+    """
+    if not alvo:
+        return None
+    pedacos = _pedacos(linha.texto)
+    n = len(alvo)
+    achados = [
+        i for i in range(len(pedacos) - n + 1)
+        if all(_casa(pedacos[i + j][0], alvo[j], j == 0) for j in range(n))
+    ]
+    if not achados:
+        return None
+    anteriores = sum(1 for t in antes.split() if _casa(t, alvo[0], True))
+    i = achados[min(anteriores, len(achados) - 1)]
+    return pedacos[i][1], pedacos[i + n - 1][2]
+
+
+def _unidade_depois(p: Parametro, linha: layout_ocr.LinhaPosicionada, fim: int) -> int:
+    """Estende o trecho do valor até a unidade, quando ela vem logo depois
+    ("96" + "mg/dL"), para o destaque mostrar o resultado inteiro."""
+    m = re.match(r"\s+(\S+)", linha.texto[fim:])
+    if not m:
+        return fim
+    seguinte = normalizar(m.group(1))
+    # Contagem: "/mm³", "céls/mm³", "mil/mm³", "mil".
+    unidade = r"\S*/\S+|MIL|MM3" if p.milhar else p.unidade_rx
+    if unidade and re.fullmatch(rf"(?:{unidade})[.,;]?", seguinte):
+        return fim + m.end()
+    return fim
+
+
+def localizar_leitura(
+    leitura: Leitura,
+    norm: str,
+    inicios: list[tuple[int, int]],
+    linhas: dict[int, layout_ocr.LinhaPosicionada],
+) -> Optional[dict[str, Any]]:
+    """
+    Página e caixas da leitura no PDF: o valor (com a unidade) e o nome do
+    parâmetro, quando estão na mesma página. Sem caixa para a linha do valor
+    (documento sem layout), None.
+    """
+    posicoes = [a for a, _ in inicios]
+
+    def caixa(span: tuple[int, int], com_unidade: bool):
+        k = bisect_right(posicoes, span[0]) - 1
+        if k < 0:
+            return None
+        inicio_linha, indice = inicios[k]
+        linha = linhas.get(indice)
+        if linha is None:
+            return None
+        trecho = _trecho_na_linha(linha, norm[span[0]:span[1]].split(), norm[inicio_linha:span[0]])
+        if trecho is None:
+            # Não achou as palavras na linha original: destaca a linha inteira.
+            return linha, linha.caixa
+        a, b = trecho
+        if com_unidade:
+            b = _unidade_depois(PARAMETROS[leitura.chave], linha, b)
+        return linha, layout_ocr.caixa_do_trecho(linha, a, b)
+
+    valor = caixa(leitura.valor_em, True)
+    if valor is None:
+        return None
+    linha_valor, caixa_valor = valor
+    caixas = [layout_ocr.caixa_json(caixa_valor)]
+    nome = caixa(leitura.nome_em, False)
+    if nome is not None and nome[0].pagina == linha_valor.pagina and nome[1] != caixa_valor:
+        caixas.append(layout_ocr.caixa_json(nome[1]))
+    return {"pagina": linha_valor.pagina, "caixas": caixas}
 
 
 # ---------------------------------------------------------------------------
@@ -362,13 +506,19 @@ def avaliar_documento(
     markdown: str,
     tabela_comparacao: Iterable[dict[str, Any]],
     ajustes: Optional[dict[str, dict[str, Any]]] = None,
+    linhas: Optional[list[layout_ocr.LinhaPosicionada]] = None,
 ) -> list[dict[str, Any]]:
     """
     Para cada exame da Comparação Detalhada que tem parâmetro numérico, o valor
     lido de cada parâmetro e a situação. Exame faltante fica de fora: não há laudo
     para ler. A ordem é a da tabela.
+
+    Com `linhas` (o layout do OCR já pareado com o markdown, ver `layout_ocr`),
+    cada valor lido leva também `localizacao`: a página e as caixas do valor e
+    do nome do parâmetro, para a checagem levar até ele no PDF.
     """
-    leituras = ler_valores(markdown or "")
+    leituras, norm, inicios = _ler(markdown or "")
+    por_indice = {l.linha_markdown: l for l in linhas or []}
     faixas = faixas_efetivas(ajustes)
     itens = []
     for item in tabela_comparacao or []:
@@ -390,6 +540,7 @@ def avaliar_documento(
                 "valor_texto": lida.valor_texto if lida else None,
                 "referencia": texto_faixa(k, faixa),
                 "situacao": classificar(lida, faixa) if lida else SEM_RESULTADO,
+                "localizacao": localizar_leitura(lida, norm, inicios, por_indice) if lida and por_indice else None,
             })
         itens.append({"exame": item.get("exame"), "parametros": parametros})
     return itens

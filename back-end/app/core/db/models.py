@@ -446,3 +446,19 @@ class FaixaNormalidadeModel(Base):
         CheckConstraint("minimo IS NOT NULL OR maximo IS NOT NULL", name="ck_faixas_normalidade_limite"),
         CheckConstraint("minimo IS NULL OR maximo IS NULL OR minimo <= maximo", name="ck_faixas_normalidade_ordem"),
     )
+
+
+class DocumentoLayoutModel(Base):
+    """
+    Posição de cada linha do OCR na página do PDF (migration 018).
+
+    Uma linha por documento, só para os lidos pelo Textract. Fica fora de
+    `documents` de propósito: são centenas de caixas por documento que só a
+    checagem lê, ao abrir um documento, e a listagem não pode carregá-las.
+    Formato do JSON em `app/services/layout_ocr.py`.
+    """
+    __tablename__ = "documento_layout"
+
+    document_id = Column(String, ForeignKey("documents.id", ondelete="CASCADE"), primary_key=True)
+    layout = Column(JSONB, nullable=False)
+    criado_em = Column(DateTime, nullable=False, default=datetime.utcnow)

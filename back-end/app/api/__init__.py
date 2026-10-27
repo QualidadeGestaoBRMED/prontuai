@@ -2,6 +2,7 @@ from fastapi import APIRouter
 from app.api import v1_ocr, v1_brmed, v1_validacao, v1_jobs, v1_notifications
 from app.api.v1 import audit_logs
 from app.api.v1 import auth, users, documents, clinics, admin, maintenance, exams, dashboard, feedback, normalidade
+from app.api.v1 import localizacao
 
 api_router = APIRouter()
 api_router.include_router(v1_ocr.router, prefix="/v1")
@@ -24,3 +25,4 @@ api_router.include_router(dashboard.router, prefix="/v1")
 api_router.include_router(feedback.router, prefix="/v1")
 # Também depois de documents: /documents/{id}/normalidade.
 api_router.include_router(normalidade.router, prefix="/v1")
+api_router.include_router(localizacao.router, prefix="/v1")

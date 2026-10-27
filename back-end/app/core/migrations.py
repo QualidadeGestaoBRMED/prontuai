@@ -196,6 +196,16 @@ def check_if_migration_needed() -> tuple[bool, list[str]]:
             logger.warning("⚠️  Migration 017 necessária: tabela faixas_normalidade não existe")
             migrations_needed.append("017_add_faixas_normalidade.sql")
 
+        # Verificar migration 018: posição das linhas do OCR no PDF
+        cursor.execute("""
+            SELECT table_name
+            FROM information_schema.tables
+            WHERE table_name='documento_layout'
+        """)
+        if not cursor.fetchone():
+            logger.warning("⚠️  Migration 018 necessária: tabela documento_layout não existe")
+            migrations_needed.append("018_add_documento_layout.sql")
+
         cursor.close()
         conn.close()
 
