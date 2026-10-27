@@ -20,7 +20,7 @@ from app.core.auth import require_management, require_roles
 from app.core.database import user_db
 from app.models.normalidade import Faixa, FaixaInput, NormalidadeDocumento
 from app.models.user import User, UserRole
-from app.services import normalidade_exames as ne
+from app.services import layout_ocr, normalidade_exames as ne
 
 logger = logging.getLogger(__name__)
 
@@ -144,10 +144,18 @@ def normalidade_do_documento(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Documento não encontrado")
     payload = document.result_payload if isinstance(document.result_payload, dict) else {}
     try:
+        # Posição no PDF de cada valor lido. Sem layout (documento antigo, OCR
+        # local), a leitura sai igual, só sem o atalho até o valor.
+        linhas = layout_ocr.alinhar(document.ocr_markdown or "", user_db.get_document_layout(document_id))
+    except Exception as e:
+        logger.warning(f"[NORMALIDADE] Layout indisponível no documento {document_id}: {type(e).__name__}")
+        linhas = None
+    try:
         itens = ne.avaliar_documento(
             document.ocr_markdown or "",
             payload.get("tabela_comparacao") or [],
             _ajustes(),
+            linhas,
         )
     except Exception as e:
         # Leitura é informativa: falha aqui não pode travar a checagem. Só o tipo

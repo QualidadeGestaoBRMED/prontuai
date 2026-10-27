@@ -8,6 +8,7 @@ Rodar sem o conftest, que importa main.py e exige DATABASE_URL:
     PYTHONPATH=back-end pytest back-end/tests/test_normalidade_exames.py -q --noconftest
 """
 import importlib
+import re
 import sys
 import types
 from datetime import datetime
@@ -18,7 +19,7 @@ from starlette.requests import Request
 
 from app.models.normalidade import AjusteFaixa, FaixaInput
 from app.models.user import User, UserRole
-from app.services import normalidade_exames as ne
+from app.services import layout_ocr, normalidade_exames as ne
 
 
 def lido(markdown, chave):
@@ -223,6 +224,10 @@ class BancoFalso:
     def __init__(self):
         self.ajustes = {}
         self.documento = None
+        self.layout = None
+
+    def get_document_layout(self, document_id):
+        return self.layout
 
     def list_faixas_normalidade(self):
         return list(self.ajustes.values())
@@ -317,3 +322,78 @@ def test_normalidade_do_documento(monkeypatch):
 def test_sender_nao_le_normalidade(monkeypatch):
     rota = carregar(monkeypatch, BancoFalso())
     assert UserRole.SENDER not in rota._LEITORES
+
+
+# ── onde o valor está no PDF ───────────────────────────────────────────────
+
+def _layout_de(markdown, pagina=1):
+    """Layout sintético, como o do OCR: uma entrada por linha com conteúdo, uma
+    linha a cada 0,02 da página, e cada caractere com 0,01 de largura."""
+    linhas = []
+    for bruta in markdown.split("\n"):
+        texto = bruta.strip()
+        if not texto or texto.startswith("<!--"):
+            continue
+        texto = texto[3:] if texto.startswith("## ") else texto
+        palavras = [[100 * m.start(), 100 * len(m.group())] for m in re.finditer(r"\S+", texto)]
+        linhas.append([pagina, 0, 200 * len(linhas), 100 * len(texto), 150, palavras])
+    return {"versao": 1, "linhas": linhas}
+
+
+def _caixa(c):
+    return tuple(round(c[k], 2) for k in ("x", "y", "w"))
+
+
+def test_texto_normalizado_por_linha_e_igual_ao_do_documento_inteiro():
+    markdown = "<!-- pagina 1 -->\n## GLICEMIA 15/10/2026\n\nResultado: 182 mg/dL\n15/10/2026\nFIM"
+    norm, inicios = ne._texto_normalizado(markdown)
+    assert norm == re.sub(r" {2,}", " ", ne._DATA.sub(" ", ne.normalizar(markdown))).strip()
+    # Cada linha com conteúdo começa onde o índice diz; a de data some.
+    assert [norm[a:].split()[0] for a, _ in inicios] == ["<", "GLICEMIA", "RESULTADO", "FIM"]
+
+
+def test_valor_lido_vem_com_a_posicao_do_valor_e_do_nome():
+    linhas = layout_ocr.alinhar(LAUDO, _layout_de(LAUDO))
+    glicose, hemograma = ne.avaliar_documento(LAUDO, TABELA, linhas=linhas)
+    loc = glicose["parametros"][0]["localizacao"]
+    assert loc["pagina"] == 1
+    valor, nome = loc["caixas"]
+    # "182 mg/dL" na linha "Resultado: 182 mg/dL ...", e o nome no título do laudo
+    # (a lista do ASO, sem valor, não conta).
+    assert _caixa(valor) == (0.11, 0.10, 0.09)
+    assert _caixa(nome) == (0.0, 0.08, 0.16)
+    # Valor e nome na mesma linha: "HEMOGLOBINA 11,2 g/dL".
+    valor, nome = hemograma["parametros"][0]["localizacao"]["caixas"]
+    assert _caixa(valor) == (0.12, 0.14, 0.09)
+    assert _caixa(nome) == (0.0, 0.14, 0.11)
+    # Contagem com a unidade de contagem: "6.000 /mm³".
+    assert _caixa(hemograma["parametros"][1]["localizacao"]["caixas"][0]) == (0.11, 0.16, 0.10)
+    # Plaquetas não foi lida: sem valor, sem posição.
+    assert hemograma["parametros"][2]["localizacao"] is None
+
+
+def test_sem_layout_nao_ha_posicao():
+    glicose = ne.avaliar_documento(LAUDO, TABELA)[0]["parametros"][0]
+    assert glicose["valor"] == 182 and glicose["localizacao"] is None
+
+
+def test_trecho_na_linha_usa_a_mesma_ocorrencia_da_leitura():
+    linha = layout_ocr.LinhaPosicionada("99 Glicose 99mg/dL", 1, (0, 0, 1800, 100))
+    assert ne._trecho_na_linha(linha, ["99"], "") == (0, 2)
+    # Segunda ocorrência, colada na unidade.
+    assert ne._trecho_na_linha(linha, ["99"], "99 GLICOSE") == (11, 18)
+
+
+def test_trecho_na_linha_nao_confunde_numero_com_data_ou_outro_numero():
+    linha = layout_ocr.LinhaPosicionada("22/10/2026 220 22 mg/dL", 1, (0, 0, 2300, 100))
+    assert ne._trecho_na_linha(linha, ["22"], "") == (15, 17)
+
+
+def test_normalidade_do_documento_com_layout(monkeypatch):
+    banco = BancoFalso()
+    banco.documento = types.SimpleNamespace(ocr_markdown=LAUDO, result_payload={"tabela_comparacao": TABELA})
+    banco.layout = _layout_de(LAUDO)
+    rota = carregar(monkeypatch, banco)
+    resposta = rota.normalidade_do_documento("doc-1", current_user=usuario(UserRole.CHECKER))
+    loc = resposta.itens[0].parametros[0].localizacao
+    assert loc.pagina == 1 and len(loc.caixas) == 2

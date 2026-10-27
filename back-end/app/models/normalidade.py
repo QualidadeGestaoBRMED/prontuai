@@ -11,6 +11,8 @@ from typing import List, Literal, Optional
 
 from pydantic import BaseModel, Field, model_validator
 
+from app.models.localizacao import Localizacao
+
 SituacaoParametro = Literal["normal", "acima", "abaixo", "alterado", "sem_resultado"]
 
 
@@ -65,6 +67,9 @@ class ParametroLido(BaseModel):
     valor_texto: Optional[str] = None
     referencia: str
     situacao: SituacaoParametro
+    # Onde o valor está no PDF (página e caixas do valor e do nome). None sem
+    # valor lido ou em documento sem layout do OCR.
+    localizacao: Optional[Localizacao] = None
 
 
 class NormalidadeItem(BaseModel):
