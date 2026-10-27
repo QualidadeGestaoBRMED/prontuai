@@ -40,6 +40,7 @@ from app.services.patient_name_extractor import extract_patient_name_from_markdo
 from app.core import metrics
 from app.core.pii import mask_cpf, mask_identifier, mask_name
 from app.core import pii_redaction
+from app.services import layout_ocr
 
 logger = logging.getLogger(__name__)
 
@@ -160,13 +161,70 @@ def processar_arquivo_docling(file) -> str:
     return markdown
 
 
-def textract_to_markdown(textract_response: dict) -> str:
+# Confiança de leitura por página — gravada em sombra, ninguém lê ainda.
+#
+# Existe para medir página ilegível (scan apagado, borrado, torto) a partir do
+# `ocr_markdown` já gravado, sem chamar o Textract de novo. Sai logo depois do
+# marcador de página, numa linha própria e num comentário SEPARADO — o
+# `_RE_PAGINA_MARKDOWN` de `workflow_service` casa `<!-- pagina N -->` exato e
+# não pode passar a casar outra coisa. Formato estável, um campo por chave:
+#
+#     <!-- leitura pagina=3 confianca=91.4 palavras=812 baixa=0.12 -->
+#
+#   pagina     número da página (o mesmo do marcador logo acima).
+#   confianca  média do `Confidence` das LINE da página, 1 casa decimal; sem
+#              LINE com confiança, média das WORD. Página sem texto lido sai
+#              com 0.0 — use `palavras=0` para separar esse caso, nunca o 0.0.
+#   palavras   quantidade de blocos WORD da página.
+#   baixa      fração das WORD com `Confidence` < LEITURA_CONFIANCA_BAIXA,
+#              2 casas decimais; 0.00 quando `palavras=0`.
+#
+# Para parsear: `RE_LEITURA_PAGINA` abaixo. Os campos sempre vêm todos e na
+# mesma ordem; campo novo, se um dia houver, entra no fim.
+LEITURA_CONFIANCA_BAIXA = 80.0
+RE_LEITURA_PAGINA = re.compile(
+    r"<!--\s*leitura\s+pagina=(\d+)\s+confianca=([\d.]+)\s+"
+    r"palavras=(\d+)\s+baixa=([\d.]+)\s*-->"
+)
+# Comentários que o OCR acrescenta ao markdown; saem antes do envio à OpenAI.
+_RE_COMENTARIO_OCR = re.compile(r"<!--\s*(?:pagina|leitura)\b[^>]*-->")
+
+
+def _estatistica_de_leitura(blocos: list[dict]) -> tuple[float, int, float]:
+    """(confiança média, nº de WORD, fração de WORD abaixo do limiar)."""
+    conf_linhas = [
+        float(b['Confidence']) for b in blocos
+        if b.get('BlockType') == 'LINE' and b.get('Confidence') is not None
+    ]
+    palavras = [b for b in blocos if b.get('BlockType') == 'WORD']
+    conf_palavras = [
+        float(b['Confidence']) for b in palavras if b.get('Confidence') is not None
+    ]
+    base = conf_linhas or conf_palavras
+    confianca = sum(base) / len(base) if base else 0.0
+    baixas = sum(1 for c in conf_palavras if c < LEITURA_CONFIANCA_BAIXA)
+    fracao = baixas / len(palavras) if palavras else 0.0
+    return confianca, len(palavras), fracao
+
+
+def _comentario_de_leitura(pagina: int, blocos: list[dict]) -> str:
+    confianca, palavras, fracao = _estatistica_de_leitura(blocos)
+    return (
+        f"<!-- leitura pagina={pagina} confianca={confianca:.1f} "
+        f"palavras={palavras} baixa={fracao:.2f} -->"
+    )
+
+
+def textract_to_markdown(textract_response: dict, pagina: Optional[int] = None) -> str:
     """
     Converte resposta JSON do AWS Textract em formato markdown.
     Preserva formato compatível com a lógica de extração existente (regex CPF + LLM exames).
 
     Args:
         textract_response: Resposta completa do detect_document_text()
+        pagina: Número da página quando a resposta é de UMA página só (Textract
+            síncrono, chamado página a página). Vale para todos os blocos e
+            prevalece sobre o `Page` que eles tragam.
 
     Returns:
         str: Texto em formato markdown compatível com o pipeline atual
@@ -175,34 +233,69 @@ def textract_to_markdown(textract_response: dict) -> str:
     - Blocos do tipo LINE são convertidos em linhas de texto
     - Texto curto em maiúsculas (≤ 4 palavras) se torna cabeçalho markdown (##)
     - Preserva padrões UF/CPF para detecção via regex
-    - Troca de página vira um comentário `<!-- pagina N -->`
+    - Cada página abre com o comentário `<!-- pagina N -->`, seguido do
+      comentário de leitura (ver `RE_LEITURA_PAGINA`)
 
     O marcador de página existe porque o nome de um exame aparecer no markdown
     não prova que o laudo veio junto: o ASO imprime a lista de exames
     complementares, e o nome lido dali é indistinguível do nome lido de um laudo
     de verdade. Com a página é possível perguntar se o exame aparece FORA da
-    página do ASO — ver `_evidencia_por_pagina` em `workflow_service`.
+    página do ASO — ver `_exames_sem_laudo` em `workflow_service`.
 
-    Sai como comentário HTML para não virar conteúdo: o markdown vai para o
-    prompt de extração e para a redação de PII, e um comentário não é texto do
-    documento. Só é emitido quando o Textract informa a página, o que acontece
-    no caminho assíncrono (PDF de várias páginas); no síncrono o campo não vem e
-    o markdown fica exatamente como era.
+    Sai como comentário HTML para não virar conteúdo, e `extrair_exames_ia`
+    retira os dois comentários antes do envio à OpenAI, para o prompt receber o
+    mesmo texto de sempre.
+
+    De onde vem o número da página:
+    - síncrono por página (`processar_pdf_textract_sincrono_por_pagina`, o
+      caminho principal): a resposta não traz `Page`, então quem chama passa
+      `pagina`. Até out/2026 isso não acontecia e nenhum documento tinha o
+      marcador (0 de 2.864 entre 28/09 e 18/10).
+    - assíncrono: os blocos de todas as páginas vêm juntos, cada um com `Page`;
+      um marcador por troca de página, nunca repetido.
+    - sem `pagina` e sem `Page`: nenhum marcador, markdown como era.
+
+    Página sem nenhum texto lido também recebe marcador — ela existe no PDF e
+    conta para `_paginas_do_markdown` — com `palavras=0` no comentário de leitura.
     """
-    lines = []
-    pagina_atual = None
+    blocos = textract_response.get('Blocks', []) or []
 
-    for block in textract_response.get('Blocks', []):
-        if block['BlockType'] == 'LINE':
-            text = block['Text'].strip()
+    def _pagina_do_bloco(block: dict) -> Optional[int]:
+        return pagina if pagina is not None else block.get('Page')
+
+    # Primeira passada: blocos por página, para a estatística de leitura.
+    blocos_por_pagina: dict[int, list[dict]] = {}
+    for block in blocos:
+        numero = _pagina_do_bloco(block)
+        if numero is not None:
+            blocos_por_pagina.setdefault(numero, []).append(block)
+
+    lines = []
+    paginas_emitidas: set[int] = set()
+
+    def _abrir_pagina(numero: Optional[int]) -> None:
+        if numero is None or numero in paginas_emitidas:
+            return
+        paginas_emitidas.add(numero)
+        lines.append(f"\n<!-- pagina {numero} -->")
+        lines.append(_comentario_de_leitura(numero, blocos_por_pagina.get(numero, [])) + "\n")
+
+    if pagina is not None:
+        _abrir_pagina(pagina)
+
+    for block in blocos:
+        tipo = block.get('BlockType')
+        if tipo == 'PAGE':
+            # Abre a página mesmo que ela não tenha nenhuma LINE.
+            _abrir_pagina(_pagina_do_bloco(block))
+            continue
+        if tipo == 'LINE':
+            text = (block.get('Text') or '').strip()
 
             if not text:
                 continue
 
-            pagina = block.get('Page')
-            if pagina is not None and pagina != pagina_atual:
-                lines.append(f"\n<!-- pagina {pagina} -->\n")
-                pagina_atual = pagina
+            _abrir_pagina(_pagina_do_bloco(block))
 
             # Detectar possíveis cabeçalhos de exames:
             # - Texto curto (até 4 palavras)
@@ -725,13 +818,15 @@ def _detect_document_text_with_retry(document_bytes: bytes, context: str) -> dic
     raise RuntimeError(f"Textract síncrono falhou sem erro explícito ({context})")
 
 
-def processar_arquivo_textract_sincrono(file_path: str) -> str:
+def processar_arquivo_textract_sincrono(file_path: str, layout: Optional[list] = None) -> str:
     """
     Processa documento via AWS Textract usando API síncrona (DetectDocumentText).
     Muito mais rápido (15-30s) mas limitado a arquivos de até 5MB.
 
     Args:
         file_path: Caminho absoluto do arquivo no disco
+        layout: Quando passada, recebe as linhas com a posição na página
+            (`layout_ocr.linhas_textract`).
 
     Returns:
         str: Conteúdo em formato markdown
@@ -774,8 +869,11 @@ def processar_arquivo_textract_sincrono(file_path: str) -> str:
 
         logger.info(f"[OCR] Resposta recebida. Total de blocos: {len(response.get('Blocks', []))}")
 
-        # Converter para markdown
-        markdown = textract_to_markdown(response)
+        # Converter para markdown. A API síncrona só aceita documento de uma
+        # página (imagem), então ele é a página 1.
+        markdown = textract_to_markdown(response, pagina=1)
+        if layout is not None:
+            layout.extend(layout_ocr.linhas_textract(response, pagina=1))
         logger.info(f"[OCR] Conversão concluída. Markdown gerado: {len(markdown)} caracteres")
 
         return markdown
@@ -810,10 +908,14 @@ def processar_arquivo_textract_sincrono(file_path: str) -> str:
 def processar_pdf_textract_sincrono_por_pagina(
     file_path: str,
     progress_hook: Optional[Callable[[str], None]] = None,
+    layout: Optional[list] = None,
 ) -> str:
     """
     Processa PDF página a página usando Textract síncrono.
     Útil para evitar fila do Textract assíncrono.
+
+    `layout`, quando passada, recebe as linhas com a posição na página
+    (`layout_ocr.linhas_textract`).
     """
     logger.info(f"[OCR] Processando PDF por pagina com Textract (Síncrono): {file_path}")
 
@@ -856,7 +958,9 @@ def processar_pdf_textract_sincrono_por_pagina(
                 page_bytes,
                 context=f"pagina={idx}/{total_pages} size={tamanho_mb:.2f}MB",
             )
-            markdown_parts.append(textract_to_markdown(response))
+            markdown_parts.append(textract_to_markdown(response, pagina=idx))
+            if layout is not None:
+                layout.extend(layout_ocr.linhas_textract(response, pagina=idx))
             if settings.TEXTRACT_SYNC_PAGE_DELAY_SECONDS > 0 and idx < total_pages:
                 time.sleep(settings.TEXTRACT_SYNC_PAGE_DELAY_SECONDS)
 
@@ -883,7 +987,8 @@ def processar_pdf_textract_sincrono_por_pagina(
 
 def processar_arquivo_textract(
     file_path: str,
-    progress_hook: Optional[Callable[[str], None]] = None
+    progress_hook: Optional[Callable[[str], None]] = None,
+    layout: Optional[list] = None,
 ) -> str:
     """
     Processa documento via AWS Textract usando API assíncrona (StartDocumentTextDetection).
@@ -891,6 +996,8 @@ def processar_arquivo_textract(
 
     Args:
         file_path: Caminho absoluto do arquivo no disco
+        layout: Quando passada, recebe as linhas com a posição na página
+            (`layout_ocr.linhas_textract`).
 
     Returns:
         str: Conteúdo em formato markdown
@@ -1037,6 +1144,8 @@ def processar_arquivo_textract(
         t_conv = time.perf_counter()
         logger.info(f"[OCR] Convertendo {len(all_blocks)} blocos em markdown...")
         markdown = textract_to_markdown({'Blocks': all_blocks})
+        if layout is not None:
+            layout.extend(layout_ocr.linhas_textract({'Blocks': all_blocks}))
 
         logger.info(f"[OCR] Conversão concluída em {time.perf_counter() - t_conv:.2f}s. Markdown gerado: {len(markdown)} caracteres")
         return markdown
@@ -1096,8 +1205,13 @@ def extrair_exames_ia(
     A redação fica *dentro* da função, e não no chamador, para que uma chamada
     nova escrita no futuro herde a proteção sem depender de lembrete.
     """
+    # Os comentários do OCR (marcador de página e confiança de leitura) não são
+    # texto do documento: saem aqui para o prompt receber o que sempre recebeu.
+    # A extração foi medida sem eles, e os números do comentário de leitura não
+    # têm por que passar pela redação e pela conferência de PII.
+    texto = _RE_COMENTARIO_OCR.sub("", markdown) if markdown else markdown
     texto = pii_redaction.redigir_para_llm(
-        markdown,
+        texto,
         valores_conhecidos=valores_cadastrais or (),
         # A data de realização fica: sem ela o modelo perde a âncora
         # "NOME DO EXAME - DATA" e descarta a linha do exame junto.
@@ -1389,6 +1503,11 @@ async def _ocr_pipeline_impl(file, salvar_markdown=True, progress_hook: Optional
 
     logger.info(f"[OCR] Iniciando conversão com {motor_ocr} para: {file.filename}")
 
+    # Posição de cada linha na página, para a checagem levar ao exame no PDF.
+    # Cada fallback recomeça do zero: a tentativa que falhou pode ter deixado
+    # páginas pela metade, e o layout precisa casar 1:1 com o markdown final.
+    layout: list = []
+
     try:
         # Feature Toggle: escolher motor de OCR
         if usar_textract:
@@ -1398,20 +1517,24 @@ async def _ocr_pipeline_impl(file, salvar_markdown=True, progress_hook: Optional
                     markdown = await asyncio.to_thread(
                         processar_pdf_textract_sincrono_por_pagina,
                         temp_path,
-                        progress_hook
+                        progress_hook,
+                        layout,
                     )
                 elif file_size <= 5 * 1024 * 1024:
                     markdown = await asyncio.to_thread(
                         processar_arquivo_textract_sincrono,
-                        temp_path
+                        temp_path,
+                        layout,
                     )
                 else:
                     markdown = await asyncio.to_thread(
                         processar_arquivo_textract,
                         temp_path,
-                        progress_hook
+                        progress_hook,
+                        layout,
                     )
             except ClientError as e:
+                layout.clear()
                 error_code = e.response.get('Error', {}).get('Code')
                 if error_code == 'UnsupportedDocumentException':
                     logger.warning(
@@ -1420,18 +1543,22 @@ async def _ocr_pipeline_impl(file, salvar_markdown=True, progress_hook: Optional
                     markdown = await asyncio.to_thread(
                         processar_arquivo_textract,
                         temp_path,
-                        progress_hook
+                        progress_hook,
+                        layout,
                     )
                 else:
                     raise
             except ValueError as e:
+                layout.clear()
                 logger.warning(f"[OCR] {e} Fallback para modo assincrono.")
                 markdown = await asyncio.to_thread(
                     processar_arquivo_textract,
                     temp_path,
-                    progress_hook
+                    progress_hook,
+                    layout,
                 )
             except TimeoutError as e:
+                layout.clear()
                 metrics.TEXTRACT_TIMEOUT.add(1)
                 if settings.TEXTRACT_FALLBACK_TO_LOCAL:
                     logger.warning(f"[OCR] {e}. Fallback para OCR local (Docling).")
@@ -1446,6 +1573,7 @@ async def _ocr_pipeline_impl(file, salvar_markdown=True, progress_hook: Optional
                 else:
                     raise
             except (EndpointConnectionError, BotoCoreError) as e:
+                layout.clear()
                 if settings.TEXTRACT_FALLBACK_TO_LOCAL:
                     logger.warning(f"[OCR] Falha de conexão Textract: {e}. Fallback para OCR local (Docling).")
                     if progress_hook:
@@ -1530,6 +1658,9 @@ async def _ocr_pipeline_impl(file, salvar_markdown=True, progress_hook: Optional
         "patient_name": patient_name,
         "exames": exames_extraidos,
         "markdown_content": markdown,  # Adiciona o markdown para o orquestrador usar
+        # Só o Textract dá posição; Docling sai sem layout. Não vai para o
+        # payload do documento: quem grava separa (ver `layout_ocr`).
+        "layout": layout_ocr.montar(layout),
     }
 
     if "erro" in exames_info:

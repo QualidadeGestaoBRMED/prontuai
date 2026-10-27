@@ -12,12 +12,19 @@ import time
 import json
 import logging
 from typing import List, Optional
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from sqlalchemy import String, cast, create_engine, text, func, or_, and_, case
 from sqlalchemy.orm import sessionmaker, Session, defer
 from app.models.user import User, UserCreate, UserUpdate, UserRole, GLOBAL_READ_ROLES, normalizar_papeis
 from app.models.clinic import Clinic, ClinicCreate, ClinicUpdate
-from app.models.document import Document, DocumentCreate, DocumentUpdate
+from app.models.document import (
+    Document,
+    DocumentCreate,
+    DocumentUpdate,
+    JUSTIFICATIVAS_VAZIAS,
+    analise_do_payload,
+    previsao_liberacao_do_payload,
+)
 from app.models.feedback import DocumentFeedback
 from app.models.notification import Notification, NotificationCreate, NotificationUpdate
 from app.models.audit_log import AuditLog, AuditLogCreate
@@ -45,6 +52,7 @@ from app.core.db.models import (
     ExamVariationModel,
     ExamVariationConflictModel,
     DocumentFeedbackModel,
+    DocumentoLayoutModel,
 )
 
 logger = logging.getLogger(__name__)
@@ -1479,6 +1487,8 @@ class PostgresUserDatabase:
         filter_clinic_id: Optional[str] = None,
         uploaded_from: Optional[datetime] = None,
         uploaded_to: Optional[datetime] = None,
+        previsao_from: Optional[date] = None,
+        previsao_to: Optional[date] = None,
     ) -> dict:
         """
         Lista documentos paginados com escopo por role e filtros de fila.
@@ -1487,6 +1497,11 @@ class PostgresUserDatabase:
         semiaberto [de, até), em UTC sem fuso — o mesmo formato de
         `uploaded_at`. Quem converte o dia local em instante é o chamador: o
         "dia 15" do revisor começa às 03:00 UTC, e só o browser sabe disso.
+
+        `previsao_from`/`previsao_to` recortam pela previsão de liberação, com
+        as duas pontas inclusas. É data de calendário, sem fuso: não há
+        conversão a fazer. Qualquer uma das pontas pode faltar ("atrasados" é
+        só o `previsao_to`), e documento sem previsão sai do recorte.
         """
         session = self._get_session()
         try:
@@ -1521,6 +1536,15 @@ class PostgresUserDatabase:
                 filtros_envio.append(DocumentModel.uploaded_at < uploaded_to)
             if filtros_envio:
                 scoped_query = scoped_query.filter(*filtros_envio)
+
+            # Previsão de liberação: mesmo raciocínio, entra nos cards também.
+            filtros_previsao = []
+            if previsao_from:
+                filtros_previsao.append(DocumentModel.data_previsao_liberacao >= previsao_from)
+            if previsao_to:
+                filtros_previsao.append(DocumentModel.data_previsao_liberacao <= previsao_to)
+            if filtros_previsao:
+                scoped_query = scoped_query.filter(*filtros_previsao)
 
             if queue == "pendentes":
                 scoped_query = scoped_query.filter(
@@ -1596,6 +1620,9 @@ class PostgresUserDatabase:
             if filtros_envio:
                 scoped_summary_query = scoped_summary_query.filter(*filtros_envio)
 
+            if filtros_previsao:
+                scoped_summary_query = scoped_summary_query.filter(*filtros_previsao)
+
             summary_row = scoped_summary_query.one()
             summary_map = summary_row._mapping if hasattr(summary_row, "_mapping") else {}
 
@@ -1609,12 +1636,19 @@ class PostgresUserDatabase:
                 "filename": DocumentModel.filename,
                 "cpf": DocumentModel.cpf,
                 "status": DocumentModel.validation_status,
+                "previsao": DocumentModel.data_previsao_liberacao,
             }
             sort_column = sort_columns.get(sort_by, DocumentModel.uploaded_at)
-            if sort_dir.lower() == "asc":
-                scoped_query = scoped_query.order_by(sort_column.asc())
+            ordem = sort_column.asc() if sort_dir.lower() == "asc" else sort_column.desc()
+            if sort_by == "previsao":
+                # Centenas de documentos dividem o mesmo dia de previsão: sem
+                # desempate, a paginação por OFFSET repete ou pula linhas entre
+                # uma página e outra. Sem previsão vai para o fim nos dois sentidos.
+                scoped_query = scoped_query.order_by(
+                    ordem.nulls_last(), DocumentModel.uploaded_at.desc(), DocumentModel.id
+                )
             else:
-                scoped_query = scoped_query.order_by(sort_column.desc())
+                scoped_query = scoped_query.order_by(ordem)
 
             if page_size > 0:
                 scoped_query = scoped_query.offset((safe_page - 1) * page_size).limit(page_size)
@@ -1651,6 +1685,114 @@ class PostgresUserDatabase:
                     "pending_review": int(summary_map.get("pending_review", 0) or 0),
                     "total": int(summary_map.get("total", 0) or 0),
                 },
+            }
+        finally:
+            session.close()
+
+    def list_revisoes_paged(
+        self,
+        *,
+        page: int = 1,
+        page_size: int = 20,
+        cpf: Optional[str] = None,
+        revisor: Optional[str] = None,
+        status: Optional[str] = None,
+        texto: Optional[str] = None,
+        so_com_justificativa: bool = False,
+    ) -> dict:
+        """
+        Página da tela de Revisões (`/admin/validacoes`), do envio mais recente
+        para o mais antigo.
+
+        A tela baixava `GET /v1/documents` inteiro (12 mil documentos, ~69 MB) e
+        filtrava no navegador — e, como aquela consulta não tem ORDER BY, a lista
+        saía na ordem física das linhas, que terminava num documento de 24/09.
+        Aqui os filtros são os mesmos da tela, só que no banco:
+
+          * `texto` procura no nome do arquivo, nas justificativas e na mensagem
+            da IA. A mensagem mora no payload compacto; o regex isola o valor de
+            `analysis` para a busca não casar com nome de chave do JSON (~1s
+            sobre a tabela inteira, aceitável numa tela só de ADMIN);
+          * `so_com_justificativa` ignora o que está em JUSTIFICATIVAS_VAZIAS.
+            As justificativas vêm das colunas: conferido que nenhum documento
+            tem a do payload sem a da coluna.
+        """
+        session = self._get_session()
+        try:
+            query = session.query(DocumentModel).options(
+                defer(DocumentModel.ocr_markdown), defer(DocumentModel.result_payload)
+            )
+
+            digitos = re.sub(r"\D", "", cpf or "")
+            if digitos:
+                query = query.filter(DocumentModel.cpf.like(f"%{digitos}%"))
+            if revisor and revisor.strip():
+                query = query.filter(DocumentModel.reviewed_by.ilike(f"%{revisor.strip()}%"))
+            if status == "pending":
+                query = query.filter(
+                    or_(DocumentModel.validation_status == "pending", DocumentModel.validation_status.is_(None))
+                )
+            elif status:
+                query = query.filter(DocumentModel.validation_status == status)
+            if texto and texto.strip():
+                like = f"%{texto.strip()}%"
+                analise = func.substring(
+                    DocumentModel.result_payload_compact, r'"analysis":\s*"((?:[^"\\]|\\.)*)"'
+                )
+                query = query.filter(
+                    or_(
+                        DocumentModel.filename.ilike(like),
+                        DocumentModel.approval_reason.ilike(like),
+                        DocumentModel.rejection_reason.ilike(like),
+                        analise.ilike(like),
+                    )
+                )
+            if so_com_justificativa:
+                def _preenchida(coluna):
+                    limpa = func.trim(coluna)
+                    return and_(limpa != "", func.lower(limpa).notin_(sorted(JUSTIFICATIVAS_VAZIAS)))
+
+                query = query.filter(
+                    or_(_preenchida(DocumentModel.approval_reason), _preenchida(DocumentModel.rejection_reason))
+                )
+
+            total_items = query.count()
+            total_pages = max(1, (total_items + page_size - 1) // page_size)
+            safe_page = max(1, min(page, total_pages))
+            models = (
+                query.order_by(DocumentModel.uploaded_at.desc(), DocumentModel.id)
+                .offset((safe_page - 1) * page_size)
+                .limit(page_size)
+                .all()
+            )
+
+            items = []
+            for m in models:
+                try:
+                    compacto = json.loads(m.result_payload_compact) if m.result_payload_compact else None
+                except (TypeError, ValueError):
+                    compacto = None
+                items.append({
+                    "id": m.id,
+                    "filename": m.filename,
+                    "cpf": m.cpf,
+                    "validation_status": m.validation_status,
+                    "uploaded_at": m.uploaded_at,
+                    "reviewed_by": m.reviewed_by,
+                    "reviewed_at": m.reviewed_at,
+                    "confidence_score": m.confidence_score,
+                    "analysis": analise_do_payload(compacto),
+                    "approval_reason": m.approval_reason,
+                    "rejection_reason": m.rejection_reason,
+                })
+
+            return {
+                "items": items,
+                "page": safe_page,
+                "page_size": page_size,
+                "total_items": total_items,
+                "total_pages": total_pages,
+                "has_next": safe_page < total_pages,
             }
         finally:
             session.close()
@@ -1709,6 +1851,7 @@ class PostgresUserDatabase:
                 file_path=file_path,
                 cpf=cpf,
                 patient_name=self._extract_patient_name(result_payload) or "",
+                data_previsao_liberacao=previsao_liberacao_do_payload(result_payload),
                 uploaded_at=datetime.utcnow(),
                 exams_found=exams_found,
                 exams_ocr=exams_ocr,
@@ -1798,6 +1941,9 @@ class PostgresUserDatabase:
                 extracted_name = self._extract_patient_name(result_payload)
                 if extracted_name:
                     doc_model.patient_name = extracted_name
+                # Reprocessar pode trazer outro pedido do BRNET: a previsão
+                # acompanha o payload novo, inclusive quando ele não tem uma.
+                doc_model.data_previsao_liberacao = previsao_liberacao_do_payload(result_payload)
                 if reviewed_by is None and isinstance(result_payload, dict):
                     payload_reviewed_by = result_payload.get("reviewed_by") or result_payload.get("reviewedBy")
                     if payload_reviewed_by:
@@ -1915,6 +2061,41 @@ class PostgresUserDatabase:
             created_at=model.created_at,
             updated_at=model.updated_at,
         )
+
+    # ------------------------------------------------------------------
+    # Posição das linhas do OCR no PDF (ver app/services/layout_ocr.py)
+    # ------------------------------------------------------------------
+
+    def save_document_layout(self, document_id: str, layout: dict) -> None:
+        """Grava o layout do documento. Reprocessar substitui o anterior."""
+        from sqlalchemy.dialects.postgresql import insert as pg_insert
+
+        stmt = pg_insert(DocumentoLayoutModel).values(
+            document_id=document_id, layout=layout, criado_em=datetime.utcnow()
+        )
+        stmt = stmt.on_conflict_do_update(
+            index_elements=[DocumentoLayoutModel.document_id],
+            set_={"layout": stmt.excluded.layout, "criado_em": stmt.excluded.criado_em},
+        )
+        session = self._get_session()
+        try:
+            session.execute(stmt)
+            session.commit()
+        except Exception:
+            session.rollback()
+            raise
+        finally:
+            session.close()
+
+    def get_document_layout(self, document_id: str) -> Optional[dict]:
+        """O layout do documento, ou None quando ele não tem (lido antes da
+        migração 018 ou pelo OCR local)."""
+        session = self._get_session()
+        try:
+            model = session.get(DocumentoLayoutModel, document_id)
+            return model.layout if model else None
+        finally:
+            session.close()
 
     def get_document_feedback(self, document_id: str) -> Optional[DocumentFeedback]:
         """Parecer do documento, ou None quando ele nunca foi avaliado."""

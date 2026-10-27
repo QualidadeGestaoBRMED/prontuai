@@ -22,6 +22,9 @@ async def processar_ocr(
         if "erro" in resultado:
             logger.error(f"Erro no OCR: {resultado['erro']}")
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=resultado["erro"])
+        # Posição das linhas na página: só serve para a checagem de um documento
+        # gravado, e aqui nada é gravado.
+        resultado.pop("layout", None)
         return resultado
     except Exception as e:
         logger.exception(f"Erro inesperado no OCR: {e}")

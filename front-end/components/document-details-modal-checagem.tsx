@@ -1,5 +1,6 @@
 "use client"
 
+import { useEffect, useState } from "react"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import { CheckIcon, XIcon, Download, Loader2, MessageSquareIcon } from "lucide-react"
@@ -14,9 +15,130 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { ProcessResult } from "@/types/process"
-import ExamesComparativoTable from "@/components/exames-comparativo-table"
+import { FieldCheck, ProcessResult, TabelaComparacaoItem } from "@/types/process"
+import ExamesComparativoTable, { ExamesComparativoTableProps, ordenarComparativo } from "@/components/exames-comparativo-table"
+import { ControleNavegacao, Destaque, VisualizadorPdf } from "@/components/visualizador-pdf"
+import { TagNovo } from "@/components/tag-novo"
+import { carregarTextoDocumento, useLocalizacoes } from "@/hooks/use-localizacoes"
 import { cn } from "@/lib/utils"
+
+// O que o destaque no PDF aponta: um exame (previsto no BRNET ou além do
+// previsto) ou um campo da Checklist de Campos.
+type Alvo = { tipo: "exame" | "campo"; nome: string }
+
+/**
+ * Item da Checklist de Campos. Com ocorrência no PDF, o item inteiro é o atalho
+ * até ela — como a linha do exame na lista de exames; clicar de novo passa
+ * para a próxima. Sem ocorrência (documento antigo, campo não encontrado), fica
+ * como era.
+ */
+function ItemChecklist({
+  item,
+  localizavel,
+  selecionado,
+  onLocalizar,
+}: {
+  item: FieldCheck
+  localizavel: boolean
+  selecionado: boolean
+  onLocalizar: () => void
+}) {
+  const conteudo = (
+    <>
+      <span className="text-sm">{item.label}</span>
+      <Badge
+        variant="secondary"
+        className={item.found ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-600"}
+      >
+        {item.found ? "Encontrado" : "Não encontrado"}
+      </Badge>
+    </>
+  )
+  if (!localizavel) {
+    return <div className="flex items-center justify-between rounded border px-3 py-2">{conteudo}</div>
+  }
+  return (
+    <button
+      type="button"
+      onClick={onLocalizar}
+      aria-pressed={selecionado}
+      title="Ver no documento"
+      className={cn(
+        "flex items-center justify-between rounded border px-3 py-2 text-left transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30",
+        selecionado && "bg-cyan-50/70 text-primary shadow-[inset_2px_0_0_0_var(--primary)] hover:bg-cyan-50/70",
+      )}
+    >
+      {conteudo}
+    </button>
+  )
+}
+
+/**
+ * Os exames da comparação em duas partes, na linguagem de quem confere a grade
+ * do BRNET: os **previstos no BRNET** (o que está na timeline do atendimento) e,
+ * numa seção à parte e fechada, os que vieram no prontuário **além do previsto**.
+ * Antes ficava tudo numa tabela só ("Comparação Detalhada"), e o "Extra no OCR"
+ * no meio dos previstos confundia a conferência.
+ *
+ * A seção dos além do previsto abre sozinha quando o destaque no PDF chega num
+ * deles (pelo botão que passa de exame em exame), para a linha selecionada não
+ * ficar escondida.
+ */
+function ExamesDaComparacao({
+  tabela,
+  localizar,
+}: {
+  tabela: TabelaComparacaoItem[]
+  localizar?: ExamesComparativoTableProps["localizar"]
+}) {
+  const previstos = tabela.filter((item) => item.status !== "extra_no_ocr")
+  const alem = tabela.filter((item) => item.status === "extra_no_ocr")
+  const [alemAberto, setAlemAberto] = useState(false)
+  const ativo = localizar?.ativo?.exame
+  useEffect(() => {
+    if (ativo && alem.some((item) => item.exame === ativo)) setAlemAberto(true)
+    // `alem` muda de identidade a cada render; o que importa é o exame ativo.
+  }, [ativo]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  return (
+    <div>
+      <h4 className={cn("font-semibold", localizar ? "mb-1" : "mb-3")}>Exames previstos no BRNET</h4>
+      {localizar && (
+        <p className="mb-3 flex items-center gap-2 text-xs text-muted-foreground">
+          Clique no exame para vê-lo no documento.
+          <TagNovo />
+        </p>
+      )}
+      {previstos.length > 0 && (
+        <div className="mb-4">
+          <ExamesComparativoTable tabela={previstos} mostrarEvidencia localizar={localizar} />
+        </div>
+      )}
+      {alem.length > 0 && (
+        <details
+          className="mb-6 rounded-lg border"
+          open={alemAberto}
+          onToggle={(e) => setAlemAberto(e.currentTarget.open)}
+        >
+          <summary className="cursor-pointer px-3 py-2 text-sm font-medium">
+            Exames além do previsto no BRNET ({alem.length})
+            <span className="block text-xs font-normal text-muted-foreground">
+              Vieram no prontuário, mas não estão previstos no BRNET para este atendimento.
+            </span>
+          </summary>
+          <div className="border-t px-1 pb-1">
+            <ExamesComparativoTable
+              tabela={alem}
+              localizar={localizar}
+              rotuloColunaExame="Exame no prontuário"
+              rotuloExtra="Além do previsto"
+            />
+          </div>
+        </details>
+      )}
+    </div>
+  )
+}
 
 interface DocumentDetailsModalChecagemProps {
   open: boolean
@@ -30,6 +152,11 @@ interface DocumentDetailsModalChecagemProps {
   onSolicitarDecisao?: (decisao: "aprovado" | "rejeitado") => void
   onViewDocument?: () => void
   documentUrl?: string | null
+  /**
+   * O PDF já baixado. O visualizador lê os bytes daqui; a URL fica para o
+   * "Abrir em nova aba". Ver `VisualizadorPdf`.
+   */
+  documentBlob?: Blob | null
   /** Avisa o cronômetro de revisão que o PDF foi aberto fora da aba. */
   onAbrirPdfExterno?: () => void
   documentLoading?: boolean
@@ -54,18 +181,82 @@ export function DocumentDetailsModalChecagem({
   onSolicitarDecisao,
   onViewDocument,
   documentUrl,
+  documentBlob,
   onAbrirPdfExterno,
   documentLoading,
   onAvaliarIA,
   somenteLeitura = false,
 }: DocumentDetailsModalChecagemProps) {
+  // Atalho "clicar no exame e ir até ele no PDF". Os hooks vêm antes do
+  // `return null` abaixo: a ordem deles não pode depender de haver documento.
+  const localizacoes = useLocalizacoes(open ? result?.id : null)
+  const [destaque, setDestaque] = useState<(Destaque & { alvo: Alvo; indice: number }) | null>(null)
+  useEffect(() => setDestaque(null), [result?.id])
+
   if (!result) return null
   const showPreview = Boolean(documentUrl || documentLoading)
-  const previewSrc = documentUrl
-    ? (documentUrl.includes("#")
-        ? `${documentUrl}&toolbar=0&navpanes=0&scrollbar=0`
-        : `${documentUrl}#toolbar=0&navpanes=0&scrollbar=0`)
-    : ""
+
+  const ocorrenciasDe = (alvo: Alvo) =>
+    (alvo.tipo === "exame" ? localizacoes.porExame : localizacoes.porCampo)[alvo.nome]
+  const ehOAlvo = (alvo: Alvo) => destaque?.alvo.tipo === alvo.tipo && destaque.alvo.nome === alvo.nome
+  // Vai à ocorrência `indice` do exame ou campo (dá a volta nas pontas). Sem o PDF
+  // na tela, abre: o visualizador aplica o destaque quando o documento carregar.
+  const mostrarOcorrencia = (alvo: Alvo, indice: number) => {
+    const ocorrencias = ocorrenciasDe(alvo)
+    if (!ocorrencias?.length) return
+    const i = (indice + ocorrencias.length) % ocorrencias.length
+    setDestaque({ ...ocorrencias[i], alvo, indice: i, chave: Date.now() })
+    if (!documentUrl && !documentLoading) onViewDocument?.()
+  }
+  // Clicar de novo no mesmo exame (ou campo) passa para a próxima ocorrência.
+  const irPara = (alvo: Alvo) => mostrarOcorrencia(alvo, destaque && ehOAlvo(alvo) ? destaque.indice + 1 : 0)
+  // O botão flutuante do visualizador: à esquerda, o exame (ou campo) entre os
+  // que têm ocorrência no PDF, na mesma sequência da tela — exames na ordem da
+  // lista (previstos no BRNET, depois os além do previsto), campos na da
+  // Checklist; à direita, as ocorrências do
+  // trecho, quando há mais de uma.
+  const fieldChecks = result.result.analysis_details?.field_checks ?? []
+  const sequencia = (tipo: Alvo["tipo"]) =>
+    tipo === "exame"
+      ? [...new Set(ordenarComparativo(Array.isArray(result.result.tabela_comparacao) ? result.result.tabela_comparacao : [], true).map((i) => i.exame))]
+          .filter((exame) => localizacoes.porExame[exame]?.length)
+      : fieldChecks.map((c) => c.field).filter((campo) => localizacoes.porCampo[campo]?.length)
+  const navegacao: ControleNavegacao[] = []
+  if (destaque) {
+    const { tipo, nome } = destaque.alvo
+    const itens = sequencia(tipo)
+    const posicao = itens.indexOf(nome)
+    if (posicao >= 0 && itens.length > 1) {
+      const vizinho = (passo: number) => ({ tipo, nome: itens[(posicao + passo + itens.length) % itens.length] })
+      navegacao.push({
+        rotulo: `${tipo} ${posicao + 1} de ${itens.length}`,
+        // O nome fica no tooltip: o rótulo mostra só a posição, como a ocorrência.
+        dica: tipo === "exame" ? nome : fieldChecks.find((c) => c.field === nome)?.label ?? nome,
+        rotuloAnterior: tipo === "exame" ? "Exame anterior" : "Campo anterior",
+        rotuloProximo: tipo === "exame" ? "Próximo exame" : "Próximo campo",
+        onAnterior: () => mostrarOcorrencia(vizinho(-1), 0),
+        onProximo: () => mostrarOcorrencia(vizinho(1), 0),
+      })
+    }
+    const total = ocorrenciasDe(destaque.alvo)?.length ?? 0
+    if (total > 1) {
+      navegacao.push({
+        rotulo: `ocorrência ${destaque.indice + 1} de ${total}`,
+        rotuloAnterior: "Ocorrência anterior",
+        rotuloProximo: "Próxima ocorrência",
+        onAnterior: () => mostrarOcorrencia(destaque.alvo, destaque.indice - 1),
+        onProximo: () => mostrarOcorrencia(destaque.alvo, destaque.indice + 1),
+      })
+    }
+  }
+  const localizar = Object.keys(localizacoes.porExame).length
+    ? {
+        porExame: Object.fromEntries(Object.entries(localizacoes.porExame).map(([exame, o]) => [exame, o.length])),
+        ativo: destaque?.alvo.tipo === "exame" ? { exame: destaque.alvo.nome, indice: destaque.indice } : null,
+        onLocalizar: (exame: string) => irPara({ tipo: "exame", nome: exame }),
+      }
+    : undefined
+  const camposLocalizaveis = Object.keys(localizacoes.porCampo).length > 0
   const highlightLiberacao = (text?: string | null) => {
     if (!text) return null
     const phrase = "Liberação concedida"
@@ -270,21 +461,22 @@ export function DocumentDetailsModalChecagem({
                 <>
                   <Separator />
                   <div>
-                    <h4 className="font-semibold mb-3">Checklist de Campos</h4>
+                    <h4 className={cn("font-semibold", camposLocalizaveis ? "mb-1" : "mb-3")}>Checklist de Campos</h4>
+                    {camposLocalizaveis && (
+                      <p className="mb-3 flex items-center gap-2 text-xs text-muted-foreground">
+                        Clique no campo para vê-lo no documento.
+                        <TagNovo />
+                      </p>
+                    )}
                     <div className="grid grid-cols-2 gap-2">
                       {result.result.analysis_details.field_checks.map((item) => (
-                        <div
+                        <ItemChecklist
                           key={item.field}
-                          className="flex items-center justify-between rounded border px-3 py-2"
-                        >
-                          <span className="text-sm">{item.label}</span>
-                          <Badge
-                            variant="secondary"
-                            className={item.found ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-600"}
-                          >
-                            {item.found ? "Encontrado" : "Não encontrado"}
-                          </Badge>
-                        </div>
+                          item={item}
+                          localizavel={Boolean(localizacoes.porCampo[item.field]?.length)}
+                          selecionado={ehOAlvo({ tipo: "campo", nome: item.field })}
+                          onLocalizar={() => irPara({ tipo: "campo", nome: item.field })}
+                        />
                       ))}
                     </div>
 
@@ -305,6 +497,7 @@ export function DocumentDetailsModalChecagem({
                             </div>
                           ) : null
                         ))}
+                        <EvidenciasExames tabela={result.result.tabela_comparacao} />
                       </div>
                     </details>
                   </div>
@@ -313,16 +506,11 @@ export function DocumentDetailsModalChecagem({
 
               <Separator />
 
-              {/* Detailed Comparison Table */}
-              <div>
-                <h4 className="font-semibold mb-3">Comparação Detalhada</h4>
-
-                {Array.isArray(result.result.tabela_comparacao) && result.result.tabela_comparacao.length > 0 && (
-                  <div className="mb-6">
-                    <ExamesComparativoTable tabela={result.result.tabela_comparacao} />
-                  </div>
-                )}
-              </div>
+              {/* Exames previstos no BRNET e, à parte, os além do previsto */}
+              <ExamesDaComparacao
+                tabela={Array.isArray(result.result.tabela_comparacao) ? result.result.tabela_comparacao : []}
+                localizar={localizar}
+              />
                 </div>
               </ScrollArea>
 
@@ -344,10 +532,13 @@ export function DocumentDetailsModalChecagem({
                 </div>
                 <div className="h-[70vh] rounded-lg border bg-muted/20 overflow-hidden">
                   {documentUrl ? (
-                    <iframe
-                      title={`Documento ${result.filename}`}
-                      src={previewSrc}
-                      className="h-full w-full"
+                    <VisualizadorPdf
+                      arquivo={documentBlob ?? null}
+                      url={documentUrl}
+                      titulo={`Documento ${result.filename}`}
+                      destaque={destaque}
+                      navegacao={navegacao}
+                      carregarTexto={() => carregarTextoDocumento(result.id)}
                     />
                   ) : (
                     <div className="h-full flex items-center justify-center text-sm text-muted-foreground px-6 text-center">
@@ -468,21 +659,22 @@ export function DocumentDetailsModalChecagem({
                   <>
                     <Separator />
                     <div>
-                      <h4 className="font-semibold mb-3">Checklist de Campos</h4>
+                      <h4 className={cn("font-semibold", camposLocalizaveis ? "mb-1" : "mb-3")}>Checklist de Campos</h4>
+                      {camposLocalizaveis && (
+                        <p className="mb-3 flex items-center gap-2 text-xs text-muted-foreground">
+                          Clique no campo para vê-lo no documento.
+                          <TagNovo />
+                        </p>
+                      )}
                       <div className="grid grid-cols-2 gap-2">
                         {result.result.analysis_details.field_checks.map((item) => (
-                          <div
+                          <ItemChecklist
                             key={item.field}
-                            className="flex items-center justify-between rounded border px-3 py-2"
-                          >
-                            <span className="text-sm">{item.label}</span>
-                            <Badge
-                              variant="secondary"
-                              className={item.found ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-600"}
-                            >
-                              {item.found ? "Encontrado" : "Não encontrado"}
-                            </Badge>
-                          </div>
+                            item={item}
+                            localizavel={Boolean(localizacoes.porCampo[item.field]?.length)}
+                            selecionado={ehOAlvo({ tipo: "campo", nome: item.field })}
+                            onLocalizar={() => irPara({ tipo: "campo", nome: item.field })}
+                          />
                         ))}
                       </div>
 
@@ -503,6 +695,7 @@ export function DocumentDetailsModalChecagem({
                               </div>
                             ) : null
                           ))}
+                          <EvidenciasExames tabela={result.result.tabela_comparacao} />
                         </div>
                       </details>
                     </div>
@@ -511,16 +704,11 @@ export function DocumentDetailsModalChecagem({
 
                 <Separator />
 
-                {/* Detailed Comparison Table */}
-                <div>
-                  <h4 className="font-semibold mb-3">Comparação Detalhada</h4>
-
-                  {Array.isArray(result.result.tabela_comparacao) && result.result.tabela_comparacao.length > 0 && (
-                    <div className="mb-6">
-                      <ExamesComparativoTable tabela={result.result.tabela_comparacao} />
-                    </div>
-                  )}
-                </div>
+                {/* Exames previstos no BRNET e, à parte, os além do previsto */}
+                <ExamesDaComparacao
+                  tabela={Array.isArray(result.result.tabela_comparacao) ? result.result.tabela_comparacao : []}
+                  localizar={localizar}
+                />
               </div>
             </ScrollArea>
           )}
@@ -590,5 +778,39 @@ export function DocumentDetailsModalChecagem({
       </Dialog>
 
     </>
+  )
+}
+
+/**
+ * Linha do documento de onde o nome de cada exame foi lido. O exame que só
+ * aparece na lista de procedimentos do ASO vem primeiro, em âmbar, com o aviso
+ * de que não há resultado no PDF. Documento antigo, sem `linha_origem`, não
+ * mostra nada.
+ */
+function EvidenciasExames({ tabela }: { tabela?: TabelaComparacaoItem[] }) {
+  const itens = (Array.isArray(tabela) ? tabela : [])
+    .filter((item) => item.linha_origem?.trim())
+    .sort((a, b) => Number(b.evidencia === "so_lista") - Number(a.evidencia === "so_lista"))
+  if (!itens.length) return null
+  return (
+    <div className="text-sm">
+      <p className="font-medium">Exames</p>
+      <ul className="list-disc ml-5">
+        {itens.map((item, idx) =>
+          item.evidencia === "so_lista" ? (
+            <li key={`exame-${idx}`} className="text-yellow-500">
+              {item.exame} · Linha de origem:{" "}
+              <span className="font-mono break-words">{item.linha_origem?.trim()}</span>. Nenhum resultado
+              encontrado no PDF.
+            </li>
+          ) : (
+            <li key={`exame-${idx}`} className="text-muted-foreground">
+              {item.exame} · Linha de origem:{" "}
+              <span className="font-mono break-words">{item.linha_origem?.trim()}</span>
+            </li>
+          ),
+        )}
+      </ul>
+    </div>
   )
 }

@@ -897,18 +897,25 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   useEffect(() => {
     if (processingDocuments.length === 0) return
     const interval = setInterval(() => {
-      setProcessingDocuments((prev) =>
-        prev.map((doc) => {
+      setProcessingDocuments((prev) => {
+        let andou = false
+        const proximo = prev.map((doc) => {
           if (doc.displayProgress === doc.progress) return doc
           const delta = doc.progress - doc.displayProgress
           if (delta <= 0) return doc
+          andou = true
           const step = Math.max(1, Math.ceil(delta / 12))
           return {
             ...doc,
             displayProgress: Math.min(doc.progress, doc.displayProgress + step),
           }
         })
-      )
+        // Sem barra para andar, devolve a MESMA lista: o `map` sempre cria um
+        // array novo, e isso re-renderizava todo consumidor do contexto 5x por
+        // segundo enquanto houvesse documento na lista — inclusive um que ficou
+        // parado no localStorage. Na Checagem, era o calendário piscando.
+        return andou ? proximo : prev
+      })
     }, 200)
 
     return () => clearInterval(interval)

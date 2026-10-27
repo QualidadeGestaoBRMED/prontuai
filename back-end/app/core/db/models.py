@@ -14,6 +14,7 @@ from sqlalchemy import (
     Boolean,
     CheckConstraint,
     Column,
+    Date,
     DateTime,
     Enum as SQLEnum,
     Float,
@@ -117,6 +118,11 @@ class DocumentModel(Base):
     # é o que permite o endpoint de visualização responder "arquivado, peça a
     # recuperação" em vez de um 404 indistinguível de arquivo perdido por bug.
     archived_at = Column(DateTime, nullable=True)
+    # Previsão de liberação do pedido no BRNET (migration 013), copiada de
+    # `result_payload` a cada gravação por `previsao_liberacao_do_payload`.
+    # Existe para o filtro da Checagem: ler do JSON custava 5s por consulta.
+    # NULL = pedido sem previsão (12% dos documentos) ou anterior a jun/2026.
+    data_previsao_liberacao = Column(Date, nullable=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -380,3 +386,19 @@ class DocumentFeedbackModel(Base):
             name="ck_document_feedbacks_status",
         ),
     )
+
+
+class DocumentoLayoutModel(Base):
+    """
+    Posição de cada linha do OCR na página do PDF (migration 018).
+
+    Uma linha por documento, só para os lidos pelo Textract. Fica fora de
+    `documents` de propósito: são centenas de caixas por documento que só a
+    checagem lê, ao abrir um documento, e a listagem não pode carregá-las.
+    Formato do JSON em `app/services/layout_ocr.py`.
+    """
+    __tablename__ = "documento_layout"
+
+    document_id = Column(String, ForeignKey("documents.id", ondelete="CASCADE"), primary_key=True)
+    layout = Column(JSONB, nullable=False)
+    criado_em = Column(DateTime, nullable=False, default=datetime.utcnow)

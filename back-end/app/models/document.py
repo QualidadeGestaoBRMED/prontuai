@@ -1,7 +1,30 @@
 from pydantic import BaseModel, Field, field_validator, model_validator
 from typing import Optional, List, Dict, Any
-from datetime import datetime
+from datetime import date, datetime
 from enum import Enum
+
+
+def previsao_liberacao_do_payload(result_payload: Any) -> Optional[date]:
+    """
+    Previsão de liberação do pedido no BRNET, lida do resultado do processamento.
+
+    Vem em `brmed_result.data_previsao_liberacao` como "dd/mm/aaaa"; dois
+    documentos de 2025 a têm em ISO. Data inválida ou ausente vira None — a
+    coluna `documents.data_previsao_liberacao` é derivada daqui e a migration 013
+    segue a mesma regra para os documentos anteriores a ela.
+    """
+    if not isinstance(result_payload, dict):
+        return None
+    brmed = result_payload.get("brmed_result")
+    valor = brmed.get("data_previsao_liberacao") if isinstance(brmed, dict) else None
+    if not isinstance(valor, str):
+        return None
+    for formato in ("%d/%m/%Y", "%Y-%m-%d"):
+        try:
+            return datetime.strptime(valor.strip(), formato).date()
+        except ValueError:
+            continue
+    return None
 
 
 class DocumentQueue(str, Enum):
@@ -232,3 +255,52 @@ class PaginatedDocumentsResponse(BaseModel):
     total_pages: int
     has_next: bool
     summary_counts: DocumentSummaryCounts
+
+
+# Texto que a tela de Revisões não conta como justificativa: o revisor
+# escrevia "sem justificativa" no campo para conseguir salvar. Espelho de
+# `normalizeReason` em front-end/app/admin/validacoes/page.tsx.
+JUSTIFICATIVAS_VAZIAS: frozenset[str] = frozenset({
+    "null", "none", "undefined", "n/a", "na", "-",
+    "sem justificativa", "sem justificativas", "sem motivo",
+    "sem observacao", "sem observação",
+})
+
+
+def analise_do_payload(result_payload: Any) -> Optional[str]:
+    """A mensagem da IA sobre o documento, onde quer que o payload a tenha posto."""
+    if not isinstance(result_payload, dict):
+        return None
+    validacao = result_payload.get("validation_result")
+    for valor in (
+        validacao.get("analysis") if isinstance(validacao, dict) else None,
+        result_payload.get("decisao_final"),
+        result_payload.get("analysis"),
+    ):
+        if isinstance(valor, str) and valor.strip():
+            return valor
+    return None
+
+
+class RevisaoItem(BaseModel):
+    """Uma linha da tela de Revisões: só o que ela mostra, sem o payload."""
+    id: str
+    filename: str
+    cpf: Optional[str] = None
+    validation_status: Optional[str] = None
+    uploaded_at: Optional[datetime] = None
+    reviewed_by: Optional[str] = None
+    reviewed_at: Optional[datetime] = None
+    confidence_score: Optional[float] = None
+    analysis: Optional[str] = None
+    approval_reason: Optional[str] = None
+    rejection_reason: Optional[str] = None
+
+
+class PaginatedRevisoesResponse(BaseModel):
+    items: List[RevisaoItem]
+    page: int
+    page_size: int
+    total_items: int
+    total_pages: int
+    has_next: bool

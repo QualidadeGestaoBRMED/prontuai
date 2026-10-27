@@ -1,0 +1,64 @@
+"use client"
+
+import { useEffect, useState } from "react"
+
+import { authFetch } from "@/lib/auth-fetch"
+import { API_ENDPOINTS } from "@/lib/config"
+import { LinhaTexto, Localizacao, LocalizacoesDocumento, TextoDocumento } from "@/types/localizacao"
+
+export type Localizacoes = {
+  /** Por nome do exame (previsto no BRNET ou além do previsto). */
+  porExame: Record<string, Localizacao[]>
+  /** Por `field` da Checklist de Campos. */
+  porCampo: Record<string, Localizacao[]>
+}
+
+const VAZIO: Localizacoes = { porExame: {}, porCampo: {} }
+
+/**
+ * Onde cada exame da lista de exames e cada campo da Checklist de Campos
+ * aparecem no PDF.
+ *
+ * Vazio enquanto carrega, para documento sem posição gravada (processado antes
+ * de existir, ou pelo OCR local) e se a rota falhar: é só navegação, e a
+ * checagem segue sem o atalho. Sem `documentId` (modal fechado) não busca.
+ */
+export function useLocalizacoes(documentId?: string | null): Localizacoes {
+  const [localizacoes, setLocalizacoes] = useState<Localizacoes>(VAZIO)
+
+  useEffect(() => {
+    setLocalizacoes(VAZIO)
+    if (!documentId) return
+    let ativo = true
+    authFetch(API_ENDPOINTS.DOCUMENT_LOCALIZACOES(documentId))
+      .then(async (resposta) => {
+        if (!resposta.ok) throw new Error(String(resposta.status))
+        const dados: LocalizacoesDocumento = await resposta.json()
+        if (!ativo || !dados.disponivel) return
+        setLocalizacoes({
+          porExame: Object.fromEntries(dados.exames.map((e) => [e.exame, e.ocorrencias])),
+          porCampo: Object.fromEntries((dados.campos ?? []).map((c) => [c.campo, c.ocorrencias])),
+        })
+      })
+      .catch(() => {
+        // Informativo: a checagem segue sem o atalho.
+      })
+    return () => {
+      ativo = false
+    }
+  }, [documentId])
+
+  return localizacoes
+}
+
+/**
+ * Texto que o OCR leu, com a posição de cada linha, para a busca no documento.
+ * null quando o documento não tem essa leitura gravada (ou a rota falhou): o
+ * visualizador procura então no texto do próprio PDF.
+ */
+export async function carregarTextoDocumento(documentId: string): Promise<LinhaTexto[] | null> {
+  const resposta = await authFetch(API_ENDPOINTS.DOCUMENT_TEXTO(documentId))
+  if (!resposta.ok) return null
+  const dados: TextoDocumento = await resposta.json()
+  return dados.disponivel ? dados.linhas : null
+}

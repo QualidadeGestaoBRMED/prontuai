@@ -12,6 +12,8 @@ from app.models.document import (
     DocumentUpdate,
     DocumentQueue,
     PaginatedDocumentsResponse,
+    PaginatedRevisoesResponse,
+    previsao_liberacao_do_payload,
 )
 from app.core.logging import set_audit_context
 from app.core.config import settings
@@ -27,7 +29,7 @@ import os
 import re
 import unicodedata
 from urllib.parse import quote
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 logger = logging.getLogger(__name__)
 
@@ -180,6 +182,8 @@ def _in_memory_paged_documents(
     filter_clinic_id: str | None = None,
     uploaded_from: datetime | None = None,
     uploaded_to: datetime | None = None,
+    previsao_from: date | None = None,
+    previsao_to: date | None = None,
 ) -> dict[str, Any]:
     normalized_search = (search or "").strip().lower()
 
@@ -206,6 +210,16 @@ def _in_memory_paged_documents(
             and (not uploaded_from or _utc_sem_fuso(d.uploaded_at) >= uploaded_from)
             and (not uploaded_to or _utc_sem_fuso(d.uploaded_at) < uploaded_to)
         ]
+    if previsao_from or previsao_to:
+        def _na_previsao(doc: Document) -> bool:
+            previsao = previsao_liberacao_do_payload(doc.result_payload)
+            return bool(
+                previsao
+                and (not previsao_from or previsao >= previsao_from)
+                and (not previsao_to or previsao <= previsao_to)
+            )
+
+        filtered = [d for d in filtered if _na_previsao(d)]
 
     summary_counts ={"approved": 0, "rejected": 0, "pending_review": 0, "total": len(filtered)}
     for doc in filtered:
@@ -244,6 +258,14 @@ def _in_memory_paged_documents(
         filtered.sort(key=lambda d: (d.cpf or "").lower(), reverse=reverse)
     elif sort_by == "status":
         filtered.sort(key=lambda d: (d.validation_status or "").lower(), reverse=reverse)
+    elif sort_by == "previsao":
+        # O mesmo ORDER BY do banco: desempate pelo envio mais recente (o sort
+        # do Python é estável) e quem não tem previsão no fim.
+        filtered.sort(key=lambda d: _to_ts(d.uploaded_at), reverse=True)
+        com_previsao = [d for d in filtered if previsao_liberacao_do_payload(d.result_payload)]
+        sem_previsao = [d for d in filtered if not previsao_liberacao_do_payload(d.result_payload)]
+        com_previsao.sort(key=lambda d: previsao_liberacao_do_payload(d.result_payload), reverse=reverse)
+        filtered = com_previsao + sem_previsao
     else:
         filtered.sort(key=lambda d: _to_ts(d.uploaded_at), reverse=reverse)
 
@@ -289,11 +311,13 @@ async def list_documents_paged(
     page_size: int = Query(20, ge=1, le=100),
     search: str | None = Query(None, max_length=120),
     status_filter: str | None = Query(None, pattern="^(approved|rejected|pending_review)$"),
-    sort_by: str = Query("uploaded_at", pattern="^(uploaded_at|updated_at|filename|cpf|status)$"),
+    sort_by: str = Query("uploaded_at", pattern="^(uploaded_at|updated_at|filename|cpf|status|previsao)$"),
     sort_dir: str = Query("desc", pattern="^(asc|desc)$"),
     filter_clinic_id: str | None = Query(None, alias="clinic_id", description="Filtra documentos de uma clínica específica"),
     uploaded_from: datetime | None = Query(None, description="Enviados a partir deste instante (inclusive), ISO 8601"),
     uploaded_to: datetime | None = Query(None, description="Enviados antes deste instante (exclusive), ISO 8601"),
+    previsao_from: date | None = Query(None, description="Previsão de liberação a partir deste dia (inclusive), AAAA-MM-DD"),
+    previsao_to: date | None = Query(None, description="Previsão de liberação até este dia (inclusive), AAAA-MM-DD"),
 ):
     """
     Lista documentos com paginação e filtros server-side.
@@ -304,6 +328,12 @@ async def list_documents_paged(
         raise HTTPException(
             status_code=422,  # literal: o nome da constante mudou entre versões do Starlette
             detail="uploaded_from deve ser anterior a uploaded_to.",
+        )
+    # Pontas inclusas: o mesmo dia nas duas é um dia só, e vale.
+    if previsao_from and previsao_to and previsao_from > previsao_to:
+        raise HTTPException(
+            status_code=422,
+            detail="previsao_from deve ser igual ou anterior a previsao_to.",
         )
 
     try:
@@ -331,6 +361,8 @@ async def list_documents_paged(
                 filter_clinic_id=filter_clinic_id,
                 uploaded_from=uploaded_from,
                 uploaded_to=uploaded_to,
+                previsao_from=previsao_from,
+                previsao_to=previsao_to,
             )
         else:
             docs = _load_documents(
@@ -351,6 +383,8 @@ async def list_documents_paged(
                 filter_clinic_id=filter_clinic_id,
                 uploaded_from=uploaded_from,
                 uploaded_to=uploaded_to,
+                previsao_from=previsao_from,
+                previsao_to=previsao_to,
             )
 
         items = payload.get("items", [])
@@ -378,6 +412,33 @@ async def list_documents_paged(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Erro ao listar documentos paginados."
         ) from exc
+
+@router.get("/revisoes", response_model=PaginatedRevisoesResponse)
+async def list_revisoes(
+    current_user: User = Depends(require_admin),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    cpf: str | None = Query(None, max_length=20),
+    revisor: str | None = Query(None, max_length=120),
+    status_filter: str | None = Query(None, pattern="^(validated|rejected|pending)$"),
+    texto: str | None = Query(None, max_length=120),
+    so_com_justificativa: bool = Query(False),
+):
+    """
+    Tela de Revisões (`/admin/validacoes`), paginada e do mais recente para o
+    mais antigo. Substitui o `GET /v1/documents` inteiro que a tela baixava.
+    """
+    payload = user_db.list_revisoes_paged(
+        page=page,
+        page_size=page_size,
+        cpf=cpf,
+        revisor=revisor,
+        status=status_filter,
+        texto=texto,
+        so_com_justificativa=so_com_justificativa,
+    )
+    return PaginatedRevisoesResponse(**payload)
+
 
 @router.get("", response_model=List[Document])
 async def list_documents(

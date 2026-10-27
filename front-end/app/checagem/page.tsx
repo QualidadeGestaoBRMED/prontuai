@@ -34,6 +34,8 @@ import { authFetch } from "@/lib/auth-fetch"
 export default function Page() {
   const [selectedResult, setSelectedResult] = useState<ProcessResult | null>(null)
   const [documentPreviewUrl, setDocumentPreviewUrl] = useState<string | null>(null)
+  // Os bytes do mesmo PDF, para o visualizador do modal (ver `VisualizadorPdf`).
+  const [documentPreviewBlob, setDocumentPreviewBlob] = useState<Blob | null>(null)
   const [documentPreviewLoading, setDocumentPreviewLoading] = useState(false)
   // Parecer sobre o acerto da IA, aberto pela decisão. Vive aqui, e não dentro
   // do modal de detalhes, porque quem decide é este componente: o modal só
@@ -54,8 +56,8 @@ export default function Page() {
     setStatusFilter,
     clinicFilter,
     setClinicFilter,
-    dateFilter,
-    setDateFilter,
+    dataFilter,
+    setDataFilter,
     summaryCounts,
     refresh,
   } = useDocumentsPaged({
@@ -159,6 +161,7 @@ export default function Page() {
       }
       const blob = await response.blob()
       const url = URL.createObjectURL(blob)
+      setDocumentPreviewBlob(blob)
       setDocumentPreviewUrl((prev) => {
         if (prev) URL.revokeObjectURL(prev)
         return url
@@ -241,6 +244,7 @@ export default function Page() {
       if (prev) URL.revokeObjectURL(prev)
       return null
     })
+    setDocumentPreviewBlob(null)
 
     // Sem toast de sucesso: o parecer agora vai em toda decisão, e o toast da
     // própria decisão já confirma o clique.
@@ -406,6 +410,7 @@ export default function Page() {
       if (prev) URL.revokeObjectURL(prev)
       return null
     })
+    setDocumentPreviewBlob(null)
     setSelectedResult(result)
     reviewTimer.abrir(id)
   }, [reviewTimer])
@@ -506,8 +511,8 @@ export default function Page() {
                       onChange: setStatusFilter,
                     }}
                     serverDate={{
-                      value: dateFilter,
-                      onChange: setDateFilter,
+                      value: dataFilter,
+                      onChange: setDataFilter,
                     }}
                     serverClinic={
                       canFilterByClinic
@@ -538,6 +543,7 @@ export default function Page() {
                 if (prev) URL.revokeObjectURL(prev)
                 return null
               })
+              setDocumentPreviewBlob(null)
             }
           }}
           result={selectedResult}
@@ -549,6 +555,7 @@ export default function Page() {
           onSolicitarDecisao={solicitarDecisao}
           somenteLeitura={isReadOnly}
           documentUrl={documentPreviewUrl}
+          documentBlob={documentPreviewBlob}
           documentLoading={documentPreviewLoading}
         />
         <FeedbackChecagemDialog
