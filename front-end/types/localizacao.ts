@@ -17,10 +17,18 @@ export type LocalizacaoExame = {
   ocorrencias: Localizacao[]
 }
 
+/** Um campo da Checklist de Campos e as linhas que o comprovam (as da evidência). */
+export type LocalizacaoCampo = {
+  /** Mesmo `field` da checklist: cpf, nome_paciente, data, crm_medico, assinatura. */
+  campo: string
+  ocorrencias: Localizacao[]
+}
+
 export type LocalizacoesDocumento = {
   /** false: documento sem posição gravada (lido antes de existir, ou pelo OCR local). */
   disponivel: boolean
   exames: LocalizacaoExame[]
+  campos?: LocalizacaoCampo[]
 }
 
 /** Uma linha do texto lido (OCR, ou o texto do próprio PDF) e a caixa dela na página. */

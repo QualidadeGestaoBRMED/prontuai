@@ -6,18 +6,28 @@ import { authFetch } from "@/lib/auth-fetch"
 import { API_ENDPOINTS } from "@/lib/config"
 import { LinhaTexto, Localizacao, LocalizacoesDocumento, TextoDocumento } from "@/types/localizacao"
 
+export type Localizacoes = {
+  /** Por nome do exame da Comparação Detalhada. */
+  porExame: Record<string, Localizacao[]>
+  /** Por `field` da Checklist de Campos. */
+  porCampo: Record<string, Localizacao[]>
+}
+
+const VAZIO: Localizacoes = { porExame: {}, porCampo: {} }
+
 /**
- * Onde cada exame da Comparação Detalhada aparece no PDF, por nome do exame.
+ * Onde cada exame da Comparação Detalhada e cada campo da Checklist de Campos
+ * aparecem no PDF.
  *
  * Vazio enquanto carrega, para documento sem posição gravada (processado antes
  * de existir, ou pelo OCR local) e se a rota falhar: é só navegação, e a
  * checagem segue sem o atalho. Sem `documentId` (modal fechado) não busca.
  */
-export function useLocalizacoes(documentId?: string | null): Record<string, Localizacao[]> {
-  const [porExame, setPorExame] = useState<Record<string, Localizacao[]>>({})
+export function useLocalizacoes(documentId?: string | null): Localizacoes {
+  const [localizacoes, setLocalizacoes] = useState<Localizacoes>(VAZIO)
 
   useEffect(() => {
-    setPorExame({})
+    setLocalizacoes(VAZIO)
     if (!documentId) return
     let ativo = true
     authFetch(API_ENDPOINTS.DOCUMENT_LOCALIZACOES(documentId))
@@ -25,7 +35,10 @@ export function useLocalizacoes(documentId?: string | null): Record<string, Loca
         if (!resposta.ok) throw new Error(String(resposta.status))
         const dados: LocalizacoesDocumento = await resposta.json()
         if (!ativo || !dados.disponivel) return
-        setPorExame(Object.fromEntries(dados.exames.map((e) => [e.exame, e.ocorrencias])))
+        setLocalizacoes({
+          porExame: Object.fromEntries(dados.exames.map((e) => [e.exame, e.ocorrencias])),
+          porCampo: Object.fromEntries((dados.campos ?? []).map((c) => [c.campo, c.ocorrencias])),
+        })
       })
       .catch(() => {
         // Informativo: a checagem segue sem o atalho.
@@ -35,7 +48,7 @@ export function useLocalizacoes(documentId?: string | null): Record<string, Loca
     }
   }, [documentId])
 
-  return porExame
+  return localizacoes
 }
 
 /**

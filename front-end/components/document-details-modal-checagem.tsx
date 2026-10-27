@@ -15,12 +15,63 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { ProcessResult, TabelaComparacaoItem } from "@/types/process"
+import { FieldCheck, ProcessResult, TabelaComparacaoItem } from "@/types/process"
 import ExamesComparativoTable from "@/components/exames-comparativo-table"
 import { Destaque, VisualizadorPdf } from "@/components/visualizador-pdf"
 import { TagNovo } from "@/components/tag-novo"
 import { carregarTextoDocumento, useLocalizacoes } from "@/hooks/use-localizacoes"
 import { cn } from "@/lib/utils"
+
+// O que o destaque no PDF aponta: um exame da Comparação Detalhada ou um campo
+// da Checklist de Campos.
+type Alvo = { tipo: "exame" | "campo"; nome: string }
+
+/**
+ * Item da Checklist de Campos. Com ocorrência no PDF, o item inteiro é o atalho
+ * até ela — como a linha do exame na Comparação Detalhada; clicar de novo passa
+ * para a próxima. Sem ocorrência (documento antigo, campo não encontrado), fica
+ * como era.
+ */
+function ItemChecklist({
+  item,
+  localizavel,
+  selecionado,
+  onLocalizar,
+}: {
+  item: FieldCheck
+  localizavel: boolean
+  selecionado: boolean
+  onLocalizar: () => void
+}) {
+  const conteudo = (
+    <>
+      <span className="text-sm">{item.label}</span>
+      <Badge
+        variant="secondary"
+        className={item.found ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-600"}
+      >
+        {item.found ? "Encontrado" : "Não encontrado"}
+      </Badge>
+    </>
+  )
+  if (!localizavel) {
+    return <div className="flex items-center justify-between rounded border px-3 py-2">{conteudo}</div>
+  }
+  return (
+    <button
+      type="button"
+      onClick={onLocalizar}
+      aria-pressed={selecionado}
+      title="Ver no documento"
+      className={cn(
+        "flex items-center justify-between rounded border px-3 py-2 text-left transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30",
+        selecionado && "bg-cyan-50/70 text-primary shadow-[inset_2px_0_0_0_var(--primary)] hover:bg-cyan-50/70",
+      )}
+    >
+      {conteudo}
+    </button>
+  )
+}
 
 interface DocumentDetailsModalChecagemProps {
   open: boolean
@@ -72,41 +123,44 @@ export function DocumentDetailsModalChecagem({
   // Atalho "clicar no exame e ir até ele no PDF". Os hooks vêm antes do
   // `return null` abaixo: a ordem deles não pode depender de haver documento.
   const localizacoes = useLocalizacoes(open ? result?.id : null)
-  const [destaque, setDestaque] = useState<(Destaque & { exame: string; indice: number }) | null>(null)
+  const [destaque, setDestaque] = useState<(Destaque & { alvo: Alvo; indice: number }) | null>(null)
   useEffect(() => setDestaque(null), [result?.id])
 
   if (!result) return null
   const showPreview = Boolean(documentUrl || documentLoading)
 
-  // Vai à ocorrência `indice` do exame (dá a volta nas pontas). Sem o PDF na
-  // tela, abre: o visualizador aplica o destaque quando o documento carregar.
-  const mostrarOcorrencia = (exame: string, indice: number) => {
-    const ocorrencias = localizacoes[exame]
+  const ocorrenciasDe = (alvo: Alvo) =>
+    (alvo.tipo === "exame" ? localizacoes.porExame : localizacoes.porCampo)[alvo.nome]
+  const ehOAlvo = (alvo: Alvo) => destaque?.alvo.tipo === alvo.tipo && destaque.alvo.nome === alvo.nome
+  // Vai à ocorrência `indice` do exame ou campo (dá a volta nas pontas). Sem o PDF
+  // na tela, abre: o visualizador aplica o destaque quando o documento carregar.
+  const mostrarOcorrencia = (alvo: Alvo, indice: number) => {
+    const ocorrencias = ocorrenciasDe(alvo)
     if (!ocorrencias?.length) return
     const i = (indice + ocorrencias.length) % ocorrencias.length
-    setDestaque({ ...ocorrencias[i], exame, indice: i, chave: Date.now() })
+    setDestaque({ ...ocorrencias[i], alvo, indice: i, chave: Date.now() })
     if (!documentUrl && !documentLoading) onViewDocument?.()
   }
-  // Clicar de novo no mesmo exame passa para a próxima ocorrência.
-  const irParaExame = (exame: string) =>
-    mostrarOcorrencia(exame, destaque?.exame === exame ? destaque.indice + 1 : 0)
-  // O botão flutuante do visualizador, quando o exame aparece mais de uma vez.
-  const totalOcorrencias = destaque ? localizacoes[destaque.exame]?.length ?? 0 : 0
+  // Clicar de novo no mesmo exame (ou campo) passa para a próxima ocorrência.
+  const irPara = (alvo: Alvo) => mostrarOcorrencia(alvo, destaque && ehOAlvo(alvo) ? destaque.indice + 1 : 0)
+  // O botão flutuante do visualizador, quando o trecho aparece mais de uma vez.
+  const totalOcorrencias = destaque ? ocorrenciasDe(destaque.alvo)?.length ?? 0 : 0
   const navegacaoOcorrencias =
     destaque && totalOcorrencias > 1
       ? {
           rotulo: `ocorrência ${destaque.indice + 1} de ${totalOcorrencias}`,
-          onAnterior: () => mostrarOcorrencia(destaque.exame, destaque.indice - 1),
-          onProxima: () => mostrarOcorrencia(destaque.exame, destaque.indice + 1),
+          onAnterior: () => mostrarOcorrencia(destaque.alvo, destaque.indice - 1),
+          onProxima: () => mostrarOcorrencia(destaque.alvo, destaque.indice + 1),
         }
       : null
-  const localizar = Object.keys(localizacoes).length
+  const localizar = Object.keys(localizacoes.porExame).length
     ? {
-        porExame: Object.fromEntries(Object.entries(localizacoes).map(([exame, o]) => [exame, o.length])),
-        ativo: destaque,
-        onLocalizar: irParaExame,
+        porExame: Object.fromEntries(Object.entries(localizacoes.porExame).map(([exame, o]) => [exame, o.length])),
+        ativo: destaque?.alvo.tipo === "exame" ? { exame: destaque.alvo.nome, indice: destaque.indice } : null,
+        onLocalizar: (exame: string) => irPara({ tipo: "exame", nome: exame }),
       }
     : undefined
+  const camposLocalizaveis = Object.keys(localizacoes.porCampo).length > 0
   const highlightLiberacao = (text?: string | null) => {
     if (!text) return null
     const phrase = "Liberação concedida"
@@ -311,21 +365,22 @@ export function DocumentDetailsModalChecagem({
                 <>
                   <Separator />
                   <div>
-                    <h4 className="font-semibold mb-3">Checklist de Campos</h4>
+                    <h4 className={cn("font-semibold", camposLocalizaveis ? "mb-1" : "mb-3")}>Checklist de Campos</h4>
+                    {camposLocalizaveis && (
+                      <p className="mb-3 flex items-center gap-2 text-xs text-muted-foreground">
+                        Clique no campo para vê-lo no documento.
+                        <TagNovo />
+                      </p>
+                    )}
                     <div className="grid grid-cols-2 gap-2">
                       {result.result.analysis_details.field_checks.map((item) => (
-                        <div
+                        <ItemChecklist
                           key={item.field}
-                          className="flex items-center justify-between rounded border px-3 py-2"
-                        >
-                          <span className="text-sm">{item.label}</span>
-                          <Badge
-                            variant="secondary"
-                            className={item.found ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-600"}
-                          >
-                            {item.found ? "Encontrado" : "Não encontrado"}
-                          </Badge>
-                        </div>
+                          item={item}
+                          localizavel={Boolean(localizacoes.porCampo[item.field]?.length)}
+                          selecionado={ehOAlvo({ tipo: "campo", nome: item.field })}
+                          onLocalizar={() => irPara({ tipo: "campo", nome: item.field })}
+                        />
                       ))}
                     </div>
 
@@ -519,21 +574,22 @@ export function DocumentDetailsModalChecagem({
                   <>
                     <Separator />
                     <div>
-                      <h4 className="font-semibold mb-3">Checklist de Campos</h4>
+                      <h4 className={cn("font-semibold", camposLocalizaveis ? "mb-1" : "mb-3")}>Checklist de Campos</h4>
+                      {camposLocalizaveis && (
+                        <p className="mb-3 flex items-center gap-2 text-xs text-muted-foreground">
+                          Clique no campo para vê-lo no documento.
+                          <TagNovo />
+                        </p>
+                      )}
                       <div className="grid grid-cols-2 gap-2">
                         {result.result.analysis_details.field_checks.map((item) => (
-                          <div
+                          <ItemChecklist
                             key={item.field}
-                            className="flex items-center justify-between rounded border px-3 py-2"
-                          >
-                            <span className="text-sm">{item.label}</span>
-                            <Badge
-                              variant="secondary"
-                              className={item.found ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-600"}
-                            >
-                              {item.found ? "Encontrado" : "Não encontrado"}
-                            </Badge>
-                          </div>
+                            item={item}
+                            localizavel={Boolean(localizacoes.porCampo[item.field]?.length)}
+                            selecionado={ehOAlvo({ tipo: "campo", nome: item.field })}
+                            onLocalizar={() => irPara({ tipo: "campo", nome: item.field })}
+                          />
                         ))}
                       </div>
 
