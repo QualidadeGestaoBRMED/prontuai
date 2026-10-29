@@ -1,0 +1,259 @@
+"""Alerta de dados de outra pessoa no documento (STC-947).
+
+Os textos imitam o markdown do OCR nos formatos achados na vistoria de 29/10
+(bloco "Nome / Name" do ASO, "Dados do colaborador" da espirometria, "Paciente:"
+do ECG, "Funcionário:" da acuidade). Nomes e CPFs são fictícios; os CPFs têm
+dígito verificador válido.
+
+Rodar sem o conftest, que importa main.py e exige DATABASE_URL:
+  PYTHONPATH=back-end back-end/.venv/bin/python -m pytest \
+      back-end/tests/test_identidade_laudo.py -q --noconftest
+"""
+import re
+import unicodedata
+
+import pytest
+
+from app.services import identidade_laudo as il
+from app.services import workflow_service as ws
+
+PACIENTE = "MARIA FICTICIA DA SILVA"
+CPF_PACIENTE = "529.982.247-25"
+CPF_OUTRO = "111.444.777-35"
+CPF_MEDICO = "390.533.447-05"
+
+ASO_DA_PACIENTE = f"""<!-- pagina 1 -->
+## ATESTADO DE SAÚDE OCUPACIONAL
+Nome / Name: {PACIENTE}
+Identidade / ID Number: 123456
+## CPF: {CPF_PACIENTE}
+Exames complementares: ELETROCARDIOGRAMA - 10/10/2026
+Apto para a função.
+"""
+
+
+def _achar(markdown, cpf=CPF_PACIENTE, nome=PACIENTE):
+    return il.outra_pessoa(markdown.splitlines(), cpf, nome)
+
+
+# ── O que deve acusar ───────────────────────────────────────────────────────
+
+@pytest.mark.parametrize("bloco", [
+    # ECG: "Paciente:" e o CPF na linha de baixo.
+    f"## DADOS DO PACIENTE\nPaciente: JOAO FICTICIO SOUZA\n## CPF: {CPF_OUTRO}\nData de Nascimento: 01/01/1990",
+    # Espirometria: data de nascimento e RG entre o nome e o CPF.
+    f"## DADOS DO COLABORADOR\n## Nome: JOAO FICTICIO SOUZA\nData de Nascimento: 01/01/1990 (36 Anos)\n## RG:\n## CPF: {CPF_OUTRO}",
+    # Acuidade visual: "Funcionário:".
+    f"## ACUIDADE VISUAL\n## Funcionário: JOAO FICTICIO SOUZA\n## CPF: {CPF_OUTRO}\nEmpresa: OUTRA EMPRESA LTDA",
+    # Nome e CPF na mesma linha.
+    f"Paciente: JOAO FICTICIO SOUZA CPF: {CPF_OUTRO}",
+    # CPF sem pontuação, com o OCR separando o hífen.
+    f"NOME : JOAO FICTICIO SOUZA\n## CPF: {CPF_OUTRO.replace('-', ' -')}",
+])
+def test_laudo_de_outra_pessoa_anexado_ao_prontuario(bloco):
+    markdown = ASO_DA_PACIENTE + "<!-- pagina 2 -->\n" + bloco
+    achados = _achar(markdown)
+    assert [(p["nome"], p["cpf"]) for p in achados] == [("JOAO FICTICIO SOUZA", "11144477735")]
+
+
+def test_as_linhas_do_achado_sao_a_do_nome_e_a_do_cpf_na_ordem_do_documento():
+    markdown = ASO_DA_PACIENTE + f"<!-- pagina 2 -->\n## Nome: JOAO FICTICIO SOUZA\n## CPF: {CPF_OUTRO}"
+    linhas = markdown.splitlines()
+    (achado,) = _achar(markdown)
+    assert [linhas[i] for i in achado["linhas"]] == ["## Nome: JOAO FICTICIO SOUZA", f"## CPF: {CPF_OUTRO}"]
+
+
+def test_mesma_pessoa_em_varias_paginas_vira_um_achado_so():
+    bloco = f"## Nome: JOAO FICTICIO SOUZA\n## CPF: {CPF_OUTRO}\n"
+    markdown = ASO_DA_PACIENTE + "<!-- pagina 2 -->\n" + bloco + "<!-- pagina 3 -->\n" + bloco
+    (achado,) = _achar(markdown)
+    assert len(achado["linhas"]) == 4
+
+
+# ── O que NÃO deve acusar ───────────────────────────────────────────────────
+
+@pytest.mark.parametrize("bloco", [
+    # Assinatura digital do laudo, com o CPF do médico.
+    f"ASSINADO POR DRA FULANA MEDICA ({CPF_MEDICO}) EM 10/10/2026 10:00:00.",
+    # Certificado ICP-Brasil: nome do titular colado no CPF, sem rótulo.
+    f"Assinado Digitalmente\nFULANA BORGES MEDICA:{CPF_MEDICO.replace('.', '').replace('-', '')}\nMédico Examinador",
+    # Médico ao lado do CRM, mesmo com um "Nome:" do paciente perto.
+    f"Paciente: {PACIENTE}\nCRM-RJ 12345\n## CPF: {CPF_MEDICO}\nMédico Examinador",
+    # Solicitante.
+    f"Solicitante: Dr(a). FULANO MEDICO\n## CPF: {CPF_MEDICO}",
+])
+def test_cpf_de_profissional_nao_e_outra_pessoa(bloco):
+    assert _achar(ASO_DA_PACIENTE + bloco) == []
+
+
+def test_cpf_sem_nome_rotulado_perto_nao_acusa():
+    # O CPF sozinho não diz de quem é (mãe, responsável, médico sem rótulo).
+    markdown = ASO_DA_PACIENTE + "\n".join(["Texto do laudo."] * 6) + f"\n## CPF: {CPF_OUTRO}"
+    assert _achar(markdown) == []
+
+
+def test_cpf_diferente_com_o_nome_do_paciente_e_erro_de_ocr_e_nao_outra_pessoa():
+    # Mesmo nome, CPF diferente: o OCR trocou dígito, ou o BRNET tem outro CPF.
+    markdown = ASO_DA_PACIENTE + f"Paciente: MARlA FICTICIA DA SlLVA\n## CPF: {CPF_OUTRO}"
+    assert _achar(markdown) == []
+
+
+def test_nome_e_cpf_em_paginas_diferentes_nao_formam_bloco():
+    markdown = ASO_DA_PACIENTE + f"Nome: JOAO FICTICIO SOUZA\n<!-- pagina 2 -->\n## CPF: {CPF_OUTRO}"
+    assert _achar(markdown) == []
+
+
+def test_rotulo_de_medico_nao_e_rotulo_de_paciente():
+    markdown = ASO_DA_PACIENTE + f"Nome do médico: JOAO FICTICIO SOUZA\n## CPF: {CPF_OUTRO}"
+    assert _achar(markdown) == []
+
+
+def test_sem_cpf_do_paciente_a_regra_nao_opina():
+    markdown = ASO_DA_PACIENTE + f"Paciente: JOAO FICTICIO SOUZA\n## CPF: {CPF_OUTRO}"
+    assert _achar(markdown, cpf=None) == []
+    assert _achar(markdown, cpf="Não encontrado") == []
+
+
+def test_cpf_invalido_nao_conta():
+    markdown = ASO_DA_PACIENTE + "Paciente: JOAO FICTICIO SOUZA\n## CPF: 111.444.777-00"
+    assert _achar(markdown) == []
+
+
+# ── Mesmo nome, com tolerância ao OCR ───────────────────────────────────────
+
+@pytest.mark.parametrize("a, b", [
+    ("MARIA FICTICIA DA SILVA", "Maria Fictícia da Silva"),
+    ("MARIA FICTICIA DA SILVA", "MARlA FICTlCIA DA SILVA"),     # l no lugar de I
+    ("MARIA FICTICIA DA SILVA", "MARIA F. SILVA"),              # abreviado
+    ("MARIA FICTICIA DA SILVA", "MARIA FICTICIA SILVAJUNIOR"),  # espaço perdido
+    ("JOSE CARLOS SILVA SANTOS", "J0SE CARLOS SILVA SANTOS"),   # primeiro nome corrompido
+    ("MARIA FICTICIA DA SILVA", ""),                            # sem como comparar
+])
+def test_mesma_pessoa(a, b):
+    assert il.mesma_pessoa(a, b)
+
+
+@pytest.mark.parametrize("a, b", [
+    ("MARIA FICTICIA DA SILVA", "JOAO FICTICIO SOUZA"),
+    ("JOSE DA SILVA SANTOS", "MARIA SILVA SANTOS"),  # só o sobrenome em comum
+    ("MARIA FICTICIA DA SILVA", "MARIA SOUZA LIMA"),  # só o primeiro nome
+])
+def test_pessoas_diferentes(a, b):
+    assert not il.mesma_pessoa(a, b)
+
+
+# ── Payload e checklist ─────────────────────────────────────────────────────
+
+def test_payload_guarda_o_cpf_mascarado_e_a_pagina():
+    markdown = ASO_DA_PACIENTE + f"<!-- pagina 2 -->\n## Nome: JOAO FICTICIO SOUZA\n## CPF: {CPF_OUTRO}"
+    linhas = markdown.splitlines()
+    assert il.para_payload(_achar(markdown), linhas) == [{
+        "chave": "outra_pessoa:***.***.***-35",
+        "nome": "JOAO FICTICIO SOUZA",
+        "cpf": "***.***.***-35",
+        "pagina": 2,
+        "linhas": ["## Nome: JOAO FICTICIO SOUZA", f"## CPF: {CPF_OUTRO}"],
+        "exames": [],
+    }]
+
+
+def test_checklist_com_cpf_do_pedido_so_conta_o_cpf_do_paciente():
+    markdown = f"Paciente: JOAO FICTICIO SOUZA\n## CPF: {CPF_OUTRO}\nCRM 1234 CPF {CPF_MEDICO}"
+    linhas = ws._extrair_linhas_markdown(markdown)
+    campos = {c["field"]: c for c in ws._avaliar_campos(markdown, linhas, PACIENTE, CPF_PACIENTE)}
+    assert campos["cpf"]["label"] == "CPF do paciente"
+    assert campos["cpf"]["found"] is False
+    # Sem o CPF do pedido, a regra antiga: qualquer número com formato de CPF.
+    antigos = {c["field"]: c for c in ws._avaliar_campos(markdown, linhas, PACIENTE)}
+    assert antigos["cpf"]["label"] == "CPF" and antigos["cpf"]["found"] is True
+
+
+def test_checklist_acha_o_cpf_do_paciente_com_a_pontuacao_do_ocr():
+    markdown = "## CPF: 529.982.247 -25"
+    linhas = ws._extrair_linhas_markdown(markdown)
+    (cpf,) = [c for c in ws._avaliar_campos(markdown, linhas, None, "52998224725") if c["field"] == "cpf"]
+    assert cpf["found"] and cpf["evidence"] == ["## CPF: 529.982.247 -25"]
+    assert ws.trecho_do_campo("cpf", "## CPF: 529.982.247 -25", None, "52998224725") == (8, 23)
+
+
+# ── Em que exame o aviso aparece ────────────────────────────────────────────
+
+def _normalizar(texto):
+    # Como `workflow_service._normalizar_busca`: sem acento, maiúsculas, só letras e dígitos.
+    sem_acento = unicodedata.normalize("NFKD", texto).encode("ascii", "ignore").decode()
+    return " ".join(re.findall(r"[A-Z0-9]+", sem_acento.upper()))
+
+
+SINONIMOS = {"ELETROCARDIOGRAMA": {"ECG", "ELETROCARDIOGRAMA DE REPOUSO"}}
+
+
+def _anotar(markdown, exames):
+    linhas = markdown.splitlines()
+    pessoas = _achar(markdown)
+    comparativo = [{"exame": e, "status": "encontrado"} for e in exames]
+    il.anotar_comparativo(comparativo, pessoas, linhas, _normalizar, lambda t: SINONIMOS.get(t, set()))
+    return comparativo, pessoas
+
+
+def test_aviso_vai_no_exame_do_titulo_acima_do_bloco():
+    markdown = ASO_DA_PACIENTE + (
+        f"<!-- pagina 2 -->\n## LAUDO DE ESPIROMETRIA\n## DADOS DO COLABORADOR\n"
+        f"## Nome: JOAO FICTICIO SOUZA\nData de Nascimento: 01/01/1990\n## CPF: {CPF_OUTRO}\n"
+        "## DADOS DA EMPRESA\n"
+    )
+    comparativo, (pessoa,) = _anotar(markdown, ["ESPIROMETRIA", "ELETROCARDIOGRAMA"])
+    assert comparativo[0]["outra_pessoa"] == [
+        {"chave": "outra_pessoa:***.***.***-35", "nome": "JOAO FICTICIO SOUZA", "cpf": "***.***.***-35", "pagina": 2}
+    ]
+    assert "outra_pessoa" not in comparativo[1]
+    assert pessoa["exames"] == ["ESPIROMETRIA"]
+    # Status e justificativa ficam como estão: é só aviso.
+    assert comparativo[0]["status"] == "encontrado" and "justificativa" not in comparativo[0]
+
+
+def test_aviso_vai_no_exame_do_titulo_abaixo_do_bloco_pelo_sinonimo():
+    # Fast Laudos: identificação primeiro, o nome do exame logo depois.
+    markdown = ASO_DA_PACIENTE + (
+        f"<!-- pagina 2 -->\n## DADOS DO PACIENTE\n## Nome: JOAO FICTICIO SOUZA\n## CPF: {CPF_OUTRO}\n"
+        "Sexo: Masculino\nLaudo Eletrocardiograma de Repouso (ECG)\nRitmo sinusal\n"
+    )
+    comparativo, _ = _anotar(markdown, ["ESPIROMETRIA", "ELETROCARDIOGRAMA"])
+    assert [("outra_pessoa" in item) for item in comparativo] == [False, True]
+
+
+def test_aso_de_outra_pessoa_vai_no_clinico():
+    markdown = ASO_DA_PACIENTE + (
+        f"<!-- pagina 2 -->\nAtestado de Saúde Ocupacional\nEMPRESA FICTICIA LTDA\n"
+        f"Nome / Name: JOAO FICTICIO SOUZA\n## CPF: {CPF_OUTRO}\nFunção: AJUDANTE\n"
+    )
+    comparativo, _ = _anotar(markdown, ["CLÍNICO OCUPACIONAL", "ESPIROMETRIA"])
+    assert [item["exame"] for item in comparativo if "outra_pessoa" in item] == ["CLÍNICO OCUPACIONAL"]
+
+
+def test_empate_fica_com_o_titulo_de_cima():
+    markdown = ASO_DA_PACIENTE + (
+        f"<!-- pagina 2 -->\n## ESPIROMETRIA\n## Nome: JOAO FICTICIO SOUZA\n## CPF: {CPF_OUTRO}\n## ELETROCARDIOGRAMA\n"
+    )
+    comparativo, _ = _anotar(markdown, ["ELETROCARDIOGRAMA", "ESPIROMETRIA"])
+    assert [item["exame"] for item in comparativo if "outra_pessoa" in item] == ["ESPIROMETRIA"]
+
+
+def test_titulo_em_outra_pagina_ou_fora_da_tabela_deixa_a_pessoa_sem_exame():
+    markdown = ASO_DA_PACIENTE + (
+        f"## ESPIROMETRIA\n<!-- pagina 2 -->\n## AVALIAÇÃO AUDIOLÓGICA\n"
+        f"## Funcionário: JOAO FICTICIO SOUZA\n## CPF: {CPF_OUTRO}\n"
+    )
+    comparativo, (pessoa,) = _anotar(markdown, ["ESPIROMETRIA", "AUDIOMETRIA TONAL"])
+    assert not any("outra_pessoa" in item for item in comparativo)
+    assert pessoa["exames"] == []
+    assert il.para_payload([pessoa], markdown.splitlines())[0]["exames"] == []
+
+
+def test_mesma_pessoa_em_dois_laudos_avisa_nos_dois_exames():
+    bloco = f"## Nome: JOAO FICTICIO SOUZA\n## CPF: {CPF_OUTRO}\n"
+    markdown = ASO_DA_PACIENTE + (
+        "<!-- pagina 2 -->\n## ESPIROMETRIA\n" + bloco + "<!-- pagina 3 -->\n## ELETROCARDIOGRAMA\n" + bloco
+    )
+    comparativo, (pessoa,) = _anotar(markdown, ["ESPIROMETRIA", "ELETROCARDIOGRAMA"])
+    assert pessoa["exames"] == ["ESPIROMETRIA", "ELETROCARDIOGRAMA"]
+    assert [item["outra_pessoa"][0]["pagina"] for item in comparativo] == [2, 3]

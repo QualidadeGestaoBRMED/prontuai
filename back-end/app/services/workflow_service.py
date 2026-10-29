@@ -5,7 +5,7 @@ import unicodedata
 from typing import Dict, Any, Optional, List
 from fastapi import UploadFile
 from app.services import ocr_service, brmed_service, validacao_service
-from app.services import exam_catalog_source, laudo_evidencia, evidencia_laboratorio, layout_ocr
+from app.services import exam_catalog_source, laudo_evidencia, evidencia_laboratorio, identidade_laudo, layout_ocr
 from app.core.config import settings
 from app.core import metrics
 from app.core.pii import mask_cpf, mask_identifier, mask_name
@@ -422,17 +422,35 @@ _TRECHO_ASSINATURA = re.compile(r"assinatura|assinado|carimbo|rubrica|_{3,}", re
 LIMITE_EVIDENCIAS_CAMPO = 3
 
 
+def _span_do_cpf(texto: str, cpf_paciente: str) -> Optional[tuple[int, int]]:
+    """Onde está, na linha, o CPF do paciente — com a pontuação que o OCR der."""
+    for m in identidade_laudo._CPF.finditer(texto):
+        if re.sub(r"\D", "", m.group(0)) == cpf_paciente:
+            return m.span()
+    return None
+
+
 def linhas_dos_campos(
     linhas: list[tuple[str, str]],
     patient_name: Optional[str] = None,
+    patient_cpf: Optional[str] = None,
 ) -> list[tuple[str, str, list[int]]]:
     """
     Para cada campo da checklist, na ordem da tela: (campo, rótulo, índices em
     `linhas` das que o comprovam), até `LIMITE_EVIDENCIAS_CAMPO`. `linhas` são
     pares (texto, texto normalizado por `_normalizar_busca`).
+
+    Com `patient_cpf`, o campo CPF procura o CPF DO PACIENTE, e não qualquer
+    número com formato de CPF: o do médico ou o de outro colaborador também
+    contavam como "Encontrado" (STC-947). Sem ele (documento antigo, passaporte),
+    fica a regra antiga.
     """
     nome = f" {_normalizar_busca(patient_name)} " if patient_name else ""
-    regras = [("cpf", "CPF", lambda texto, normalizado: bool(_CAMPO_CPF.search(texto)))]
+    cpf_paciente = re.sub(r"\D", "", patient_cpf or "")
+    if len(cpf_paciente) == 11:
+        regras = [("cpf", "CPF do paciente", lambda texto, normalizado: bool(_span_do_cpf(texto, cpf_paciente)))]
+    else:
+        regras = [("cpf", "CPF", lambda texto, normalizado: bool(_CAMPO_CPF.search(texto)))]
     if patient_name:
         regras.append((
             "nome_paciente", "Nome do paciente",
@@ -470,13 +488,21 @@ def _trecho_normalizado(texto: str, alvo: str) -> Optional[tuple[int, int]]:
     return (mapa[m.start()], mapa[m.end() - 1] + 1) if m else None
 
 
-def trecho_do_campo(campo: str, texto: str, patient_name: Optional[str] = None) -> Optional[tuple[int, int]]:
+def trecho_do_campo(
+    campo: str,
+    texto: str,
+    patient_name: Optional[str] = None,
+    patient_cpf: Optional[str] = None,
+) -> Optional[tuple[int, int]]:
     """
     Onde, na linha, está o que faz o campo contar como encontrado: o número do
     CPF, a data, a sigla do conselho com o número, a palavra da assinatura (ou a
     linha de assinar), o nome. None quando não dá para apontar — a tela destaca
     a linha inteira.
     """
+    cpf_paciente = re.sub(r"\D", "", patient_cpf or "")
+    if campo == "cpf" and len(cpf_paciente) == 11:
+        return _span_do_cpf(texto, cpf_paciente)
     if campo == "cpf":
         m = _CAMPO_CPF.search(texto)
         return m.span() if m else None
@@ -500,10 +526,11 @@ def trecho_do_campo(campo: str, texto: str, patient_name: Optional[str] = None) 
 def _avaliar_campos(
     markdown: str,
     linhas: list[tuple[str, str]],
-    patient_name: Optional[str] = None
+    patient_name: Optional[str] = None,
+    patient_cpf: Optional[str] = None,
 ) -> list[Dict[str, Any]]:
     checks = []
-    for campo, rotulo, indices in linhas_dos_campos(linhas, patient_name):
+    for campo, rotulo, indices in linhas_dos_campos(linhas, patient_name, patient_cpf):
         evidencias = [linhas[i][0] for i in indices]
         checks.append({
             "field": campo,
@@ -1358,13 +1385,37 @@ async def _processar_documento_completo_impl(
     linhas_markdown = _extrair_linhas_markdown(markdown_content or "")
     analysis_details = {
         "quality": _avaliar_qualidade(markdown_content or "", linhas_markdown),
-        "field_checks": _avaliar_campos(markdown_content or "", linhas_markdown, patient_name),
+        "field_checks": _avaliar_campos(markdown_content or "", linhas_markdown, patient_name, cpf_final),
         "match_confidence": _avaliar_confianca_exames(
             resultado_validacao.get("exames_comparativo", []),
             exames_enviados,
             linhas_markdown
         ),
     }
+
+    # Alerta de dados de outra pessoa (laudo de outro colaborador anexado). NÃO
+    # muda status, faltantes nem confiança — só grava para a tela do revisor,
+    # no exame cujo laudo traz a outra pessoa. Ver `identidade_laudo`.
+    if identidade_laudo.HABILITADA:
+        try:
+            linhas_texto = (markdown_content or "").splitlines()
+            outras_pessoas = identidade_laudo.outra_pessoa(linhas_texto, cpf_final, patient_name)
+            if outras_pessoas:
+                identidade_laudo.anotar_comparativo(
+                    resultado_validacao.get("exames_comparativo") or [],
+                    outras_pessoas,
+                    linhas_texto,
+                    _normalizar_busca,
+                    obter_sinonimos,
+                )
+        except Exception as e:
+            # Alerta é informativo: falha aqui não pode derrubar a validação.
+            logger.warning(f"[WORKFLOW] Checagem de outra pessoa falhou: {type(e).__name__}")
+            outras_pessoas = []
+        if outras_pessoas:
+            analysis_details["outra_pessoa"] = identidade_laudo.para_payload(outras_pessoas, linhas_texto)
+            # Só a contagem: nome e CPF de terceiro não vão para o log.
+            _log_event("outra_pessoa", run_id=run_id, quantas=len(outras_pessoas))
     comparativo = resultado_validacao.get("exames_comparativo", [])
     obrigatorios_total = len([e for e in comparativo if e.get("status") != "extra_no_ocr"])
     obrigatorios_encontrados = len([e for e in comparativo if e.get("status") == "encontrado"])

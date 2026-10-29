@@ -60,7 +60,7 @@ class BancoFalso:
 
 
 def _documento():
-    return types.SimpleNamespace(ocr_markdown=MARKDOWN, result_payload=PAYLOAD)
+    return types.SimpleNamespace(ocr_markdown=MARKDOWN, result_payload=PAYLOAD, cpf=None)
 
 
 def carregar(monkeypatch, banco):
@@ -146,6 +146,7 @@ def test_campos_apontam_o_trecho_que_a_checklist_achou(monkeypatch):
     documento = types.SimpleNamespace(
         ocr_markdown=MARKDOWN_FICHA,
         result_payload={"tabela_comparacao": [], "patient_name": "Fulano de Tál"},
+        cpf=None,
     )
     rota = carregar(monkeypatch, BancoFalso(documento, LAYOUT_FICHA))
     campos = {c.campo: c.ocorrencias for c in rota.localizacoes_do_documento("doc-1", current_user=usuario()).campos}
@@ -173,3 +174,53 @@ def test_crm_sem_numero_fica_so_com_a_sigla():
     assert trecho_do_campo("crm_medico", "CRM/RJ 123456 - Dr.") == (0, 13)
     assert trecho_do_campo("assinatura", "Data ____________") == (5, 17)
     assert trecho_do_campo("nome_paciente", "Paciente: FULANO DE TAL", "Fulano") == (10, 16)
+
+
+# ── Dados de outra pessoa (STC-947) ────────────────────────────────────────
+# CPFs fictícios com dígito verificador válido.
+
+FICHA_COM_LAUDO_DE_OUTRO = _resposta(
+    ("Nome: FULANO DE TAL", 0.10),
+    ("CPF: 123.456.789-09", 0.12),
+    ("ELETROCARDIOGRAMA", 0.30),
+    ("Paciente: CICRANO SOUZA LIMA", 0.32),
+    ("CPF: 111.444.777-35", 0.34),
+)
+MARKDOWN_OUTRO = textract_to_markdown(FICHA_COM_LAUDO_DE_OUTRO, pagina=1)
+LAYOUT_OUTRO = layout_ocr.montar(layout_ocr.linhas_textract(FICHA_COM_LAUDO_DE_OUTRO, pagina=1))
+
+
+def test_com_cpf_do_pedido_o_campo_cpf_aponta_so_o_do_paciente(monkeypatch):
+    documento = types.SimpleNamespace(
+        ocr_markdown=MARKDOWN_OUTRO,
+        result_payload={"tabela_comparacao": [], "patient_name": "Fulano de Tal", "cpf_processado": "12345678909"},
+        cpf=None,
+    )
+    rota = carregar(monkeypatch, BancoFalso(documento, LAYOUT_OUTRO))
+    campos = {c.campo: c.ocorrencias for c in rota.localizacoes_do_documento("doc-1", current_user=usuario()).campos}
+    assert [o.caixas[0].y for o in campos["cpf"]] == [0.12]
+
+
+def test_outra_pessoa_aponta_o_cpf_e_o_nome_dela(monkeypatch):
+    documento = types.SimpleNamespace(
+        ocr_markdown=MARKDOWN_OUTRO,
+        result_payload={"tabela_comparacao": [], "patient_name": "Fulano de Tal"},
+        # Sem `cpf_processado` no payload, vale o CPF gravado no documento.
+        cpf="123.456.789-09",
+    )
+    rota = carregar(monkeypatch, BancoFalso(documento, LAYOUT_OUTRO))
+    campos = {c.campo: c.ocorrencias for c in rota.localizacoes_do_documento("doc-1", current_user=usuario()).campos}
+    ocorrencias = campos["outra_pessoa:***.***.***-35"]
+    # Linha do nome e linha do CPF, na ordem do documento; caixa só do trecho.
+    assert [_caixa(o.caixas[0]) for o in ocorrencias] == [(0.20, 0.32, 0.18), (0.15, 0.34, 0.14)]
+
+
+def test_sem_cpf_do_paciente_nao_ha_alerta(monkeypatch):
+    documento = types.SimpleNamespace(
+        ocr_markdown=MARKDOWN_OUTRO,
+        result_payload={"tabela_comparacao": [], "patient_name": "Fulano de Tal", "cpf_processado": "Não encontrado"},
+        cpf=None,
+    )
+    rota = carregar(monkeypatch, BancoFalso(documento, LAYOUT_OUTRO))
+    campos = [c.campo for c in rota.localizacoes_do_documento("doc-1", current_user=usuario()).campos]
+    assert not any(c.startswith("outra_pessoa") for c in campos)

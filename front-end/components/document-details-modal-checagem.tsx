@@ -1,9 +1,9 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { ReactNode, useEffect, useRef, useState } from "react"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
-import { CheckIcon, XIcon, Download, Loader2, MessageSquareIcon } from "lucide-react"
+import { AlertTriangleIcon, CheckIcon, XIcon, Download, Loader2, MessageSquareIcon } from "lucide-react"
 import {
   Dialog,
   DialogContent,
@@ -15,7 +15,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { FieldCheck, ProcessResult, TabelaComparacaoItem } from "@/types/process"
+import { FieldCheck, OutraPessoa, ProcessResult, TabelaComparacaoItem } from "@/types/process"
 import ExamesComparativoTable, { ExamesComparativoTableProps, ordenarComparativo } from "@/components/exames-comparativo-table"
 import { ControleNavegacao, Destaque, VisualizadorPdf } from "@/components/visualizador-pdf"
 import { TagNovo } from "@/components/tag-novo"
@@ -33,12 +33,12 @@ type Alvo = { tipo: "exame" | "campo"; nome: string }
  * como era.
  */
 function ItemChecklist({
-  item,
+  children,
   localizavel,
   selecionado,
   onLocalizar,
 }: {
-  item: FieldCheck
+  children: ReactNode
   localizavel: boolean
   selecionado: boolean
   onLocalizar: () => void
@@ -49,7 +49,28 @@ function ItemChecklist({
   useEffect(() => {
     if (selecionado) botao.current?.scrollIntoView({ block: "nearest", behavior: "smooth" })
   }, [selecionado])
-  const conteudo = (
+  if (!localizavel) {
+    return <div className="flex items-center justify-between gap-2 rounded border px-3 py-2">{children}</div>
+  }
+  return (
+    <button
+      ref={botao}
+      type="button"
+      onClick={onLocalizar}
+      aria-pressed={selecionado}
+      title="Ver no documento"
+      className={cn(
+        "flex items-center justify-between gap-2 rounded border px-3 py-2 text-left transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30",
+        selecionado && "bg-cyan-50/70 text-primary shadow-[inset_2px_0_0_0_var(--primary)] hover:bg-cyan-50/70",
+      )}
+    >
+      {children}
+    </button>
+  )
+}
+
+function ConteudoCampo({ item }: { item: FieldCheck }) {
+  return (
     <>
       <span className="text-sm">{item.label}</span>
       <Badge
@@ -60,23 +81,29 @@ function ItemChecklist({
       </Badge>
     </>
   )
-  if (!localizavel) {
-    return <div className="flex items-center justify-between rounded border px-3 py-2">{conteudo}</div>
-  }
+}
+
+/**
+ * Pessoa que não é o paciente, identificada no documento fora do laudo de
+ * qualquer exame da tabela (STC-947) — título que o catálogo não conhece, ou
+ * documento sem tabela. Quem está no laudo de um exame aparece na própria linha
+ * do exame, como "Laudo de outra pessoa".
+ */
+function ConteudoOutraPessoa({ pessoa }: { pessoa: OutraPessoa }) {
   return (
-    <button
-      ref={botao}
-      type="button"
-      onClick={onLocalizar}
-      aria-pressed={selecionado}
-      title="Ver no documento"
-      className={cn(
-        "flex items-center justify-between rounded border px-3 py-2 text-left transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30",
-        selecionado && "bg-cyan-50/70 text-primary shadow-[inset_2px_0_0_0_var(--primary)] hover:bg-cyan-50/70",
-      )}
-    >
-      {conteudo}
-    </button>
+    <>
+      <span className="flex min-w-0 flex-col">
+        <span className="text-sm">Dados de outra pessoa</span>
+        <span className="text-xs text-yellow-600">
+          {pessoa.nome} · CPF {pessoa.cpf}
+          {pessoa.pagina ? ` · página ${pessoa.pagina}` : ""}
+        </span>
+      </span>
+      <Badge variant="secondary" className="shrink-0 gap-1 bg-yellow-100 text-yellow-700">
+        <AlertTriangleIcon className="size-3" />
+        Conferir
+      </Badge>
+    </>
   )
 }
 
@@ -138,6 +165,7 @@ function ExamesDaComparacao({
           <div className="border-t px-1 pb-1">
             <ExamesComparativoTable
               tabela={alem}
+              mostrarEvidencia
               localizar={localizar}
               rotuloColunaExame="Exame no prontuário"
               rotuloExtra="Além do previsto"
@@ -225,11 +253,16 @@ export function DocumentDetailsModalChecagem({
   // Checklist; à direita, as ocorrências do
   // trecho, quando há mais de uma.
   const fieldChecks = result.result.analysis_details?.field_checks ?? []
+  // A pessoa achada no laudo de um exame aparece na linha do exame; as demais,
+  // como item da Checklist de Campos.
+  const pessoasSemExame = (result.result.analysis_details?.outra_pessoa ?? []).filter((p) => !p.exames?.length)
   const sequencia = (tipo: Alvo["tipo"]) =>
     tipo === "exame"
       ? [...new Set(ordenarComparativo(Array.isArray(result.result.tabela_comparacao) ? result.result.tabela_comparacao : [], true).map((i) => i.exame))]
           .filter((exame) => localizacoes.porExame[exame]?.length)
-      : fieldChecks.map((c) => c.field).filter((campo) => localizacoes.porCampo[campo]?.length)
+      : [...fieldChecks.map((c) => c.field), ...pessoasSemExame.map((p) => p.chave)].filter(
+          (campo) => localizacoes.porCampo[campo]?.length,
+        )
   const navegacao: ControleNavegacao[] = []
   if (destaque) {
     const { tipo, nome } = destaque.alvo
@@ -240,7 +273,12 @@ export function DocumentDetailsModalChecagem({
       navegacao.push({
         rotulo: `${tipo} ${posicao + 1} de ${itens.length}`,
         // O nome fica no tooltip: o rótulo mostra só a posição, como a ocorrência.
-        dica: tipo === "exame" ? nome : fieldChecks.find((c) => c.field === nome)?.label ?? nome,
+        dica:
+          tipo === "exame"
+            ? nome
+            : fieldChecks.find((c) => c.field === nome)?.label ??
+              pessoasSemExame.find((p) => p.chave === nome)?.nome ??
+              nome,
         rotuloAnterior: tipo === "exame" ? "Exame anterior" : "Campo anterior",
         rotuloProximo: tipo === "exame" ? "Próximo exame" : "Próximo campo",
         onAnterior: () => mostrarOcorrencia(vizinho(-1), 0),
@@ -465,6 +503,7 @@ export function DocumentDetailsModalChecagem({
                 </>
               )}
 
+
               {/* Checklist de Campos */}
               {result.result.analysis_details?.field_checks?.length ? (
                 <>
@@ -481,11 +520,22 @@ export function DocumentDetailsModalChecagem({
                       {result.result.analysis_details.field_checks.map((item) => (
                         <ItemChecklist
                           key={item.field}
-                          item={item}
                           localizavel={Boolean(localizacoes.porCampo[item.field]?.length)}
                           selecionado={ehOAlvo({ tipo: "campo", nome: item.field })}
                           onLocalizar={() => irPara({ tipo: "campo", nome: item.field })}
-                        />
+                        >
+                          <ConteudoCampo item={item} />
+                        </ItemChecklist>
+                      ))}
+                      {pessoasSemExame.map((pessoa) => (
+                        <ItemChecklist
+                          key={pessoa.chave}
+                          localizavel={Boolean(localizacoes.porCampo[pessoa.chave]?.length)}
+                          selecionado={ehOAlvo({ tipo: "campo", nome: pessoa.chave })}
+                          onLocalizar={() => irPara({ tipo: "campo", nome: pessoa.chave })}
+                        >
+                          <ConteudoOutraPessoa pessoa={pessoa} />
+                        </ItemChecklist>
                       ))}
                     </div>
 
@@ -663,6 +713,7 @@ export function DocumentDetailsModalChecagem({
                     </>
                   )}
 
+
                 {/* Checklist de Campos */}
                 {result.result.analysis_details?.field_checks?.length ? (
                   <>
@@ -679,11 +730,22 @@ export function DocumentDetailsModalChecagem({
                         {result.result.analysis_details.field_checks.map((item) => (
                           <ItemChecklist
                             key={item.field}
-                            item={item}
                             localizavel={Boolean(localizacoes.porCampo[item.field]?.length)}
                             selecionado={ehOAlvo({ tipo: "campo", nome: item.field })}
                             onLocalizar={() => irPara({ tipo: "campo", nome: item.field })}
-                          />
+                          >
+                            <ConteudoCampo item={item} />
+                          </ItemChecklist>
+                        ))}
+                        {pessoasSemExame.map((pessoa) => (
+                          <ItemChecklist
+                            key={pessoa.chave}
+                            localizavel={Boolean(localizacoes.porCampo[pessoa.chave]?.length)}
+                            selecionado={ehOAlvo({ tipo: "campo", nome: pessoa.chave })}
+                            onLocalizar={() => irPara({ tipo: "campo", nome: pessoa.chave })}
+                          >
+                            <ConteudoOutraPessoa pessoa={pessoa} />
+                          </ItemChecklist>
                         ))}
                       </div>
 

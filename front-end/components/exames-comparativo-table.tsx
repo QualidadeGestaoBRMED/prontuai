@@ -15,7 +15,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
-import { TabelaComparacaoItem } from "@/types/process"
+import { PessoaNoLaudo, TabelaComparacaoItem } from "@/types/process"
 import { cn } from "@/lib/utils"
 
 // Define as props do componente, que agora recebe a tabela de comparação
@@ -27,6 +27,11 @@ export interface ExamesComparativoTableProps {
    * É só exibição: a decisão da IA não muda. A linha de origem fica nas
    * Evidências do modal. Só a tela do revisor liga; a da clínica e o chat
    * seguem como antes. Documento antigo, sem os campos, renderiza igual.
+   *
+   * Liga também o status "Laudo de outra pessoa": o laudo do exame traz nome e
+   * CPF de quem não é o paciente do pedido (STC-947). Vale para encontrado e
+   * extra; o motivo, com o nome e o CPF mascarado, fica no tooltip da
+   * justificativa ("Passe o mouse").
    */
   mostrarEvidencia?: boolean;
   /**
@@ -84,18 +89,40 @@ const SO_NA_LISTA = {
   color: "text-yellow-500",
 };
 
+// Status exibido para o exame cujo laudo traz nome e CPF de outra pessoa. É
+// aviso, como o "Só na lista do ASO": a IA não muda a decisão, o revisor confere.
+const OUTRA_PESSOA = {
+  label: "Laudo de outra pessoa",
+  icon: <AlertTriangleIcon className="inline-flex stroke-yellow-500" size={16} />,
+  color: "text-yellow-500",
+};
+
+function descreverPessoa(pessoa: PessoaNoLaudo): string {
+  return `${pessoa.nome} (CPF ${pessoa.cpf}${pessoa.pagina ? `, página ${pessoa.pagina}` : ""})`;
+}
+
+// O motivo do aviso, com quem é a outra pessoa.
+export function motivoOutraPessoa(pessoas: PessoaNoLaudo[]): string {
+  return (
+    `O laudo traz nome e CPF de quem não é o paciente do pedido: ${pessoas.map(descreverPessoa).join("; ")}. ` +
+    "Confira se o laudo é de outro colaborador."
+  );
+}
+
 // Componente da tabela de comparação de exames
 /**
  * A ordem em que a tabela mostra os exames: primeiro os "encontrados", depois os
- * "faltantes", depois os "extras". Com a evidência ligada, os "só na lista do ASO"
- * abrem o grupo dos encontrados (continuam encontrados, mas são os que o revisor
- * precisa conferir no PDF). O sort é estável: fora isso, a ordem do back-end se
+ * "faltantes", depois os "extras". Com a evidência ligada, o laudo de outra
+ * pessoa e depois os "só na lista do ASO" abrem o seu grupo (o status não muda,
+ * mas são os que o revisor precisa conferir no PDF). O sort é estável: fora isso, a ordem do back-end se
  * mantém. Exportada para quem precisa seguir a mesma sequência — o botão que
  * passa de exame em exame no PDF.
  */
 export function ordenarComparativo(tabela: TabelaComparacaoItem[], mostrarEvidencia = false): TabelaComparacaoItem[] {
   const ehSoLista = (item: TabelaComparacaoItem) =>
     mostrarEvidencia && item.evidencia === "so_lista";
+  const ehOutraPessoa = (item: TabelaComparacaoItem) =>
+    mostrarEvidencia && Boolean(item.outra_pessoa?.length);
   const getStatusOrder = (status: TabelaComparacaoItem['status']) => {
     switch (status) {
       case "encontrado":
@@ -111,6 +138,8 @@ export function ordenarComparativo(tabela: TabelaComparacaoItem[], mostrarEviden
   return [...tabela].sort((a, b) => {
     const porStatus = getStatusOrder(a.status) - getStatusOrder(b.status);
     if (porStatus !== 0) return porStatus;
+    const porOutraPessoa = Number(ehOutraPessoa(b)) - Number(ehOutraPessoa(a));
+    if (porOutraPessoa !== 0) return porOutraPessoa;
     return Number(ehSoLista(b)) - Number(ehSoLista(a));
   });
 }
@@ -149,7 +178,12 @@ export default function ExamesComparativoTable({
         </TableHeader>
         <TableBody ref={corpo}>
           {sortedExames.map((item, index) => {
-            const conf = ehSoLista(item) ? SO_NA_LISTA : getConformidade(item.status, rotuloExtra);
+            const outrasPessoas = mostrarEvidencia ? item.outra_pessoa ?? [] : [];
+            const conf = outrasPessoas.length
+              ? OUTRA_PESSOA
+              : ehSoLista(item)
+                ? SO_NA_LISTA
+                : getConformidade(item.status, rotuloExtra);
             const localizavel = Boolean(localizar?.porExame[item.exame]);
             const selecionado = localizar?.ativo?.exame === item.exame;
             return (
@@ -186,7 +220,8 @@ export default function ExamesComparativoTable({
                         <span className="text-xs">Passe o mouse</span>
                       </span>
                     </TooltipTrigger>
-                    <TooltipContent className="max-w-md">
+                    <TooltipContent className="max-w-md space-y-2">
+                      {outrasPessoas.length > 0 && <p>{motivoOutraPessoa(outrasPessoas)}</p>}
                       <p>{item.justificativa}</p>
                     </TooltipContent>
                   </Tooltip>
