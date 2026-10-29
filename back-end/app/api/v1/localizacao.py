@@ -3,8 +3,10 @@ Onde cada exame da Comparação Detalhada aparece no PDF.
 
 - `GET /documents/{id}/localizacoes`: para cada exame da tabela de comparação,
   as linhas do documento onde ele aparece (página e caixa), na ordem em que a
-  tela deve oferecer. O revisor clica no exame e o visualizador rola até lá,
-  com a linha destacada. Traz também os campos da Checklist de Campos (CPF,
+  tela deve oferecer: primeiro o laudo — pelo nome, pelo sinônimo ou pelo
+  título de laudo do exame ("Ficha Médica" para o Clínico) —, por último as
+  páginas de lista (ASO, voucher). O revisor clica no exame e o visualizador
+  rola até lá, com a linha destacada. Traz também os campos da Checklist de Campos (CPF,
   nome, data, CRM, assinatura), com as mesmas linhas que a checklist achou, e
   as pessoas do alerta de dados de outra pessoa (`identidade_laudo`).
 - `GET /documents/{id}/texto`: o texto lido pelo OCR, linha a linha, com a
@@ -113,14 +115,20 @@ def localizacoes_do_documento(
         lido_no_ocr = {d.get("exame"): d.get("ocr_match") for d in detalhes if isinstance(d, dict)}
 
         normalizadas = layout_ocr.normalizar_linhas(linhas, workflow_service._normalizar_busca)
-        paginas_aso = layout_ocr.paginas_da_lista_aso(linhas)
-        exames = []
+        termos = {}
         for item in payload.get("tabela_comparacao") or []:
             exame = item.get("exame") if isinstance(item, dict) else None
-            if not exame:
-                continue
+            if exame and exame not in termos:
+                termos[exame] = _termos_do_exame(exame, lido_no_ocr.get(exame))
+        paginas_lista = layout_ocr.paginas_de_lista(linhas, normalizadas, termos.values())
+        exames = []
+        for exame, termos_do_exame in termos.items():
             ocorrencias = layout_ocr.localizar_termos(
-                linhas, normalizadas, _termos_do_exame(exame, lido_no_ocr.get(exame)), paginas_aso
+                linhas,
+                normalizadas,
+                termos_do_exame,
+                paginas_lista,
+                layout_ocr.titulos_do_exame(workflow_service._normalizar_busca(exame)),
             )
             if ocorrencias:
                 exames.append({"exame": exame, "ocorrencias": ocorrencias})
