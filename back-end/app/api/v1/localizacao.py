@@ -39,18 +39,6 @@ router = APIRouter(tags=["Localização no PDF"])
 _LEITORES = [UserRole.ADMIN, UserRole.MANAGER, UserRole.CHECKER, UserRole.CURATOR]
 
 
-def _termos_do_exame(*nomes: str | None) -> set[str]:
-    """O nome do exame e o lido no OCR, com os sinônimos do catálogo — o laudo
-    de GLICEMIA DE JEJUM se chama GLICOSE, o de AUDIOMETRIA TONAL, AUDIOGRAMA."""
-    termos: set[str] = set()
-    for nome in nomes:
-        normalizado = workflow_service._normalizar_busca(nome or "")
-        if normalizado:
-            termos.add(normalizado)
-            termos |= workflow_service.obter_sinonimos(normalizado)
-    return termos
-
-
 def _localizar_campos(
     linhas: list[layout_ocr.LinhaPosicionada],
     patient_name: str | None,
@@ -119,7 +107,7 @@ def localizacoes_do_documento(
         for item in payload.get("tabela_comparacao") or []:
             exame = item.get("exame") if isinstance(item, dict) else None
             if exame and exame not in termos:
-                termos[exame] = _termos_do_exame(exame, lido_no_ocr.get(exame))
+                termos[exame] = workflow_service.termos_do_exame(exame, lido_no_ocr.get(exame))
         paginas_lista = layout_ocr.paginas_de_lista(linhas, normalizadas, termos.values())
         exames = []
         for exame, termos_do_exame in termos.items():

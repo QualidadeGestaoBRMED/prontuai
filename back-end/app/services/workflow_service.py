@@ -6,7 +6,7 @@ from typing import Dict, Any, Optional, List
 from fastapi import UploadFile
 from app.services import ocr_service, brmed_service, validacao_service
 from app.services import exam_catalog_source, laudo_evidencia, evidencia_laboratorio, identidade_laudo, layout_ocr
-from app.services import nomes_conhecidos
+from app.services import monitoramento_checagem, nomes_conhecidos
 from app.core.config import settings
 from app.core import metrics
 from app.core.pii import mask_cpf, mask_identifier, mask_name
@@ -228,6 +228,19 @@ def obter_sinonimos(termo_normalizado: str) -> set[str]:
     return EXAM_SYNONYM_MAP_DISCO.get(termo_normalizado, set()) | exam_catalog_source.sinonimos_de(
         termo_normalizado
     )
+
+
+def termos_do_exame(*nomes: Optional[str]) -> set[str]:
+    """O nome do exame e o lido no OCR, normalizados, com os sinônimos do catálogo
+    — o laudo de GLICEMIA DE JEJUM se chama GLICOSE, o de AUDIOMETRIA TONAL,
+    AUDIOGRAMA. É o que o clique no exame procura no PDF."""
+    termos: set[str] = set()
+    for nome in nomes:
+        normalizado = _normalizar_busca(nome or "")
+        if normalizado:
+            termos.add(normalizado)
+            termos |= obter_sinonimos(normalizado)
+    return termos
 
 
 def _log_event(event: str, **payload: Any) -> None:
@@ -1397,6 +1410,7 @@ async def _processar_documento_completo_impl(
     # Alerta de dados de outra pessoa (laudo de outro colaborador anexado). NÃO
     # muda status, faltantes nem confiança — só grava para a tela do revisor,
     # no exame cujo laudo traz a outra pessoa. Ver `identidade_laudo`.
+    outras_pessoas: list[dict] = []
     if identidade_laudo.HABILITADA:
         try:
             linhas_texto = (markdown_content or "").splitlines()
@@ -1424,6 +1438,33 @@ async def _processar_documento_completo_impl(
                 quantas=len(outras_pessoas),
                 so_nome=sum(1 for p in outras_pessoas if p["tipo"] == identidade_laudo.SO_NOME),
             )
+
+    # Monitoramento silencioso do clique no exame e do aviso de outra pessoa:
+    # nada na tela, só contagens no payload, no log e nas métricas. Ver
+    # `monitoramento_checagem`. Falha aqui não pode derrubar o processamento.
+    if monitoramento_checagem.HABILITADO:
+        try:
+            lido_no_ocr = {d.get("exame"): d.get("ocr_match") for d in analysis_details["match_confidence"]}
+            linhas_layout = layout_ocr.alinhar(markdown_content or "", ocr_resultado.get("layout")) or []
+            clique = monitoramento_checagem.medir_clique(
+                linhas_layout,
+                [e.get("exame") for e in resultado_validacao.get("exames_comparativo") or []],
+                lambda exame: termos_do_exame(exame, lido_no_ocr.get(exame)),
+                _normalizar_busca,
+            )
+            avisos = monitoramento_checagem.confirmar_avisos(
+                outras_pessoas,
+                monitoramento_checagem.cpf_existe_no_banco,
+                lambda: monitoramento_checagem.nomes_da_clinica_no_banco(clinic_id),
+            )
+            for medida in clique:
+                metrics.CLIQUE_LAUDO.add(1, medida)
+            for medida in avisos:
+                metrics.AVISO_OUTRA_PESSOA.add(1, medida)
+            analysis_details["monitoramento"] = monitoramento_checagem.resumo(clique, avisos)
+            _log_event("monitoramento_checagem", run_id=run_id, **analysis_details["monitoramento"])
+        except Exception as e:
+            logger.warning(f"[WORKFLOW] Monitoramento da checagem falhou: {type(e).__name__}")
     comparativo = resultado_validacao.get("exames_comparativo", [])
     obrigatorios_total = len([e for e in comparativo if e.get("status") != "extra_no_ocr"])
     obrigatorios_encontrados = len([e for e in comparativo if e.get("status") == "encontrado"])
