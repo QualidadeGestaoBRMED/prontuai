@@ -54,6 +54,7 @@ CODIGOS_REJEICAO_EXAME: frozenset[str] = frozenset({
     "EXAME_OUTRA_DATA",
     "EXAME_ILEGIVEL",
     "EXAME_SEM_ASSINATURA",
+    "EXAME_OUTRA_PESSOA",
 })
 CODIGOS_REJEICAO_DOCUMENTO: frozenset[str] = frozenset({
     "ASO_INCOMPLETO",

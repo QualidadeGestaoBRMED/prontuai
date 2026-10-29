@@ -245,7 +245,7 @@ julgamento AS (
                                                    'EXAME_NAO_RECONHECIDO')), false) AS estava,
             COALESCE(bool_or(i ->> 'categoria' = 'ENCONTRADO_INCORRETO'), false) AS nao_estava,
             COALESCE(bool_or(i ->> 'categoria' IN ('EXAME_OUTRA_DATA', 'EXAME_ILEGIVEL',
-                                                   'EXAME_SEM_ASSINATURA')), false) AS formal,
+                                                   'EXAME_SEM_ASSINATURA', 'EXAME_OUTRA_PESSOA')), false) AS formal,
             COALESCE(bool_or(i ->> 'categoria' = 'DADO_BRNET'), false) AS brnet
         FROM jsonb_array_elements(CASE WHEN jsonb_typeof(fb.issue_items) = 'array'
                                        THEN fb.issue_items ELSE '[]'::jsonb END) AS i
