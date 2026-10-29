@@ -201,25 +201,65 @@ def test_com_cpf_do_pedido_o_campo_cpf_aponta_so_o_do_paciente(monkeypatch):
     assert [o.caixas[0].y for o in campos["cpf"]] == [0.12]
 
 
+def _analisar(markdown, cpf, nome, nomes=frozenset()):
+    """O que a análise (`workflow_service`) grava em `analysis_details.outra_pessoa`,
+    rodando sobre as linhas do MARKDOWN — a rota roda sobre as do layout."""
+    from app.services import identidade_laudo
+    linhas = markdown.splitlines()
+    return identidade_laudo.para_payload(
+        identidade_laudo.pessoas_no_documento(linhas, cpf, nome, nomes_conhecidos=nomes), linhas
+    )
+
+
 def test_outra_pessoa_aponta_o_cpf_e_o_nome_dela(monkeypatch):
+    salvas = _analisar(MARKDOWN_OUTRO, "123.456.789-09", "Fulano de Tal")
     documento = types.SimpleNamespace(
         ocr_markdown=MARKDOWN_OUTRO,
-        result_payload={"tabela_comparacao": [], "patient_name": "Fulano de Tal"},
-        # Sem `cpf_processado` no payload, vale o CPF gravado no documento.
+        result_payload={"tabela_comparacao": [], "patient_name": "Fulano de Tal", "analysis_details": {"outra_pessoa": salvas}},
         cpf="123.456.789-09",
     )
     rota = carregar(monkeypatch, BancoFalso(documento, LAYOUT_OUTRO))
     campos = {c.campo: c.ocorrencias for c in rota.localizacoes_do_documento("doc-1", current_user=usuario()).campos}
-    ocorrencias = campos["outra_pessoa:***.***.***-35"]
+    ocorrencias = campos["outra_pessoa:0"]
     # Linha do nome e linha do CPF, na ordem do documento; caixa só do trecho.
     assert [_caixa(o.caixas[0]) for o in ocorrencias] == [(0.20, 0.32, 0.18), (0.15, 0.34, 0.14)]
 
 
-def test_sem_cpf_do_paciente_nao_ha_alerta(monkeypatch):
+FICHA_COM_DOIS_LAUDOS_DE_OUTROS = _resposta(
+    ("Nome: FULANO DE TAL", 0.10),
+    ("CPF: 123.456.789-09", 0.12),
+    ("ELETROCARDIOGRAMA", 0.30),
+    ("Paciente: CICRANO SOUZA LIMA", 0.32),
+    ("CPF: 111.444.777-35", 0.34),
+    ("ESPIROMETRIA", 0.50),
+    ("Paciente: BELTRANO ROCHA DIAS", 0.52),
+)
+
+
+def test_chaves_da_analise_e_da_rota_sao_as_mesmas(monkeypatch):
+    # A análise lê o markdown (com "## " nos cabeçalhos); a rota, o layout.
+    # Aviso forte (nome + CPF) e aviso só pelo nome no mesmo documento.
+    markdown = textract_to_markdown(FICHA_COM_DOIS_LAUDOS_DE_OUTROS, pagina=1)
+    layout = layout_ocr.montar(layout_ocr.linhas_textract(FICHA_COM_DOIS_LAUDOS_DE_OUTROS, pagina=1))
+    salvas = _analisar(markdown, "123.456.789-09", "Fulano de Tal", {"BELTRANO", "ROCHA", "DIAS"})
+    assert [(p["chave"], p["tipo"]) for p in salvas] == [("outra_pessoa:0", "nome_e_cpf"), ("outra_pessoa:1", "so_nome")]
+    documento = types.SimpleNamespace(
+        ocr_markdown=markdown,
+        result_payload={"tabela_comparacao": [], "patient_name": "Fulano de Tal", "analysis_details": {"outra_pessoa": salvas}},
+        cpf="123.456.789-09",
+    )
+    rota = carregar(monkeypatch, BancoFalso(documento, layout))
+    campos = {c.campo: c.ocorrencias for c in rota.localizacoes_do_documento("doc-1", current_user=usuario()).campos}
+    assert {p["chave"] for p in salvas} <= set(campos)
+    assert [o.caixas[0].y for o in campos["outra_pessoa:1"]] == [0.52]
+
+
+def test_sem_pessoa_no_payload_nao_ha_alerta(monkeypatch):
+    # A rota não detecta de novo: documento sem `outra_pessoa` gravado não ganha alerta.
     documento = types.SimpleNamespace(
         ocr_markdown=MARKDOWN_OUTRO,
-        result_payload={"tabela_comparacao": [], "patient_name": "Fulano de Tal", "cpf_processado": "Não encontrado"},
-        cpf=None,
+        result_payload={"tabela_comparacao": [], "patient_name": "Fulano de Tal"},
+        cpf="123.456.789-09",
     )
     rota = carregar(monkeypatch, BancoFalso(documento, LAYOUT_OUTRO))
     campos = [c.campo for c in rota.localizacoes_do_documento("doc-1", current_user=usuario()).campos]

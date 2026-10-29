@@ -371,7 +371,7 @@ def _recalcular_confianca(
     analysis_details = dict(payload.get("analysis_details") or {})
     analysis_details["quality"] = workflow_service._avaliar_qualidade(markdown or "", linhas)
     analysis_details["field_checks"] = workflow_service._avaliar_campos(
-        markdown or "", linhas, payload.get("patient_name")
+        markdown or "", linhas, payload.get("patient_name"), payload.get("cpf_processado")
     )
     analysis_details["match_confidence"] = workflow_service._avaliar_confianca_exames(
         comparativo, exames_ocr, linhas

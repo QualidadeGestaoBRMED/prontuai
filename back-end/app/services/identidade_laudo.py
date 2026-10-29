@@ -48,7 +48,7 @@ import unicodedata
 from difflib import SequenceMatcher
 from typing import Callable, Collection, Iterable, Optional
 
-from app.core.pii import mask_cpf, mask_name
+from app.core.pii import mask_cpf
 from app.services.ocr_service import _digits_only, _is_valid_cpf
 from app.services.patient_name_extractor import _clean_candidate
 
@@ -193,17 +193,18 @@ def _paginas(linhas: list[str]) -> list[Optional[int]]:
     return saida
 
 
-def chave(cpf: str) -> str:
-    """Como a tela e a rota de localização se referem a uma pessoa achada: pelo
-    CPF mascarado, o mesmo que o payload guarda."""
-    return f"outra_pessoa:{mask_cpf(cpf)}"
+def chave(indice: int) -> str:
+    """Como a tela e a rota de localização se referem a uma pessoa achada: pela
+    posição dela na lista gravada no payload. Única por documento — CPF
+    mascarado ou iniciais do nome colidiam entre duas pessoas —, e a rota a lê
+    do payload em vez de recalcular (ver `linhas_salvas`)."""
+    return f"outra_pessoa:{indice}"
 
 
-def chave_da_pessoa(pessoa: dict) -> str:
-    """A chave de `chave`, ou, para quem só tem o nome, o nome mascarado."""
-    if pessoa.get("cpf"):
-        return chave(pessoa["cpf"])
-    return f"nome_diferente:{mask_name(' '.join(_tokens(pessoa['nome'])))}"
+def _numerar(pessoas: list[dict]) -> list[dict]:
+    for indice, pessoa in enumerate(pessoas):
+        pessoa["chave"] = chave(indice)
+    return pessoas
 
 
 def outra_pessoa(
@@ -262,7 +263,7 @@ def outra_pessoa(
                     pessoa["linhas"].append(indice)
     for pessoa in pessoas.values():
         pessoa["linhas"].sort(key=posicao.get)
-    return list(pessoas.values())
+    return _numerar(list(pessoas.values()))
 
 
 def _palavras(nome: str) -> list[str]:
@@ -373,7 +374,35 @@ def pessoas_no_documento(
         pessoa["linhas"].append(i)
     for pessoa in pessoas:
         pessoa["linhas"].sort()
-    return pessoas + so_nome
+    return _numerar(pessoas + so_nome)
+
+
+def _sem_cabecalho(texto: str) -> str:
+    return re.sub(r"^#+\s*", "", texto.strip())
+
+
+def linhas_salvas(pessoa: dict, textos: list[str]) -> list[int]:
+    """
+    Índices, em `textos`, das linhas de origem de uma pessoa gravada no payload
+    (`para_payload`). A rota de localização usa isto em vez de detectar as
+    pessoas de novo sobre as linhas do layout: a chave e as pessoas são as que a
+    análise gravou, mesmo que um limiar ou o vocabulário de nomes mude depois.
+    O layout guarda o texto da linha sem o "## " de cabeçalho; o payload, com.
+    """
+    alvo = {_sem_cabecalho(t) for t in pessoa.get("linhas") or []}
+    return [i for i, texto in enumerate(textos) if _sem_cabecalho(texto) in alvo]
+
+
+def trecho_salvo(pessoa: dict, texto: str) -> Optional[tuple[int, int]]:
+    """`trecho` para a pessoa do payload, que guarda o CPF mascarado: o CPF
+    válido da linha que termina nos mesmos dois dígitos, ou o nome."""
+    final = _digits_only(pessoa.get("cpf"))
+    for m in _CPF.finditer(texto):
+        digitos = _digits_only(m.group(0))
+        if final and _is_valid_cpf(digitos) and digitos.endswith(final):
+            return m.span()
+    m = _ROTULO_NOME.match(texto)
+    return m.span("valor") if m else None
 
 
 def trecho(pessoa: dict, texto: str) -> Optional[tuple[int, int]]:
@@ -476,7 +505,7 @@ def anotar_comparativo(
                 continue
             pessoa["exames"].append(exame)
             por_exame.setdefault(exame, []).append({
-                "chave": chave_da_pessoa(pessoa),
+                "chave": pessoa["chave"],
                 "nome": pessoa["nome"],
                 "cpf": mask_cpf(pessoa["cpf"]) if pessoa.get("cpf") else None,
                 "pagina": paginas[bloco[0]],
@@ -495,7 +524,7 @@ def para_payload(pessoas: list[dict], linhas: list[str]) -> list[dict]:
     paginas = _paginas(linhas)
     return [
         {
-            "chave": chave_da_pessoa(p),
+            "chave": p["chave"],
             "nome": p["nome"],
             "cpf": mask_cpf(p["cpf"]) if p.get("cpf") else None,
             "tipo": p.get("tipo", NOME_E_CPF),

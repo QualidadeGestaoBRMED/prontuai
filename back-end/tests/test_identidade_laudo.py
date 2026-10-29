@@ -148,7 +148,7 @@ def test_payload_guarda_o_cpf_mascarado_e_a_pagina():
     markdown = ASO_DA_PACIENTE + f"<!-- pagina 2 -->\n## Nome: JOAO FICTICIO SOUZA\n## CPF: {CPF_OUTRO}"
     linhas = markdown.splitlines()
     assert il.para_payload(_achar(markdown), linhas) == [{
-        "chave": "outra_pessoa:***.***.***-35",
+        "chave": "outra_pessoa:0",
         "nome": "JOAO FICTICIO SOUZA",
         "cpf": "***.***.***-35",
         "tipo": il.NOME_E_CPF,
@@ -204,7 +204,7 @@ def test_aviso_vai_no_exame_do_titulo_acima_do_bloco():
     )
     comparativo, (pessoa,) = _anotar(markdown, ["ESPIROMETRIA", "ELETROCARDIOGRAMA"])
     assert comparativo[0]["outra_pessoa"] == [
-        {"chave": "outra_pessoa:***.***.***-35", "nome": "JOAO FICTICIO SOUZA", "cpf": "***.***.***-35", "pagina": 2,
+        {"chave": "outra_pessoa:0", "nome": "JOAO FICTICIO SOUZA", "cpf": "***.***.***-35", "pagina": 2,
          "tipo": il.NOME_E_CPF}
     ]
     assert "outra_pessoa" not in comparativo[1]
@@ -275,7 +275,7 @@ def test_nome_diferente_sem_cpf_vira_aviso_so_pelo_nome():
     markdown = ASO_DA_PACIENTE + "<!-- pagina 2 -->\n## AVALIAÇÃO ODONTOLÓGICA\nPaciente: CARLOS LIMA ROCHA\nIdade: 30\n"
     (pessoa,) = _pessoas(markdown)
     assert (pessoa["nome"], pessoa["cpf"], pessoa["tipo"]) == ("CARLOS LIMA ROCHA", None, il.SO_NOME)
-    assert il.chave_da_pessoa(pessoa) == "nome_diferente:C***** L*** R****"
+    assert pessoa["chave"] == "outra_pessoa:0"
 
 
 def test_nome_e_cpf_continua_aviso_forte_e_vem_primeiro():
@@ -354,8 +354,28 @@ def test_aviso_so_pelo_nome_vai_no_exame_e_no_payload_sem_cpf():
     comparativo = [{"exame": "ESPIROMETRIA", "status": "encontrado"}]
     il.anotar_comparativo(comparativo, pessoas, linhas, _normalizar, lambda t: set())
     assert comparativo[0]["outra_pessoa"] == [{
-        "chave": "nome_diferente:C***** L*** R****", "nome": "CARLOS LIMA ROCHA",
+        "chave": "outra_pessoa:0", "nome": "CARLOS LIMA ROCHA",
         "cpf": None, "pagina": 2, "tipo": il.SO_NOME,
     }]
     (payload,) = il.para_payload(pessoas, linhas)
     assert (payload["cpf"], payload["tipo"], payload["exames"]) == (None, il.SO_NOME, ["ESPIROMETRIA"])
+
+
+def test_chave_e_unica_mesmo_com_iniciais_e_final_de_cpf_iguais():
+    # Mesmo final de CPF (-35) e mesmas iniciais: com a chave mascarada, colidiam.
+    markdown = ASO_DA_PACIENTE + (
+        f"<!-- pagina 2 -->\nPaciente: JOAO FICTICIO SOUZA\n## CPF: {CPF_OUTRO}\n"
+        "<!-- pagina 3 -->\nPaciente: JOSE FICTICIO SANTOS\n## CPF: 222.333.442-35\n"
+    )
+    pessoas = _pessoas(markdown, nomes=NOMES | {"JOSE", "SANTOS"})
+    assert [p["chave"] for p in pessoas] == ["outra_pessoa:0", "outra_pessoa:1"]
+
+
+def test_linhas_salvas_acham_a_pessoa_no_texto_do_layout_sem_o_cabecalho():
+    markdown = ASO_DA_PACIENTE + f"<!-- pagina 2 -->\n## Nome: JOAO FICTICIO SOUZA\n## CPF: {CPF_OUTRO}\n"
+    (salva,) = il.para_payload(_achar(markdown), markdown.splitlines())
+    textos_do_layout = ["ATESTADO", "Nome: JOAO FICTICIO SOUZA", f"CPF: {CPF_OUTRO}"]
+    assert il.linhas_salvas(salva, textos_do_layout) == [1, 2]
+    # O CPF guardado é mascarado: o trecho é o CPF válido com o mesmo final.
+    assert il.trecho_salvo(salva, f"CPF: {CPF_OUTRO}") == (5, 19)
+    assert il.trecho_salvo(salva, "Nome: JOAO FICTICIO SOUZA") == (6, 25)
