@@ -49,6 +49,7 @@ CATEGORIAS_EXAME: frozenset[str] = frozenset({
     "EXAME_OUTRA_DATA",         # era de outra data (antigo, vencido, de outro atendimento)
     "EXAME_ILEGIVEL",           # veio cortado, ilegível ou incompleto (sem conclusão, sem resultado)
     "EXAME_SEM_ASSINATURA",     # sem carimbo ou assinatura do profissional
+    "EXAME_OUTRA_PESSOA",       # o laudo é de outro colaborador (nome/CPF de outra pessoa)
     "VALIDADE_PERIODICIDADE",   # erro de validade/periodicidade do exame
     "DADO_BRNET",               # a exigência veio errada ou desatualizada do BRNET
     "OUTRO",

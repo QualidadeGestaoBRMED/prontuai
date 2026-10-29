@@ -372,6 +372,13 @@ async def startup_event():
     except Exception as e:
         logger.warning(f"Warmup de cache de documentos falhou: {e}")
 
+    # Vocabulário de nomes do aviso de outra pessoa no laudo (não bloqueia o startup)
+    try:
+        from app.services import nomes_conhecidos
+        nomes_conhecidos.aquecer()
+    except Exception as e:
+        logger.warning(f"Carga do vocabulário de nomes falhou: {e}")
+
     # Watchdog de jobs para encerrar processamentos travados
     try:
         from app.core.job_watchdog import job_watchdog_loop

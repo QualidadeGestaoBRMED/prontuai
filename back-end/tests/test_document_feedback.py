@@ -213,7 +213,9 @@ def test_outro_so_com_texto_e_parecer_valido(monkeypatch):
     assert salvo.document_issues == ["OUTRO_PROBLEMA"]
 
 
-@pytest.mark.parametrize("categoria", ["EXAME_OUTRA_DATA", "EXAME_ILEGIVEL", "EXAME_SEM_ASSINATURA", "ENCONTRADO_INCORRETO"])
+@pytest.mark.parametrize(
+    "categoria", ["EXAME_OUTRA_DATA", "EXAME_ILEGIVEL", "EXAME_SEM_ASSINATURA", "EXAME_OUTRA_PESSOA", "ENCONTRADO_INCORRETO"]
+)
 def test_exame_aceito_que_nao_servia_aponta_o_exame(categoria):
     with pytest.raises(ValidationError):
         DocumentFeedbackInput(status="IA_INCORRETA", document_issues=[categoria], notes="x")

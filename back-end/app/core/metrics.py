@@ -172,6 +172,19 @@ try:
         description="Usuários cadastrados no sistema",
     )
 
+    # Monitoramento silencioso da checagem (`monitoramento_checagem`): nada
+    # aparece na tela. Atributos bounded: `grupo` é a lista fixa de
+    # `REGUA_LAUDO` (clínico, audiometria...), `resultado`/`confirmacao`/`tipo`
+    # são poucos valores fixos. Nenhum nome, CPF ou documento vira atributo.
+    CLIQUE_LAUDO = _meter.create_counter(
+        "prontuai_clique_laudo",
+        description="Para cada exame de documento novo, se o clique no exame leva à página com o conteúdo do laudo",
+    )
+    AVISO_OUTRA_PESSOA = _meter.create_counter(
+        "prontuai_aviso_outra_pessoa",
+        description="Avisos de laudo de outra pessoa, e se a outra pessoa foi confirmada como paciente em outro documento",
+    )
+
 except ImportError:  # pragma: no cover - ambiente sem opentelemetry-api
     logger.warning("opentelemetry-api não instalado; métricas de negócio desabilitadas")
 
@@ -198,3 +211,5 @@ except ImportError:  # pragma: no cover - ambiente sem opentelemetry-api
     DOCUMENTOS_ENVIADOS = _NoopInstrument()
     CLINICAS_CRIADAS = _NoopInstrument()
     USUARIOS_CRIADOS = _NoopInstrument()
+    CLIQUE_LAUDO = _NoopInstrument()
+    AVISO_OUTRA_PESSOA = _NoopInstrument()

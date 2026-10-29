@@ -148,14 +148,24 @@ def test_caixa_do_trecho_sem_palavras_estima_pela_proporcao():
 
 # ── onde o exame aparece ───────────────────────────────────────────────────
 
-def _localizar(markdown, layout, *termos):
+def _localizar(markdown, layout, *termos, exame=None, tabela=()):
+    """Ocorrências dos `termos`; com `exame`, também os títulos de laudo dele.
+    `tabela` são os outros exames do documento, para a página de lista."""
     linhas = layout_ocr.alinhar(markdown, layout)
+    normalizadas = layout_ocr.normalizar_linhas(linhas, _normalizar_busca)
+    termos = {_normalizar_busca(t) for t in termos}
+    outros = [{_normalizar_busca(t)} for t in tabela]
     return layout_ocr.localizar_termos(
         linhas,
-        layout_ocr.normalizar_linhas(linhas, _normalizar_busca),
-        {_normalizar_busca(t) for t in termos},
-        layout_ocr.paginas_da_lista_aso(linhas),
+        normalizadas,
+        termos,
+        layout_ocr.paginas_de_lista(linhas, normalizadas, [termos, *outros]),
+        layout_ocr.titulos_do_exame(_normalizar_busca(exame)) if exame else (),
     )
+
+
+def _paginas(ocorrencias):
+    return [o["pagina"] for o in ocorrencias]
 
 
 def test_laudo_vem_antes_da_lista_do_aso():
@@ -180,3 +190,90 @@ def test_termo_casa_so_palavra_inteira_e_termo_curto_e_ignorado():
 def test_limita_as_ocorrencias():
     markdown, layout = _documento(_resposta(*[("GLICOSE", 0.1, 0.05 * i) for i in range(1, 9)]))
     assert len(_localizar(markdown, layout, "GLICOSE")) == layout_ocr.MAX_OCORRENCIAS
+
+
+# ── laudo com outro título, voucher e lista sem rótulo ─────────────────────
+
+ASO_COMPLETO = _resposta(
+    ("ATESTADO DE SAUDE OCUPACIONAL", 0.1, 0.05),
+    ("Procedimentos Realizados", 0.1, 0.30),
+    ("CLINICO OCUPACIONAL 10/10/2026", 0.1, 0.35),
+    ("AUDIOMETRIA TONAL 10/10/2026", 0.1, 0.40),
+)
+FICHA_MEDICA = _resposta(
+    ("Ficha Médica Periódico", 0.1, 0.05),
+    ("Anamnese: paciente sem queixas atuais.", 0.1, 0.20),
+)
+AUDIOLOGIA = _resposta(
+    ("AVALIAÇÃO AUDIOLÓGICA", 0.1, 0.05),
+    ("Parecer audiológico: limiares auditivos normais.", 0.1, 0.30),
+)
+
+
+def test_clinico_leva_a_ficha_medica_antes_da_lista_do_aso():
+    markdown, layout = _documento(ASO_COMPLETO, FICHA_MEDICA)
+    assert _paginas(_localizar(markdown, layout, "CLINICO OCUPACIONAL", exame="CLÍNICO OCUPACIONAL")) == [2, 1]
+
+
+def test_audiometria_leva_ao_laudo_audiologico():
+    markdown, layout = _documento(ASO_COMPLETO, FICHA_MEDICA, AUDIOLOGIA)
+    assert _paginas(_localizar(markdown, layout, "AUDIOMETRIA TONAL", exame="AUDIOMETRIA TONAL"))[0] == 3
+
+
+def test_sem_o_exame_o_titulo_de_laudo_nao_vale():
+    # "Ficha Médica" é título do Clínico, não da audiometria.
+    markdown, layout = _documento(ASO_COMPLETO, FICHA_MEDICA)
+    assert _paginas(_localizar(markdown, layout, "AUDIOMETRIA TONAL", exame="AUDIOMETRIA TONAL")) == [1]
+
+
+def test_pergunta_de_questionario_e_linha_longa_nao_sao_titulo():
+    questionario = _resposta(
+        ("Você já fez audiometria?", 0.1, 0.10),
+        ("O paciente relata que fez audiometria no emprego anterior e não lembra o resultado.", 0.1, 0.20),
+    )
+    markdown, layout = _documento(ASO_COMPLETO, questionario)
+    assert _paginas(_localizar(markdown, layout, "AUDIOMETRIA TONAL", exame="AUDIOMETRIA TONAL")) == [1]
+
+
+def test_voucher_e_pagina_de_lista():
+    voucher = _resposta(("Voucher", 0.1, 0.05), ("AUDIOMETRIA TONAL", 0.1, 0.20))
+    markdown, layout = _documento(voucher, AUDIOLOGIA)
+    # O título e o parecer do laudo antes do voucher.
+    assert _paginas(_localizar(markdown, layout, "AUDIOMETRIA TONAL", exame="AUDIOMETRIA TONAL")) == [2, 2, 1]
+
+
+def test_pagina_que_cita_tres_exames_da_tabela_e_lista_mesmo_sem_rotulo():
+    copia_do_aso = _resposta(
+        ("ESPIROMETRIA", 0.1, 0.10),
+        ("ELETROCARDIOGRAMA", 0.1, 0.15),
+        ("HEMOGRAMA COMPLETO", 0.1, 0.20),
+    )
+    laudo = _resposta(("LAUDO", 0.1, 0.05), ("ESPIROMETRIA", 0.1, 0.10))
+    markdown, layout = _documento(copia_do_aso, laudo)
+    tabela = ["ELETROCARDIOGRAMA", "HEMOGRAMA COMPLETO"]
+    assert _paginas(_localizar(markdown, layout, "ESPIROMETRIA", tabela=tabela)) == [2, 1]
+    # Com dois exames só, a página não é lista: fica na ordem do documento.
+    assert _paginas(_localizar(markdown, layout, "ESPIROMETRIA", tabela=tabela[:1])) == [1, 2]
+
+
+def test_laudo_de_laboratorio_com_varios_analitos_nao_e_lista():
+    aso = _resposta(
+        ("Exames complementares", 0.1, 0.05),
+        ("GLICEMIA DE JEJUM 10/10/2026", 0.1, 0.10),
+        ("HEMOGRAMA COMPLETO 10/10/2026", 0.1, 0.15),
+    )
+    laboratorio = _resposta(
+        ("GLICOSE 92 mg/dL", 0.1, 0.10),
+        ("HEMOGRAMA COMPLETO", 0.1, 0.20),
+        ("COLESTEROL TOTAL 180 mg/dL", 0.1, 0.30),
+    )
+    markdown, layout = _documento(aso, laboratorio)
+    tabela = ["HEMOGRAMA COMPLETO", "COLESTEROL TOTAL"]
+    assert _paginas(_localizar(markdown, layout, "GLICEMIA DE JEJUM", "GLICOSE", tabela=tabela))[0] == 2
+
+
+def test_laudo_de_audiometria_achado_pelo_conteudo():
+    # Título ilegível no OCR; os limiares tonais continuam lá.
+    laudo = _resposta(("Auorol4 ErRlA Torum", 0.1, 0.05), ("Limiares Tonais - Orelha Direita", 0.1, 0.30))
+    markdown, layout = _documento(ASO_COMPLETO, laudo)
+    assert _paginas(_localizar(markdown, layout, "AUDIOMETRIA TONAL", exame="AUDIOMETRIA TONAL"))[0] == 2

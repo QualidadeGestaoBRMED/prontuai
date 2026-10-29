@@ -5,7 +5,8 @@ import unicodedata
 from typing import Dict, Any, Optional, List
 from fastapi import UploadFile
 from app.services import ocr_service, brmed_service, validacao_service
-from app.services import exam_catalog_source, laudo_evidencia, evidencia_laboratorio, layout_ocr
+from app.services import exam_catalog_source, laudo_evidencia, evidencia_laboratorio, identidade_laudo, layout_ocr
+from app.services import monitoramento_checagem, nomes_conhecidos
 from app.core.config import settings
 from app.core import metrics
 from app.core.pii import mask_cpf, mask_identifier, mask_name
@@ -229,6 +230,19 @@ def obter_sinonimos(termo_normalizado: str) -> set[str]:
     )
 
 
+def termos_do_exame(*nomes: Optional[str]) -> set[str]:
+    """O nome do exame e o lido no OCR, normalizados, com os sinônimos do catálogo
+    — o laudo de GLICEMIA DE JEJUM se chama GLICOSE, o de AUDIOMETRIA TONAL,
+    AUDIOGRAMA. É o que o clique no exame procura no PDF."""
+    termos: set[str] = set()
+    for nome in nomes:
+        normalizado = _normalizar_busca(nome or "")
+        if normalizado:
+            termos.add(normalizado)
+            termos |= obter_sinonimos(normalizado)
+    return termos
+
+
 def _log_event(event: str, **payload: Any) -> None:
     try:
         logger.info("[WORKFLOW-EVENT] %s", json.dumps({"event": event, **payload}, ensure_ascii=False))
@@ -422,17 +436,35 @@ _TRECHO_ASSINATURA = re.compile(r"assinatura|assinado|carimbo|rubrica|_{3,}", re
 LIMITE_EVIDENCIAS_CAMPO = 3
 
 
+def _span_do_cpf(texto: str, cpf_paciente: str) -> Optional[tuple[int, int]]:
+    """Onde está, na linha, o CPF do paciente — com a pontuação que o OCR der."""
+    for m in identidade_laudo._CPF.finditer(texto):
+        if re.sub(r"\D", "", m.group(0)) == cpf_paciente:
+            return m.span()
+    return None
+
+
 def linhas_dos_campos(
     linhas: list[tuple[str, str]],
     patient_name: Optional[str] = None,
+    patient_cpf: Optional[str] = None,
 ) -> list[tuple[str, str, list[int]]]:
     """
     Para cada campo da checklist, na ordem da tela: (campo, rótulo, índices em
     `linhas` das que o comprovam), até `LIMITE_EVIDENCIAS_CAMPO`. `linhas` são
     pares (texto, texto normalizado por `_normalizar_busca`).
+
+    Com `patient_cpf`, o campo CPF procura o CPF DO PACIENTE, e não qualquer
+    número com formato de CPF: o do médico ou o de outro colaborador também
+    contavam como "Encontrado" (STC-947). Sem ele (documento antigo, passaporte),
+    fica a regra antiga.
     """
     nome = f" {_normalizar_busca(patient_name)} " if patient_name else ""
-    regras = [("cpf", "CPF", lambda texto, normalizado: bool(_CAMPO_CPF.search(texto)))]
+    cpf_paciente = re.sub(r"\D", "", patient_cpf or "")
+    if len(cpf_paciente) == 11:
+        regras = [("cpf", "CPF do paciente", lambda texto, normalizado: bool(_span_do_cpf(texto, cpf_paciente)))]
+    else:
+        regras = [("cpf", "CPF", lambda texto, normalizado: bool(_CAMPO_CPF.search(texto)))]
     if patient_name:
         regras.append((
             "nome_paciente", "Nome do paciente",
@@ -470,13 +502,21 @@ def _trecho_normalizado(texto: str, alvo: str) -> Optional[tuple[int, int]]:
     return (mapa[m.start()], mapa[m.end() - 1] + 1) if m else None
 
 
-def trecho_do_campo(campo: str, texto: str, patient_name: Optional[str] = None) -> Optional[tuple[int, int]]:
+def trecho_do_campo(
+    campo: str,
+    texto: str,
+    patient_name: Optional[str] = None,
+    patient_cpf: Optional[str] = None,
+) -> Optional[tuple[int, int]]:
     """
     Onde, na linha, está o que faz o campo contar como encontrado: o número do
     CPF, a data, a sigla do conselho com o número, a palavra da assinatura (ou a
     linha de assinar), o nome. None quando não dá para apontar — a tela destaca
     a linha inteira.
     """
+    cpf_paciente = re.sub(r"\D", "", patient_cpf or "")
+    if campo == "cpf" and len(cpf_paciente) == 11:
+        return _span_do_cpf(texto, cpf_paciente)
     if campo == "cpf":
         m = _CAMPO_CPF.search(texto)
         return m.span() if m else None
@@ -500,10 +540,11 @@ def trecho_do_campo(campo: str, texto: str, patient_name: Optional[str] = None) 
 def _avaliar_campos(
     markdown: str,
     linhas: list[tuple[str, str]],
-    patient_name: Optional[str] = None
+    patient_name: Optional[str] = None,
+    patient_cpf: Optional[str] = None,
 ) -> list[Dict[str, Any]]:
     checks = []
-    for campo, rotulo, indices in linhas_dos_campos(linhas, patient_name):
+    for campo, rotulo, indices in linhas_dos_campos(linhas, patient_name, patient_cpf):
         evidencias = [linhas[i][0] for i in indices]
         checks.append({
             "field": campo,
@@ -1358,13 +1399,80 @@ async def _processar_documento_completo_impl(
     linhas_markdown = _extrair_linhas_markdown(markdown_content or "")
     analysis_details = {
         "quality": _avaliar_qualidade(markdown_content or "", linhas_markdown),
-        "field_checks": _avaliar_campos(markdown_content or "", linhas_markdown, patient_name),
+        "field_checks": _avaliar_campos(markdown_content or "", linhas_markdown, patient_name, cpf_final),
         "match_confidence": _avaliar_confianca_exames(
             resultado_validacao.get("exames_comparativo", []),
             exames_enviados,
             linhas_markdown
         ),
     }
+
+    # Alerta de dados de outra pessoa (laudo de outro colaborador anexado). NÃO
+    # muda status, faltantes nem confiança — só grava para a tela do revisor,
+    # no exame cujo laudo traz a outra pessoa. Ver `identidade_laudo`.
+    outras_pessoas: list[dict] = []
+    if identidade_laudo.HABILITADA:
+        try:
+            linhas_texto = (markdown_content or "").splitlines()
+            outras_pessoas = identidade_laudo.pessoas_no_documento(
+                linhas_texto, cpf_final, patient_name, nomes_conhecidos=nomes_conhecidos.vocabulario()
+            )
+        except Exception as e:
+            # Alerta é informativo: falha aqui não pode derrubar a validação.
+            logger.warning(f"[WORKFLOW] Checagem de outra pessoa falhou: {type(e).__name__}")
+            outras_pessoas = []
+        if outras_pessoas:
+            try:
+                identidade_laudo.anotar_comparativo(
+                    resultado_validacao.get("exames_comparativo") or [],
+                    outras_pessoas,
+                    linhas_texto,
+                    _normalizar_busca,
+                    obter_sinonimos,
+                )
+            except Exception as e:
+                # Sem a ligação ao exame o aviso continua, na Checklist de Campos.
+                logger.warning(f"[WORKFLOW] Ligação do aviso de outra pessoa ao exame falhou: {type(e).__name__}")
+                for pessoa in outras_pessoas:
+                    pessoa["exames"] = []
+                for item in resultado_validacao.get("exames_comparativo") or []:
+                    if isinstance(item, dict):
+                        item.pop("outra_pessoa", None)
+            analysis_details["outra_pessoa"] = identidade_laudo.para_payload(outras_pessoas, linhas_texto)
+            # Só a contagem: nome e CPF de terceiro não vão para o log.
+            _log_event(
+                "outra_pessoa",
+                run_id=run_id,
+                quantas=len(outras_pessoas),
+                so_nome=sum(1 for p in outras_pessoas if p["tipo"] == identidade_laudo.SO_NOME),
+            )
+
+    # Monitoramento silencioso do clique no exame e do aviso de outra pessoa:
+    # nada na tela, só contagens no payload, no log e nas métricas. Ver
+    # `monitoramento_checagem`. Falha aqui não pode derrubar o processamento.
+    if monitoramento_checagem.HABILITADO:
+        try:
+            lido_no_ocr = {d.get("exame"): d.get("ocr_match") for d in analysis_details["match_confidence"]}
+            linhas_layout = layout_ocr.alinhar(markdown_content or "", ocr_resultado.get("layout")) or []
+            clique = monitoramento_checagem.medir_clique(
+                linhas_layout,
+                [e.get("exame") for e in resultado_validacao.get("exames_comparativo") or []],
+                lambda exame: termos_do_exame(exame, lido_no_ocr.get(exame)),
+                _normalizar_busca,
+            )
+            avisos = monitoramento_checagem.confirmar_avisos(
+                outras_pessoas,
+                monitoramento_checagem.cpf_existe_no_banco,
+                lambda: monitoramento_checagem.nomes_da_clinica_no_banco(clinic_id),
+            )
+            for medida in clique:
+                metrics.CLIQUE_LAUDO.add(1, medida)
+            for medida in avisos:
+                metrics.AVISO_OUTRA_PESSOA.add(1, medida)
+            analysis_details["monitoramento"] = monitoramento_checagem.resumo(clique, avisos)
+            _log_event("monitoramento_checagem", run_id=run_id, **analysis_details["monitoramento"])
+        except Exception as e:
+            logger.warning(f"[WORKFLOW] Monitoramento da checagem falhou: {type(e).__name__}")
     comparativo = resultado_validacao.get("exames_comparativo", [])
     obrigatorios_total = len([e for e in comparativo if e.get("status") != "extra_no_ocr"])
     obrigatorios_encontrados = len([e for e in comparativo if e.get("status") == "encontrado"])

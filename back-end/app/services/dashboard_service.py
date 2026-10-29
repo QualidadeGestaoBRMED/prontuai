@@ -225,7 +225,7 @@ WHERE c.name NOT IN ('teste', 'testando', 'Clinica Default')
 # categorias de `CATEGORIAS_EXAME`, que o modal oferece conforme o que a IA disse
 # dele (front-end/types/feedback.ts, OPCOES_EXAME): "Estava no documento", "Com
 # outro nome", "Não estava", "Estava, mas não foi lido", os de qualidade (outra
-# data, ilegível, sem carimbo, validade) e "Não é exigido". Decisão de 23/10/2026:
+# data, ilegível, sem carimbo, de outra pessoa, validade) e "Não é exigido". Decisão de 23/10/2026:
 # quem acompanha a acurácia é o time de desenvolvimento, e a pergunta é em quais
 # exames o processo inteiro tem dificuldade — inclusive no que a IA ainda não
 # confere e no que vem errado do BRNET. O motivo vai junto para separar na lista.
@@ -241,6 +241,7 @@ PRIORIDADE_MOTIVO = (
     "EXAME_OUTRA_DATA",
     "EXAME_ILEGIVEL",
     "EXAME_SEM_ASSINATURA",
+    "EXAME_OUTRA_PESSOA",
     "VALIDADE_PERIODICIDADE",
     "DADO_BRNET",
     "OUTRO",

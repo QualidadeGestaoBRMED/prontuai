@@ -80,6 +80,13 @@ export const CATEGORIAS_EXAME: Array<{
     frase: (x) => `${x} foi aceito, mas estava sem carimbo ou assinatura.`,
   },
   {
+    // O laudo do exame é de outro colaborador (nome/CPF de outra pessoa). Por
+    // exame, e não do documento: o caso real é UM laudo trocado no prontuário.
+    valor: "EXAME_OUTRA_PESSOA",
+    rotulo: "De outra pessoa",
+    frase: (x) => `${x} foi aceito, mas era de outra pessoa.`,
+  },
+  {
     valor: "EXAME_NAO_RECONHECIDO",
     rotulo: "Estava, mas não foi lido",
     frase: (x) => `${x} estava no documento, mas a IA não extraiu.`,
@@ -147,6 +154,7 @@ export const CODIGOS_REJEICAO = [
   "EXAME_OUTRA_DATA",
   "EXAME_ILEGIVEL",
   "EXAME_SEM_ASSINATURA",
+  "EXAME_OUTRA_PESSOA",
   "ASO_INCOMPLETO",
   "ASO_SEM_APTIDAO",
   "ASO_DADO_ERRADO",
@@ -168,6 +176,7 @@ export const ROTULO_REJEICAO_EXAME: Partial<Record<CodigoRejeicao, string>> = {
   EXAME_OUTRA_DATA: "De outra data",
   EXAME_ILEGIVEL: "Ilegível ou incompleto",
   EXAME_SEM_ASSINATURA: "Sem carimbo ou assinatura",
+  EXAME_OUTRA_PESSOA: "De outra pessoa",
 };
 
 /**
@@ -190,6 +199,7 @@ export const OPCOES_EXAME: Record<
     { categoria: "EXAME_OUTRA_DATA", rotulo: "De outra data", rejeicao: "EXAME_OUTRA_DATA" },
     { categoria: "EXAME_ILEGIVEL", rotulo: "Ilegível ou incompleto", rejeicao: "EXAME_ILEGIVEL" },
     { categoria: "EXAME_SEM_ASSINATURA", rotulo: "Sem carimbo", rejeicao: "EXAME_SEM_ASSINATURA" },
+    { categoria: "EXAME_OUTRA_PESSOA", rotulo: "De outra pessoa", rejeicao: "EXAME_OUTRA_PESSOA" },
   ],
   // Digitado pelo revisor: não estava na lista do BRNET.
   avulso: [
