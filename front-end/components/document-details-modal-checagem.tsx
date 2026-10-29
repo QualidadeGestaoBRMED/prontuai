@@ -87,15 +87,17 @@ function ConteudoCampo({ item }: { item: FieldCheck }) {
  * Pessoa que não é o paciente, identificada no documento fora do laudo de
  * qualquer exame da tabela (STC-947) — título que o catálogo não conhece, ou
  * documento sem tabela. Quem está no laudo de um exame aparece na própria linha
- * do exame, como "Laudo de outra pessoa".
+ * do exame, como "Laudo de outra pessoa". Sem CPF (só o nome é diferente), o
+ * aviso é o mais fraco "Nome diferente no documento": pode ser nome mal lido.
  */
 function ConteudoOutraPessoa({ pessoa }: { pessoa: OutraPessoa }) {
   return (
     <>
       <span className="flex min-w-0 flex-col">
-        <span className="text-sm">Dados de outra pessoa</span>
+        <span className="text-sm">{pessoa.cpf ? "Dados de outra pessoa" : "Nome diferente no documento"}</span>
         <span className="text-xs text-yellow-600">
-          {pessoa.nome} · CPF {pessoa.cpf}
+          {pessoa.nome}
+          {pessoa.cpf ? ` · CPF ${pessoa.cpf}` : ""}
           {pessoa.pagina ? ` · página ${pessoa.pagina}` : ""}
         </span>
       </span>

@@ -6,6 +6,7 @@ from typing import Dict, Any, Optional, List
 from fastapi import UploadFile
 from app.services import ocr_service, brmed_service, validacao_service
 from app.services import exam_catalog_source, laudo_evidencia, evidencia_laboratorio, identidade_laudo, layout_ocr
+from app.services import nomes_conhecidos
 from app.core.config import settings
 from app.core import metrics
 from app.core.pii import mask_cpf, mask_identifier, mask_name
@@ -1399,7 +1400,9 @@ async def _processar_documento_completo_impl(
     if identidade_laudo.HABILITADA:
         try:
             linhas_texto = (markdown_content or "").splitlines()
-            outras_pessoas = identidade_laudo.outra_pessoa(linhas_texto, cpf_final, patient_name)
+            outras_pessoas = identidade_laudo.pessoas_no_documento(
+                linhas_texto, cpf_final, patient_name, nomes_conhecidos=nomes_conhecidos.vocabulario()
+            )
             if outras_pessoas:
                 identidade_laudo.anotar_comparativo(
                     resultado_validacao.get("exames_comparativo") or [],
@@ -1415,7 +1418,12 @@ async def _processar_documento_completo_impl(
         if outras_pessoas:
             analysis_details["outra_pessoa"] = identidade_laudo.para_payload(outras_pessoas, linhas_texto)
             # Só a contagem: nome e CPF de terceiro não vão para o log.
-            _log_event("outra_pessoa", run_id=run_id, quantas=len(outras_pessoas))
+            _log_event(
+                "outra_pessoa",
+                run_id=run_id,
+                quantas=len(outras_pessoas),
+                so_nome=sum(1 for p in outras_pessoas if p["tipo"] == identidade_laudo.SO_NOME),
+            )
     comparativo = resultado_validacao.get("exames_comparativo", [])
     obrigatorios_total = len([e for e in comparativo if e.get("status") != "extra_no_ocr"])
     obrigatorios_encontrados = len([e for e in comparativo if e.get("status") == "encontrado"])

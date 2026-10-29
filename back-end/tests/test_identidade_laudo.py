@@ -151,6 +151,7 @@ def test_payload_guarda_o_cpf_mascarado_e_a_pagina():
         "chave": "outra_pessoa:***.***.***-35",
         "nome": "JOAO FICTICIO SOUZA",
         "cpf": "***.***.***-35",
+        "tipo": il.NOME_E_CPF,
         "pagina": 2,
         "linhas": ["## Nome: JOAO FICTICIO SOUZA", f"## CPF: {CPF_OUTRO}"],
         "exames": [],
@@ -203,7 +204,8 @@ def test_aviso_vai_no_exame_do_titulo_acima_do_bloco():
     )
     comparativo, (pessoa,) = _anotar(markdown, ["ESPIROMETRIA", "ELETROCARDIOGRAMA"])
     assert comparativo[0]["outra_pessoa"] == [
-        {"chave": "outra_pessoa:***.***.***-35", "nome": "JOAO FICTICIO SOUZA", "cpf": "***.***.***-35", "pagina": 2}
+        {"chave": "outra_pessoa:***.***.***-35", "nome": "JOAO FICTICIO SOUZA", "cpf": "***.***.***-35", "pagina": 2,
+         "tipo": il.NOME_E_CPF}
     ]
     assert "outra_pessoa" not in comparativo[1]
     assert pessoa["exames"] == ["ESPIROMETRIA"]
@@ -257,3 +259,103 @@ def test_mesma_pessoa_em_dois_laudos_avisa_nos_dois_exames():
     comparativo, (pessoa,) = _anotar(markdown, ["ESPIROMETRIA", "ELETROCARDIOGRAMA"])
     assert pessoa["exames"] == ["ESPIROMETRIA", "ELETROCARDIOGRAMA"]
     assert [item["outra_pessoa"][0]["pagina"] for item in comparativo] == [2, 3]
+
+
+# ── Aviso só pelo nome ──────────────────────────────────────────────────────
+
+# Vocabulário de nomes fictício: no app vem de `nomes_conhecidos.vocabulario()`.
+NOMES = {"MARIA", "SILVA", "JOAO", "FICTICIO", "SOUZA", "PEDRO", "OUTRO", "LIMA", "CARLOS", "ROCHA"}
+
+
+def _pessoas(markdown, cpf=CPF_PACIENTE, nome=PACIENTE, nomes=NOMES):
+    return il.pessoas_no_documento(markdown.splitlines(), cpf, nome, nomes_conhecidos=nomes)
+
+
+def test_nome_diferente_sem_cpf_vira_aviso_so_pelo_nome():
+    markdown = ASO_DA_PACIENTE + "<!-- pagina 2 -->\n## AVALIAÇÃO ODONTOLÓGICA\nPaciente: CARLOS LIMA ROCHA\nIdade: 30\n"
+    (pessoa,) = _pessoas(markdown)
+    assert (pessoa["nome"], pessoa["cpf"], pessoa["tipo"]) == ("CARLOS LIMA ROCHA", None, il.SO_NOME)
+    assert il.chave_da_pessoa(pessoa) == "nome_diferente:C***** L*** R****"
+
+
+def test_nome_e_cpf_continua_aviso_forte_e_vem_primeiro():
+    markdown = ASO_DA_PACIENTE + (
+        f"<!-- pagina 2 -->\nPaciente: JOAO FICTICIO SOUZA\n## CPF: {CPF_OUTRO}\n"
+        "<!-- pagina 3 -->\nNome: PEDRO OUTRO LIMA\n"
+    )
+    assert [(p["nome"], p["tipo"]) for p in _pessoas(markdown)] == [
+        ("JOAO FICTICIO SOUZA", il.NOME_E_CPF),
+        ("PEDRO OUTRO LIMA", il.SO_NOME),
+    ]
+
+
+def test_mesma_outra_pessoa_num_laudo_sem_cpf_entra_no_aviso_forte():
+    markdown = ASO_DA_PACIENTE + (
+        f"<!-- pagina 2 -->\nPaciente: JOAO FICTICIO SOUZA\n## CPF: {CPF_OUTRO}\n"
+        "<!-- pagina 3 -->\nNome: JOAO FICTlCIO SOUZA\n"
+    )
+    (pessoa,) = _pessoas(markdown)
+    assert pessoa["tipo"] == il.NOME_E_CPF and len(pessoa["linhas"]) == 3
+
+
+@pytest.mark.parametrize("linha", [
+    "Paciente: MARlA FICTICIA DA SlLVA",       # o paciente, com erro de OCR
+    "Nome do médico: JOAO FICTICIO SOUZA",      # rótulo de profissional
+    "Nome: JOAO",                               # uma palavra só
+    "Responsável técnico: JOAO FICTICIO SOUZA",  # não é rótulo de paciente
+])
+def test_o_que_nao_vira_aviso_so_pelo_nome(linha):
+    assert _pessoas(ASO_DA_PACIENTE + linha) == []
+
+
+def test_aviso_so_pelo_nome_nao_precisa_do_cpf_do_paciente():
+    markdown = ASO_DA_PACIENTE + "Paciente: CARLOS LIMA ROCHA\n"
+    assert [p["tipo"] for p in _pessoas(markdown, cpf=None)] == [il.SO_NOME]
+    assert _pessoas(markdown, nome=None) == []
+
+
+def test_sem_vocabulario_de_nomes_nao_ha_aviso_so_pelo_nome():
+    # Banco fora: preferir não avisar a avisar ruído. O aviso forte não depende dele.
+    markdown = ASO_DA_PACIENTE + "Paciente: JOAO FICTICIO SOUZA\n"
+    assert _pessoas(markdown, nomes=frozenset()) == []
+    assert _pessoas(markdown, nomes=None) == []
+
+
+@pytest.mark.parametrize("bloco", [
+    # 1. Grafia parecida: o próprio paciente com o nome manuscrito estragado.
+    "Paciente: Marta Fictacia da Sirva Rocha",
+    # 2. Conselho logo abaixo: é a profissional que assina.
+    "Nome: CARLOS LIMA ROCHA\nFonoaudióloga\nCRFa: 1-2345",
+    # 3. Formulário de custódia do toxicológico: é o coletor.
+    "ESPAÇO RESERVADO PARA O SUPERVISOR DA COLETA\nNome: CARLOS LIMA ROCHA",
+    # 4. Palavra em minúscula: o OCR inventando.
+    "Nome: carlos lima rocha",
+    # 5. Nome cortado.
+    "Nome: CARLOS LIMA DE RO",
+    # 6. Empresa no lugar do nome.
+    "Nome: ROCHA SERVICOS LTDA",
+    # 7. Palavras fora do vocabulário de nomes: o OCR inventando com maiúsculas.
+    "Nome: Quelgo Varnip Trusda",
+])
+def test_cortes_do_aviso_so_pelo_nome(bloco):
+    assert _pessoas(ASO_DA_PACIENTE + "<!-- pagina 2 -->\n" + bloco + "\n") == []
+
+
+def test_metade_das_palavras_conhecidas_basta():
+    # Sobrenome raro ("ZANFRUQ") não derruba um nome que é de gente.
+    (pessoa,) = _pessoas(ASO_DA_PACIENTE + "Paciente: CARLOS ZANFRUQ\n")
+    assert pessoa["tipo"] == il.SO_NOME
+
+
+def test_aviso_so_pelo_nome_vai_no_exame_e_no_payload_sem_cpf():
+    markdown = ASO_DA_PACIENTE + "<!-- pagina 2 -->\n## ESPIROMETRIA\nNome: CARLOS LIMA ROCHA\n"
+    linhas = markdown.splitlines()
+    pessoas = _pessoas(markdown)
+    comparativo = [{"exame": "ESPIROMETRIA", "status": "encontrado"}]
+    il.anotar_comparativo(comparativo, pessoas, linhas, _normalizar, lambda t: set())
+    assert comparativo[0]["outra_pessoa"] == [{
+        "chave": "nome_diferente:C***** L*** R****", "nome": "CARLOS LIMA ROCHA",
+        "cpf": None, "pagina": 2, "tipo": il.SO_NOME,
+    }]
+    (payload,) = il.para_payload(pessoas, linhas)
+    assert (payload["cpf"], payload["tipo"], payload["exames"]) == (None, il.SO_NOME, ["ESPIROMETRIA"])

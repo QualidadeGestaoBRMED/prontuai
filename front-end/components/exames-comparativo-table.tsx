@@ -29,9 +29,10 @@ export interface ExamesComparativoTableProps {
    * seguem como antes. Documento antigo, sem os campos, renderiza igual.
    *
    * Liga também o status "Laudo de outra pessoa": o laudo do exame traz nome e
-   * CPF de quem não é o paciente do pedido (STC-947). Vale para encontrado e
-   * extra; o motivo, com o nome e o CPF mascarado, fica no tooltip da
-   * justificativa ("Passe o mouse").
+   * CPF de quem não é o paciente do pedido (STC-947). Só com o nome diferente,
+   * sem CPF, o status é o mais fraco "Nome diferente no laudo". Vale para
+   * encontrado e extra; o motivo, com o nome e o CPF mascarado, fica no tooltip
+   * da justificativa ("Passe o mouse").
    */
   mostrarEvidencia?: boolean;
   /**
@@ -97,16 +98,40 @@ const OUTRA_PESSOA = {
   color: "text-yellow-500",
 };
 
+// O mesmo aviso quando só o nome é diferente, sem CPF para confirmar: pode ser
+// laudo de outro colaborador, ou nome escrito à mão que o OCR leu mal.
+const NOME_DIFERENTE = {
+  ...OUTRA_PESSOA,
+  label: "Nome diferente no laudo",
+};
+
+export function temCpf(pessoa: PessoaNoLaudo): boolean {
+  return Boolean(pessoa.cpf);
+}
+
 function descreverPessoa(pessoa: PessoaNoLaudo): string {
-  return `${pessoa.nome} (CPF ${pessoa.cpf}${pessoa.pagina ? `, página ${pessoa.pagina}` : ""})`;
+  const detalhes = [pessoa.cpf && `CPF ${pessoa.cpf}`, pessoa.pagina && `página ${pessoa.pagina}`].filter(Boolean);
+  return detalhes.length ? `${pessoa.nome} (${detalhes.join(", ")})` : pessoa.nome;
 }
 
 // O motivo do aviso, com quem é a outra pessoa.
 export function motivoOutraPessoa(pessoas: PessoaNoLaudo[]): string {
-  return (
-    `O laudo traz nome e CPF de quem não é o paciente do pedido: ${pessoas.map(descreverPessoa).join("; ")}. ` +
-    "Confira se o laudo é de outro colaborador."
-  );
+  const comCpf = pessoas.filter(temCpf);
+  const soNome = pessoas.filter((p) => !temCpf(p));
+  const frases = [];
+  if (comCpf.length) {
+    frases.push(
+      `O laudo traz nome e CPF de quem não é o paciente do pedido: ${comCpf.map(descreverPessoa).join("; ")}. ` +
+        "Confira se o laudo é de outro colaborador.",
+    );
+  }
+  if (soNome.length) {
+    frases.push(
+      `O laudo traz um nome diferente do paciente do pedido, sem CPF para confirmar: ${soNome.map(descreverPessoa).join("; ")}. ` +
+        "Pode ser laudo de outro colaborador ou o nome mal lido pelo OCR; confira no PDF.",
+    );
+  }
+  return frases.join(" ");
 }
 
 // Componente da tabela de comparação de exames
@@ -121,8 +146,9 @@ export function motivoOutraPessoa(pessoas: PessoaNoLaudo[]): string {
 export function ordenarComparativo(tabela: TabelaComparacaoItem[], mostrarEvidencia = false): TabelaComparacaoItem[] {
   const ehSoLista = (item: TabelaComparacaoItem) =>
     mostrarEvidencia && item.evidencia === "so_lista";
-  const ehOutraPessoa = (item: TabelaComparacaoItem) =>
-    mostrarEvidencia && Boolean(item.outra_pessoa?.length);
+  // Nome e CPF de outra pessoa primeiro, depois só o nome.
+  const pesoOutraPessoa = (item: TabelaComparacaoItem) =>
+    !mostrarEvidencia || !item.outra_pessoa?.length ? 0 : item.outra_pessoa.some(temCpf) ? 2 : 1;
   const getStatusOrder = (status: TabelaComparacaoItem['status']) => {
     switch (status) {
       case "encontrado":
@@ -138,7 +164,7 @@ export function ordenarComparativo(tabela: TabelaComparacaoItem[], mostrarEviden
   return [...tabela].sort((a, b) => {
     const porStatus = getStatusOrder(a.status) - getStatusOrder(b.status);
     if (porStatus !== 0) return porStatus;
-    const porOutraPessoa = Number(ehOutraPessoa(b)) - Number(ehOutraPessoa(a));
+    const porOutraPessoa = pesoOutraPessoa(b) - pesoOutraPessoa(a);
     if (porOutraPessoa !== 0) return porOutraPessoa;
     return Number(ehSoLista(b)) - Number(ehSoLista(a));
   });
@@ -180,7 +206,9 @@ export default function ExamesComparativoTable({
           {sortedExames.map((item, index) => {
             const outrasPessoas = mostrarEvidencia ? item.outra_pessoa ?? [] : [];
             const conf = outrasPessoas.length
-              ? OUTRA_PESSOA
+              ? outrasPessoas.some(temCpf)
+                ? OUTRA_PESSOA
+                : NOME_DIFERENTE
               : ehSoLista(item)
                 ? SO_NA_LISTA
                 : getConformidade(item.status, rotuloExtra);

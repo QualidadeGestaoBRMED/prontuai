@@ -26,7 +26,7 @@ from app.core.auth import require_roles
 from app.core.database import user_db
 from app.models.localizacao import LocalizacoesDocumento, TextoDocumento
 from app.models.user import User, UserRole
-from app.services import identidade_laudo, layout_ocr, workflow_service
+from app.services import identidade_laudo, layout_ocr, nomes_conhecidos, workflow_service
 
 logger = logging.getLogger(__name__)
 
@@ -62,7 +62,8 @@ def _localizar_campos(
     com o número), ou a linha inteira quando não dá para apontar.
 
     Cada pessoa do alerta de dados de outra pessoa entra também, como o campo
-    `identidade_laudo.chave(cpf)`: o CPF e o nome dela no PDF.
+    `identidade_laudo.chave_da_pessoa`: o CPF e o nome dela no PDF (só o nome,
+    quando o aviso é só pelo nome).
     """
     pares = [(linha.texto, workflow_service._normalizar_busca(linha.texto)) for linha in linhas]
     campos = []
@@ -77,9 +78,10 @@ def _localizar_campos(
             campos.append({"campo": campo, "ocorrencias": ocorrencias})
 
     if identidade_laudo.HABILITADA:
-        pessoas = identidade_laudo.outra_pessoa(
+        pessoas = identidade_laudo.pessoas_no_documento(
             [linha.texto for linha in linhas], patient_cpf, patient_name,
             paginas=[linha.pagina for linha in linhas],
+            nomes_conhecidos=nomes_conhecidos.vocabulario(),
         )
         for pessoa in pessoas:
             ocorrencias = []
@@ -88,7 +90,7 @@ def _localizar_campos(
                 trecho = identidade_laudo.trecho(pessoa, linha.texto)
                 caixa = layout_ocr.caixa_do_trecho(linha, *trecho) if trecho else linha.caixa
                 ocorrencias.append({"pagina": linha.pagina, "caixas": [layout_ocr.caixa_json(caixa)]})
-            campos.append({"campo": identidade_laudo.chave(pessoa["cpf"]), "ocorrencias": ocorrencias})
+            campos.append({"campo": identidade_laudo.chave_da_pessoa(pessoa), "ocorrencias": ocorrencias})
     return campos
 
 

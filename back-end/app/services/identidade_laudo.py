@@ -20,6 +20,13 @@ ao lado também não é — os dois juntos, porque cada um sozinho falha:
   - O nome confirma o CPF: CPF diferente com o MESMO nome é o OCR trocando um
     dígito ou o BRNET com CPF errado, não outra pessoa.
 
+Abaixo desse aviso há um mais fraco, só pelo nome (`pessoas_no_documento`):
+o rótulo de paciente com nome claramente diferente, sem CPF de terceiro por
+perto, e que passa pelos cortes de `_nome_de_outra_pessoa` (grafia, profissional,
+coletor, OCR inventando, empresa, vocabulário de nomes). Pega laudo de outro
+colaborador que não traz CPF; a tela o mostra como "Nome diferente no laudo",
+para o revisor saber que é aviso de outra natureza.
+
 É só um alerta. Não muda status, faltantes nem validation_status: o chamador
 grava as ocorrências no payload para a tela do revisor. Não chama API e não
 envia dado a ninguém; roda sobre o markdown local.
@@ -38,9 +45,10 @@ from __future__ import annotations
 import os
 import re
 import unicodedata
-from typing import Callable, Iterable, Optional
+from difflib import SequenceMatcher
+from typing import Callable, Collection, Iterable, Optional
 
-from app.core.pii import mask_cpf
+from app.core.pii import mask_cpf, mask_name
 from app.services.ocr_service import _digits_only, _is_valid_cpf
 from app.services.patient_name_extractor import _clean_candidate
 
@@ -82,6 +90,26 @@ ALCANCE_EXAME = 10
 # O ASO identifica o paciente logo abaixo do título, e o exame dele é o clínico.
 _CLINICO = re.compile(r"\bCLINICO\b")
 _TITULO_ASO = "ATESTADO DE SAUDE OCUPACIONAL"
+
+# Força do aviso: nome e CPF de outra pessoa, ou só o nome (ver `pessoas_no_documento`).
+NOME_E_CPF = "nome_e_cpf"
+SO_NOME = "so_nome"
+
+# Cortes do aviso só pelo nome (ver `_nome_de_outra_pessoa`).
+# Abaixo disso o nome não "soa" como o do paciente: o OCR estraga o nome escrito
+# à mão do próprio paciente e deixa a grafia parecida (0,5 a 0,9); o de outra
+# pessoa fica perto de 0,3.
+LIMIAR_SEMELHANCA = 0.45
+# Fração mínima das palavras do nome que precisa estar no vocabulário de nomes.
+FRACAO_NOMES_CONHECIDOS = 0.5
+# Conselho ou assinatura logo abaixo do nome: é o profissional que assina.
+_CONSELHO = re.compile(r"(?i)\b(?:CRM|CRO|CRFA|CRF|CRP|COREN|CRBM|CREFITO|CRN|RQE|CRMV)\b|ASSINAD[OA]")
+# Formulário de cadeia de custódia do toxicológico: o "Nome:" é do coletor.
+_COLETA_TOXICOLOGICO = re.compile(r"(?i)SUPERVISOR DA COLETA|\bCOLLECTION\b|CUST[ÓO]DIA|CUSTODY")
+_EMPRESA = re.compile(
+    r"(?i)\b(?:LTDA|S\.?A\.?|EIRELI|ME|EPP|MED|SERVI[CÇ]OS|MARITIMA|NAVIO|EMPRESA|CL[IÍ]NICA|HOSPITAL|"
+    r"LABORAT[OÓ]RIO)\b|[()/]"
+)
 
 _PARTICULAS = {"DA", "DE", "DO", "DAS", "DOS", "E", "DI", "DU"}
 
@@ -171,6 +199,13 @@ def chave(cpf: str) -> str:
     return f"outra_pessoa:{mask_cpf(cpf)}"
 
 
+def chave_da_pessoa(pessoa: dict) -> str:
+    """A chave de `chave`, ou, para quem só tem o nome, o nome mascarado."""
+    if pessoa.get("cpf"):
+        return chave(pessoa["cpf"])
+    return f"nome_diferente:{mask_name(' '.join(_tokens(pessoa['nome'])))}"
+
+
 def outra_pessoa(
     linhas: Iterable[str],
     cpf_paciente: Optional[str],
@@ -221,7 +256,7 @@ def outra_pessoa(
                     break
             if not nome or len(_tokens(nome)) < 2 or mesma_pessoa(nome, nome_paciente):
                 continue
-            pessoa = pessoas.setdefault(cpf, {"nome": nome, "cpf": cpf, "linhas": []})
+            pessoa = pessoas.setdefault(cpf, {"nome": nome, "cpf": cpf, "tipo": NOME_E_CPF, "linhas": []})
             for indice in (i, linha_nome):
                 if indice not in pessoa["linhas"]:
                     pessoa["linhas"].append(indice)
@@ -230,11 +265,122 @@ def outra_pessoa(
     return list(pessoas.values())
 
 
+def _palavras(nome: str) -> list[str]:
+    return [w for w in re.findall(r"[^\W\d_]+", nome) if w.upper() not in _PARTICULAS]
+
+
+def _semelhanca(nome_a: str, nome_b: str) -> float:
+    return SequenceMatcher(None, " ".join(_tokens(nome_a)), " ".join(_tokens(nome_b))).ratio()
+
+
+def _conselho_abaixo(linhas: list[str], i: int, quantas: int = 2) -> bool:
+    vistas = 0
+    for j in range(i + 1, len(linhas)):
+        if linhas[j].strip():
+            if _CONSELHO.search(linhas[j]):
+                return True
+            vistas += 1
+            if vistas >= quantas:
+                return False
+    return False
+
+
+def _nome_de_outra_pessoa(
+    nome: str,
+    linhas: list[str],
+    i: int,
+    nome_paciente: str,
+    nomes_conhecidos: Collection[str],
+) -> bool:
+    """
+    Os cortes do aviso só pelo nome, na ordem em que foram medidos. Cada um tira
+    um tipo de ruído achado na classificação à mão dos avisos (replay de 23/10):
+
+    1. grafia parecida com a do paciente — o próprio paciente, nome estragado
+       pelo OCR ("Marla Fictiua da Sirva" por MARIA FICTICIA DA SILVA);
+    2. conselho ou assinatura nas 2 linhas de baixo — profissional;
+    3. formulário de custódia do toxicológico por perto — coletor;
+    4. palavra começando em minúscula — OCR inventando ("mavia fictiua silra");
+    5. última palavra com até 2 letras — nome cortado ("FICTICIA DA SI");
+    6. empresa no lugar do nome;
+    7. menos da metade das palavras no vocabulário de nomes — OCR inventando
+       com maiúsculas ("Quelgo Varnip").
+
+    Com os cortes, o aviso só pelo nome sai em 15 documentos do replay, todos
+    de outra pessoa de fato (conferidos um a um), contra 542 sem eles. Os
+    limiares foram ajustados nessa mesma base: em documento novo, espere um
+    pouco menos.
+    """
+    palavras = _palavras(nome)
+    tokens = _tokens(nome)
+    if not palavras or not tokens:
+        return False
+    if _semelhanca(nome, nome_paciente) >= LIMIAR_SEMELHANCA:
+        return False
+    if _conselho_abaixo(linhas, i):
+        return False
+    if any(_COLETA_TOXICOLOGICO.search(linhas[j]) for j in range(max(0, i - 4), min(len(linhas), i + 5))):
+        return False
+    if any(p[0].islower() for p in palavras) or len(palavras[-1]) <= 2:
+        return False
+    if _EMPRESA.search(nome):
+        return False
+    return sum(t in nomes_conhecidos for t in tokens) / len(tokens) >= FRACAO_NOMES_CONHECIDOS
+
+
+def pessoas_no_documento(
+    linhas: Iterable[str],
+    cpf_paciente: Optional[str],
+    nome_paciente: Optional[str],
+    paginas: Optional[list[Optional[int]]] = None,
+    nomes_conhecidos: Optional[Collection[str]] = None,
+) -> list[dict]:
+    """
+    As pessoas de `outra_pessoa` (nome e CPF, `tipo` "nome_e_cpf") e, depois
+    delas, as que só têm o nome (`tipo` "so_nome", `cpf` None): um rótulo de
+    paciente com nome claramente diferente do paciente do pedido, sem CPF de
+    terceiro por perto.
+
+    O aviso só pelo nome é mais fraco, e a tela o mostra como tal. Sem cortes ele
+    era quase todo ruído: no replay de 23/10 avisava em 413 dos 4.219 aprovados,
+    e numa amostra de 60 só 2 eram outra pessoa — o resto era o próprio paciente
+    com o nome manuscrito estragado pelo OCR, profissional e coletor. Os cortes
+    de `_nome_de_outra_pessoa` precisam de `nomes_conhecidos`; sem vocabulário
+    (banco fora), o aviso só pelo nome não sai.
+
+    O nome que é o de uma pessoa já achada com CPF (o mesmo colaborador num
+    laudo sem CPF) entra nas linhas dela, e não como outra pessoa.
+    """
+    linhas = list(linhas)
+    pessoas = outra_pessoa(linhas, cpf_paciente, nome_paciente, paginas)
+    if not _tokens(nome_paciente):
+        return pessoas
+    usadas = {i for pessoa in pessoas for i in pessoa["linhas"]}
+    so_nome: list[dict] = []
+    for i, linha in enumerate(linhas):
+        if i in usadas:
+            continue
+        nome = _nome_rotulado(linha)
+        if not nome or len(_tokens(nome)) < 2 or mesma_pessoa(nome, nome_paciente):
+            continue
+        # A mesma pessoa lida de novo, inclusive com outro erro de OCR.
+        pessoa = next((p for p in pessoas + so_nome if mesma_pessoa(nome, p["nome"])), None)
+        if pessoa is None:
+            if not nomes_conhecidos or not _nome_de_outra_pessoa(nome, linhas, i, nome_paciente, nomes_conhecidos):
+                continue
+            pessoa = {"nome": nome, "cpf": None, "tipo": SO_NOME, "linhas": []}
+            so_nome.append(pessoa)
+        pessoa["linhas"].append(i)
+    for pessoa in pessoas:
+        pessoa["linhas"].sort()
+    return pessoas + so_nome
+
+
 def trecho(pessoa: dict, texto: str) -> Optional[tuple[int, int]]:
     """Onde, na linha, está o que identifica a pessoa: o CPF dela, ou o nome
     depois do rótulo. None quando não dá para apontar — a tela destaca a linha."""
     for m in _CPF.finditer(texto):
-        if _digits_only(m.group(0)) == pessoa["cpf"]:
+        if pessoa.get("cpf") and _digits_only(m.group(0)) == pessoa["cpf"]:
             return m.span()
     m = _ROTULO_NOME.match(texto)
     return m.span("valor") if m else None
@@ -300,7 +446,7 @@ def anotar_comparativo(
 ) -> None:
     """
     Grava a outra pessoa no exame cujo laudo ela identifica: o item da tabela
-    ganha `outra_pessoa` ([{chave, nome, cpf mascarado, pagina}]) e a pessoa,
+    ganha `outra_pessoa` ([{chave, nome, cpf mascarado ou None, pagina, tipo}]) e a pessoa,
     `exames`. Pessoa sem exame da tabela por perto (título que o catálogo não
     conhece, laudo de exame fora da grade) fica com `exames` vazio, e a tela a
     mostra à parte. Não mexe em status nem justificativa.
@@ -330,10 +476,11 @@ def anotar_comparativo(
                 continue
             pessoa["exames"].append(exame)
             por_exame.setdefault(exame, []).append({
-                "chave": chave(pessoa["cpf"]),
+                "chave": chave_da_pessoa(pessoa),
                 "nome": pessoa["nome"],
-                "cpf": mask_cpf(pessoa["cpf"]),
+                "cpf": mask_cpf(pessoa["cpf"]) if pessoa.get("cpf") else None,
                 "pagina": paginas[bloco[0]],
+                "tipo": pessoa.get("tipo", NOME_E_CPF),
             })
     for item in comparativo:
         if isinstance(item, dict) and item.get("exame") in por_exame:
@@ -348,9 +495,10 @@ def para_payload(pessoas: list[dict], linhas: list[str]) -> list[dict]:
     paginas = _paginas(linhas)
     return [
         {
-            "chave": chave(p["cpf"]),
+            "chave": chave_da_pessoa(p),
             "nome": p["nome"],
-            "cpf": mask_cpf(p["cpf"]),
+            "cpf": mask_cpf(p["cpf"]) if p.get("cpf") else None,
+            "tipo": p.get("tipo", NOME_E_CPF),
             "pagina": paginas[p["linhas"][0]],
             "linhas": [linhas[i].strip() for i in p["linhas"]],
             "exames": p.get("exames", []),

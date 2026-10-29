@@ -73,10 +73,16 @@ export type PessoaNoLaudo = {
   chave: string
   /** Como o OCR leu o nome. */
   nome: string
-  /** Mascarado: ***.***.***-35. */
-  cpf: string
+  /** Mascarado: ***.***.***-35. Null no aviso só pelo nome. */
+  cpf: string | null
   /** Página da primeira ocorrência; null em documento sem marcador de página. */
   pagina: number | null
+  /**
+   * "nome_e_cpf": nome e CPF de outra pessoa no laudo. "so_nome": só o nome é
+   * diferente, sem CPF para confirmar — aviso mais fraco (pode ser nome mal lido
+   * pelo OCR).
+   */
+  tipo?: "nome_e_cpf" | "so_nome"
 }
 
 export type OutraPessoa = PessoaNoLaudo & {
