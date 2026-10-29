@@ -86,7 +86,7 @@ export type PessoaNoLaudo = {
 }
 
 export type OutraPessoa = PessoaNoLaudo & {
-  /** Linhas de origem no texto do OCR. */
+  /** Linhas de origem no texto do OCR, com o CPF mascarado. */
   linhas: string[]
   /** Exames da tabela em cujo laudo a pessoa aparece; vazio quando nenhum. */
   exames?: string[]

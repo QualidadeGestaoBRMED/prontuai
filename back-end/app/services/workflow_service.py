@@ -1417,7 +1417,12 @@ async def _processar_documento_completo_impl(
             outras_pessoas = identidade_laudo.pessoas_no_documento(
                 linhas_texto, cpf_final, patient_name, nomes_conhecidos=nomes_conhecidos.vocabulario()
             )
-            if outras_pessoas:
+        except Exception as e:
+            # Alerta é informativo: falha aqui não pode derrubar a validação.
+            logger.warning(f"[WORKFLOW] Checagem de outra pessoa falhou: {type(e).__name__}")
+            outras_pessoas = []
+        if outras_pessoas:
+            try:
                 identidade_laudo.anotar_comparativo(
                     resultado_validacao.get("exames_comparativo") or [],
                     outras_pessoas,
@@ -1425,11 +1430,14 @@ async def _processar_documento_completo_impl(
                     _normalizar_busca,
                     obter_sinonimos,
                 )
-        except Exception as e:
-            # Alerta é informativo: falha aqui não pode derrubar a validação.
-            logger.warning(f"[WORKFLOW] Checagem de outra pessoa falhou: {type(e).__name__}")
-            outras_pessoas = []
-        if outras_pessoas:
+            except Exception as e:
+                # Sem a ligação ao exame o aviso continua, na Checklist de Campos.
+                logger.warning(f"[WORKFLOW] Ligação do aviso de outra pessoa ao exame falhou: {type(e).__name__}")
+                for pessoa in outras_pessoas:
+                    pessoa["exames"] = []
+                for item in resultado_validacao.get("exames_comparativo") or []:
+                    if isinstance(item, dict):
+                        item.pop("outra_pessoa", None)
             analysis_details["outra_pessoa"] = identidade_laudo.para_payload(outras_pessoas, linhas_texto)
             # Só a contagem: nome e CPF de terceiro não vão para o log.
             _log_event(

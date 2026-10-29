@@ -381,16 +381,29 @@ def _sem_cabecalho(texto: str) -> str:
     return re.sub(r"^#+\s*", "", texto.strip())
 
 
+def mascarar_cpfs(texto: str) -> str:
+    """O texto com todo CPF válido trocado pela máscara de `mask_cpf`
+    (***.***.***-35). É assim que a linha de origem vai ao payload: o CPF de
+    terceiro não fica gravado inteiro em `analysis_details` nem chega à tela."""
+    def trocar(m: re.Match) -> str:
+        digitos = _digits_only(m.group(0))
+        return mask_cpf(digitos) if _is_valid_cpf(digitos) else m.group(0)
+
+    return _CPF.sub(trocar, texto)
+
+
 def linhas_salvas(pessoa: dict, textos: list[str]) -> list[int]:
     """
     Índices, em `textos`, das linhas de origem de uma pessoa gravada no payload
     (`para_payload`). A rota de localização usa isto em vez de detectar as
     pessoas de novo sobre as linhas do layout: a chave e as pessoas são as que a
     análise gravou, mesmo que um limiar ou o vocabulário de nomes mude depois.
-    O layout guarda o texto da linha sem o "## " de cabeçalho; o payload, com.
+    O layout guarda o texto da linha sem o "## " de cabeçalho; o payload, com, e
+    com o CPF mascarado — por isso a comparação é entre as duas versões
+    mascaradas (o que também casa payload antigo, gravado sem máscara).
     """
-    alvo = {_sem_cabecalho(t) for t in pessoa.get("linhas") or []}
-    return [i for i, texto in enumerate(textos) if _sem_cabecalho(texto) in alvo]
+    alvo = {mascarar_cpfs(_sem_cabecalho(t)) for t in pessoa.get("linhas") or []}
+    return [i for i, texto in enumerate(textos) if mascarar_cpfs(_sem_cabecalho(texto)) in alvo]
 
 
 def trecho_salvo(pessoa: dict, texto: str) -> Optional[tuple[int, int]]:
@@ -517,10 +530,11 @@ def anotar_comparativo(
 
 
 def para_payload(pessoas: list[dict], linhas: list[str]) -> list[dict]:
-    """O que vai ao `analysis_details` para a tela: o nome como o OCR leu, o CPF
-    mascarado (o revisor confere no PDF; o payload não precisa de mais uma cópia
-    do número inteiro), a página, as linhas de origem e os exames em que a tela
-    mostra o aviso (ver `anotar_comparativo`)."""
+    """O que vai ao `analysis_details` para a tela: o nome como o OCR leu (o
+    revisor precisa saber de quem é o laudo; o nome já está no PDF), o CPF
+    mascarado — também dentro das linhas de origem (`mascarar_cpfs`): o payload
+    não guarda o número inteiro do terceiro em lugar nenhum —, a página e os
+    exames em que a tela mostra o aviso (ver `anotar_comparativo`)."""
     paginas = _paginas(linhas)
     return [
         {
@@ -529,7 +543,7 @@ def para_payload(pessoas: list[dict], linhas: list[str]) -> list[dict]:
             "cpf": mask_cpf(p["cpf"]) if p.get("cpf") else None,
             "tipo": p.get("tipo", NOME_E_CPF),
             "pagina": paginas[p["linhas"][0]],
-            "linhas": [linhas[i].strip() for i in p["linhas"]],
+            "linhas": [mascarar_cpfs(linhas[i].strip()) for i in p["linhas"]],
             "exames": p.get("exames", []),
         }
         for p in pessoas

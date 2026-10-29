@@ -153,9 +153,16 @@ def test_payload_guarda_o_cpf_mascarado_e_a_pagina():
         "cpf": "***.***.***-35",
         "tipo": il.NOME_E_CPF,
         "pagina": 2,
-        "linhas": ["## Nome: JOAO FICTICIO SOUZA", f"## CPF: {CPF_OUTRO}"],
+        "linhas": ["## Nome: JOAO FICTICIO SOUZA", "## CPF: ***.***.***-35"],
         "exames": [],
     }]
+
+
+def test_payload_nao_guarda_o_cpf_inteiro_do_terceiro_em_lugar_nenhum():
+    import json
+    markdown = ASO_DA_PACIENTE + f"<!-- pagina 2 -->\nPaciente: JOAO FICTICIO SOUZA CPF: {CPF_OUTRO}\n"
+    payload = json.dumps(il.para_payload(_achar(markdown), markdown.splitlines()))
+    assert "11144477735" not in payload and "111.444.777" not in payload
 
 
 def test_checklist_com_cpf_do_pedido_so_conta_o_cpf_do_paciente():
