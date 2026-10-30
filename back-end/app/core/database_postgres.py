@@ -1811,40 +1811,45 @@ class PostgresUserDatabase:
         clinic_id: Optional[str],
         desde: datetime,
         antes_de: Optional[datetime] = None,
+        incluir_em_revisao: bool = False,
     ) -> Optional[dict]:
         """
-        Documento já liberado de que o novo envio é reenvio, ou None.
+        Documento já liberado — ou, com `incluir_em_revisao`, ainda em revisão —
+        de que o novo envio é reenvio, ou None.
 
         Três critérios, nesta ordem (ver app/services/reenvio_service.py):
-          1. mesmo arquivo (`content_hash`) de um liberado, de qualquer clínica;
-          2. mesmo pedido do BRNET de um liberado da mesma clínica;
-          3. sem pedido: liberado do mesmo CPF e da mesma empresa (CNPJ lido do
-             ASO), da mesma clínica, a partir de `desde`. Com pedido, o critério
-             3 não vale: o BRNET achou um pedido em aberto, e é outro atendimento.
-
+          1. mesmo arquivo (`content_hash`), de qualquer clínica;
+          2. mesmo pedido do BRNET, da mesma clínica;
+          3. sem pedido: mesmo CPF e mesma empresa (CNPJ lido do ASO), da mesma
+             clínica, a partir de `desde`. Com pedido, o critério 3 não vale: o
+             BRNET achou um pedido em aberto, e é outro atendimento.
         "Mesma clínica" é o mesmo cadastro ou o mesmo credenciado do BRNET — há
         credenciado cadastrado duas vezes. Outra clínica com o mesmo pedido ou o
         mesmo CPF + empresa é outro credenciado da expedição (laboratório,
         imagem) ou outra unidade, e segue para a Checagem.
 
         "Liberado" é aprovado PELO REVISOR (`validated` com `reviewed_by`) — é o
-        que a clínica vê como "Aprovado". Aprovado só pela IA ela vê como
-        "Aguardando Revisão", e o reenvio dele segue para a Checagem como antes
-        (decisão de out/2026; fica para o complemento com histórico). A data da
-        liberação é a da revisão.
+        que a clínica vê como "Aprovado". A data é a da revisão.
+        "Em revisão" é o que ainda não passou pelo revisor (`reviewed_by` vazio):
+        pendente, aprovado ou rejeitado só pela IA, todos na fila da Checagem.
+        Os três critérios valem igual; o liberado tem precedência. A data é a
+        do envio. Medido na cópia de produção de 23/10/2026: 160 envios
+        repetidos chegaram ANTES da revisão do primeiro (contra 63 depois da
+        liberação), e em 104 o revisor revisou os dois.
 
-        Devolve também os exames lidos e os faltantes de TODOS os liberados que
+        Devolve também os exames lidos e os faltantes de TODOS os documentos que
         casaram — uma expedição pode ter vários prontuários, e o serviço usa
         isso para separar complemento de reenvio.
-
         `antes_de` só serve para reconstruir o histórico (cada envio enxerga o
-        que estava liberado até ele); no envio de verdade tudo é anterior.
+        que estava liberado, ou em revisão, até ele); no envio de verdade tudo é
+        anterior.
         """
         session = self._get_session()
         try:
             colunas = (
                 DocumentModel.id,
                 DocumentModel.reviewed_at,
+                DocumentModel.uploaded_at,
                 DocumentModel.exams_ocr,
                 DocumentModel.result_payload_compact,
             )
@@ -1859,6 +1864,18 @@ class PostgresUserDatabase:
             )
             if antes_de:
                 liberados = liberados.filter(DocumentModel.reviewed_at < antes_de)
+            em_revisao = (
+                session.query(*colunas)
+                .filter(DocumentModel.validation_status.in_(("pending", "validated", "rejected")))
+                .order_by(DocumentModel.uploaded_at.desc())
+            )
+            if antes_de:
+                em_revisao = em_revisao.filter(
+                    DocumentModel.uploaded_at < antes_de,
+                    or_(DocumentModel.reviewed_at.is_(None), DocumentModel.reviewed_at >= antes_de),
+                )
+            else:
+                em_revisao = em_revisao.filter(DocumentModel.reviewed_by.is_(None))
 
             def compacto(linha) -> dict:
                 try:
@@ -1867,7 +1884,12 @@ class PostgresUserDatabase:
                     return {}
                 return dados if isinstance(dados, dict) else {}
 
-            def achado(linhas: list, criterio: str) -> dict:
+            def utc(momento: Optional[datetime]) -> Optional[str]:
+                # Gravado em UTC sem fuso: o fuso vai explícito para o navegador
+                # não ler como hora local e trocar o dia perto da meia-noite.
+                return momento.replace(tzinfo=timezone.utc).isoformat() if momento else None
+
+            def achado(linhas: list, criterio: str, situacao: str) -> dict:
                 exames, faltantes = [], []
                 for linha in linhas:
                     exames.extend(linha.exams_ocr or [])
@@ -1876,35 +1898,40 @@ class PostgresUserDatabase:
                         faltantes.extend(validacao.get("exames_faltantes") or [])
                 return {
                     "documento_id": linhas[0].id,
-                    # Gravado em UTC sem fuso: o fuso vai explícito para o navegador
-                    # não ler como hora local e trocar o dia perto da meia-noite.
-                    "liberado_em": linhas[0].reviewed_at.replace(tzinfo=timezone.utc).isoformat(),
+                    "liberado_em": utc(linhas[0].reviewed_at) if situacao == "liberado" else None,
+                    "enviado_em": utc(linhas[0].uploaded_at),
                     "criterio": criterio,
+                    "situacao": situacao,
                     "exames": exames,
                     "faltantes": faltantes,
                 }
 
-            if content_hash:
-                linha = liberados.filter(DocumentModel.content_hash == content_hash).first()
-                if linha:
-                    return achado([linha], "arquivo")
-
-            clinicas = self._clinicas_equivalentes(session, clinic_id)
-            if not clinicas:
+            def casar(consulta, situacao: str) -> Optional[dict]:
+                if content_hash:
+                    linha = consulta.filter(DocumentModel.content_hash == content_hash).first()
+                    if linha:
+                        return achado([linha], "arquivo", situacao)
+                clinicas = self._clinicas_equivalentes(session, clinic_id)
+                if not clinicas:
+                    return None
+                da_clinica = consulta.filter(DocumentModel.clinic_id.in_(clinicas))
+                if pedido_exame_id:
+                    linhas = da_clinica.filter(DocumentModel.pedido_exame_id == pedido_exame_id).all()
+                    return achado(linhas, "pedido", situacao) if linhas else None
+                if cpf and cnpj_empresa:
+                    linhas = [
+                        linha
+                        for linha in da_clinica.filter(DocumentModel.cpf == cpf, DocumentModel.uploaded_at >= desde)
+                        if re.sub(r"\D", "", str(compacto(linha).get("cnpj_processado") or "")) == cnpj_empresa
+                    ]
+                    if linhas:
+                        return achado(linhas, "cpf_empresa", situacao)
                 return None
-            da_clinica = liberados.filter(DocumentModel.clinic_id.in_(clinicas))
-            if pedido_exame_id:
-                linhas = da_clinica.filter(DocumentModel.pedido_exame_id == pedido_exame_id).all()
-                return achado(linhas, "pedido") if linhas else None
-            if cpf and cnpj_empresa:
-                linhas = [
-                    linha
-                    for linha in da_clinica.filter(DocumentModel.cpf == cpf, DocumentModel.uploaded_at >= desde)
-                    if re.sub(r"\D", "", str(compacto(linha).get("cnpj_processado") or "")) == cnpj_empresa
-                ]
-                if linhas:
-                    return achado(linhas, "cpf_empresa")
-            return None
+
+            encontrado = casar(liberados, "liberado")
+            if encontrado is None and incluir_em_revisao:
+                encontrado = casar(em_revisao, "em_revisao")
+            return encontrado
         finally:
             session.close()
 
@@ -1967,6 +1994,199 @@ class PostgresUserDatabase:
         except Exception:
             session.rollback()
             raise
+        finally:
+            session.close()
+
+    def devolver_reenvios_em_revisao(self, document_id: str, *, por: str) -> list[str]:
+        """
+        Devolve à Checagem os envios repetidos que esperavam a revisão deste
+        documento (reenvio "em_revisao" dele), quando o revisor o rejeita: o
+        repetido pode ser a versão corrigida, e ficaria parado atrás de uma
+        rejeição. Cada um volta como no "É um complemento" (`desfazer_reenvio`).
+        Devolve os ids devolvidos.
+        """
+        session = self._get_session()
+        try:
+            ids = [
+                linha.id
+                for linha in session.query(DocumentModel.id, DocumentModel.result_payload_compact).filter(
+                    DocumentModel.reenvio_de == document_id,
+                    DocumentModel.validation_status == "reenvio",
+                )
+                if re.search(r'"situacao":\s*"em_revisao"', linha.result_payload_compact or "")
+            ]
+        finally:
+            session.close()
+        return [doc_id for doc_id in ids if self.desfazer_reenvio(doc_id, por=por)]
+
+    def envios_por_hash(self, hashes: list[str], clinic_id: Optional[str] = None) -> dict[str, dict]:
+        """
+        Para cada hash de PDF, o envio mais recente com esse mesmo arquivo:
+        quando foi, a situação ("liberado", "rejeitado", "em_revisao" ou
+        "reenvio") e o nome do arquivo. É o aviso da tela de envio, antes de
+        mandar: "Foi identificado o envio deste prontuário em DD/MM".
+
+        Com `clinic_id` (a clínica que está enviando), só os envios dela e do
+        mesmo credenciado do BRNET — a clínica não fica sabendo do envio de
+        outra. Sem, todos.
+        """
+        hashes = [h for h in dict.fromkeys(hashes) if h]
+        if not hashes:
+            return {}
+        session = self._get_session()
+        try:
+            consulta = session.query(
+                DocumentModel.id,
+                DocumentModel.content_hash,
+                DocumentModel.uploaded_at,
+                DocumentModel.validation_status,
+                DocumentModel.reviewed_by,
+                DocumentModel.filename,
+            ).filter(DocumentModel.content_hash.in_(hashes), DocumentModel.archived_at.is_(None))
+            if clinic_id is not None:
+                clinicas = self._clinicas_equivalentes(session, clinic_id)
+                if not clinicas:
+                    return {}
+                consulta = consulta.filter(DocumentModel.clinic_id.in_(clinicas))
+            achados: dict[str, dict] = {}
+            for linha in consulta.order_by(DocumentModel.uploaded_at.desc()):
+                if linha.content_hash in achados:
+                    continue
+                if linha.validation_status == "reenvio":
+                    situacao = "reenvio"
+                elif not linha.reviewed_by:
+                    situacao = "em_revisao"
+                else:
+                    situacao = "liberado" if linha.validation_status == "validated" else "rejeitado"
+                achados[linha.content_hash] = {
+                    "documento_id": linha.id,
+                    "enviado_em": linha.uploaded_at.replace(tzinfo=timezone.utc).isoformat() if linha.uploaded_at else None,
+                    "situacao": situacao,
+                    "filename": linha.filename,
+                }
+            return achados
+        finally:
+            session.close()
+
+    def reenvios_por_clinica(self, desde: datetime) -> list[dict]:
+        """
+        Clínicas com reenvio desde `desde`, da que mais reenvia para a que menos:
+        quantos envios no período, quantos foram reenvio (de liberado ou de
+        prontuário ainda em revisão), quantos a clínica ou o revisor devolveram
+        como complemento, e a data do último reenvio. Para a operação orientar
+        a clínica: o reenvio some da Checagem, e sem isto ninguém o veria.
+        """
+        consulta = text(
+            """
+            SELECT d.clinic_id, c.name,
+                   count(*) AS envios,
+                   count(*) FILTER (WHERE d.validation_status = 'reenvio') AS reenvios,
+                   count(*) FILTER (WHERE d.validation_status = 'reenvio'
+                                    AND d.result_payload_compact ~ '"situacao":\\s*"em_revisao"') AS em_revisao,
+                   count(*) FILTER (WHERE d.result_payload_compact LIKE '%"reenvio_desfeito"%') AS complementos,
+                   max(d.uploaded_at) FILTER (WHERE d.validation_status = 'reenvio') AS ultimo
+            FROM documents d
+            LEFT JOIN clinics c ON c.id = d.clinic_id
+            WHERE d.uploaded_at >= :desde AND d.archived_at IS NULL
+            GROUP BY d.clinic_id, c.name
+            HAVING count(*) FILTER (WHERE d.validation_status = 'reenvio'
+                                    OR d.result_payload_compact LIKE '%"reenvio_desfeito"%') > 0
+            ORDER BY reenvios DESC, envios DESC
+            """
+        )
+        with self.engine.connect() as conexao:
+            linhas = conexao.execute(consulta, {"desde": desde}).fetchall()
+        return [
+            {
+                "clinic_id": linha.clinic_id,
+                "clinica": linha.name,
+                "envios": linha.envios,
+                "reenvios": linha.reenvios,
+                "em_revisao": linha.em_revisao,
+                "complementos": linha.complementos,
+                "ultimo": linha.ultimo.replace(tzinfo=timezone.utc).isoformat() if linha.ultimo else None,
+            }
+            for linha in linhas
+        ]
+
+    def envios_relacionados(self, document_id: str, limite: int = 20) -> list[dict]:
+        """
+        Os outros envios do mesmo colaborador, para o histórico do documento: o
+        original de que ele é reenvio, os reenvios dele, os devolvidos como
+        complemento e os outros envios do mesmo pedido do BRNET ou do mesmo CPF
+        na mesma clínica (ou credenciado). Do mais novo para o mais antigo; o
+        próprio documento entra marcado como "este". Vazio se ele não existe.
+        """
+        session = self._get_session()
+        try:
+            doc = session.query(DocumentModel).filter(DocumentModel.id == document_id).first()
+            if not doc:
+                return []
+            clinicas = self._clinicas_equivalentes(session, doc.clinic_id)
+            # O original: o `reenvio_de`, ou, se o reenvio já voltou para a
+            # revisão (o que apaga a coluna), o que o payload guardou dele.
+            original = doc.reenvio_de
+            if not original:
+                try:
+                    desfeito = json.loads(doc.result_payload_compact or "{}").get("reenvio_desfeito")
+                except (TypeError, ValueError, AttributeError):
+                    desfeito = None
+                original = desfeito.get("documento_id") if isinstance(desfeito, dict) else None
+            ligados = {doc.id}
+            if original:
+                ligados.add(original)
+            condicoes = [DocumentModel.id.in_(ligados), DocumentModel.reenvio_de.in_(ligados)]
+            # Devolvido como complemento: perdeu o `reenvio_de`, mas o payload
+            # guarda de quem era reenvio (`reenvio_desfeito.documento_id`).
+            for alvo in ligados:
+                condicoes.append(DocumentModel.result_payload_compact.like(f'%"reenvio_desfeito"%"{alvo}"%'))
+            cpf = re.sub(r"\D", "", doc.cpf or "")
+            if clinicas and doc.pedido_exame_id:
+                condicoes.append(and_(DocumentModel.clinic_id.in_(clinicas), DocumentModel.pedido_exame_id == doc.pedido_exame_id))
+            if clinicas and len(cpf) == 11:
+                condicoes.append(and_(DocumentModel.clinic_id.in_(clinicas), DocumentModel.cpf == cpf))
+            linhas = (
+                session.query(
+                    DocumentModel.id,
+                    DocumentModel.filename,
+                    DocumentModel.uploaded_at,
+                    DocumentModel.validation_status,
+                    DocumentModel.reviewed_by,
+                    DocumentModel.reviewed_at,
+                    DocumentModel.reenvio_de,
+                    DocumentModel.clinic_id,
+                    DocumentModel.result_payload_compact,
+                )
+                .filter(or_(*condicoes), DocumentModel.archived_at.is_(None))
+                .order_by(DocumentModel.uploaded_at.desc())
+                .limit(limite)
+                .all()
+            )
+
+            def papel(linha) -> str:
+                if linha.id == doc.id:
+                    return "este"
+                if linha.id == original:
+                    return "original"
+                if linha.validation_status == "reenvio":
+                    return "reenvio"
+                if '"reenvio_desfeito"' in (linha.result_payload_compact or ""):
+                    return "complemento"
+                return "outro_envio"
+
+            return [
+                {
+                    "documento_id": linha.id,
+                    "filename": linha.filename,
+                    "enviado_em": linha.uploaded_at.replace(tzinfo=timezone.utc).isoformat() if linha.uploaded_at else None,
+                    "validation_status": linha.validation_status,
+                    "revisado": bool(linha.reviewed_by),
+                    "revisado_em": linha.reviewed_at.replace(tzinfo=timezone.utc).isoformat() if linha.reviewed_at else None,
+                    "clinic_id": linha.clinic_id,
+                    "papel": papel(linha),
+                }
+                for linha in linhas
+            ]
         finally:
             session.close()
 
