@@ -3,16 +3,36 @@
 export type ProcessStatus = 'processing' | 'completed' | 'error'
 export type ProcessStep = 'upload' | 'ocr' | 'brmed' | 'validation' | 'completed'
 export type DocumentStatus = 'pending' | 'processing' | 'completed' | 'error'
-// 'resubmission': reenvio de um prontuário já liberado (validation_status
-// 'reenvio' no back-end, migration 015). Não vai para a Checagem; a clínica vê
-// a data em que o original foi liberado.
+// 'resubmission': reenvio de um prontuário já liberado ou ainda em revisão
+// (validation_status 'reenvio' no back-end, migration 015). Não vai para a
+// Checagem; a clínica vê a data em que o original foi liberado ou enviado.
 export type ResultStatus = 'approved' | 'rejected' | 'pending_review' | 'resubmission'
 
-/** O liberado original de um reenvio, como o back-end grava em `result_payload.reenvio`. */
+/** O original de um reenvio, como o back-end grava em `result_payload.reenvio`. */
 export type ReenvioLiberado = {
   documento_id: string
-  liberado_em: string
+  /** Data da liberação; null quando o original ainda está em revisão. */
+  liberado_em: string | null
+  /** Data do envio do original. Reenvio gravado antes de out/2026 não traz. */
+  enviado_em?: string | null
   criterio: 'arquivo' | 'pedido' | 'cpf_empresa'
+  /** "em_revisao": o original ainda espera o revisor. Ausente = "liberado". */
+  situacao?: 'liberado' | 'em_revisao'
+}
+
+/** Reenvio devolvido à Checagem (`result_payload.reenvio_desfeito`): pelo botão
+ * "É um complemento", ou sozinho, quando o revisor rejeitou o original. */
+export type ReenvioDesfeito = ReenvioLiberado & { por: string; em: string }
+
+/** Um envio do mesmo colaborador (`GET /documents/{id}/envios`). */
+export type EnvioDoColaborador = {
+  documento_id: string
+  filename: string
+  enviado_em: string | null
+  validation_status: string
+  revisado: boolean
+  revisado_em: string | null
+  papel: 'este' | 'original' | 'reenvio' | 'complemento' | 'outro_envio'
 }
 export type TabelaComparacaoItem = {
   exame: string
@@ -158,6 +178,7 @@ export interface ProcessResult {
 // Estrutura de resposta do backend (da API existente)
 export interface DocumentProcessingResult {
   reenvio?: ReenvioLiberado | null
+  reenvio_desfeito?: ReenvioDesfeito | null
   cpf: string
   cpf_processado?: string
   passaporte_processado?: string | null

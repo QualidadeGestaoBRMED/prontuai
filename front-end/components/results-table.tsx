@@ -26,7 +26,7 @@ import { Download, Eye, Search, FileDown } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { ClinicFilter } from "@/components/clinic-filter"
 import type { ClinicOption } from "@/hooks/use-clinic-options"
-import { CLASSE_TAG_REENVIO, mensagemReenvio } from "@/lib/reenvio"
+import { CLASSE_TAG_REENVIO, mensagemReenvio, rotuloReenvio } from "@/lib/reenvio"
 
 type StatusFilter = "all" | "approved" | "rejected" | "pending_review"
 
@@ -65,7 +65,7 @@ const exportToCSV = (results: ProcessResult[]) => {
       : r.status === "rejected"
         ? "Rejeitado"
         : r.status === "resubmission"
-          ? "Já liberado"
+          ? rotuloReenvio(r.result.reenvio)
           : "Pendente",
     r.examesFaltantes.toString(),
     r.submittedBy,
@@ -214,7 +214,7 @@ export function ResultsTable({
           className={CLASSE_TAG_REENVIO}
           title={result.result.reenvio ? mensagemReenvio(result.result.reenvio) : undefined}
         >
-          Já liberado
+          {rotuloReenvio(result.result.reenvio)}
         </Badge>
       )
     }
