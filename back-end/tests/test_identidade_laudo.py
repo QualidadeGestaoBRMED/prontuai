@@ -386,3 +386,52 @@ def test_linhas_salvas_acham_a_pessoa_no_texto_do_layout_sem_o_cabecalho():
     # O CPF guardado é mascarado: o trecho é o CPF válido com o mesmo final.
     assert il.trecho_salvo(salva, f"CPF: {CPF_OUTRO}") == (5, 19)
     assert il.trecho_salvo(salva, "Nome: JOAO FICTICIO SOUZA") == (6, 25)
+
+
+# ── Rejeição pela IA (30/10) ────────────────────────────────────────────────
+
+def test_motivo_cita_so_os_exames_e_nunca_a_pessoa():
+    pessoas = [
+        {"nome": "JOAO FICTICIO PEREIRA", "cpf": CPF_OUTRO, "exames": ["ELETROCARDIOGRAMA"]},
+        {"nome": "JOAO FICTICIO PEREIRA", "cpf": None, "exames": ["ESPIROMETRIA", "ELETROCARDIOGRAMA"]},
+    ]
+    motivo = il.motivo_rejeicao(pessoas)
+    assert motivo == "Laudo de outra pessoa nos exames: ELETROCARDIOGRAMA, ESPIROMETRIA."
+    assert "JOAO" not in motivo and "111" not in motivo
+
+
+def test_motivo_de_um_exame_e_de_pessoa_sem_exame():
+    assert il.motivo_rejeicao([{"exames": ["AUDIOMETRIA"]}]) == "Laudo de outra pessoa no exame: AUDIOMETRIA."
+    assert il.motivo_rejeicao([{"exames": []}]) == "Dados de outra pessoa no documento."
+
+
+def test_documento_liberado_vira_rejeitado_com_o_motivo():
+    validacao = {"status_liberado": True, "mensagem": "Todos os exames obrigatórios foram enviados. Liberação concedida."}
+    ws._rejeitar_por_outra_pessoa(validacao, [{"exames": ["ELETROCARDIOGRAMA"]}])
+    assert validacao == {
+        "status_liberado": False,
+        "mensagem": "Laudo de outra pessoa no exame: ELETROCARDIOGRAMA.",
+    }
+
+
+def test_documento_com_faltante_ganha_o_motivo_depois():
+    validacao = {"status_liberado": False, "mensagem": "Faltam exames obrigatórios: AUDIOMETRIA"}
+    ws._rejeitar_por_outra_pessoa(validacao, [{"exames": []}])
+    assert validacao["mensagem"] == "Faltam exames obrigatórios: AUDIOMETRIA Dados de outra pessoa no documento."
+    assert validacao["status_liberado"] is False
+
+
+@pytest.mark.parametrize(
+    "resultado, esperado",
+    [
+        ({"status": "success", "validation_result": {"exames_faltantes": []}}, "validated"),
+        ({"status": "success", "validation_result": {"exames_faltantes": [], "outra_pessoa": False}}, "validated"),
+        ({"status": "success", "validation_result": {"exames_faltantes": [], "outra_pessoa": True}}, "pending"),
+        ({"status": "success", "validation_result": {"exames_faltantes": ["AUDIOMETRIA"]}}, "pending"),
+        ({"status": "success"}, "validated"),
+        ({"status": "error", "validation_result": {"exames_faltantes": []}}, "rejected"),
+        ({"status": "partial", "validation_result": {"exames_faltantes": []}}, "pending"),
+    ],
+)
+def test_decisao_da_ia(resultado, esperado):
+    assert ws.decisao_da_ia(resultado) == esperado

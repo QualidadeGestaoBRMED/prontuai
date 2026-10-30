@@ -174,6 +174,8 @@ export interface DocumentProcessingResult {
   validation_result?: {
     exames_faltantes: string[]
     exames_extras: string[]
+    // Laudo de outra pessoa no documento: rejeitado pela IA sem exame faltante.
+    outra_pessoa?: boolean
     analysis?: string
     similarity_scores?: Record<string, number>
   }

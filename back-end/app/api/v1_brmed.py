@@ -224,9 +224,7 @@ async def processar_documento_completo_api(
                 exams_brnet = resultado.get('exames_brnet', []) or resultado.get('brmed_result', {}).get('exames_obrigatorios', [])
                 exams_found = exams_ocr
                 ocr_markdown = resultado.get('ocr_result', {}).get('text', '')
-                validation_status = 'validated' if not resultado.get('validation_result', {}).get('exames_faltantes') and resultado.get('status') == 'success' else 'pending'
-                if resultado.get('status') == 'error':
-                    validation_status = 'rejected'
+                validation_status = workflow_service.decisao_da_ia(resultado)
 
                 # Criar documento no banco
                 clinic_id = current_user.clinic_id
@@ -762,9 +760,7 @@ async def process_document_background(
                 or resultado.get("erro")
                 or resultado.get("error")
             )
-            validation_status = 'validated' if not resultado.get('validation_result', {}).get('exames_faltantes') and resultado.get('status') == 'success' else 'pending'
-            if resultado.get('status') == 'error':
-                validation_status = 'rejected'
+            validation_status = workflow_service.decisao_da_ia(resultado)
 
             clinic_id_to_use = clinic_id
             if not clinic_id_to_use:
