@@ -27,9 +27,11 @@ coletor, OCR inventando, empresa, vocabulário de nomes). Pega laudo de outro
 colaborador que não traz CPF; a tela o mostra como "Nome diferente no laudo",
 para o revisor saber que é aviso de outra natureza.
 
-É só um alerta. Não muda status, faltantes nem validation_status: o chamador
-grava as ocorrências no payload para a tela do revisor. Não chama API e não
-envia dado a ninguém; roda sobre o markdown local.
+Os dois avisos rejeitam o documento ("Rejeitado pela IA", 30/10/2026): o
+chamador grava as ocorrências no payload para a tela do revisor e tira a
+liberação com `motivo_rejeicao`. O exame continua encontrado — não vira
+faltante, e a contagem de faltantes não muda. Não chama API e não envia dado a
+ninguém; roda sobre o markdown local.
 
 Medido por replay no texto gravado da cópia de produção de 23/10/2026 (5.175
 documentos com texto): acusa 4 dos 19 documentos em que o revisor escreveu
@@ -54,6 +56,8 @@ from app.services.patient_name_extractor import _clean_candidate
 
 # Desliga o alerta sem deploy de código: IDENTIDADE_LAUDO=false.
 HABILITADA = os.getenv("IDENTIDADE_LAUDO", "true").strip().lower() not in ("0", "false", "nao", "no")
+# Mantém o alerta e volta a só avisar, sem rejeitar: IDENTIDADE_LAUDO_REJEITA=false.
+REJEITA = os.getenv("IDENTIDADE_LAUDO_REJEITA", "true").strip().lower() not in ("0", "false", "nao", "no")
 
 # Linhas antes e depois do CPF onde o rótulo de nome é procurado. Laudo põe
 # "Paciente:" e "CPF:" na mesma linha ou em linhas vizinhas; o OCR intercala
@@ -527,6 +531,17 @@ def anotar_comparativo(
     for item in comparativo:
         if isinstance(item, dict) and item.get("exame") in por_exame:
             item["outra_pessoa"] = por_exame[item["exame"]]
+
+
+def motivo_rejeicao(pessoas: list[dict]) -> str:
+    """A frase que vai na mensagem da IA (a "Análise de Validação" da tela e da
+    clínica). Só nomes de exame: o nome e o CPF do terceiro ficam no aviso da
+    linha do exame, que é só da tela do revisor, e a mensagem também vai ao log."""
+    exames = list(dict.fromkeys(e for p in pessoas for e in p.get("exames", [])))
+    if exames:
+        rotulo = "no exame" if len(exames) == 1 else "nos exames"
+        return f"Laudo de outra pessoa {rotulo}: {', '.join(exames)}."
+    return "Dados de outra pessoa no documento."
 
 
 def para_payload(pessoas: list[dict], linhas: list[str]) -> list[dict]:

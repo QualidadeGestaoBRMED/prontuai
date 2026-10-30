@@ -361,6 +361,32 @@ def _exames_sem_laudo(markdown: str, exames_brnet: list[str]) -> Optional[list[s
 # então a IA aprovava o documento sem ele.
 _RE_VIX_LOGISTICA = re.compile(r"\bVIX LOGISTICA\b")
 _RE_KIT_VIX = re.compile(r"\bVIXPAR\b|\bFM COP\b")
+def decisao_da_ia(resultado: dict) -> str:
+    """O `validation_status` com que o documento é gravado: "validated" (Aprovado
+    pela IA) só sem exame faltante e sem laudo de outra pessoa; "pending"
+    (Rejeitado pela IA, vai à Checagem) no resto; "rejected" quando o
+    processamento falhou."""
+    if resultado.get("status") == "error":
+        return "rejected"
+    validacao = resultado.get("validation_result") or {}
+    if resultado.get("status") != "success" or validacao.get("exames_faltantes") or validacao.get("outra_pessoa"):
+        return "pending"
+    return "validated"
+
+
+def _rejeitar_por_outra_pessoa(resultado_validacao: dict, pessoas: list[dict]) -> None:
+    """Tira a liberação e põe o motivo na mensagem da IA. Documento que seria
+    liberado troca a frase de liberação pelo motivo; o que já tinha faltante
+    ganha o motivo depois dela."""
+    motivo = identidade_laudo.motivo_rejeicao(pessoas)
+    if resultado_validacao.get("status_liberado"):
+        resultado_validacao["mensagem"] = motivo
+    else:
+        mensagem = (resultado_validacao.get("mensagem") or "").strip()
+        resultado_validacao["mensagem"] = f"{mensagem} {motivo}".strip()
+    resultado_validacao["status_liberado"] = False
+
+
 KIT_VIX_FALTANTE = "KIT VIX (ASO VIXPAR E FICHA CLÍNICA)"
 
 
@@ -1407,10 +1433,12 @@ async def _processar_documento_completo_impl(
         ),
     }
 
-    # Alerta de dados de outra pessoa (laudo de outro colaborador anexado). NÃO
-    # muda status, faltantes nem confiança — só grava para a tela do revisor,
-    # no exame cujo laudo traz a outra pessoa. Ver `identidade_laudo`.
+    # Alerta de dados de outra pessoa (laudo de outro colaborador anexado): grava
+    # para a tela do revisor, no exame cujo laudo traz a outra pessoa, e rejeita
+    # o documento (`_rejeitar_por_outra_pessoa`). Não muda faltantes nem
+    # confiança. Ver `identidade_laudo`.
     outras_pessoas: list[dict] = []
+    rejeitado_por_outra_pessoa = False
     if identidade_laudo.HABILITADA:
         try:
             linhas_texto = (markdown_content or "").splitlines()
@@ -1439,12 +1467,16 @@ async def _processar_documento_completo_impl(
                     if isinstance(item, dict):
                         item.pop("outra_pessoa", None)
             analysis_details["outra_pessoa"] = identidade_laudo.para_payload(outras_pessoas, linhas_texto)
+            rejeitado_por_outra_pessoa = not resultado_validacao.get("erro") and identidade_laudo.REJEITA
+            if rejeitado_por_outra_pessoa:
+                _rejeitar_por_outra_pessoa(resultado_validacao, outras_pessoas)
             # Só a contagem: nome e CPF de terceiro não vão para o log.
             _log_event(
                 "outra_pessoa",
                 run_id=run_id,
                 quantas=len(outras_pessoas),
                 so_nome=sum(1 for p in outras_pessoas if p["tipo"] == identidade_laudo.SO_NOME),
+                rejeitado=rejeitado_por_outra_pessoa,
             )
 
     # Monitoramento silencioso do clique no exame e do aviso de outra pessoa:
@@ -1576,6 +1608,8 @@ async def _processar_documento_completo_impl(
             "exames_faltantes": [e["exame"] for e in resultado_validacao["exames_comparativo"] if e["status"] == "faltante"]
             + ([KIT_VIX_FALTANTE] if falta_kit_vix else []),
             "exames_extras": [e["exame"] for e in resultado_validacao["exames_comparativo"] if e["status"] == "extra_no_ocr"],
+            # Rejeita sem faltante: ver `decisao_da_ia`.
+            "outra_pessoa": rejeitado_por_outra_pessoa,
             "analysis": resultado_validacao["mensagem"]
         },
         "status": "success"  # Será ajustado abaixo se houver erro
