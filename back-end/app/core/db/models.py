@@ -84,7 +84,7 @@ class DocumentModel(Base):
     content_hash = Column(String, nullable=True, index=True)
     filename = Column(String, nullable=False)
     file_path = Column(String, nullable=True)
-    cpf = Column(String, nullable=True)
+    cpf = Column(String, nullable=True, index=True)
     # Extraído de result_payload.patient_name para permitir busca server-side
     patient_name = Column(String, nullable=True, index=True)
     uploaded_at = Column(DateTime, nullable=False, default=datetime.utcnow)
@@ -123,6 +123,12 @@ class DocumentModel(Base):
     # Existe para o filtro da Checagem: ler do JSON custava 5s por consulta.
     # NULL = pedido sem previsão (12% dos documentos) ou anterior a jun/2026.
     data_previsao_liberacao = Column(Date, nullable=True)
+    # Pedido de exame no BRNET (migration 015), copiado de `result_payload` a
+    # cada gravação: é a chave da detecção de reenvio.
+    pedido_exame_id = Column(BigInteger, nullable=True, index=True)
+    # Documento já liberado de que este é reenvio; vem com
+    # validation_status = 'reenvio' (app/services/reenvio_service.py).
+    reenvio_de = Column(String, nullable=True, index=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 

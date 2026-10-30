@@ -24,6 +24,7 @@ import { authFetch } from '@/lib/auth-fetch'
 import { useAsyncJob } from '@/hooks/use-async-job'
 import { useVisibleInterval } from '@/hooks/use-visible-interval'
 import { Job } from '@/types/job'
+import { mensagemReenvio } from '@/lib/reenvio'
 
 type StartBackgroundProcessingOptions = {
   submittedBy?: string
@@ -58,6 +59,7 @@ interface NotificationContextType {
   addProcessResult: (result: ProcessResult) => void
   getResultsByBatchId: (batchId: string) => ProcessResult[]
   updateProcessResultStatus: (id: string, status: 'approved' | 'rejected' | 'pending_review', reviewerEmail: string, rejectionReason?: string, approvalReason?: string) => void
+  replaceProcessResult: (atualizado: ProcessResult) => void
 
   // Estado da UI
   notificationCenterOpen: boolean
@@ -602,11 +604,22 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       const approved = results.filter(r => r.status === 'approved').length
       const rejected = results.filter(r => r.status === 'rejected').length
       const pending = results.filter(r => r.status === 'pending_review').length
+      const reenvios = results.filter(r => r.status === 'resubmission')
 
       let message = ''
       let variant: 'success' | 'warning' | 'error' = 'success'
 
-      if (rejected === 0 && pending === 0) {
+      if (reenvios.length > 0 && reenvios.length === results.length) {
+        // Só reenvio: o aviso é a própria mensagem (um documento) ou a contagem.
+        message = reenvios.length === 1 && reenvios[0].result.reenvio
+          ? mensagemReenvio(reenvios[0].result.reenvio)
+          : `${reenvios.length} prontuários já tinham sido enviados (liberados ou em revisão). Não é preciso reenviar.`
+        variant = 'warning'
+      } else if (reenvios.length > 0) {
+        message = `${approved} aprovados, ${rejected} rejeitados, ${pending} pendentes, ` +
+          `${reenvios.length} já enviados antes (não era preciso reenviar)`
+        variant = 'warning'
+      } else if (rejected === 0 && pending === 0) {
         message = `Todos os ${approved} documentos foram aprovados!`
         variant = 'success'
       } else if (rejected > 0) {
@@ -757,17 +770,23 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
               result.error_code === "NO_OPEN_EXAM_ORDER"
             )
 
+          // Reenvio de prontuário já liberado não é erro, mesmo quando o BRNET
+          // responde "expedição em aberto não encontrada" — é justamente porque
+          // o pedido já fechou. A clínica vê a data da liberação.
+          const reenvio = result?.reenvio
           updateProcessingDocument(docId, (current) => ({
             ...current,
             stage: 'completed',
             progress: 100,
             displayProgress: 100,
-            statusMessage: backendErrorMessage
+            statusMessage: reenvio
+              ? mensagemReenvio(reenvio)
+              : backendErrorMessage
               ? (hasBusinessRuleRejection
                   ? 'Processamento concluído com rejeição por regra de negócio.'
                   : 'Processamento concluído com erro.')
               : 'Processamento concluído!',
-            error: backendErrorMessage || current.error,
+            error: reenvio ? undefined : backendErrorMessage || current.error,
             result,
           }))
           pollingJobsRef.current.delete(jobId)
@@ -1013,7 +1032,9 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         patientName,
         uploadedAt: new Date(),
         processedAt: new Date(),
-        status: doc.error
+        status: doc.result?.reenvio
+          ? ('resubmission' as const)
+          : doc.error
           ? ('rejected' as const)
           : examesFaltantes === 0
           ? ('approved' as const)
@@ -1108,6 +1129,18 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
               rejectionReason: rejectionReason || result.rejectionReason,
               approvalReason: approvalReason || result.approvalReason,
             }
+          : result
+      )
+    )
+  }, [])
+
+  // Troca o resultado pela versão que o back-end devolveu (ex.: reenvio
+  // devolvido à Checagem como complemento), mantendo o lote e o envio locais.
+  const replaceProcessResult = useCallback((atualizado: ProcessResult) => {
+    setProcessResults(prev =>
+      prev.map(result =>
+        result.id === atualizado.id
+          ? { ...atualizado, batchId: result.batchId, submittedBy: result.submittedBy }
           : result
       )
     )
@@ -1214,6 +1247,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     addProcessResult,
     getResultsByBatchId,
     updateProcessResultStatus,
+    replaceProcessResult,
     notificationCenterOpen,
     setNotificationCenterOpen,
     progressBarMinimized,

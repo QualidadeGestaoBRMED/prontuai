@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, status, UploadFile, File, Body, Depends, Request
 from fastapi.responses import StreamingResponse
-from app.services import workflow_service, brmed_service, layout_ocr
+from app.services import workflow_service, brmed_service, layout_ocr, reenvio_service
 from app.core.job_manager import job_manager
 from app.core.auth import create_upload_token, require_sender, require_upload_sender, get_current_user
 from app.models.user import User, UserRole
@@ -227,6 +227,17 @@ async def processar_documento_completo_api(
                 validation_status = 'validated' if not resultado.get('validation_result', {}).get('exames_faltantes') and resultado.get('status') == 'success' else 'pending'
                 if resultado.get('status') == 'error':
                     validation_status = 'rejected'
+                reenvio = reenvio_service.liberado_anterior(
+                    user_db, resultado, cpf=cpf, content_hash=content_hash, clinic_id=current_user.clinic_id
+                )
+                if reenvio:
+                    reenvio_service.marcar(
+                        resultado,
+                        reenvio,
+                        status_ia=validation_status,
+                        motivo_ia=resultado.get("erro") or resultado.get("error"),
+                    )
+                    validation_status = "reenvio"
 
                 # Criar documento no banco
                 clinic_id = current_user.clinic_id
@@ -262,7 +273,8 @@ async def processar_documento_completo_api(
                     result_payload=resultado,
                     confidence_score=confidence_score,
                     quality_score=confidence_details.get("quality_score"),
-                    mandatory_coverage=confidence_details.get("mandatory_coverage")
+                    mandatory_coverage=confidence_details.get("mandatory_coverage"),
+                    reenvio_de=reenvio["documento_id"] if reenvio else None,
                 )
 
                 logger.info(f"[DB] Documento salvo com ID: {document.id}")
@@ -734,16 +746,40 @@ async def process_document_background(
             file=BytesIO(file_content)
         )
 
+        # O mesmo arquivo de um prontuário liberado ou em revisão é reenvio de
+        # qualquer jeito: reaproveita o resultado do original em vez de refazer
+        # OCR, BRNET e IA. A marcação de reenvio, mais abaixo, acha o original
+        # pelo mesmo hash. Ver `reenvio_service.mesmo_arquivo`.
+        resultado, layout = None, None
+        original = reenvio_service.mesmo_arquivo(user_db, content_hash)
+        if original:
+            try:
+                documento_original = user_db.get_document_by_id(original["documento_id"])
+                resultado = reenvio_service.resultado_reaproveitado(documento_original)
+                if resultado is not None:
+                    layout = user_db.get_document_layout(original["documento_id"])
+                    logger.info(
+                        "[JOB %s] Mesmo arquivo do documento %s (%s): resultado reaproveitado, sem OCR",
+                        job_id, original["documento_id"], original.get("situacao"),
+                    )
+            except Exception as reaproveitar_error:
+                logger.warning(
+                    "[JOB %s] Falha ao reaproveitar o resultado do mesmo arquivo: %s",
+                    job_id, type(reaproveitar_error).__name__,
+                )
+                resultado, layout = None, None
+
         # Processar documento
-        resultado = await workflow_service.processar_documento_completo(
-            upload_file,
-            exames_obrigatorios,
-            progress_callback=progress_callback,
-            clinic_cnpj=clinic_cnpj,
-            clinic_id=clinic_id,
-            clinic_name=clinic_name,
-        )
-        layout = layout_ocr.separar(resultado)
+        if resultado is None:
+            resultado = await workflow_service.processar_documento_completo(
+                upload_file,
+                exames_obrigatorios,
+                progress_callback=progress_callback,
+                clinic_cnpj=clinic_cnpj,
+                clinic_id=clinic_id,
+                clinic_name=clinic_name,
+            )
+            layout = layout_ocr.separar(resultado)
 
         # Salvar documento no banco
         try:
@@ -780,6 +816,17 @@ async def process_document_background(
             if not clinic_id_to_use:
                 raise ValueError("clinic_id não encontrado para salvar documento")
 
+            # Reenvio de prontuário já liberado ou em revisão: não volta para a
+            # Checagem, e o resultado do job leva a data para o alerta da clínica.
+            reenvio = reenvio_service.liberado_anterior(
+                user_db, resultado, cpf=cpf, content_hash=content_hash, clinic_id=clinic_id_to_use
+            )
+            if reenvio:
+                reenvio_service.marcar(
+                    resultado, reenvio, status_ia=validation_status, motivo_ia=rejection_reason
+                )
+                validation_status = "reenvio"
+
             document = user_db.create_document(
                 clinic_id=clinic_id_to_use,
                 uploaded_by_user_id=uploaded_by_user_id,
@@ -799,6 +846,7 @@ async def process_document_background(
                 quality_score=(resultado.get("confidence_details") or {}).get("quality_score"),
                 mandatory_coverage=(resultado.get("confidence_details") or {}).get("mandatory_coverage"),
                 rejection_reason=rejection_reason if validation_status == "rejected" else None,
+                reenvio_de=reenvio["documento_id"] if reenvio else None,
             )
             logger.info(f"[DB] Documento salvo via async com ID: {document.id} (job_id={job_id})")
             _gravar_layout(document.id, layout)

@@ -27,6 +27,26 @@ def previsao_liberacao_do_payload(result_payload: Any) -> Optional[date]:
     return None
 
 
+def pedido_exame_id_do_payload(result_payload: Any) -> Optional[int]:
+    """Número do pedido de exame no BRNET, lido do resultado do processamento.
+
+    Vem em `brmed_result.pedido_exame_id`, número ou texto ("123"). A coluna
+    `documents.pedido_exame_id` é derivada daqui, e a migration 015 segue a
+    mesma regra para os documentos anteriores a ela.
+    """
+    if not isinstance(result_payload, dict):
+        return None
+    brmed = result_payload.get("brmed_result")
+    valor = brmed.get("pedido_exame_id") if isinstance(brmed, dict) else None
+    if isinstance(valor, bool):
+        return None
+    if isinstance(valor, int):
+        return valor if valor > 0 else None
+    if isinstance(valor, str) and valor.strip().isdigit():
+        return int(valor.strip())
+    return None
+
+
 class DocumentQueue(str, Enum):
     PENDENTES = "pendentes"
     CHECAGEM = "checagem"
@@ -116,7 +136,7 @@ class Document(BaseModel):
     exams_found: Optional[List[str]] = None  # Lista de exames encontrados
     exams_ocr: Optional[List[str]] = None  # Lista de exames recebidos do OCR
     exams_brnet: Optional[List[str]] = None  # Lista de exames obrigatórios do BRNET
-    validation_status: Optional[str] = "pending"  # pending, validated, rejected
+    validation_status: Optional[str] = "pending"  # pending, validated, rejected, reenvio
     ocr_markdown: Optional[str] = None  # Resultado do OCR em markdown
     run_id: Optional[str] = None
     result_payload: Optional[Dict[str, Any]] = None
@@ -132,6 +152,8 @@ class Document(BaseModel):
     # disco. Serve para a UI avisar que a recuperação é manual, em vez de
     # mostrar erro genérico.
     archived_at: Optional[datetime] = None
+    # Reenvio de prontuário já liberado: id do documento liberado.
+    reenvio_de: Optional[str] = None
     # Nome do arquivo como ele existe no armazenamento (e, portanto, no Drive):
     # "<uuid-do-upload>_<nome-sanitizado>.pdf". É o que Qualidade e Gestão
     # precisa para localizar o PDF no arquivo morto — o `id` do documento NÃO
