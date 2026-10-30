@@ -16,6 +16,9 @@ export type DocumentoChecagem = {
   documentoUrl?: string;
   decisaoIA?: 'approved' | 'rejected'; // Indica se IA aprovou ou rejeitou (antes de revisão humana)
   submittedBy?: string; // Email do usuário que enviou
+  // Era reenvio e voltou para a revisão (botão "É um complemento", ou o
+  // original rejeitado). Ver `result_payload.reenvio_desfeito`.
+  complemento?: boolean;
 };
 
 export type AcaoChecagem = "aprovar" | "rejeitar";

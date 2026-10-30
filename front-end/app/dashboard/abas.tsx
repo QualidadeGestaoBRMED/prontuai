@@ -32,6 +32,7 @@ import {
   type Abordagem,
   type StatusAbordagem,
 } from "./abordagem";
+import { CartaoReenvios } from "./reenvios";
 import styles from "./dashboard.module.css";
 
 const CARTAO ="rounded-[14px] border border-[#DFE0E2] bg-white";
@@ -1785,6 +1786,8 @@ export function AbaUtilizacao({
           />
         )}
       </div>
+
+      <CartaoReenvios onAjuda={onAjuda} />
     </div>
   );
 }
