@@ -613,11 +613,11 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         // Só reenvio: o aviso é a própria mensagem (um documento) ou a contagem.
         message = reenvios.length === 1 && reenvios[0].result.reenvio
           ? mensagemReenvio(reenvios[0].result.reenvio)
-          : `${reenvios.length} prontuários já tinham sido liberados. Não é preciso reenviar.`
+          : `${reenvios.length} prontuários já tinham sido enviados (liberados ou em revisão). Não é preciso reenviar.`
         variant = 'warning'
       } else if (reenvios.length > 0) {
         message = `${approved} aprovados, ${rejected} rejeitados, ${pending} pendentes, ` +
-          `${reenvios.length} já liberados antes (não era preciso reenviar)`
+          `${reenvios.length} já enviados antes (não era preciso reenviar)`
         variant = 'warning'
       } else if (rejected === 0 && pending === 0) {
         message = `Todos os ${approved} documentos foram aprovados!`

@@ -60,6 +60,9 @@ export const API_ENDPOINTS = {
   DOCUMENT_COMPLEMENTO: (id: string) => `${API_PROXY_BASE}/v1/documents/${id}/complemento`,
   // Valores lidos no laudo e a situação de cada um (normal / acima / abaixo).
   DOCUMENT_NORMALIDADE: (id: string) => `${API_PROXY_BASE}/v1/documents/${id}/normalidade`,
+  DOCUMENT_ENVIOS: (id: string) => `${API_PROXY_BASE}/v1/documents/${id}/envios`,
+  DOCUMENTS_ENVIOS_ANTERIORES: `${API_PROXY_BASE}/v1/documents/envios-anteriores`,
+  REENVIOS_POR_CLINICA: (dias: number) => `${API_PROXY_BASE}/v1/documents/reenvios/por-clinica?dias=${dias}`,
   // Onde cada exame e cada campo da checklist aparecem no PDF (página e caixa).
   DOCUMENT_LOCALIZACOES: (id: string) => `${API_PROXY_BASE}/v1/documents/${id}/localizacoes`,
   // Texto do OCR com a posição de cada linha, para a busca no documento.

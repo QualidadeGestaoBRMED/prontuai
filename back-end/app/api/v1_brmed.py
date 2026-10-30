@@ -746,16 +746,40 @@ async def process_document_background(
             file=BytesIO(file_content)
         )
 
+        # O mesmo arquivo de um prontuário liberado ou em revisão é reenvio de
+        # qualquer jeito: reaproveita o resultado do original em vez de refazer
+        # OCR, BRNET e IA. A marcação de reenvio, mais abaixo, acha o original
+        # pelo mesmo hash. Ver `reenvio_service.mesmo_arquivo`.
+        resultado, layout = None, None
+        original = reenvio_service.mesmo_arquivo(user_db, content_hash)
+        if original:
+            try:
+                documento_original = user_db.get_document_by_id(original["documento_id"])
+                resultado = reenvio_service.resultado_reaproveitado(documento_original)
+                if resultado is not None:
+                    layout = user_db.get_document_layout(original["documento_id"])
+                    logger.info(
+                        "[JOB %s] Mesmo arquivo do documento %s (%s): resultado reaproveitado, sem OCR",
+                        job_id, original["documento_id"], original.get("situacao"),
+                    )
+            except Exception as reaproveitar_error:
+                logger.warning(
+                    "[JOB %s] Falha ao reaproveitar o resultado do mesmo arquivo: %s",
+                    job_id, type(reaproveitar_error).__name__,
+                )
+                resultado, layout = None, None
+
         # Processar documento
-        resultado = await workflow_service.processar_documento_completo(
-            upload_file,
-            exames_obrigatorios,
-            progress_callback=progress_callback,
-            clinic_cnpj=clinic_cnpj,
-            clinic_id=clinic_id,
-            clinic_name=clinic_name,
-        )
-        layout = layout_ocr.separar(resultado)
+        if resultado is None:
+            resultado = await workflow_service.processar_documento_completo(
+                upload_file,
+                exames_obrigatorios,
+                progress_callback=progress_callback,
+                clinic_cnpj=clinic_cnpj,
+                clinic_id=clinic_id,
+                clinic_name=clinic_name,
+            )
+            layout = layout_ocr.separar(resultado)
 
         # Salvar documento no banco
         try:
@@ -792,8 +816,8 @@ async def process_document_background(
             if not clinic_id_to_use:
                 raise ValueError("clinic_id não encontrado para salvar documento")
 
-            # Reenvio de prontuário já liberado: não volta para a Checagem, e o
-            # resultado do job leva a data da liberação para o alerta da clínica.
+            # Reenvio de prontuário já liberado ou em revisão: não volta para a
+            # Checagem, e o resultado do job leva a data para o alerta da clínica.
             reenvio = reenvio_service.liberado_anterior(
                 user_db, resultado, cpf=cpf, content_hash=content_hash, clinic_id=clinic_id_to_use
             )

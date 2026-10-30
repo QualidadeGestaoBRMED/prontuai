@@ -80,6 +80,7 @@ def test_chaves_vao_limpas_para_a_consulta():
         "cnpj_empresa": "12345678000190",
         "clinic_id": "c1",
         "desde": AGORA - timedelta(days=30),
+        "incluir_em_revisao": True,
     }
 
 
@@ -99,7 +100,9 @@ def test_cnpj_incompleto_nao_entra():
 def test_devolve_o_liberado_encontrado():
     achado = {"documento_id": "d1", "liberado_em": "2026-10-15T10:00:00", "criterio": "pedido"}
     banco = BancoFalso(devolve=achado)
-    assert reenvio_service.liberado_anterior(banco, {}, cpf=None, content_hash="abc", clinic_id="c1", agora=AGORA) == achado
+    resultado = reenvio_service.liberado_anterior(banco, {}, cpf=None, content_hash="abc", clinic_id="c1", agora=AGORA)
+    # Sem `situacao` no achado (banco antigo), vale "liberado".
+    assert resultado == {**achado, "situacao": "liberado"}
 
 
 def test_falha_na_consulta_nao_derruba_o_envio():
@@ -129,7 +132,9 @@ def detectar(anterior, resultado):
 def test_mesmos_exames_e_reenvio():
     achado = detectar(liberado(exames=["CLINICO OCUPACIONAL", "AUDIOMETRIA"]), envio("clinico ocupacional"))
     # Exames e faltantes servem só para decidir; não vão para o resultado.
-    assert achado == {"documento_id": "d1", "liberado_em": "2026-10-15T10:00:00+00:00", "criterio": "pedido"}
+    assert achado == {
+        "documento_id": "d1", "liberado_em": "2026-10-15T10:00:00+00:00", "criterio": "pedido", "situacao": "liberado",
+    }
 
 
 def test_exame_a_mais_nao_basta_para_ser_complemento():
@@ -267,12 +272,12 @@ class BancoDoJob:
         return None
 
 
-def processar(monkeypatch, tmp_path, liberado, resultado):
+def processar(monkeypatch, tmp_path, liberado, resultado, banco=None):
     monkeypatch.setenv("OPENAI_API_KEY", "chave-de-teste")
     import app.core.config as config
     for chave, valor in {"APP_ENV": "test", "JWT_SECRET_KEY": "x" * 40, "DEV_AUTH_BYPASS": False}.items():
         monkeypatch.setattr(config.settings, chave, valor, raising=False)
-    banco = BancoDoJob(liberado)
+    banco = banco or BancoDoJob(liberado)
     falso = types.ModuleType("app.core.database")
     falso.user_db = banco
     monkeypatch.setitem(sys.modules, "app.core.database", falso)
@@ -284,6 +289,8 @@ def processar(monkeypatch, tmp_path, liberado, resultado):
     monkeypatch.setattr(mod, "user_db", banco)
 
     async def processar_pdf(*args, **kwargs):
+        if resultado is None:
+            raise AssertionError("o mesmo arquivo não devia ser processado de novo")
         return dict(resultado)
 
     monkeypatch.setattr(mod.workflow_service, "processar_documento_completo", processar_pdf)
@@ -311,7 +318,7 @@ def test_reenvio_de_liberado_sai_como_reenvio_e_o_job_leva_o_aviso(monkeypatch, 
     banco, jobs = processar(monkeypatch, tmp_path, achado, RESULTADO_APROVADO)
     assert banco.criado["validation_status"] == "reenvio"
     assert banco.criado["reenvio_de"] == "original"
-    assert jobs.concluido["reenvio"] == {**achado, "status_ia": "validated", "motivo_ia": None}
+    assert jobs.concluido["reenvio"] == {**achado, "situacao": "liberado", "status_ia": "validated", "motivo_ia": None}
     assert jobs.falhou is None
     # A clínica do envio entra na busca: pedido e CPF + empresa só casam com ela.
     assert banco.busca["clinic_id"] == "c1"
@@ -401,3 +408,210 @@ def test_so_reenvio_pode_virar_complemento(monkeypatch):
     with pytest.raises(HTTPException) as erro:
         complemento(monkeypatch, documento(status="validated"), usuario(UserRole.ADMIN))
     assert erro.value.status_code == 409
+
+
+# ── envio repetido antes da revisão ──────────────────────────────────────────
+
+def em_revisao(criterio="pedido", exames=(), faltantes=()):
+    return {
+        **liberado(criterio, exames, faltantes),
+        "liberado_em": None, "enviado_em": "2026-10-20T09:00:00+00:00", "situacao": "em_revisao",
+    }
+
+
+def test_envio_repetido_antes_da_revisao_e_reenvio():
+    achado = detectar(em_revisao(exames=["CLINICO OCUPACIONAL"]), envio("clinico ocupacional"))
+    assert achado == {
+        "documento_id": "d1", "liberado_em": None, "enviado_em": "2026-10-20T09:00:00+00:00",
+        "criterio": "pedido", "situacao": "em_revisao",
+    }
+
+
+def test_complemento_de_prontuario_em_revisao_segue_para_a_checagem():
+    anterior = em_revisao(exames=["CLINICO OCUPACIONAL"], faltantes=["AUDIOMETRIA"])
+    assert detectar(anterior, envio("AUDIOMETRIA")) is None
+
+
+def test_busca_em_revisao_desliga_sem_deploy(monkeypatch):
+    monkeypatch.setattr(reenvio_service, "EM_REVISAO", False)
+    banco = BancoFalso()
+    reenvio_service.liberado_anterior(banco, {}, cpf=None, content_hash="abc", clinic_id="c1", agora=AGORA)
+    assert banco.recebido["incluir_em_revisao"] is False
+
+
+# ── mesmo arquivo: reaproveita o resultado, sem processar de novo ────────────
+
+def test_mesmo_arquivo_so_vale_pelo_hash():
+    banco = BancoFalso(devolve=em_revisao(criterio="arquivo"))
+    assert reenvio_service.mesmo_arquivo(banco, "abc")["criterio"] == "arquivo"
+    assert banco.recebido["content_hash"] == "abc"
+    assert banco.recebido["clinic_id"] is None and banco.recebido["pedido_exame_id"] is None
+    # Outro critério não basta para pular o processamento.
+    assert reenvio_service.mesmo_arquivo(BancoFalso(devolve=liberado(criterio="pedido")), "abc") is None
+
+
+def test_mesmo_arquivo_sem_hash_ou_com_banco_fora_nao_bloqueia():
+    assert reenvio_service.mesmo_arquivo(BancoFalso(devolve=liberado(criterio="arquivo")), None) is None
+    assert reenvio_service.mesmo_arquivo(BancoFalso(erro=RuntimeError("fora")), "abc") is None
+
+
+def original(payload=None):
+    return types.SimpleNamespace(
+        id="original",
+        ocr_markdown="texto do OCR",
+        result_payload=payload if payload is not None else {
+            **RESULTADO_APROVADO,
+            "ocr_result": {"exames_extraidos": ["CLINICO OCUPACIONAL"]},
+            "document_id": "original", "reviewed_by": "revisora@x.com", "reviewed_at": "2026-10-15",
+            "approvalReason": "ok", "reenvio": {"documento_id": "mais-antigo"},
+        },
+    )
+
+
+def test_resultado_reaproveitado_tira_o_que_e_do_documento():
+    resultado = reenvio_service.resultado_reaproveitado(original())
+    for chave in ("document_id", "reviewed_by", "reviewed_at", "approvalReason", "reenvio"):
+        assert chave not in resultado
+    assert resultado["ocr_result"]["text"] == "texto do OCR"
+    assert resultado["reaproveitado_de"] == "original"
+    assert resultado["brmed_result"] == {"pedido_exame_id": 987}
+
+
+def test_original_sem_resultado_gravado_e_processado_como_sempre():
+    assert reenvio_service.resultado_reaproveitado(original(payload={})) is None
+
+
+class BancoDoArquivoIgual(BancoDoJob):
+    def __init__(self):
+        super().__init__(em_revisao(criterio="arquivo"))
+        self.layout_gravado = None
+
+    def get_document_by_id(self, did):
+        return original() if did == "d1" else None
+
+    def get_document_layout(self, did):
+        return {"versao": 1, "linhas": [[1, 0, 0, 10, 10, []]]}
+
+    def save_document_layout(self, did, layout):
+        self.layout_gravado = (did, layout)
+
+
+def test_mesmo_arquivo_nao_refaz_ocr_e_sai_como_reenvio(monkeypatch, tmp_path):
+    # `resultado=None`: se o workflow for chamado, o teste quebra.
+    banco, jobs = processar(monkeypatch, tmp_path, None, None, banco=BancoDoArquivoIgual())
+    assert jobs.falhou is None
+    assert banco.criado["validation_status"] == "reenvio"
+    assert banco.criado["reenvio_de"] == "d1"
+    assert banco.criado["ocr_markdown"] == "texto do OCR"
+    # A decisão do revisor do original não vem junto: o reenvio não sai como revisado.
+    assert not banco.criado.get("reviewed_by")
+    assert jobs.concluido["reenvio"]["situacao"] == "em_revisao"
+    assert jobs.concluido["reaproveitado_de"] == "original"
+    # O layout do original vai junto: o clique até o exame continua funcionando.
+    assert banco.layout_gravado == ("novo-doc", {"versao": 1, "linhas": [[1, 0, 0, 10, 10, []]]})
+
+
+# ── para a operação: reenvios por clínica e envios do colaborador ────────────
+
+class BancoDasListas:
+    def __init__(self, documento=None, envios=()):
+        self.documento = documento
+        self.envios = list(envios)
+        self.desde = None
+
+    def reenvios_por_clinica(self, desde):
+        self.desde = desde
+        return [{"clinic_id": "c1", "clinica": "Clínica A", "envios": 10, "reenvios": 4,
+                 "em_revisao": 3, "complementos": 1, "ultimo": "2026-10-29T10:00:00+00:00"}]
+
+    def get_document_by_id(self, did):
+        return self.documento
+
+    def envios_relacionados(self, did):
+        return self.envios
+
+
+def test_reenvios_por_clinica_no_periodo(monkeypatch):
+    import asyncio
+    mod = carregar(monkeypatch)
+    banco = BancoDasListas()
+    monkeypatch.setattr(mod, "user_db", banco)
+    resposta = asyncio.run(mod.reenvios_por_clinica(dias=7, current_user=usuario()))
+    assert resposta["dias"] == 7 and resposta["clinicas"][0]["reenvios"] == 4
+    assert timedelta(days=6, hours=23) < datetime.utcnow() - banco.desde < timedelta(days=7, minutes=1)
+
+
+def test_clinica_ve_so_os_proprios_envios_do_colaborador(monkeypatch):
+    import asyncio
+    from app.models.user import UserRole
+    mod = carregar(monkeypatch)
+    envios = [
+        {"documento_id": "doc-1", "clinic_id": "c1", "papel": "este"},
+        {"documento_id": "doc-0", "clinic_id": "c1", "papel": "original"},
+        {"documento_id": "doc-x", "clinic_id": "outra", "papel": "outro_envio"},
+    ]
+    monkeypatch.setattr(mod, "user_db", BancoDasListas(documento("validated"), envios))
+    resposta = asyncio.run(mod.envios_do_colaborador("doc-1", current_user=usuario(UserRole.SENDER)))
+    assert [e["documento_id"] for e in resposta["envios"]] == ["doc-1", "doc-0"]
+    assert all("clinic_id" not in e for e in resposta["envios"])
+    # O revisor vê todos.
+    resposta = asyncio.run(mod.envios_do_colaborador("doc-1", current_user=usuario(UserRole.CHECKER, clinic_id=None)))
+    assert len(resposta["envios"]) == 3
+
+
+def test_clinica_nao_ve_envios_de_documento_de_outra(monkeypatch):
+    import asyncio
+    from fastapi import HTTPException
+    from app.models.user import UserRole
+    mod = carregar(monkeypatch)
+    monkeypatch.setattr(mod, "user_db", BancoDasListas(documento("validated", clinic_id="outra")))
+    with pytest.raises(HTTPException) as erro:
+        asyncio.run(mod.envios_do_colaborador("doc-1", current_user=usuario(UserRole.SENDER)))
+    assert erro.value.status_code == 403
+
+
+# ── antes de enviar: o mesmo arquivo já foi enviado? ─────────────────────────
+
+class BancoDosHashes:
+    def __init__(self):
+        self.pedido = None
+
+    def envios_por_hash(self, hashes, clinic_id=None):
+        self.pedido = (hashes, clinic_id)
+        return {h: {"documento_id": "d1", "enviado_em": "2026-10-29T10:00:00+00:00", "situacao": "liberado",
+                    "filename": "a.pdf"} for h in hashes}
+
+
+HASH = "a" * 64
+
+
+def test_clinica_so_consulta_os_proprios_envios_e_hash_invalido_e_ignorado(monkeypatch):
+    import asyncio
+    from app.models.user import UserRole
+    mod = carregar(monkeypatch)
+    banco = BancoDosHashes()
+    monkeypatch.setattr(mod, "user_db", banco)
+    entrada = mod.EnviosAnterioresEntrada(hashes=[HASH.upper(), "nao-e-hash", "b" * 63])
+    resposta = asyncio.run(mod.envios_anteriores(entrada, current_user=usuario(UserRole.SENDER)))
+    assert banco.pedido == ([HASH], "c1")
+    assert resposta["envios"][HASH]["situacao"] == "liberado"
+
+
+def test_revisor_consulta_todos_os_envios(monkeypatch):
+    import asyncio
+    from app.models.user import UserRole
+    mod = carregar(monkeypatch)
+    banco = BancoDosHashes()
+    monkeypatch.setattr(mod, "user_db", banco)
+    asyncio.run(mod.envios_anteriores(mod.EnviosAnterioresEntrada(hashes=[HASH]), current_user=usuario(UserRole.CHECKER, clinic_id=None)))
+    assert banco.pedido == ([HASH], None)
+
+
+def test_clinica_sem_cadastro_de_clinica_nao_ve_nada(monkeypatch):
+    import asyncio
+    from app.models.user import UserRole
+    mod = carregar(monkeypatch)
+    banco = BancoDosHashes()
+    monkeypatch.setattr(mod, "user_db", banco)
+    resposta = asyncio.run(mod.envios_anteriores(mod.EnviosAnterioresEntrada(hashes=[HASH]), current_user=usuario(UserRole.SENDER, clinic_id=None)))
+    assert resposta == {"envios": {}} and banco.pedido is None
