@@ -16,7 +16,7 @@ import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { FieldCheck, OutraPessoa, ProcessResult, TabelaComparacaoItem } from "@/types/process"
-import ExamesComparativoTable, { ExamesComparativoTableProps, ordenarComparativo } from "@/components/exames-comparativo-table"
+import ExamesComparativoTable, { ExamesComparativoTableProps, motivoDataAntiga, ordenarComparativo } from "@/components/exames-comparativo-table"
 import { ControleNavegacao, Destaque, VisualizadorPdf } from "@/components/visualizador-pdf"
 import { TagNovo } from "@/components/tag-novo"
 import { carregarTextoDocumento, useLocalizacoes } from "@/hooks/use-localizacoes"
@@ -875,6 +875,12 @@ function EvidenciasExames({ tabela }: { tabela?: TabelaComparacaoItem[] }) {
               {item.exame} · Linha de origem:{" "}
               <span className="font-mono break-words">{item.linha_origem?.trim()}</span>. Nenhum resultado
               encontrado no PDF.
+            </li>
+          ) : item.data_antiga ? (
+            <li key={`exame-${idx}`} className="text-yellow-500">
+              {item.exame} · Linha de origem:{" "}
+              <span className="font-mono break-words">{item.linha_origem?.trim()}</span>.{" "}
+              {motivoDataAntiga(item.data_antiga)}
             </li>
           ) : (
             <li key={`exame-${idx}`} className="text-muted-foreground">

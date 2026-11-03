@@ -15,7 +15,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
-import { PessoaNoLaudo, TabelaComparacaoItem } from "@/types/process"
+import { DataAntiga, PessoaNoLaudo, TabelaComparacaoItem } from "@/types/process"
 import { cn } from "@/lib/utils"
 
 // Define as props do componente, que agora recebe a tabela de comparação
@@ -105,6 +105,20 @@ const NOME_DIFERENTE = {
   label: "Nome diferente no laudo",
 };
 
+// Status exibido para o exame cuja coleta é muito anterior ao ASO. Também é aviso:
+// a IA não muda a decisão, e há exame antigo aceito pelo cliente.
+const DATA_ANTIGA = {
+  label: "Data antiga",
+  icon: <AlertTriangleIcon className="inline-flex stroke-yellow-500" size={16} />,
+  color: "text-yellow-500",
+};
+
+// De onde vem o aviso, com as duas datas.
+export function motivoDataAntiga(data: DataAntiga): string {
+  const referencia = data.referencia === "aso" ? `do ASO (${data.data_referencia})` : "da análise do documento";
+  return `Coleta em ${data.data_exame}, ${data.dias} dias antes ${referencia}. Confira se o exame é deste atendimento.`;
+}
+
 export function temCpf(pessoa: PessoaNoLaudo): boolean {
   return Boolean(pessoa.cpf);
 }
@@ -146,6 +160,7 @@ export function motivoOutraPessoa(pessoas: PessoaNoLaudo[]): string {
 export function ordenarComparativo(tabela: TabelaComparacaoItem[], mostrarEvidencia = false): TabelaComparacaoItem[] {
   const ehSoLista = (item: TabelaComparacaoItem) =>
     mostrarEvidencia && item.evidencia === "so_lista";
+  const ehDataAntiga = (item: TabelaComparacaoItem) => mostrarEvidencia && Boolean(item.data_antiga);
   // Nome e CPF de outra pessoa primeiro, depois só o nome.
   const pesoOutraPessoa = (item: TabelaComparacaoItem) =>
     !mostrarEvidencia || !item.outra_pessoa?.length ? 0 : item.outra_pessoa.some(temCpf) ? 2 : 1;
@@ -166,7 +181,9 @@ export function ordenarComparativo(tabela: TabelaComparacaoItem[], mostrarEviden
     if (porStatus !== 0) return porStatus;
     const porOutraPessoa = pesoOutraPessoa(b) - pesoOutraPessoa(a);
     if (porOutraPessoa !== 0) return porOutraPessoa;
-    return Number(ehSoLista(b)) - Number(ehSoLista(a));
+    const porSoLista = Number(ehSoLista(b)) - Number(ehSoLista(a));
+    if (porSoLista !== 0) return porSoLista;
+    return Number(ehDataAntiga(b)) - Number(ehDataAntiga(a));
   });
 }
 
@@ -205,13 +222,16 @@ export default function ExamesComparativoTable({
         <TableBody ref={corpo}>
           {sortedExames.map((item, index) => {
             const outrasPessoas = mostrarEvidencia ? item.outra_pessoa ?? [] : [];
+            const dataAntiga = mostrarEvidencia ? item.data_antiga : undefined;
             const conf = outrasPessoas.length
               ? outrasPessoas.some(temCpf)
                 ? OUTRA_PESSOA
                 : NOME_DIFERENTE
               : ehSoLista(item)
                 ? SO_NA_LISTA
-                : getConformidade(item.status, rotuloExtra);
+                : dataAntiga
+                  ? DATA_ANTIGA
+                  : getConformidade(item.status, rotuloExtra);
             const localizavel = Boolean(localizar?.porExame[item.exame]);
             const selecionado = localizar?.ativo?.exame === item.exame;
             return (
@@ -250,6 +270,7 @@ export default function ExamesComparativoTable({
                     </TooltipTrigger>
                     <TooltipContent className="max-w-md space-y-2">
                       {outrasPessoas.length > 0 && <p>{motivoOutraPessoa(outrasPessoas)}</p>}
+                      {dataAntiga && <p>{motivoDataAntiga(dataAntiga)}</p>}
                       <p>{item.justificativa}</p>
                     </TooltipContent>
                   </Tooltip>

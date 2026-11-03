@@ -180,6 +180,10 @@ try:
         "prontuai_clique_laudo",
         description="Para cada exame de documento novo, se o clique no exame leva à página com o conteúdo do laudo",
     )
+    AVISO_DATA_ANTIGA = _meter.create_counter(
+        "prontuai_aviso_data_antiga",
+        description="Documentos novos com aviso de exame de laboratório coletado muito antes do ASO",
+    )
     AVISO_OUTRA_PESSOA = _meter.create_counter(
         "prontuai_aviso_outra_pessoa",
         description="Avisos de laudo de outra pessoa, e se a outra pessoa foi confirmada como paciente em outro documento",
@@ -212,4 +216,5 @@ except ImportError:  # pragma: no cover - ambiente sem opentelemetry-api
     CLINICAS_CRIADAS = _NoopInstrument()
     USUARIOS_CRIADOS = _NoopInstrument()
     CLIQUE_LAUDO = _NoopInstrument()
+    AVISO_DATA_ANTIGA = _NoopInstrument()
     AVISO_OUTRA_PESSOA = _NoopInstrument()
