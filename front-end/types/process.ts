@@ -56,6 +56,21 @@ export type TabelaComparacaoItem = {
    * CPF de outro colaborador). Só aviso: não muda status. Ver `OutraPessoa`.
    */
   outra_pessoa?: PessoaNoLaudo[]
+  /**
+   * Só em exame de laboratório com resultado no PDF: a coleta é muito anterior ao
+   * ASO. Só aviso: não muda status. Documento antigo não traz o campo.
+   */
+  data_antiga?: DataAntiga
+}
+
+export interface DataAntiga {
+  /** dd/mm/aaaa */
+  data_exame: string
+  /** dd/mm/aaaa */
+  data_referencia: string
+  /** "aso", ou "processamento" quando a data do ASO não foi lida. */
+  referencia: "aso" | "processamento"
+  dias: number
 }
 
 export type FieldCheck = {
