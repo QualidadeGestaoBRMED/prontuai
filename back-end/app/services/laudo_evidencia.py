@@ -26,11 +26,18 @@ Ajustes de 20/10/2026, cada um medido no texto gravado de 14/09 a 19/10 (confer�
 das divergências de outubro no PDF): a marca de RX OIT passou a aceitar a ficha
 da CMTL, a acuidade passou a ser reconhecida em tabela de oftalmologista e a
 sorologia passou a exigir o resultado perto do analito, fora das listas de exames.
+
+Ajustes de 03/11/2026: Clínico, glicemia, teste ergométrico e GGT passaram a exigir
+laudo. Regras escolhidas nos envios de 14/09 a 18/10 e confirmadas nos de 19/10 a
+03/11 (5.863 documentos revisados, contra a decisão do revisor): +39 corrigidos, −7.
+Hemograma ficou FORA (+17, −31) e reticulócitos também (+4, −4).
 """
 from __future__ import annotations
 
 import re
 from typing import Any, Optional
+
+from app.services import evidencia_laboratorio
 
 # ---------------------------------------------------------------------------
 # 1. Recuperar faltante pelo conteúdo do laudo
@@ -101,6 +108,13 @@ def evidencia_de_faltante(exame_norm: str, markdown_norm: str) -> Optional[str]:
 # DE TÓRAX PADRÃO OIT" é RX_OIT, não RX). Os tipos que não exigem laudo continuam
 # aqui só para classificar corretamente e ficar fora da exigência.
 _TIPOS: list[tuple[str, re.Pattern, re.Pattern]] = [
+    # O Clínico é a própria consulta: o laudo é a ficha médica ou a anamnese com o
+    # exame físico. Os títulos são os mesmos do clique no exame (`layout_ocr`).
+    ("CLINICO", re.compile(r"\bCLINICO\b"),
+     re.compile(r"\bFICHA (MEDICA|CLINICA)\b|\bPRONTUARIO (MEDICO|CLINICO)\b"
+                r"|^(?=.*ANAMNESE)(?=.*(?:EXAME FISICO|PRESSAO ARTERIAL|AUSCULTA|FREQUENCIA CARDIACA))")),
+    # Marca julgada fora das listas, em `falta_laudo`.
+    ("ERGOMETRICO", re.compile(r"ERGOMETRI"), None),
     ("AUDIOMETRIA", re.compile(r"AUDIOMETR"),
      re.compile(r"ORELHA (DIREITA|ESQUERDA)|\bKHZ\b|VIA AEREA|LIMIARES|LOGOAUDIOMETRIA|\bIRF\b|\bSRT\b|\bLRF\b")),
     # A ficha OIT da CMTL escreve "Qualidade da radiografia", "Profusão" e "Pequenas
@@ -115,10 +129,16 @@ _TIPOS: list[tuple[str, re.Pattern, re.Pattern]] = [
     ("ECG", re.compile(r"ELETROCARDIO|\bECG\b"),
      re.compile(r"RITMO SINUSAL|\bQRS\b|\bEIXO\b|INTERVALO PR|\bQTC?\b|\bBPM\b")),
     ("EEG", re.compile(r"ELETROENCEFAL|\bEEG\b"), None),
-    ("GLICOSE", re.compile(r"GLICEMIA|GLICOSE"), None),
+    # As duas palavras em qualquer ponto do documento. Exigir uma perto da outra
+    # barrava mais documentos certos do que pegava (replay de 05/10).
+    ("GLICOSE", re.compile(r"GLICEMIA|GLICOSE"),
+     re.compile(r"^(?=.*(?:GLICOSE|GLICEMIA))(?=.*MG ?DL)")),
     ("HEMOGRAMA", re.compile(r"HEMOGRAMA"), None),
     ("LIPIDES", re.compile(r"TRIGLICER|LIPIDOGRAMA|COLESTEROL"),
      re.compile(r"(TRIGLICER|COLESTEROL).{0,150}MG ?DL")),
+    # Julgado pelo resultado perto do nome, em `falta_laudo`. Antes das transaminases,
+    # que também casam GGT e continuam sem exigência.
+    ("GGT", re.compile(r"\bGGT\b"), None),
     ("TRANSAMINASES", re.compile(r"\bTGO\b|\bTGP\b|\bAST\b|\bALT\b|GGT|TRANSAMINASE"), None),
     ("CREAT_UREIA", re.compile(r"CREATININA|UREIA"), None),
     # A marca daqui só vale para analito sem padrão próprio: os demais são julgados
@@ -216,10 +236,18 @@ def _sorologia_tem_laudo(exame_norm: str, markdown_norm: str, marca_documento: r
     return bool(marca_documento.search(markdown_norm))
 
 
+_ERGOMETRICO_NOME = re.compile(r"ERGOMETRI")
+
+
 def falta_laudo(exame_norm: str, markdown_norm: str) -> Optional[str]:
     """Tipo do exame quando ele exige laudo e a marca do laudo não está no documento."""
     for nome, padrao, marca in _TIPOS:
         if padrao.search(exame_norm):
+            if nome == "ERGOMETRICO":
+                return None if _ERGOMETRICO_NOME.search(sem_listas(markdown_norm)) else nome
+            if nome == "GGT":
+                evidencia, _linha = evidencia_laboratorio.avaliar(markdown_norm, exame_norm)
+                return nome if evidencia == evidencia_laboratorio.SO_LISTA else None
             if nome == "SOROLOGIA":
                 return None if _sorologia_tem_laudo(exame_norm, markdown_norm, marca) else nome
             if marca is not None and not marca.search(markdown_norm):
