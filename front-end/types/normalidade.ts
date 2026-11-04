@@ -14,7 +14,7 @@ export type ParametroLido = {
   valor: number | null
   /** Como saiu no laudo ("8,9", "148.000", "Reagente 1/4"). */
   valor_texto: string | null
-  /** Faixa impressa no laudo, já formatada ("70 a 99 mg/dL"), ou "não lida no laudo". */
+  /** Faixa impressa no laudo, já formatada ("70 a 99 mg/dL"), ou "faixa não identificada no laudo". */
   referencia: string
   situacao: SituacaoParametro
   /** Onde o valor está no PDF (valor e nome do parâmetro). Sem layout do OCR, null. */
