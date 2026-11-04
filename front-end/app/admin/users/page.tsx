@@ -70,6 +70,7 @@ const roleLabels: Record<UserRole, string> = {
   CURATOR: "Saúde",
   CHECKER: "Checador",
   SENDER: "Enviador",
+  FILIAL: "Filial",
   VIEWER: "Visualizador",
 };
 
@@ -81,6 +82,7 @@ const roleDescriptions: Record<UserRole, string> = {
   CURATOR: "Catálogo de exames",
   CHECKER: "Checagem de documentos",
   SENDER: "Envio de documentos de uma clínica",
+  FILIAL: "Aprova os documentos que enviou (inclui Enviador)",
   VIEWER: "Dashboard de indicadores",
 };
 
@@ -90,6 +92,7 @@ const roleBadges: Record<UserRole, string> = {
   CURATOR: "bg-teal-100 text-teal-800",
   CHECKER: "bg-blue-100 text-blue-800",
   SENDER: "bg-green-100 text-green-800",
+  FILIAL: "bg-emerald-100 text-emerald-800",
   VIEWER: "bg-slate-100 text-slate-800",
 };
 
@@ -126,11 +129,17 @@ function SeletorCargos({
   podeTodos: boolean;
 }) {
   const opcoes = podeTodos ? PRECEDENCIA_PAPEIS : PRECEDENCIA_PAPEIS.filter((p) => PAPEIS_DO_GESTOR.includes(p));
+  // Filial não existe sem Enviador (o servidor recusa): marcar uma traz o outro,
+  // e desmarcar o Enviador leva a Filial junto.
   const alternar = (papel: UserRole, marcado: boolean) =>
     onChange(
       marcado
-        ? semCargosContidos([...value.filter((p) => p !== papel), papel])
-        : value.filter((p) => p !== papel),
+        ? semCargosContidos([
+            ...value.filter((p) => p !== papel && !(papel === "FILIAL" && p === "SENDER")),
+            papel,
+            ...(papel === "FILIAL" ? (["SENDER"] as UserRole[]) : []),
+          ])
+        : value.filter((p) => p !== papel && !(papel === "SENDER" && p === "FILIAL")),
     );
 
   return (

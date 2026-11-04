@@ -70,6 +70,9 @@ export function RequireRole({
     if (papeis.includes("CHECKER")) {
       redirect("/checagem");
     }
+    if (papeis.includes("FILIAL")) {
+      redirect("/filial");
+    }
     if (papeis.includes("SENDER")) {
       redirect("/anexar-prontuario");
     }

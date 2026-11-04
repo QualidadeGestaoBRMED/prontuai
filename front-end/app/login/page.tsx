@@ -20,8 +20,11 @@ export default function LoginPage() {
     // Mesma ordem do papel principal (ADMIN > MANAGER > CHECKER > CURATOR >
     // SENDER): quem tem ADMIN ou MANAGER cai no envio, como antes, e o
     // CHECKER + SENDER cai na checagem.
-    const role = papeisDoUsuario(session?.user)[0];
-    if (role === "CHECKER") {
+    const papeis = papeisDoUsuario(session?.user);
+    const role = papeis[0];
+    if (role === "SENDER" && papeis.includes("FILIAL")) {
+      router.replace("/filial");
+    } else if (role === "CHECKER") {
       router.replace("/checagem");
     } else if (role === "CURATOR") {
       router.replace("/admin/exames");

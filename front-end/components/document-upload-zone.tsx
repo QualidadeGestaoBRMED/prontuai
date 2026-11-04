@@ -64,6 +64,8 @@ interface DocumentUploadZoneProps {
   maxFiles?: number
   autoOpen?: boolean
   disabled?: boolean
+  /** Zona mais baixa, para dividir a tela com outro conteúdo. */
+  compacta?: boolean
 }
 
 export function DocumentUploadZone({
@@ -72,6 +74,7 @@ export function DocumentUploadZone({
   maxFiles = 1,
   autoOpen = false,
   disabled = false,
+  compacta = false,
 }: DocumentUploadZoneProps) {
   const hasAutoOpened = useRef(false)
   const [
@@ -115,9 +118,9 @@ export function DocumentUploadZone({
         onDragOver={handleDragOver}
         onDrop={handleDrop}
         data-dragging={isDragging || undefined}
-        className="flex min-h-64 flex-col items-center justify-center rounded-xl border-2 border-dashed border-[#193B4F] p-8 transition-colors hover:bg-accent/10
+        className={`flex ${compacta ? "min-h-36 p-4" : "min-h-64 p-8"} flex-col items-center justify-center rounded-xl border-2 border-dashed border-[#193B4F] transition-colors hover:bg-accent/10
 has-disabled:pointer-events-none has-disabled:opacity-50 has-[input:focus]:border-ring has-[input:focus]:ring-[3px] has-[input:focus]:ring-ring/50
-data-[dragging=true]:bg-accent/50 data-[dragging=true]:border-primary cursor-pointer"
+data-[dragging=true]:bg-accent/50 data-[dragging=true]:border-primary cursor-pointer`}
       >
         <input
           {...getInputProps()}

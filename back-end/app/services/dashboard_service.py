@@ -170,7 +170,8 @@ WHERE is_active AND name NOT IN ('teste', 'testando', 'Clinica Default')
 # (é como created_at/reviewed_at são gravados) para o fuso do painel antes de
 # virar dia: prontuário enviado às 22h do dia da previsão é "no dia", não
 # atrasado. `liberado_pelo_tecnico` só existe quando um revisor humano aprovou —
-# aprovação automática da IA não é trabalho do técnico e fica fora da conta.
+# aprovação automática da IA não é trabalho do técnico e fica fora da conta, como
+# a aprovação da filial (cargo FILIAL), que aprova o próprio envio.
 #
 # `prazo_brmed` é a `data_previsao_liberacao` que o patients_exams do BRNET
 # devolve no processamento. O BRNET mantém DUAS previsões para o mesmo pedido e
@@ -184,6 +185,7 @@ SELECT
     (d.result_payload::jsonb #>> '{brmed_result,pedido_exame_id}')::bigint AS pedido,
     (d.created_at AT TIME ZONE 'UTC' AT TIME ZONE :fuso)::date AS enviado,
     CASE WHEN d.validation_status = 'validated' AND d.reviewed_by IS NOT NULL
+              AND NOT EXISTS (SELECT 1 FROM users u WHERE u.email = d.reviewed_by AND 'FILIAL' = ANY(u.roles))
          THEN (d.reviewed_at AT TIME ZONE 'UTC' AT TIME ZONE :fuso)::date END AS liberado_pelo_tecnico,
     CASE WHEN d.result_payload::jsonb #>> '{brmed_result,data_previsao_liberacao}' ~ '^\d{2}/\d{2}/\d{4}$'
          THEN to_date(d.result_payload::jsonb #>> '{brmed_result,data_previsao_liberacao}', 'DD/MM/YYYY')
@@ -202,7 +204,8 @@ WHERE c.name NOT IN ('teste', 'testando', 'Clinica Default')
 # Um documento com parecer por linha. Os exames avaliados são os exigidos pelo
 # BRNET — a lista que o modal mostra ao revisor —, e `comparou` separa o
 # documento em que a IA chegou a julgar os exames da falha técnica, que fica
-# fora como em toda acurácia do painel.
+# fora como em toda acurácia do painel. O parecer da filial é gravado, para medir
+# a concordância dela com a IA, mas não entra aqui até essa medição decidir.
 _SQL_PARECERES_EXAMES = r"""
 SELECT
     d.created_at,
@@ -223,6 +226,7 @@ CROSS JOIN LATERAL (
                 THEN d.result_payload::jsonb END AS payload
 ) p
 WHERE c.name NOT IN ('teste', 'testando', 'Clinica Default')
+  AND NOT EXISTS (SELECT 1 FROM users u WHERE u.id = f.reviewed_by_id AND 'FILIAL' = ANY(u.roles))
 """
 
 # Denominador da adesão ao parecer: decisões humanas desde o primeiro parecer
@@ -241,6 +245,7 @@ WHERE c.name NOT IN ('teste', 'testando', 'Clinica Default')
          AND d.reviewed_at >= (SELECT min(created_at) FROM document_feedbacks))
      OR EXISTS (SELECT 1 FROM document_feedbacks f WHERE f.document_id = d.id)
   )
+  AND NOT EXISTS (SELECT 1 FROM users u WHERE u.email = d.reviewed_by AND 'FILIAL' = ANY(u.roles))
 """
 
 # Todo motivo que o revisor marca num exame conta como ERRO daquele exame — as

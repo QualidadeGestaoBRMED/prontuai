@@ -29,6 +29,9 @@ router = APIRouter(tags=["Normalidade de Exames"])
 # Quem checa ou acompanha a checagem. Espelha o modal: CHECKER decide, CURATOR
 # acompanha em modo leitura, gestão vê tudo.
 _LEITORES = [UserRole.ADMIN, UserRole.MANAGER, UserRole.CHECKER, UserRole.CURATOR]
+# A FILIAL usa o mesmo modal, mas só lê a normalidade do que enviou. As faixas de
+# referência (Administração › Normalidade) seguem fora do alcance dela.
+_LEITORES_DO_DOCUMENTO = [*_LEITORES, UserRole.FILIAL]
 
 
 def _ajustes() -> dict[str, dict[str, Any]]:
@@ -134,7 +137,7 @@ def restaurar_faixa(
 @router.get("/documents/{document_id}/normalidade", response_model=NormalidadeDocumento)
 def normalidade_do_documento(
     document_id: str,
-    current_user: User = Depends(require_roles(_LEITORES)),
+    current_user: User = Depends(require_roles(_LEITORES_DO_DOCUMENTO)),
 ) -> NormalidadeDocumento:
     """Valores lidos no PDF para os exames encontrados, com a situação de cada um."""
     if not ne.HABILITADA:
@@ -142,6 +145,12 @@ def normalidade_do_documento(
     document = user_db.get_document_by_id(document_id)
     if not document:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Documento não encontrado")
+    # Principal SENDER aqui só pode ser a filial: o SENDER puro nem chega à rota.
+    if current_user.role == UserRole.SENDER and document.uploaded_by_user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Você não tem permissão para acessar este documento",
+        )
     payload = document.result_payload if isinstance(document.result_payload, dict) else {}
     try:
         # Posição no PDF de cada valor lido. Sem layout (documento antigo, OCR

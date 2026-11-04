@@ -12,6 +12,7 @@ class UserRole(str, Enum):
     CHECKER = "CHECKER"  # Apenas checagem de exames
     SENDER = "SENDER"    # Apenas enviar documentos (pendentes)
     VIEWER = "VIEWER"    # Visualizador: só o dashboard de indicadores, sem acesso a documentos
+    FILIAL = "FILIAL"    # Soma-se ao SENDER: decide os documentos que o próprio usuário enviou
 
 
 # Papéis sem clinic_id, que leem documentos de TODAS as clínicas. O SENDER é o
@@ -40,11 +41,18 @@ GLOBAL_READ_ROLES = frozenset({
 # não dá acesso a documento nenhum, deixá-lo por último não tira nada de
 # ninguém — o principal só é VIEWER quando ele é o único cargo.
 #
+# FILIAL também fica depois do SENDER, e é o que sustenta o cargo: o principal
+# continua SENDER, então todo recorte `role == SENDER` segue valendo sem mudar
+# uma linha (a filial só lê o que enviou) e a auditoria grava SENDER, o que deixa
+# a decisão dela fora da revisão humana do dashboard. O cargo nunca fica sozinho
+# (`_exigir_enviador_na_filial` em api/v1/users.py), por isso não existe no enum
+# `userrole` do Postgres: a coluna `role` jamais recebe esse valor.
+#
 # Permissão é outra coisa: para PODER algo, basta ter o cargo em qualquer
 # posição da lista (ver `User.tem_papel` e `_exigir_papel` em core/auth.py).
 PRECEDENCIA_PAPEIS = (
     UserRole.ADMIN, UserRole.MANAGER, UserRole.CHECKER, UserRole.CURATOR, UserRole.SENDER,
-    UserRole.VIEWER,
+    UserRole.FILIAL, UserRole.VIEWER,
 )
 
 
@@ -61,7 +69,9 @@ PRECEDENCIA_PAPEIS = (
 # juntos — e ao dar acesso novo ao MANAGER, veja se ele passou a conter mais um.
 CARGOS_CONTIDOS: dict[UserRole, frozenset[UserRole]] = {
     UserRole.ADMIN: frozenset(UserRole) - {UserRole.ADMIN},
-    UserRole.MANAGER: frozenset({UserRole.CHECKER, UserRole.SENDER, UserRole.VIEWER}),
+    UserRole.MANAGER: frozenset({UserRole.CHECKER, UserRole.SENDER, UserRole.VIEWER, UserRole.FILIAL}),
+    # Quem decide qualquer documento já decide os que enviou.
+    UserRole.CHECKER: frozenset({UserRole.FILIAL}),
 }
 
 
