@@ -195,7 +195,7 @@ def test_texto_faixa():
     assert ne.texto_faixa("hba1c", ne.FaixaLaudo(None, 5.6)) == "até 5,6 %"
     assert ne.texto_faixa("colesterol", ne.FaixaLaudo(None, 190, True)) == "abaixo de 190 mg/dL"
     assert ne.texto_faixa("plaquetas", ne.FaixaLaudo(150000, 450000)) == "150.000 a 450.000 /mm³"
-    assert ne.texto_faixa("glicemia", None) == "não lida no laudo"
+    assert ne.texto_faixa("glicemia", None) == "faixa não identificada no laudo"
     assert ne.texto_faixa("vdrl", None) == "Não reagente"
 
 
@@ -213,6 +213,13 @@ def leitura(markdown, chave):
     ("HEMOGLOBINA 12,7 g/dL 13,0 a 17,5 g/dL", "hemoglobina", (13, 17.5, False), ne.ABAIXO),
     ("PLAQUETAS 148.000 /mm³ 140.000 a 400.000 /mm³", "plaquetas", (140000, 400000, False), ne.NORMAL),
     ("PLAQUETAS 201.000 MIL/MM3 150 A 400 METODO AUTOMACAO", "plaquetas", (150000, 400000, False), ne.NORMAL),
+    # O OCR trocou o ponto do milhar por espaço ("3.500" virou "3 500").
+    ("LEUCOCITOS GLOBAL 4.800 CELS. /MM3 3 500 A 10.500 CELS/MM3 BASOFILOS 0,0 %", "leucocitos", (3500, 10500, False), ne.NORMAL),
+    ("PLAQUETAS 241.000 /MM3 150 000 A 450 000 /MM3", "plaquetas", (150000, 450000, False), ne.NORMAL),
+    # Par sem conector continua sendo par, e não um número só.
+    ("PLAQUETAS 233.000 MIL/MM 150 450 MPV 13,3", "plaquetas", (150000, 450000, False), ne.NORMAL),
+    # O "3" de MM3 não se junta ao número seguinte.
+    ("PLAQUETAS 233.000 MIL/MM3 150 A 450 MIL/MM3", "plaquetas", (150000, 450000, False), ne.NORMAL),
     # O laboratório vale mesmo quando difere da faixa mais comum.
     ("PLAQUETAS 487.000 /mm³ 140.000 a 500.000 /mm³", "plaquetas", (140000, 500000, False), ne.NORMAL),
     ("TGP 56 U/L ATE 55 U/L", "tgp", (None, 55, False), ne.ACIMA),
@@ -243,6 +250,8 @@ def test_faixa_impressa_no_laudo(markdown, chave, faixa, situacao):
     ("LEUCOCITOS 5.840 /MM3 4 A 120 ANOS 3.600 A 12.000 MM3", "leucocitos"),
     # Homem e mulher sem saber o sexo do paciente.
     ("TGO 18 U/L HOMEM INFERIOR A 35 U/L MULHER INFERIOR A 31 U/L", "tgo"),
+    # Zero à esquerda não é milhar: "0 500" é a contagem do basófilo vizinho.
+    ("LEUCOCITOS 6.900 /MM3 0 500 /MM3 BASTONETES", "leucocitos"),
     # Duas colunas sem rótulo.
     ("HEMOGLOBINA 12,7 g/dL 13,0 a 17,5 12,0 a 16,0", "hemoglobina"),
     # Meta de tratamento não é faixa de normalidade.

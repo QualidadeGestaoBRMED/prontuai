@@ -311,7 +311,14 @@ def _intervalo(p: Parametro, m: re.Match) -> Optional[FaixaLaudo]:
     return None
 
 
-def _faixa_do_laudo(p: Parametro, depois: str, sexo: Optional[str]) -> Optional[FaixaLaudo]:
+# Milhar que o OCR gravou com espaço no lugar do ponto: "3 500 A 10.500". Só nas
+# contagens (`milhar`), sem zero à esquerda, sem letra colada antes (o "3" de
+# "MM3 150 A 450" não é milhar) e com o grupo de três dígitos fechado.
+# A conferência de `ref_min`/`ref_max` continua barrando o que não for faixa.
+_RX_MILHAR_COM_ESPACO = re.compile(r"(?<![A-Z\d.,/])([1-9]\d{0,2}) (\d{3})(?![\d.,])")
+
+
+def _faixa_no_texto(p: Parametro, depois: str, sexo: Optional[str]) -> Optional[FaixaLaudo]:
     """
     A faixa de adulto impressa logo depois do resultado, ou None. Errar aqui marca
     como alterado quem está normal, então toda dúvida vira None: faixa por idade
@@ -352,6 +359,20 @@ def _faixa_do_laudo(p: Parametro, depois: str, sexo: Optional[str]) -> Optional[
         vizinho = rx.search(resto)
         if vizinho and (segunda := _intervalo(p, vizinho)) and segunda != faixa:
             return None
+    return faixa
+
+
+def _faixa_do_laudo(p: Parametro, depois: str, sexo: Optional[str]) -> Optional[FaixaLaudo]:
+    """
+    A faixa do laudo. O milhar com espaço só entra quando a leitura normal não achou
+    nada: assim ele não muda faixa que já era lida ("150 450" sem conector é um par,
+    e juntar viraria 150.450).
+    """
+    faixa = _faixa_no_texto(p, depois, sexo)
+    if faixa is None and p.milhar:
+        corrigido = _RX_MILHAR_COM_ESPACO.sub(r"\1.\2", depois[:170])
+        if corrigido != depois[:170]:
+            faixa = _faixa_no_texto(p, corrigido, sexo)
     return faixa
 
 
@@ -564,7 +585,7 @@ def texto_faixa(chave: str, faixa: Optional[FaixaLaudo]) -> str:
     if p.qualitativo:
         return p.normal_texto
     if faixa is None:
-        return "não lida no laudo"
+        return "faixa não identificada no laudo"
     un = f" {p.unidade}" if p.unidade else ""
     if faixa.minimo is not None and faixa.maximo is not None:
         return f"{_fmt(faixa.minimo)} a {_fmt(faixa.maximo)}{un}"

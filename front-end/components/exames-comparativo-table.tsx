@@ -114,7 +114,11 @@ function CelulaNormalidade({ item, parametros, carregando, onLocalizar, ativo }:
               <span className={`rounded border px-1.5 py-px text-[11px] font-medium ${sit.className}`}>{sit.label}</span>
             </div>
             <div className="text-[11px] text-muted-foreground">
-              {p.situacao === "sem_resultado" ? "Valor não encontrado no PDF" : `Ref. do laudo: ${p.referencia}`}
+              {p.situacao === "sem_resultado"
+                ? "Valor não encontrado no PDF"
+                : p.situacao === "sem_referencia"
+                  ? "Faixa de referência não identificada no laudo"
+                  : `Ref. do laudo: ${p.referencia}`}
             </div>
           </div>
         );
