@@ -14,10 +14,9 @@ import types
 from datetime import datetime
 
 import pytest
-from pydantic import ValidationError
 from starlette.requests import Request
 
-from app.models.normalidade import AjusteFaixa, FaixaInput
+from app.models.normalidade import AjusteFaixa
 from app.models.user import User, UserRole
 from app.services import layout_ocr, normalidade_exames as ne
 
@@ -192,16 +191,77 @@ def test_avaliar_documento():
     assert hemo["plaquetas"]["situacao"] == ne.SEM_RESULTADO
 
 
-def test_ajuste_de_faixa_vale_na_avaliacao():
-    itens = ne.avaliar_documento(LAUDO, TABELA, {"glicemia": {"minimo": 70, "maximo": 200}})
-    assert itens[0]["parametros"][0]["situacao"] == ne.NORMAL
-    assert itens[0]["parametros"][0]["referencia"] == "70 a 200 mg/dL"
-
-
 def test_texto_faixa():
-    assert ne.texto_faixa("hba1c", (None, 5.6)) == "até 5,6 %"
-    assert ne.texto_faixa("plaquetas", (150000, 450000)) == "150.000 a 450.000 /mm³"
+    assert ne.texto_faixa("hba1c", ne.FaixaLaudo(None, 5.6)) == "até 5,6 %"
+    assert ne.texto_faixa("colesterol", ne.FaixaLaudo(None, 190, True)) == "abaixo de 190 mg/dL"
+    assert ne.texto_faixa("plaquetas", ne.FaixaLaudo(150000, 450000)) == "150.000 a 450.000 /mm³"
+    assert ne.texto_faixa("glicemia", None) == "não lida no laudo"
     assert ne.texto_faixa("vdrl", None) == "Não reagente"
+
+
+# ---------------------------------------------------------------------------
+# Faixa impressa no laudo. Os textos vêm de formatos vistos na cópia de produção
+# de 03/11/2026; valores e nomes são fictícios.
+# ---------------------------------------------------------------------------
+
+def leitura(markdown, chave):
+    return ne.ler_valores(markdown)[chave]
+
+
+@pytest.mark.parametrize("markdown,chave,faixa,situacao", [
+    ("GLICOSE 88 mg/dL VALOR DE REFERENCIA 60,0 99,0 MG/DL", "glicemia", (60, 99, False), ne.NORMAL),
+    ("HEMOGLOBINA 12,7 g/dL 13,0 a 17,5 g/dL", "hemoglobina", (13, 17.5, False), ne.ABAIXO),
+    ("PLAQUETAS 148.000 /mm³ 140.000 a 400.000 /mm³", "plaquetas", (140000, 400000, False), ne.NORMAL),
+    ("PLAQUETAS 201.000 MIL/MM3 150 A 400 METODO AUTOMACAO", "plaquetas", (150000, 400000, False), ne.NORMAL),
+    # O laboratório vale mesmo quando difere da faixa mais comum.
+    ("PLAQUETAS 487.000 /mm³ 140.000 a 500.000 /mm³", "plaquetas", (140000, 500000, False), ne.NORMAL),
+    ("TGP 56 U/L ATE 55 U/L", "tgp", (None, 55, False), ne.ACIMA),
+    # "Inferior a 190": o próprio 190 está fora.
+    ("COLESTEROL TOTAL 190 mg/dL ADULTOS ACIMA DE 20 ANOS INFERIOR A 190 MG/DL CRIANCAS INFERIOR A 170",
+     "colesterol", (None, 190, True), ne.ACIMA),
+    # A classe normal vem antes das outras da tabela.
+    ("GLICOSE 99 mg/dL VALORES DE REFERENCIA NORMAL INFERIOR A 100 PRE-DIABETIS MELLITUS DE 100 A 125",
+     "glicemia", (None, 100, True), ne.NORMAL),
+    ("TRIGLICERIDEOS 89 mg/dL ADULTOS ACIMA DE 20 ANOS COM JEJUM INFERIOR A 150 MG/DL SEM JEJUM INFERIOR A 175",
+     "triglic", (None, 150, True), ne.NORMAL),
+])
+def test_faixa_impressa_no_laudo(markdown, chave, faixa, situacao):
+    lida = leitura(markdown, chave)
+    assert lida.faixa == faixa
+    assert ne.classificar(lida) == situacao
+
+
+@pytest.mark.parametrize("markdown,chave", [
+    # Sem faixa nenhuma.
+    ("GLICOSE 86 mg/dL", "glicemia"),
+    # Hemácias logo depois da hemoglobina: faixa de outro analito.
+    ("HEMOGLOBINA 15,30 g/dL 4,50 a 5,50 10 6/L", "hemoglobina"),
+    # Só faixa de recém-nascido à vista.
+    ("GLICOSE 97 mg/dL CORDAO UMBILICAL 45,0 A 96,0 PREMATURO 20,0 A 60,0", "glicemia"),
+    # Idade não é faixa.
+    ("TRIGLICERIDEOS 80 mg/dL VALOR DE REFERENCIA CRIANCAS 0 A 9 ANOS < 75MG/DL", "triglic"),
+    ("LEUCOCITOS 5.840 /MM3 4 A 120 ANOS 3.600 A 12.000 MM3", "leucocitos"),
+    # Homem e mulher sem saber o sexo do paciente.
+    ("TGO 18 U/L HOMEM INFERIOR A 35 U/L MULHER INFERIOR A 31 U/L", "tgo"),
+    # Duas colunas sem rótulo.
+    ("HEMOGLOBINA 12,7 g/dL 13,0 a 17,5 12,0 a 16,0", "hemoglobina"),
+    # Meta de tratamento não é faixa de normalidade.
+    ("HEMOGLOBINA GLICADA 6,4 % DIAGNOSTICO ACIMA DE 6,5 META TERAPEUTICA MENOR QUE 7,0%", "hba1c"),
+    ("HEMOGLOBINA GLICADA 5,9 % PACIENTES DM1 OU DM2 MENOR QUE 7,0%", "hba1c"),
+    # Hora da coleta não é faixa.
+    ("TGO 50 U/L DATA HORA 06 51 20 RESULTADO 27 U/L", "tgo"),
+])
+def test_na_duvida_nao_classifica(markdown, chave):
+    lida = leitura(markdown, chave)
+    assert lida.faixa is None
+    assert ne.classificar(lida) == ne.SEM_REFERENCIA
+
+
+@pytest.mark.parametrize("sexo,faixa,situacao", [("M", (None, 35, True), ne.NORMAL), ("F", (None, 31, True), ne.ACIMA)])
+def test_sexo_impresso_escolhe_a_coluna(sexo, faixa, situacao):
+    lida = leitura(f"Sexo: {sexo}\nTGO 32 U/L HOMEM INFERIOR A 35 U/L MULHER INFERIOR A 31 U/L", "tgo")
+    assert lida.faixa == faixa
+    assert ne.classificar(lida) == situacao
 
 
 # ---------------------------------------------------------------------------
@@ -261,61 +321,23 @@ def carregar(monkeypatch, banco):
     return importlib.import_module("app.api.v1.normalidade")
 
 
-def test_faixa_input_valida_limites():
-    with pytest.raises(ValidationError):
-        FaixaInput()
-    with pytest.raises(ValidationError):
-        FaixaInput(minimo=100, maximo=70)
-    with pytest.raises(ValidationError):
-        FaixaInput(minimo=-1)
-    assert FaixaInput(maximo=5.6).minimo is None
-
-
-def test_listar_faixas_mostra_padrao(monkeypatch):
+def test_lista_parametros_sem_faixa_cadastrada(monkeypatch):
     rota = carregar(monkeypatch, BancoFalso())
-    faixas = {f.parametro: f for f in rota.listar_faixas(current_user=usuario())}
-    assert set(faixas) == set(ne.PARAMETROS)
-    assert (faixas["glicemia"].minimo, faixas["glicemia"].maximo, faixas["glicemia"].ajustada) == (70, 99, False)
-    assert faixas["vdrl"].qualitativo and faixas["vdrl"].referencia == "Não reagente"
-
-
-def test_ajustar_e_restaurar_faixa_com_trilha(monkeypatch):
-    banco = BancoFalso()
-    rota = carregar(monkeypatch, banco)
-    req = requisicao()
-    faixa = rota.ajustar_faixa("glicemia", FaixaInput(minimo=70, maximo=110), req, current_user=usuario())
-    assert (faixa.maximo, faixa.ajustada, faixa.referencia) == (110, True, "70 a 110 mg/dL")
-    assert req.state.audit["action"] == "normalidade.faixa.ajuste"
-    assert req.state.audit["metadata"] == {"parametro": "glicemia", "antes": {"minimo": 70, "maximo": 99},
-                                           "depois": {"minimo": 70, "maximo": 110}}
-
-    req = requisicao("DELETE")
-    faixa = rota.restaurar_faixa("glicemia", req, current_user=usuario())
-    assert (faixa.maximo, faixa.ajustada) == (99, False)
-    assert banco.ajustes == {}
-    assert req.state.audit["metadata"]["antes"] == {"minimo": 70, "maximo": 110}
-
-
-def test_qualitativo_e_desconhecido_nao_se_ajustam(monkeypatch):
-    rota = carregar(monkeypatch, BancoFalso())
-    from fastapi import HTTPException
-    with pytest.raises(HTTPException) as e:
-        rota.ajustar_faixa("vdrl", FaixaInput(maximo=1), requisicao(), current_user=usuario())
-    assert e.value.status_code == 422
-    with pytest.raises(HTTPException) as e:
-        rota.ajustar_faixa("colesterol_hdl", FaixaInput(maximo=1), requisicao(), current_user=usuario())
-    assert e.value.status_code == 404
+    lista = {p.parametro: p for p in rota.listar_parametros(current_user=usuario(UserRole.CHECKER))}
+    assert lista["glicemia"].unidade == "mg/dL"
+    assert lista["vdrl"].qualitativo and lista["vdrl"].normal_texto == "Não reagente"
+    # Cadastrar faixa saiu: a rota de ajuste não existe mais.
+    assert not hasattr(rota, "ajustar_faixa")
 
 
 def test_normalidade_do_documento(monkeypatch):
     banco = BancoFalso()
     banco.documento = types.SimpleNamespace(ocr_markdown=LAUDO, result_payload={"tabela_comparacao": TABELA})
-    banco.upsert_faixa_normalidade("glicemia", 70, 200, None, None, None)
     rota = carregar(monkeypatch, banco)
     resposta = rota.normalidade_do_documento("doc-1", current_user=usuario(UserRole.CHECKER))
     assert resposta.habilitada
-    # O ajuste de faixa vale para o documento já processado.
-    assert resposta.itens[0].parametros[0].situacao == "normal"
+    assert resposta.itens[0].parametros[0].situacao == "acima"
+    assert resposta.itens[0].parametros[0].referencia == "70 a 99 mg/dL"
     assert resposta.itens[1].parametros[0].situacao == "abaixo"
 
 

@@ -68,9 +68,8 @@ export const API_ENDPOINTS = {
   // Texto do OCR com a posição de cada linha, para a busca no documento.
   DOCUMENT_TEXTO: (id: string) => `${API_PROXY_BASE}/v1/documents/${id}/texto`,
 
-  // Faixas de referência da normalidade (tela de Normalidade)
-  NORMALIDADE_FAIXAS: `${API_PROXY_BASE}/v1/normalidade/faixas`,
-  NORMALIDADE_FAIXA: (parametro: string) => `${API_PROXY_BASE}/v1/normalidade/faixas/${parametro}`,
+  // Parâmetros que o ProntuAI lê nos laudos (tela de Normalidade)
+  NORMALIDADE_PARAMETROS: `${API_PROXY_BASE}/v1/normalidade/parametros`,
 
   // Notifications
   NOTIFICATIONS: `${API_PROXY_BASE}/v1/notifications`,
