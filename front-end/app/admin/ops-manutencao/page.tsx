@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react"
 import { CalendarClock, RefreshCw, ShieldAlert, Wrench } from "lucide-react"
 import { toast } from "sonner"
 
+import { CardPedidosGuardados } from "@/components/card-pedidos-guardados"
 import { RequireRole } from "@/components/require-role"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -197,6 +198,8 @@ function OpsManutencaoContent() {
             {publicStatus?.eta && <span className="text-sm text-amber-200">{publicStatus.eta}</span>}
           </CardContent>
         </Card>
+
+        <CardPedidosGuardados />
 
         <div className="grid gap-6 lg:grid-cols-[1fr_1.2fr]">
           <Card className="border-slate-800 bg-slate-900 text-slate-50">
