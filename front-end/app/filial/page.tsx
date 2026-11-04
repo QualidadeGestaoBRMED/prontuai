@@ -69,7 +69,9 @@ export default function Page() {
     <RequireRole allowedRoles={["FILIAL", "ADMIN", "MANAGER"]}>
       <SidebarProvider>
         <AppSidebar />
-        <SidebarInset className="bg-sidebar group/sidebar-inset">
+        {/* `min-w-0`: sem ele, a tabela larga estica a página toda, e o botão da
+            faixa de envio sai da tela no celular. Quem rola é a área de conteúdo. */}
+        <SidebarInset className="bg-sidebar group/sidebar-inset min-w-0">
           <header className="flex h-16 shrink-0 items-center gap-2 px-4 md:px-6 lg:px-8 bg-sidebar text-sidebar-foreground relative before:absolute before:inset-y-3 before:-left-px before:w-px before:bg-gradient-to-b before:from-white/5 before:via-white/15 before:to-white/5 before:z-50">
             <SidebarTrigger className="-ms-2 text-sidebar-foreground hover:text-sidebar-foreground/70" />
             <h1 className="text-lg font-semibold">Envio e Checagem</h1>
@@ -87,17 +89,18 @@ export default function Page() {
             <div className="flex-1 min-h-0 flex flex-col gap-4 p-4 md:p-6 lg:p-8 overflow-auto">
               <section aria-label="Enviar documento" className="shrink-0 bg-white rounded-lg p-4 shadow-sm">
                 {processando || comErro ? (
-                  <div className="space-y-4">
-                    <DocumentBatchProcessor
-                      files={arquivos}
-                      onComplete={aoConcluir}
-                      submittedBy={session?.user?.email || undefined}
-                    />
-                    <div className="flex justify-end">
-                      <Button variant="outline" size="sm" onClick={encerrar}>
-                        {processando ? "Encerrar processo" : "Fechar e enviar outro"}
-                      </Button>
+                  <div className="flex flex-wrap items-start gap-x-6 gap-y-3">
+                    <div className="min-w-64 flex-1">
+                      <DocumentBatchProcessor
+                        files={arquivos}
+                        onComplete={aoConcluir}
+                        submittedBy={session?.user?.email || undefined}
+                        compacto
+                      />
                     </div>
+                    <Button variant="outline" size="sm" onClick={encerrar} className="shrink-0">
+                      {processando ? "Encerrar processo" : "Fechar e enviar outro"}
+                    </Button>
                   </div>
                 ) : (
                   <DocumentUploadZone onProcessFiles={enviar} compacta />
