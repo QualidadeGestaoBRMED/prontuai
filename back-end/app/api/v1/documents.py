@@ -5,7 +5,15 @@ from fastapi import APIRouter, HTTPException, status, Depends, Query, Request, B
 from fastapi.responses import FileResponse
 from typing import List, Any
 from pydantic import BaseModel, Field
-from app.core.auth import get_current_user, require_admin, require_checker, require_document_reader, require_roles
+from app.core.auth import (
+    decide_qualquer_documento,
+    garantir_decisao_no_documento,
+    get_current_user,
+    require_admin,
+    require_decisor,
+    require_document_reader,
+    require_roles,
+)
 from app.core.database import user_db
 from app.models.user import User, UserRole, GLOBAL_READ_ROLES
 from app.models.document import (
@@ -840,23 +848,26 @@ async def update_document(
     document_id: str,
     payload: DocumentUpdate,
     background_tasks: BackgroundTasks,
-    current_user: User = Depends(require_checker)
+    current_user: User = Depends(require_decisor)
 ):
     """
     Atualiza status de validação e dados do documento.
 
     - CHECKER/ADMIN: atualiza status de validação e payload de revisão
+    - FILIAL: só aprova ou rejeita o que ela mesma enviou
     """
     try:
-        if current_user.role not in [UserRole.CHECKER, UserRole.ADMIN, UserRole.MANAGER]:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Apenas checadores, administradores ou gestores podem atualizar validações",
-            )
-
         document = user_db.get_document_by_id(document_id)
         if not document:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Documento não encontrado")
+
+        garantir_decisao_no_documento(current_user, document)
+        e_filial = not decide_qualquer_documento(current_user)
+        if e_filial and payload.validation_status not in ("validated", "rejected"):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Seu perfil só pode aprovar ou rejeitar o documento",
+            )
 
         approval_reason = payload.approval_reason
         rejection_reason = payload.rejection_reason
@@ -883,7 +894,14 @@ async def update_document(
         if not reviewed_at:
             reviewed_at = existing_reviewed_at
 
-        is_human_reviewer = current_user.role in [UserRole.ADMIN, UserRole.CHECKER, UserRole.MANAGER]
+        # O revisor da filial não vem do cliente: é por este e-mail exato que o
+        # dashboard separa as decisões dela (ver `_SQL_PRAZOS`).
+        if e_filial:
+            reviewed_by = current_user.email
+            reviewed_at = reviewed_at or datetime.utcnow().isoformat()
+
+        # A guarda de cima já barrou quem não decide este documento.
+        is_human_reviewer = True
         effective_status = payload.validation_status or document.validation_status
 
         if effective_status == "validated" and is_human_reviewer and not reviewed_by:

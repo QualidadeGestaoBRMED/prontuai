@@ -77,6 +77,19 @@ def _recusar_cargo_contido(papeis: Optional[List[UserRole]]) -> None:
             )
 
 
+def _exigir_enviador_na_filial(papeis: Optional[List[UserRole]]) -> None:
+    """
+    FILIAL não existe sem SENDER: é ele que prende o usuário a uma clínica e aos
+    próprios envios, e FILIAL não está no enum `userrole` do Postgres (ver
+    `PRECEDENCIA_PAPEIS`), então sozinho nem seria gravável como papel principal.
+    """
+    if papeis and UserRole.FILIAL in papeis and UserRole.SENDER not in papeis:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="O cargo FILIAL exige o cargo SENDER",
+        )
+
+
 def _validar_clinica(clinic_id: Optional[str]):
     """Clínica obrigatória para quem tem SENDER, e precisa existir."""
     if not clinic_id:
@@ -156,6 +169,7 @@ async def create_user(
     papeis = user_create.papeis()
     _assert_manager_cannot_touch_admin(admin, papeis)
     _recusar_cargo_contido(papeis)
+    _exigir_enviador_na_filial(papeis)
     try:
         clinic_id = None
         clinic_name = None
@@ -238,6 +252,7 @@ async def update_user(
     if _gestor_sem_admin(admin):
         _assert_manager_can_edit(admin, user_id, user_update)
     _recusar_cargo_contido(papeis)
+    _exigir_enviador_na_filial(papeis)
 
     alvo = user_db.get_user_by_id(user_id)
     if alvo is None:

@@ -14,8 +14,8 @@ Calculado na hora sobre o `ocr_markdown` e o layout gravados (ver
 `app/services/layout_ocr.py`): melhorar o catálogo de sinônimos vale também para
 documentos já processados. Documento sem layout responde `disponivel: false`.
 
-É só navegação: nada aqui muda status, faltantes ou decisão. O SENDER fica de
-fora, como na leitura de normalidade: é apoio à checagem.
+É só navegação: nada aqui muda status, faltantes ou decisão. O SENDER puro fica
+de fora, como na leitura de normalidade: é apoio à checagem.
 """
 import logging
 
@@ -32,8 +32,18 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Localização no PDF"])
 
 # Quem checa ou acompanha a checagem. Espelha o modal: CHECKER decide, CURATOR
-# acompanha em modo leitura, gestão vê tudo.
-_LEITORES = [UserRole.ADMIN, UserRole.MANAGER, UserRole.CHECKER, UserRole.CURATOR]
+# acompanha em modo leitura, gestão vê tudo. A FILIAL usa o mesmo modal, mas só
+# nos documentos que enviou (`_garantir_leitura`).
+_LEITORES = [UserRole.ADMIN, UserRole.MANAGER, UserRole.CHECKER, UserRole.CURATOR, UserRole.FILIAL]
+
+
+def _garantir_leitura(current_user: User, document) -> None:
+    """Principal SENDER aqui só pode ser a filial: o SENDER puro nem chega à rota."""
+    if current_user.role == UserRole.SENDER and document.uploaded_by_user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Você não tem permissão para acessar este documento",
+        )
 
 
 def _termos_do_exame(*nomes: str | None) -> set[str]:
@@ -79,6 +89,7 @@ def localizacoes_do_documento(
     document = user_db.get_document_by_id(document_id)
     if not document:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Documento não encontrado")
+    _garantir_leitura(current_user, document)
     try:
         linhas = layout_ocr.alinhar(document.ocr_markdown or "", user_db.get_document_layout(document_id))
         if linhas is None:
@@ -121,6 +132,7 @@ def texto_do_documento(
     document = user_db.get_document_by_id(document_id)
     if not document:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Documento não encontrado")
+    _garantir_leitura(current_user, document)
     try:
         linhas = layout_ocr.alinhar(document.ocr_markdown or "", user_db.get_document_layout(document_id))
     except Exception as e:

@@ -54,6 +54,12 @@ const data = {
       url: "#",
       items: [
         {
+          title: "Envio e Checagem",
+          url: "/filial",
+          icon: RiCheckDoubleLine,
+          roles: ["FILIAL"],
+        },
+        {
           title: "Anexar Prontuário",
           url: "/anexar-prontuario",
           icon: RiUploadLine,
@@ -84,8 +90,8 @@ const data = {
 };
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
-  const { isAdmin, isManagement, canCurateExams, canViewDashboard, roles } = usePermissions();
-  const documentsRoutes = new Set(["/pendentes", "/historico", "/checagem"]);
+  const { isAdmin, isManagement, canCurateExams, canViewDashboard, isFilial, roles } = usePermissions();
+  const documentsRoutes = new Set(["/filial", "/pendentes", "/historico", "/checagem"]);
   const handleDocumentsRefresh = (url?: string) => {
     if (!url || !documentsRoutes.has(url)) return;
     if (typeof window === "undefined") return;
@@ -96,6 +102,10 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     );
   };
   const visibleItems = data.navMain[0]?.items.filter((item) => {
+    // A tela da filial substitui o Anexar para ela e não aparece para mais ninguém,
+    // nem para a gestão, que veria a Checagem repetida no menu.
+    if (item.url === "/filial") return isFilial;
+    if (item.url === "/anexar-prontuario" && isFilial) return false;
     if (isManagement) return true;
     if (!roles.length) return false;
     if (!item.roles || item.roles.length === 0) return true;

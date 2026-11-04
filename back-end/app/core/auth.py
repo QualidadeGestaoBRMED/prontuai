@@ -624,6 +624,62 @@ async def require_checker(
     )
 
 
+def decide_qualquer_documento(user: User) -> bool:
+    """CHECKER e gestão decidem documentos de todas as clínicas; a FILIAL, não."""
+    return user.tem_papel(UserRole.CHECKER, UserRole.ADMIN, UserRole.MANAGER)
+
+
+async def require_decisor(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+) -> User:
+    """
+    Requer um cargo que decide documentos, inclusive a FILIAL.
+
+    Só decide QUEM pode chegar à rota: o handler precisa chamar
+    `garantir_decisao_no_documento`, ou a filial alcançaria documento alheio.
+    """
+    return _exigir_papel(
+        request, current_user,
+        (UserRole.CHECKER, UserRole.ADMIN, UserRole.MANAGER, UserRole.FILIAL),
+        "Apenas checadores ou administradores podem acessar este recurso",
+    )
+
+
+def garantir_decisao_no_documento(user: User, document) -> None:
+    """
+    A FILIAL só decide o que ela mesma enviou e que ninguém mais decidiu.
+
+    A segunda condição existe porque o documento dela continua na Checagem
+    central: sem ela, a filial poderia desfazer a rejeição de um checador sobre o
+    próprio envio, e sobrescrever o parecer dele.
+    """
+    if decide_qualquer_documento(user):
+        return
+    if not user.tem_papel(UserRole.FILIAL) or document.uploaded_by_user_id != user.id:
+        motivo, detail = (
+            "documento_de_outro_usuario",
+            "Você não tem permissão para decidir este documento",
+        )
+    elif document.reviewed_by and document.reviewed_by != user.email:
+        motivo, detail = (
+            "documento_decidido_por_outra_pessoa",
+            "Este documento já foi decidido por outra pessoa",
+        )
+    else:
+        return
+    _registrar_recusa(
+        None,
+        "auth.access.denied",
+        motivo,
+        email=user.email,
+        papel=user.role.value,
+        papeis=[p.value for p in user.roles],
+        documento=document.id,
+    )
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=detail)
+
+
 async def require_sender(
     request: Request,
     current_user: User = Depends(get_current_user),

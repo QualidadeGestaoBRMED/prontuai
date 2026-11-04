@@ -26,5 +26,5 @@ export default function middleware(req: NextRequest, event: NextFetchEvent) {
 }
 
 export const config = {
-  matcher: ["/anexar-prontuario", "/chat", "/checagem", "/dashboard", "/insights", "/historico", "/pendentes", "/admin/:path*"],
+  matcher: ["/anexar-prontuario", "/chat", "/checagem", "/filial", "/dashboard", "/insights", "/historico", "/pendentes", "/admin/:path*"],
 };

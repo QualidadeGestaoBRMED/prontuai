@@ -16,7 +16,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 
 from app.core import metrics
-from app.core.auth import require_checker
+from app.core.auth import garantir_decisao_no_documento, require_decisor
 from app.core.database import user_db
 from app.core.logging import get_request_id
 from app.models.audit_log import AuditLogCreate
@@ -168,12 +168,14 @@ def _validar_payload(payload: DocumentFeedbackInput) -> None:
 @router.get("/{document_id}/feedback", response_model=DocumentFeedback | None)
 async def get_document_feedback(
     document_id: str,
-    current_user: User = Depends(require_checker),
+    current_user: User = Depends(require_decisor),
 ):
     """Parecer atual do documento, ou `null` quando nunca foi avaliado."""
     try:
-        if not user_db.get_document_by_id(document_id):
+        document = user_db.get_document_by_id(document_id)
+        if not document:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Documento não encontrado")
+        garantir_decisao_no_documento(current_user, document)
         return user_db.get_document_feedback(document_id)
     except HTTPException:
         raise
@@ -189,7 +191,7 @@ async def put_document_feedback(
     document_id: str,
     payload: DocumentFeedbackInput,
     request: Request,
-    current_user: User = Depends(require_checker),
+    current_user: User = Depends(require_decisor),
 ):
     """
     Cria ou substitui o parecer do documento.
@@ -203,6 +205,7 @@ async def put_document_feedback(
         document = user_db.get_document_by_id(document_id)
         if not document:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Documento não encontrado")
+        garantir_decisao_no_documento(current_user, document)
         if not _revisado_por_humano(document):
             raise HTTPException(
                 status.HTTP_409_CONFLICT,

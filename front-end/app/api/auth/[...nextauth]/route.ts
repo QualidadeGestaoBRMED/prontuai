@@ -10,8 +10,8 @@ interface BackendAuthData {
     id: string;
     email: string;
     name: string;
-    role: "ADMIN" | "MANAGER" | "CURATOR" | "CHECKER" | "SENDER" | "VIEWER";
-    roles?: ("ADMIN" | "MANAGER" | "CURATOR" | "CHECKER" | "SENDER" | "VIEWER")[];
+    role: "ADMIN" | "MANAGER" | "CURATOR" | "CHECKER" | "SENDER" | "FILIAL" | "VIEWER";
+    roles?: ("ADMIN" | "MANAGER" | "CURATOR" | "CHECKER" | "SENDER" | "FILIAL" | "VIEWER")[];
     is_active: boolean;
   };
 }

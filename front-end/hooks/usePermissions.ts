@@ -2,14 +2,14 @@
 
 import { useSession } from "next-auth/react";
 
-export type UserRole = "ADMIN" | "MANAGER" | "CURATOR" | "CHECKER" | "SENDER" | "VIEWER";
+export type UserRole = "ADMIN" | "MANAGER" | "CURATOR" | "CHECKER" | "SENDER" | "FILIAL" | "VIEWER";
 
 /**
  * Um usuário pode ter mais de um cargo. Esta é a ordem do back-end
  * (`PRECEDENCIA_PAPEIS` em back-end/app/models/user.py): o primeiro da lista é
  * o papel principal, o que vai para a auditoria. Mude as duas juntas.
  */
-export const PRECEDENCIA_PAPEIS: UserRole[] = ["ADMIN", "MANAGER", "CHECKER", "CURATOR", "SENDER", "VIEWER"];
+export const PRECEDENCIA_PAPEIS: UserRole[] = ["ADMIN", "MANAGER", "CHECKER", "CURATOR", "SENDER", "FILIAL", "VIEWER"];
 
 /**
  * Os cargos do usuário, na ordem de precedência. Sessão aberta antes do deploy
@@ -27,8 +27,9 @@ export function papeisDoUsuario(user?: { role?: UserRole; roles?: UserRole[] } |
  * aqui ela só some da tela. Mude os dois juntos.
  */
 export const CARGOS_CONTIDOS: Partial<Record<UserRole, UserRole[]>> = {
-  ADMIN: ["MANAGER", "CHECKER", "CURATOR", "SENDER", "VIEWER"],
-  MANAGER: ["CHECKER", "SENDER", "VIEWER"],
+  ADMIN: ["MANAGER", "CHECKER", "CURATOR", "SENDER", "FILIAL", "VIEWER"],
+  MANAGER: ["CHECKER", "SENDER", "FILIAL", "VIEWER"],
+  CHECKER: ["FILIAL"],
 };
 
 /** O cargo da lista que já contém `papel`, ou undefined. */
@@ -70,6 +71,8 @@ export interface PermissionsHook {
   canViewDashboard: boolean;
   isChecker: boolean;
   isSender: boolean;
+  /** Envia e decide só os próprios documentos, na tela `/filial`. Quem é CHECKER ou gestão não entra. */
+  isFilial: boolean;
   canManageUsers: boolean;
   canValidateExams: boolean;
   canSendDocuments: boolean;
@@ -102,6 +105,7 @@ function buildPermissions(roles: UserRole[]) {
     canViewDashboard,
     isChecker,
     isSender,
+    isFilial: tem("FILIAL") && !isChecker,
     canManageUsers: isManagement,
     canValidateExams: isChecker,
     canSendDocuments: isSender,
