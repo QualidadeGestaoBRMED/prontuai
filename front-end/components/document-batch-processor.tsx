@@ -5,6 +5,7 @@ import { FileWithPreview } from "@/hooks/use-file-upload"
 import { ProcessingStepper } from "./processing-stepper"
 import { Card } from "./ui/card"
 import { Badge } from "./ui/badge"
+import { Progress } from "./ui/progress"
 import { FileIcon, AlertCircleIcon, CheckCircle2Icon } from "lucide-react"
 import { formatBytes } from "@/hooks/use-file-upload"
 import { useNotifications } from "@/hooks/use-notifications"
@@ -23,6 +24,15 @@ interface DocumentBatchProcessorProps {
    * @default true
    */
   useAsync?: boolean
+  /** Uma faixa por documento, para dividir a tela com outro conteúdo. */
+  compacto?: boolean
+}
+
+const ETAPA_COMPACTA: Partial<Record<ProcessingDocumentState["stage"], string>> = {
+  upload: "Enviando",
+  ocr: "Lendo o documento",
+  brnet: "Consultando o BR NET",
+  validation: "Comparando os exames",
 }
 
 export function DocumentBatchProcessor({
@@ -31,6 +41,7 @@ export function DocumentBatchProcessor({
   onError,
   submittedBy,
   useAsync = true,
+  compacto = false,
 }: DocumentBatchProcessorProps) {
   const { startBackgroundProcessing, processingDocuments } = useNotifications()
   const hasInitializedRef = useRef(false)
@@ -77,6 +88,51 @@ export function DocumentBatchProcessor({
 
   if (documents.length === 0) {
     return null
+  }
+
+  if (compacto) {
+    return (
+      <div className="space-y-3">
+        {documents.map((doc) => (
+          <div key={doc.id} className="flex items-start gap-3">
+            {doc.error ? (
+              <AlertCircleIcon className="mt-0.5 size-5 shrink-0 text-destructive" />
+            ) : doc.stage === "completed" ? (
+              <CheckCircle2Icon className="mt-0.5 size-5 shrink-0 text-green-500" />
+            ) : (
+              <FileIcon className="mt-0.5 size-5 shrink-0 text-muted-foreground" />
+            )}
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-baseline gap-x-2">
+                <span className="min-w-0 truncate text-sm font-medium">
+                  {doc.file?.name ?? doc.fileName ?? "Documento"}
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  {formatBytes(doc.file?.size ?? doc.fileSize ?? 0)}
+                </span>
+              </div>
+              {doc.error ? (
+                <p role="alert" className="mt-0.5 text-sm text-destructive">{doc.error}</p>
+              ) : (
+                <>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    {doc.stage === "completed"
+                      ? "Concluído"
+                      : doc.statusMessage || ETAPA_COMPACTA[doc.stage] || "Processando..."}
+                  </p>
+                  {doc.stage !== "completed" && (
+                    <Progress value={doc.displayProgress} className="mt-1.5 h-1.5" />
+                  )}
+                </>
+              )}
+            </div>
+            {!doc.error && (
+              <span className="shrink-0 text-sm font-semibold tabular-nums">{doc.displayProgress}%</span>
+            )}
+          </div>
+        ))}
+      </div>
+    )
   }
 
   return (
