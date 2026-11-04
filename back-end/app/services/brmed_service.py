@@ -6,6 +6,7 @@ import time
 import httpx
 from app.core.config import settings
 from app.core import metrics
+from app.services import pedidos_guardados
 
 logger = logging.getLogger(__name__)
 
@@ -241,4 +242,9 @@ async def consultar_exames_prontuai(
 ) -> Dict[str, Any]:
     resultado = await consultar_exames_prontuai_api(cpf=cpf, passaporte=passaporte, cnpj=cnpj)
     metrics.PRONTUAI_API_CONSULTAS.add(1, {"resultado": "falha" if "erro" in resultado else "sucesso"})
-    return resultado
+    # Só em staging, com a função ligada. Ver `pedidos_guardados`.
+    return await pedidos_guardados.aplicar(
+        resultado,
+        _normalize_cpf(cpf) or _normalize_passport(passaporte),
+        _normalize_cnpj(cnpj),
+    )

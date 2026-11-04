@@ -34,3 +34,7 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+## Testes em staging
+
+O card "Testes em staging: pedidos guardados" fica em `/admin/ops-manutencao`, só para ADMIN, e liga ou desliga a função sem reiniciar nada. Fora de staging a rota responde 404 e o card não aparece.
