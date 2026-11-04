@@ -4,7 +4,7 @@
 
 import { Localizacao } from "@/types/localizacao"
 
-export type SituacaoParametro = "normal" | "acima" | "abaixo" | "alterado" | "sem_resultado"
+export type SituacaoParametro = "normal" | "acima" | "abaixo" | "alterado" | "sem_resultado" | "sem_referencia"
 
 /** Valor de um parâmetro (glicose, hemoglobina...) lido no laudo do documento. */
 export type ParametroLido = {
@@ -14,7 +14,7 @@ export type ParametroLido = {
   valor: number | null
   /** Como saiu no laudo ("8,9", "148.000", "Reagente 1/4"). */
   valor_texto: string | null
-  /** Faixa em vigor, já formatada ("70 a 99 mg/dL"). */
+  /** Faixa impressa no laudo, já formatada ("70 a 99 mg/dL"), ou "não lida no laudo". */
   referencia: string
   situacao: SituacaoParametro
   /** Onde o valor está no PDF (valor e nome do parâmetro). Sem layout do OCR, null. */
@@ -32,20 +32,11 @@ export type NormalidadeDocumento = {
   itens: NormalidadeItem[]
 }
 
-/** Linha da tela de Normalidade: a faixa padrão e a que está valendo. */
-export type FaixaNormalidade = {
+/** Linha da tela de Normalidade: um parâmetro que o ProntuAI lê nos laudos. */
+export type ParametroLeitura = {
   parametro: string
   nome: string
   unidade: string
   qualitativo: boolean
   normal_texto: string | null
-  padrao_minimo: number | null
-  padrao_maximo: number | null
-  minimo: number | null
-  maximo: number | null
-  referencia: string
-  ajustada: boolean
-  atualizado_por_email: string | null
-  atualizado_por_nome: string | null
-  atualizado_em: string | null
 }

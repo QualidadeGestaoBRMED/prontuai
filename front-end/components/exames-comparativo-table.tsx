@@ -65,6 +65,7 @@ const SITUACAO: Record<SituacaoParametro, { label: string; className: string }> 
   alterado: { label: "Alterado", className: "bg-red-100 text-red-700 border-red-300" },
   normal: { label: "Normal", className: "bg-emerald-100 text-emerald-700 border-emerald-300" },
   sem_resultado: { label: "Não lido", className: "bg-slate-100 text-slate-600 border-slate-300" },
+  sem_referencia: { label: "Sem referência", className: "bg-slate-100 text-slate-600 border-slate-300" },
 };
 
 export const foraDaFaixa = (p: ParametroLido) =>
@@ -113,7 +114,7 @@ function CelulaNormalidade({ item, parametros, carregando, onLocalizar, ativo }:
               <span className={`rounded border px-1.5 py-px text-[11px] font-medium ${sit.className}`}>{sit.label}</span>
             </div>
             <div className="text-[11px] text-muted-foreground">
-              {p.situacao === "sem_resultado" ? "Valor não encontrado no PDF" : `Ref.: ${p.referencia}`}
+              {p.situacao === "sem_resultado" ? "Valor não encontrado no PDF" : `Ref. do laudo: ${p.referencia}`}
             </div>
           </div>
         );

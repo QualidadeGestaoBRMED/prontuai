@@ -2,13 +2,15 @@
 Normalidade e alteração de exames de laboratório.
 
 Lê no markdown do OCR o resultado de cada parâmetro (glicose, HbA1c, hemoglobina,
-plaquetas...) e compara com a faixa de referência. O resultado é só informativo:
-não muda status, faltantes, confiança nem validation_status. A tela da checagem
-mostra os valores numa coluna da Comparação Detalhada.
+plaquetas...) e a faixa de referência impressa pelo laboratório no mesmo laudo. O
+resultado é só informativo: não muda status, faltantes, confiança nem
+validation_status. A tela da checagem mostra os valores numa coluna da Comparação
+Detalhada.
 
-A faixa NÃO é a impressa no laudo: cada laboratório imprime a sua, e o OCR
-embaralha a tabela. Vale a faixa cadastrada aqui (padrão no código, ajuste na
-tabela `faixas_normalidade`), igual para todos os documentos.
+A faixa é a do laudo, por decisão da Saúde na reunião de 28/10/2026: os médicos da
+BR MED seguem o que o laboratório considera normal ou alterado, sem cadastrar
+faixa e sem contraprova da BR MED. O critério de conduta é outra etapa. Sem faixa
+legível, a situação é `sem_referencia`: o valor aparece e nada é classificado.
 
 Roda sobre o markdown local e não chama API: o resultado de exame é dado de
 saúde e não sai daqui. Nada deste módulo loga valor nem trecho do documento.
@@ -40,7 +42,7 @@ import re
 import unicodedata
 from bisect import bisect_right
 from dataclasses import dataclass
-from typing import Any, Iterable, Optional
+from typing import Any, Iterable, NamedTuple, Optional
 
 from app.services import layout_ocr
 
@@ -54,6 +56,8 @@ ABAIXO = "abaixo"
 ALTERADO = "alterado"
 # Parâmetro do exame sem valor legível no PDF.
 SEM_RESULTADO = "sem_resultado"
+# Valor lido, mas sem faixa do laboratório em que se possa confiar.
+SEM_REFERENCIA = "sem_referencia"
 
 JANELA = 160
 
@@ -65,8 +69,11 @@ class Parametro:
     unidade: str
     # Como o nome aparece no laudo, já normalizado (sem acento, maiúsculo).
     nomes: tuple[str, ...]
-    padrao_min: Optional[float] = None
-    padrao_max: Optional[float] = None
+    # Onde o mínimo e o máximo impressos podem estar. Não é critério clínico: é a
+    # conferência de que o número lido é a faixa deste parâmetro de adulto, e não
+    # a de outro analito ou a de recém-nascido que o OCR deixou por perto.
+    ref_min: Optional[tuple[float, float]] = None
+    ref_max: Optional[tuple[float, float]] = None
     # Regex da unidade aceita logo depois do número, no texto normalizado.
     unidade_rx: str = ""
     # Contagem por mm³: aceita número sem unidade se tiver milhar ou "mil".
@@ -84,49 +91,47 @@ class Parametro:
     plausivel: tuple[float, float] = (0, float("inf"))
 
 
-# Faixas padrão de adulto. Ponto de partida para a staging: quem decide o
-# critério ocupacional ajusta na tela de Normalidade, sem deploy.
 PARAMETROS: dict[str, Parametro] = {p.chave: p for p in (
     Parametro("glicemia", "Glicose em jejum", "mg/dL",
               ("GLICEMIA DE JEJUM", "GLICEMIA EM JEJUM", "GLICOSE DE JEJUM", "GLICOSE EM JEJUM", "GLICEMIA", "GLICOSE"),
-              70, 99, unidade_rx=r"MG\s?/\s?DL", plausivel=(20, 1000),
+              (40, 100), (80, 140), unidade_rx=r"MG\s?/\s?DL", plausivel=(20, 1000),
               exclui=("MEDIA", "ESTIMADA", "POS", "NA URINA", "URINA", "1 HORA", "2 HORAS")),
     Parametro("hba1c", "Hemoglobina glicada (HbA1c)", "%",
               ("HEMOGLOBINA GLICADA", "HBA1C", "HB A1C", "HB ALC", "HBALC", "A1C"),
-              None, 5.6, unidade_rx=r"%", plausivel=(3, 20)),
+              (3, 5), (5, 7.5), unidade_rx=r"%", plausivel=(3, 20)),
     Parametro("colesterol", "Colesterol total", "mg/dL",
               ("COLESTEROL TOTAL", "COLESTROL TOTAL"),
-              None, 189, unidade_rx=r"MG\s?/\s?DL", plausivel=(50, 1000)),
+              (0, 150), (150, 240), unidade_rx=r"MG\s?/\s?DL", plausivel=(50, 1000)),
     Parametro("triglic", "Triglicerídeos", "mg/dL",
               ("TRIGLICERIDEOS", "TRIGLICERIDES", "TRIGLICERIDIOS"),
-              None, 149, unidade_rx=r"MG\s?/\s?DL", plausivel=(10, 5000)),
+              (0, 100), (100, 200), unidade_rx=r"MG\s?/\s?DL", plausivel=(10, 5000)),
     Parametro("creatinina", "Creatinina", "mg/dL",
               ("CREATININA",),
-              0.7, 1.3, unidade_rx=r"MG\s?/\s?DL", plausivel=(0.1, 20),
+              (0.3, 1.1), (0.8, 1.7), unidade_rx=r"MG\s?/\s?DL", plausivel=(0.1, 20),
               exclui=("NA URINA", "URINARIA", "CLEARANCE")),
     Parametro("ureia", "Ureia", "mg/dL",
               ("UREIA",),
-              15, 45, unidade_rx=r"MG\s?/\s?DL", plausivel=(2, 400),
+              (5, 30), (30, 80), unidade_rx=r"MG\s?/\s?DL", plausivel=(2, 400),
               exclui=("NA URINA", "URINARIA")),
     Parametro("tgo", "TGO (AST)", "U/L",
               ("ASPARTATO AMINOTRANSFERASE", "TRANSAMINASE OXALACETICA", "TGO", "AST"),
-              None, 40, unidade_rx=r"U\s?/\s?L", plausivel=(1, 5000)),
+              (0, 20), (20, 70), unidade_rx=r"U\s?/\s?L", plausivel=(1, 5000)),
     Parametro("tgp", "TGP (ALT)", "U/L",
               ("ALANINA AMINOTRANSFERASE", "TRANSAMINASE PIRUVICA", "TGP", "ALT"),
-              None, 41, unidade_rx=r"U\s?/\s?L", plausivel=(1, 5000)),
+              (0, 20), (20, 70), unidade_rx=r"U\s?/\s?L", plausivel=(1, 5000)),
     Parametro("ggt", "Gama GT", "U/L",
               ("GAMA GLUTAMIL TRANSFERASE", "GAMA GLUTAMILTRANSFERASE", "GAMA-GT", "GAMA GT", "GGT"),
-              None, 60, unidade_rx=r"U\s?/\s?L", plausivel=(1, 5000)),
+              (0, 20), (25, 90), unidade_rx=r"U\s?/\s?L", plausivel=(1, 5000)),
     Parametro("hemoglobina", "Hemoglobina", "g/dL",
               ("HEMOGLOBINA",),
-              12, 17.5, unidade_rx=r"G\s?/\s?DL|G\s?%", plausivel=(3, 25),
+              (10, 15.5), (14, 19), unidade_rx=r"G\s?/\s?DL|G\s?%", plausivel=(3, 25),
               exclui=("GLICADA", "CORPUSCULAR", "VARIANTE", "FETAL", "A1C"), exclui_antes=("CONCENTRACAO", "CONC.")),
     Parametro("leucocitos", "Leucócitos", "/mm³",
               ("LEUCOCITOS", "GLOBULOS BRANCOS"),
-              4000, 11000, milhar=True, plausivel=(500, 200000)),
+              (2500, 6000), (8000, 14000), milhar=True, plausivel=(500, 200000)),
     Parametro("plaquetas", "Plaquetas", "/mm³",
               ("PLAQUETAS",),
-              150000, 450000, milhar=True, plausivel=(5000, 2000000)),
+              (100000, 200000), (300000, 600000), milhar=True, plausivel=(5000, 2000000)),
     Parametro("vdrl", "VDRL", "",
               ("VDRL",),
               qualitativo=True, normal_texto="Não reagente"),
@@ -254,6 +259,102 @@ def _valor_numerico(p: Parametro, jan: str) -> Optional[tuple[float, str, int, i
     return None
 
 
+class FaixaLaudo(NamedTuple):
+    minimo: Optional[float]
+    maximo: Optional[float]
+    # "Inferior a 190": o próprio 190 já está fora.
+    teto_exclusivo: bool = False
+
+
+_NUM_REF = r"(\d{1,3}(?:\.\d{3})+|\d+(?:[.,]\d+)?)"
+_UNIDADE_REF = r"(?:\s*(?:MG\s?/\s?DL|G\s?/\s?DL|U\s?/\s?L|%|/?\s?MM\s?3|/\s?UL|MIL(?:\s?/\s?MM\s?3)?))?"
+_SEM_IDADE = r"(?!\s*(?:ANO|ANOS|MES|MESES|DIA|DIAS)\b)"
+_RX_INTERVALO = re.compile(rf"(?<![A-Z\d.,/]){_NUM_REF}{_UNIDADE_REF}\s*(?:A|ATE|-)\s*{_NUM_REF}(?![\d]){_SEM_IDADE}")
+# Tabela em que o OCR comeu o conector: "60,0 99,0 MG/DL".
+_RX_PAR = re.compile(rf"(?<![A-Z\d.,/]){_NUM_REF}\s+{_NUM_REF}(?![\d.,/]){_SEM_IDADE}")
+_RX_TETO = re.compile(
+    rf"(INFERIOR OU IGUAL A|MENOR OU IGUAL A|<\s?=|ATE)\s*{_NUM_REF}{_SEM_IDADE}"
+    rf"|(INFERIOR A|MENOR QUE|MENOR DE|<)\s*{_NUM_REF}{_SEM_IDADE}"
+)
+# Daqui em diante são as outras classes da tabela, não a de quem está normal.
+_RX_OUTRA_CLASSE = re.compile(
+    r"\b(?:PRE.?DIABET\w*|DIABET\w*|LIMITROFE|ALTO|ELEVADO|RISCO|TOLERANCIA|DIAGNOSTICO|META|CONTROLE|ANTERIOR|ANTERIORES|PACIENTES?|DM1|DM2|DATA HORA|RESULTADO)\b"
+)
+_RX_NAO_ADULTO = re.compile(
+    r"\b(?:CRIANCAS?|ADOLESCENTES?|RECEM|NEONATOS?|PREMATUROS?|CORDAO|LACTENTES?|INFANTIL)\b"
+    r"|\b\d+\s*(?:ANO|ANOS|MES|MESES|DIA|DIAS)\b|\b\d+[AM]\d+[MD]"
+)
+_RX_HOMEM = re.compile(r"\b(?:HOMEM|HOMENS|MASCULINO)\b")
+_RX_MULHER = re.compile(r"\b(?:MULHER|MULHERES|FEMININO)\b")
+_RX_SEXO = re.compile(r"\bSEXO\s*(MASCULINO|FEMININO|M|F)\b")
+_RX_ADULTO = re.compile(r"\bADULTOS?\b(?:\s+(?:ACIMA|MAIOR(?:ES)?)\s+DE\s+\d+\s+ANOS)?")
+
+
+def _sexo_do_documento(norm: str) -> Optional[str]:
+    """Sexo impresso no laudo. Fica no processo: não vai para log nem para fora."""
+    m = _RX_SEXO.search(norm)
+    return m.group(1)[0] if m else None
+
+
+def _no_lugar_certo(p: Parametro, minimo: Optional[float], maximo: Optional[float]) -> bool:
+    if minimo is not None and not (p.ref_min and p.ref_min[0] <= minimo <= p.ref_min[1]):
+        return False
+    return maximo is None or bool(p.ref_max and p.ref_max[0] <= maximo <= p.ref_max[1])
+
+
+def _intervalo(p: Parametro, m: re.Match) -> Optional[FaixaLaudo]:
+    a, b = _numero(m.group(1)), _numero(m.group(2))
+    # "150 A 400" ao lado de "MIL/MM3" é 150.000 a 400.000.
+    for escala in (1, 1000) if p.milhar else (1,):
+        if a < b and _no_lugar_certo(p, a * escala, b * escala):
+            return FaixaLaudo(a * escala, b * escala)
+    return None
+
+
+def _faixa_do_laudo(p: Parametro, depois: str, sexo: Optional[str]) -> Optional[FaixaLaudo]:
+    """
+    A faixa de adulto impressa logo depois do resultado, ou None. Errar aqui marca
+    como alterado quem está normal, então toda dúvida vira None: faixa por idade
+    sem adulto, coluna de homem e mulher sem saber o sexo, dois intervalos sem
+    rótulo, número fora do lugar deste parâmetro.
+    """
+    texto = depois[:170]
+    adulto = _RX_ADULTO.search(texto)
+    if adulto:
+        texto = texto[adulto.end():]
+    homem, mulher = _RX_HOMEM.search(texto), _RX_MULHER.search(texto)
+    if homem or mulher:
+        proprio, outro = (homem, mulher) if sexo == "M" else (mulher, homem) if sexo == "F" else (None, None)
+        if not proprio:
+            return None
+        fim = outro.start() if outro and outro.start() > proprio.start() else len(texto)
+        texto = texto[proprio.end():fim]
+    classe = _RX_OUTRA_CLASSE.search(texto)
+    if classe:
+        texto = texto[:classe.start()]
+
+    candidatos = [m for m in (_RX_INTERVALO.search(texto), _RX_TETO.search(texto), _RX_PAR.search(texto)) if m]
+    if not candidatos:
+        return None
+    m = min(candidatos, key=lambda c: c.start())
+    if not adulto and _RX_NAO_ADULTO.search(texto[:m.start()]):
+        return None
+    if m.re is _RX_TETO:
+        exclusivo = m.group(3) is not None
+        maximo = _numero(m.group(4) if exclusivo else m.group(2))
+        return FaixaLaudo(None, maximo, exclusivo) if _no_lugar_certo(p, None, maximo) else None
+    faixa = _intervalo(p, m)
+    if faixa is None:
+        return None
+    # "13,0 A 17,5 12,0 A 16,0": duas colunas sem rótulo, uma de cada sexo.
+    resto = texto[m.end():m.end() + 25]
+    for rx in (_RX_INTERVALO, _RX_PAR):
+        vizinho = rx.search(resto)
+        if vizinho and (segunda := _intervalo(p, vizinho)) and segunda != faixa:
+            return None
+    return faixa
+
+
 def _valor_qualitativo(jan: str) -> Optional[tuple[str, int, int]]:
     """(como exibir, início e fim do resultado na janela)."""
     # Quando a janela tem "RESULTADO", a resposta vem depois dele; antes pode
@@ -279,6 +380,7 @@ class Leitura:
     # o trecho no PDF (`localizar_leitura`). Fim exclusivo.
     nome_em: tuple[int, int] = (0, 0)
     valor_em: tuple[int, int] = (0, 0)
+    faixa: Optional[FaixaLaudo] = None
 
 
 def _texto_normalizado(markdown: str) -> tuple[str, list[tuple[int, int]]]:
@@ -309,6 +411,7 @@ def _texto_normalizado(markdown: str) -> tuple[str, list[tuple[int, int]]]:
 def _ler(markdown: str) -> tuple[dict[str, Leitura], str, list[tuple[int, int]]]:
     norm, inicios = _texto_normalizado(markdown)
     fronteiras = [m.start() for m in _RX_FRONTEIRA.finditer(norm)]
+    sexo = _sexo_do_documento(norm)
     leituras: dict[str, Leitura] = {}
     for chave, p in PARAMETROS.items():
         for m in _RX_NOME[chave].finditer(norm):
@@ -327,7 +430,10 @@ def _ler(markdown: str) -> tuple[dict[str, Leitura], str, list[tuple[int, int]]]
             achado = _valor_numerico(p, jan)
             if achado:
                 valor, texto, a, b = achado
-                leituras[chave] = Leitura(chave, p.nome, p.unidade, valor, texto, m.span(), (ini + a, ini + b))
+                fim_valor = ini + b
+                seguinte = next((f for f in fronteiras if f >= fim_valor), len(norm))
+                faixa = _faixa_do_laudo(p, norm[fim_valor:seguinte], sexo)
+                leituras[chave] = Leitura(chave, p.nome, p.unidade, valor, texto, m.span(), (ini + a, fim_valor), faixa)
                 break
     return leituras, norm, inicios
 
@@ -442,20 +548,8 @@ def localizar_leitura(
 
 
 # ---------------------------------------------------------------------------
-# Faixas e classificação
+# Classificação
 # ---------------------------------------------------------------------------
-
-def faixas_efetivas(ajustes: Optional[dict[str, dict[str, Any]]] = None) -> dict[str, tuple[Optional[float], Optional[float]]]:
-    """Faixa de cada parâmetro numérico: o ajuste gravado, senão o padrão."""
-    ajustes = ajustes or {}
-    out = {}
-    for k, p in PARAMETROS.items():
-        if p.qualitativo:
-            continue
-        a = ajustes.get(k)
-        out[k] = (a["minimo"], a["maximo"]) if a else (p.padrao_min, p.padrao_max)
-    return out
-
 
 def _fmt(n: Optional[float]) -> str:
     if n is None:
@@ -465,29 +559,28 @@ def _fmt(n: Optional[float]) -> str:
     return (f"{n:.2f}".rstrip("0").rstrip(".")).replace(".", ",")
 
 
-def texto_faixa(chave: str, faixa: tuple[Optional[float], Optional[float]] | None) -> str:
+def texto_faixa(chave: str, faixa: Optional[FaixaLaudo]) -> str:
     p = PARAMETROS[chave]
     if p.qualitativo:
         return p.normal_texto
-    mn, mx = faixa or (None, None)
+    if faixa is None:
+        return "não lida no laudo"
     un = f" {p.unidade}" if p.unidade else ""
-    if mn is not None and mx is not None:
-        return f"{_fmt(mn)} a {_fmt(mx)}{un}"
-    if mx is not None:
-        return f"até {_fmt(mx)}{un}"
-    if mn is not None:
-        return f"a partir de {_fmt(mn)}{un}"
-    return "sem faixa"
+    if faixa.minimo is not None and faixa.maximo is not None:
+        return f"{_fmt(faixa.minimo)} a {_fmt(faixa.maximo)}{un}"
+    return f"{'abaixo de' if faixa.teto_exclusivo else 'até'} {_fmt(faixa.maximo)}{un}"
 
 
-def classificar(leitura: Leitura, faixa: tuple[Optional[float], Optional[float]] | None) -> str:
+def classificar(leitura: Leitura) -> str:
     p = PARAMETROS[leitura.chave]
     if p.qualitativo:
         return NORMAL if leitura.valor_texto.startswith(("Não reagente", "Negativo")) else ALTERADO
-    mn, mx = faixa or (None, None)
-    if mx is not None and leitura.valor > mx:
+    faixa = leitura.faixa
+    if faixa is None:
+        return SEM_REFERENCIA
+    if faixa.maximo is not None and (leitura.valor > faixa.maximo or (faixa.teto_exclusivo and leitura.valor == faixa.maximo)):
         return ACIMA
-    if mn is not None and leitura.valor < mn:
+    if faixa.minimo is not None and leitura.valor < faixa.minimo:
         return ABAIXO
     return NORMAL
 
@@ -505,7 +598,6 @@ def parametros_do_exame(exame: str) -> tuple[str, ...]:
 def avaliar_documento(
     markdown: str,
     tabela_comparacao: Iterable[dict[str, Any]],
-    ajustes: Optional[dict[str, dict[str, Any]]] = None,
     linhas: Optional[list[layout_ocr.LinhaPosicionada]] = None,
 ) -> list[dict[str, Any]]:
     """
@@ -519,7 +611,6 @@ def avaliar_documento(
     """
     leituras, norm, inicios = _ler(markdown or "")
     por_indice = {l.linha_markdown: l for l in linhas or []}
-    faixas = faixas_efetivas(ajustes)
     itens = []
     for item in tabela_comparacao or []:
         if not isinstance(item, dict) or item.get("status") not in ("encontrado", "parcialmente_encontrado"):
@@ -530,7 +621,6 @@ def avaliar_documento(
         parametros = []
         for k in chaves:
             p = PARAMETROS[k]
-            faixa = faixas.get(k)
             lida = leituras.get(k)
             parametros.append({
                 "chave": k,
@@ -538,8 +628,8 @@ def avaliar_documento(
                 "unidade": p.unidade,
                 "valor": lida.valor if lida else None,
                 "valor_texto": lida.valor_texto if lida else None,
-                "referencia": texto_faixa(k, faixa),
-                "situacao": classificar(lida, faixa) if lida else SEM_RESULTADO,
+                "referencia": texto_faixa(k, lida.faixa if lida else None),
+                "situacao": classificar(lida) if lida else SEM_RESULTADO,
                 "localizacao": localizar_leitura(lida, norm, inicios, por_indice) if lida and por_indice else None,
             })
         itens.append({"exame": item.get("exame"), "parametros": parametros})
