@@ -6,6 +6,8 @@ dos formatos medidos nas semanas de 14/09 a 05/10/2026.
 import re
 import unicodedata
 
+import pytest
+
 from app.services import laudo_evidencia as le
 
 
@@ -139,13 +141,61 @@ def test_exame_com_laudo_continua_encontrado():
 
 
 def test_tipos_fora_da_regra_nao_sao_exigidos():
-    # Glicose, transaminases, hemograma, espirometria e RX comum barravam mais
-    # documentos certos do que pegavam: ficam fora da exigência.
-    itens = [("GLICEMIA DE JEJUM", "encontrado"), ("TGO (AST)", "encontrado"),
-             ("HEMOGRAMA COMPLETO COM PLAQUETAS", "encontrado"), ("ESPIROMETRIA", "encontrado"),
-             ("RADIOGRAFIA DE COLUNA LOMBO SACRA AP/PERFIL", "encontrado"), ("CLÍNICO OCUPACIONAL", "encontrado")]
+    # Transaminases, hemograma, espirometria e RX comum barravam mais documentos
+    # certos do que pegavam: ficam fora da exigência.
+    itens = [("TGO (AST)", "encontrado"), ("HEMOGRAMA COMPLETO COM PLAQUETAS", "encontrado"),
+             ("ESPIROMETRIA", "encontrado"), ("RADIOGRAFIA DE COLUNA LOMBO SACRA AP/PERFIL", "encontrado")]
     status, mud = ajusta(itens, "ATESTADO DE SAÚDE OCUPACIONAL lista de exames sem laudo")
     assert set(status.values()) == {"encontrado"} and not mud
+
+
+def test_clinico_sem_ficha_vira_faltante():
+    status, mud = ajusta([("CLÍNICO OCUPACIONAL", "encontrado")], ASO_SO_LISTANDO + " CLÍNICO OCUPACIONAL")
+    assert status["CLÍNICO OCUPACIONAL"] == "faltante"
+    assert mud[0]["tipo"] == "CLINICO"
+
+
+@pytest.mark.parametrize("laudo", [
+    "FICHA MÉDICA OCUPACIONAL",
+    "Ficha clínica do colaborador",
+    "PRONTUÁRIO MÉDICO",
+    "Anamnese: sem queixas. Exame físico: sem alterações",
+    "Pressão arterial 120x80 ... ANAMNESE ocupacional",
+])
+def test_clinico_com_ficha_ou_anamnese_com_exame_fisico_continua(laudo):
+    status, mud = ajusta([("CLÍNICO OCUPACIONAL", "encontrado")], f"{ASO_SO_LISTANDO} {laudo}")
+    assert status["CLÍNICO OCUPACIONAL"] == "encontrado" and not mud
+
+
+def test_anamnese_sozinha_nao_prova_o_clinico():
+    # "Anamnese" também está na audiometria e no psicossocial.
+    status, _ = ajusta([("CLÍNICO OCUPACIONAL", "encontrado")], f"{ASO_SO_LISTANDO} Anamnese ocupacional")
+    assert status["CLÍNICO OCUPACIONAL"] == "faltante"
+
+
+def test_glicemia_exige_o_nome_e_mg_dl_no_documento():
+    item = [("GLICEMIA DE JEJUM", "encontrado")]
+    assert ajusta(item, "Procedimentos realizados GLICEMIA DE JEJUM 12/10/2026")[0]["GLICEMIA DE JEJUM"] == "faltante"
+    assert ajusta(item, "GLICOSE 93 mg/dL")[0]["GLICEMIA DE JEJUM"] == "encontrado"
+    # As duas palavras não precisam estar juntas: o OCR separa a tabela do laudo.
+    assert ajusta(item, "GLICEMIA DE JEJUM Método enzimático ... Creatinina 0,9 mg/dL")[0]["GLICEMIA DE JEJUM"] == "encontrado"
+
+
+def test_ergometrico_so_na_lista_vira_faltante_e_com_laudo_continua():
+    lista = "EXAMES COMPLEMENTARES TESTE ERGOMÉTRICO 12/10/2026 CONCLUSÃO CONCLUSION apto"
+    item = [("TESTE ERGOMÉTRICO", "encontrado")]
+    status, mud = ajusta(item, lista)
+    assert status["TESTE ERGOMÉTRICO"] == "faltante" and mud[0]["tipo"] == "ERGOMETRICO"
+    assert ajusta(item, f"{lista} LAUDO DE TESTE ERGOMÉTRICO protocolo de Bruce")[0]["TESTE ERGOMÉTRICO"] == "encontrado"
+
+
+def test_ggt_julgado_pelo_resultado_perto_do_nome():
+    # A normalização do motor reescreve "GAMA-GT" e "GAMA GLUTAMIL TRANSFERASE" como GGT.
+    item = [("GGT", "encontrado")]
+    assert ajusta(item, "Procedimentos realizados GGT 12/10/2026")[0]["GGT"] == "faltante"
+    assert ajusta(item, "GGT 25 U/L valores de referência")[0]["GGT"] == "encontrado"
+    # Sem o nome no texto a regra não opina, como o selo de laboratório.
+    assert ajusta(item, "Texto sem o exame")[0]["GGT"] == "encontrado"
 
 
 def test_rx_oit_classificado_antes_do_rx_comum():

@@ -1,8 +1,10 @@
-import type { TabelaComparacaoItem } from "@/types/process"
+import type { ReenvioLiberado, TabelaComparacaoItem } from "@/types/process"
 
 export type ProcessingStage = "upload" | "ocr" | "brnet" | "validation" | "completed"
 
 export interface DocumentProcessingResult {
+  /** Reenvio de prontuário já liberado: o original e a data da liberação. */
+  reenvio?: ReenvioLiberado | null
   status?: "success" | "partial" | "error"
   cpf_processado: string
   passaporte_processado?: string | null

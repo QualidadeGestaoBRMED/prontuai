@@ -277,3 +277,67 @@ def test_laudo_de_audiometria_achado_pelo_conteudo():
     laudo = _resposta(("Auorol4 ErRlA Torum", 0.1, 0.05), ("Limiares Tonais - Orelha Direita", 0.1, 0.30))
     markdown, layout = _documento(ASO_COMPLETO, laudo)
     assert _paginas(_localizar(markdown, layout, "AUDIOMETRIA TONAL", exame="AUDIOMETRIA TONAL"))[0] == 2
+
+
+def test_rotulo_do_aso_no_meio_de_frase_nao_faz_lista():
+    # Rodapé de laudo: "a correta interpretação dos exames complementares...".
+    laudo = _resposta(
+        ("LAUDO DE ELETROENCEFALOGRAMA", 0.1, 0.05),
+        ("A correta interpretação dos exames complementares deve ser feita pelo médico.", 0.1, 0.80),
+    )
+    markdown, layout = _documento(ASO_COMPLETO, laudo)
+    linhas = layout_ocr.alinhar(markdown, layout)
+    normalizadas = layout_ocr.normalizar_linhas(linhas, _normalizar_busca)
+    assert layout_ocr.paginas_de_lista(linhas, normalizadas, []) == {1}
+
+
+def test_rotulo_do_aso_numerado_ou_bilingue_ainda_faz_lista():
+    for rotulo in ("1. PROCEDIMENTOS REALIZADOS / PERFORMED PROCEDURES", "Additional exams / Exames complementares"):
+        markdown, layout = _documento(_resposta((rotulo, 0.1, 0.05)))
+        linhas = layout_ocr.alinhar(markdown, layout)
+        normalizadas = layout_ocr.normalizar_linhas(linhas, _normalizar_busca)
+        assert layout_ocr.paginas_de_lista(linhas, normalizadas, []) == {1}, rotulo
+
+
+def test_laudo_psicologico_sem_o_nome_do_exame_achado_pelos_testes_e_pelo_crp():
+    aso = _resposta(("Exames complementares", 0.1, 0.05), ("AVALIAÇÃO PSICOLÓGICA 26/10/2026", 0.1, 0.10))
+    laudo = _resposta(
+        ("Raciocínio Lógico", 0.1, 0.10),
+        ("PALOGRÁFICO", 0.6, 0.15),
+        ("ASPECTOS DA PERSONALIDADE", 0.1, 0.40),
+        ("Psicóloga", 0.1, 0.85),
+        ("CRP: 03/2800", 0.1, 0.88),
+    )
+    markdown, layout = _documento(aso, laudo)
+    ocorrencias = _localizar(markdown, layout, "AVALIAÇÃO PSICOLÓGICA", exame="AVALIAÇÃO PSICOLÓGICA")
+    assert _paginas(ocorrencias) == [2, 2, 2, 2, 1]
+
+
+def test_crp_de_laboratorio_nao_e_titulo_do_laudo_psicologico():
+    # Proteína C reativa em laudo em inglês: "CRP 0.5 mg/L".
+    aso = _resposta(("Exames complementares", 0.1, 0.05), ("AVALIAÇÃO PSICOLÓGICA", 0.1, 0.10))
+    laboratorio = _resposta(("CRP 0.5 mg/L", 0.1, 0.10))
+    markdown, layout = _documento(aso, laboratorio)
+    assert _paginas(_localizar(markdown, layout, "AVALIAÇÃO PSICOLÓGICA", exame="AVALIAÇÃO PSICOLÓGICA")) == [1]
+
+
+def test_rx_de_torax_com_titulo_sem_o_de():
+    for titulo in ("LAUDO DE RAIO-X - TÓRAX (PA)", "RAIOS X TÓRAX PA", "TÓRAX PA"):
+        laudo = _resposta((titulo, 0.1, 0.05), ("Seios costofrênicos livres.", 0.1, 0.30))
+        markdown, layout = _documento(ASO_COMPLETO, laudo)
+        ocorrencias = _localizar(markdown, layout, "RADIOGRAFIA DE TORAX PA", exame="RADIOGRAFIA DE TÓRAX PA")
+        assert _paginas(ocorrencias) == [2], titulo
+
+
+def test_folha_oit_achada_pelos_cabecalhos_e_nao_pela_pergunta():
+    aso = _resposta(("Exames complementares", 0.1, 0.05), ("RADIOGRAFIA DE TÓRAX PADRÃO OIT", 0.1, 0.10))
+    folha_oit = _resposta(
+        ("2A - Alguma anormalidade pleural consistente com pneumoconiose?", 0.1, 0.10),
+        ("2B - Pequenas Opacidades", 0.1, 0.20),
+        ("[C] PROFUSÃO", 0.5, 0.25),
+    )
+    markdown, layout = _documento(aso, folha_oit)
+    ocorrencias = _localizar(
+        markdown, layout, "RADIOGRAFIA DE TORAX PADRAO OIT", exame="RADIOGRAFIA DE TÓRAX PADRÃO OIT"
+    )
+    assert _paginas(ocorrencias) == [2, 2, 1]

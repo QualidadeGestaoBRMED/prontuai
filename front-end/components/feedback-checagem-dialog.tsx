@@ -31,10 +31,11 @@ import {
   type RejectionCode,
   type Veredito,
 } from "@/types/feedback";
-import type { DocumentProcessingResult } from "@/types/process";
+import { motivoDataAntiga } from "@/components/exames-comparativo-table";
+import type { DataAntiga, DocumentProcessingResult } from "@/types/process";
 
 /** Um exame da lista do modal, com o que a IA disse dele. */
-export type ExamePrevisto = { nome: string; veredito: Veredito | null };
+export type ExamePrevisto = { nome: string; veredito: Veredito | null; dataAntiga?: DataAntiga };
 
 /** O que a IA decidiu sozinha, antes de qualquer revisão humana. */
 export type DecisaoIA = {
@@ -159,13 +160,19 @@ export function examesDoResultado(r?: DocumentProcessingResult | null): ExamePre
       .filter((t) => t?.status === "parcialmente_encontrado" && typeof t.exame === "string")
       .map((t) => normalizarNome(t.exame)),
   );
+  // Aviso de coleta antiga: o revisor vê aqui e decide. Nada vem pré-marcado.
+  const datasAntigas = new Map(
+    (Array.isArray(r.tabela_comparacao) ? r.tabela_comparacao : [])
+      .filter((t) => t?.data_antiga && typeof t.exame === "string")
+      .map((t) => [normalizarNome(t.exame), t.data_antiga]),
+  );
   const vistos = new Set<string>();
   const lista: ExamePrevisto[] = [];
   const incluir = (nome: string, veredito: Veredito | null) => {
     const chave = normalizarNome(nome);
     if (!chave || vistos.has(chave)) return;
     vistos.add(chave);
-    lista.push({ nome: nome.trim(), veredito });
+    lista.push({ nome: nome.trim(), veredito, dataAntiga: datasAntigas.get(chave) });
   };
   for (const nome of textos(r.brmed_result?.exames_obrigatorios)) {
     const chave = normalizarNome(nome);
@@ -627,9 +634,10 @@ export function FeedbackChecagemDialog({ alvo, onClose, onConfirmarDecisao }: Pr
   }
 
   const faltantesDaIA = linhas.filter((l) => !l.avulso && l.veredito === "faltante");
-  const encontradosDaIA = linhas.filter(
-    (l) => !l.avulso && (l.veredito === "encontrado" || l.veredito === "parcialmente_encontrado"),
-  );
+  const encontradosDaIA = linhas
+    .filter((l) => !l.avulso && (l.veredito === "encontrado" || l.veredito === "parcialmente_encontrado"))
+    .sort((a, b) => Number(Boolean(b.dataAntiga)) - Number(Boolean(a.dataAntiga)));
+  const comDataAntiga = linhas.filter((l) => l.dataAntiga);
 
   const pilulaExame = (linha: Linha) => {
     const ativo = exames.includes(linha.nome);
@@ -639,10 +647,16 @@ export function FeedbackChecagemDialog({ alvo, onClose, onConfirmarDecisao }: Pr
         type="button"
         aria-pressed={ativo}
         onClick={() => setExames((atuais) => alternar(atuais, linha.nome))}
-        className={cn(ESTILO.pilula, ativo && ESTILO.pilulaAtiva)}
+        title={linha.dataAntiga && motivoDataAntiga(linha.dataAntiga)}
+        className={cn(
+          ESTILO.pilula,
+          linha.dataAntiga && !ativo && "border-yellow-500",
+          ativo && ESTILO.pilulaAtiva,
+        )}
       >
         <Marca ativa={ativo} />
         {nomeLegivel(linha.nome)}
+        {linha.dataAntiga && <AlertTriangleIcon className={cn("size-3.5", !ativo && "stroke-yellow-500")} aria-label="Data antiga" />}
       </button>
     );
   };
@@ -709,6 +723,24 @@ export function FeedbackChecagemDialog({ alvo, onClose, onConfirmarDecisao }: Pr
                   </span>{" "}
                   {ia.motivo}
                 </span>
+              </div>
+            )}
+
+            {comDataAntiga.length > 0 && (
+              <div className="rounded-[10px] border border-yellow-500/40 bg-yellow-500/5 px-3 py-2.5 text-[13px] leading-snug text-muted-foreground">
+                <p className="flex items-center gap-2 font-semibold text-foreground">
+                  <AlertTriangleIcon className="size-4 shrink-0 stroke-yellow-500" />
+                  Exames com data antiga
+                </p>
+                <ul className="mt-1.5 space-y-1">
+                  {comDataAntiga.map((l) => (
+                    <li key={l.nome}>
+                      <span className="font-medium text-foreground">{nomeLegivel(l.nome)}:</span>{" "}
+                      {l.dataAntiga && motivoDataAntiga(l.dataAntiga)}
+                    </li>
+                  ))}
+                </ul>
+                <p className="mt-1.5">Se não servir, marque como &quot;De outra data&quot; em &quot;Em quais exames?&quot;.</p>
               </div>
             )}
 

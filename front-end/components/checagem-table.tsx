@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { type ReactNode, useEffect, useId, useMemo, useRef, useState } from "react";
 import {
   Column,
   ColumnDef,
@@ -26,6 +26,7 @@ import {
 
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
+import { CLASSE_TAG_COMPLEMENTO } from "@/lib/reenvio";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -287,16 +288,29 @@ export function CheckagemTable({
         cell: ({ row }) => {
           const status = row.getValue("status") as StatusDocumento;
           const decisaoIA = row.original.decisaoIA;
+          // Reenvio que voltou para a revisão: a tag avisa que há um envio
+          // anterior do mesmo colaborador (o detalhe mostra qual).
+          const comComplemento = (badge: ReactNode) =>
+            row.original.complemento ? (
+              <div className="flex flex-col items-start gap-1">
+                {badge}
+                <Badge variant="outline" className={CLASSE_TAG_COMPLEMENTO} title="Era reenvio e voltou para a revisão">
+                  Complemento
+                </Badge>
+              </div>
+            ) : (
+              badge
+            );
 
           // Show badge indicating AI decision
           if (decisaoIA === 'approved') {
-            return (
+            return comComplemento(
               <Badge variant="outline" className="bg-green-100 text-green-700 border-green-300">
                 Aprovado pela IA
               </Badge>
             );
           } else if (decisaoIA === 'rejected') {
-            return (
+            return comComplemento(
               <Badge variant="outline" className="bg-orange-100 text-orange-700 border-orange-300">
                 Rejeitado pela IA
               </Badge>
@@ -310,7 +324,7 @@ export function CheckagemTable({
             rejeitado: "bg-red-400/20 text-red-700 border-red-400/50",
           }[status];
 
-          return (
+          return comComplemento(
             <Badge variant="outline" className={cn("capitalize", styles)}>
               {status}
             </Badge>

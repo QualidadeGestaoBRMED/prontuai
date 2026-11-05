@@ -6,7 +6,7 @@ from typing import Dict, Any, Optional, List
 from fastapi import UploadFile
 from app.services import ocr_service, brmed_service, validacao_service
 from app.services import exam_catalog_source, laudo_evidencia, evidencia_laboratorio, identidade_laudo, layout_ocr
-from app.services import monitoramento_checagem, nomes_conhecidos
+from app.services import data_exame, monitoramento_checagem, nomes_conhecidos
 from app.core.config import settings
 from app.core import metrics
 from app.core.pii import mask_cpf, mask_identifier, mask_name
@@ -1392,6 +1392,24 @@ async def _processar_documento_completo_impl(
             # Só nomes de exame: a linha de origem pode ter dado do paciente.
             _log_event("exames_so_lista", run_id=run_id, quantos=len(exames_so_lista), exames=exames_so_lista)
 
+    # Aviso de coleta muito anterior ao ASO. Como o selo acima, NÃO muda status,
+    # faltantes, validation_status nem confiança. Ver `data_exame`.
+    exames_data_antiga: list[str] = []
+    if not resultado_validacao.get("erro") and data_exame.HABILITADA:
+        try:
+            exames_data_antiga = data_exame.anotar_comparativo(
+                resultado_validacao.get("exames_comparativo", []),
+                markdown_content or "",
+                exam_catalog_source.sinonimos_de,
+            )
+        except Exception as e:
+            # Aviso é informativo: falha aqui não pode derrubar a validação.
+            logger.warning(f"[WORKFLOW] Aviso de data do exame falhou: {type(e).__name__}")
+            exames_data_antiga = []
+        if exames_data_antiga:
+            metrics.AVISO_DATA_ANTIGA.add(1)
+            _log_event("exames_data_antiga", run_id=run_id, quantos=len(exames_data_antiga), exames=exames_data_antiga)
+
     # Documento exigido pela empresa, fora da grade do BRNET: entra como faltante
     # para o documento ir à checagem. Fica fora da `tabela_comparacao`, que é só
     # dos exames exigidos. Ver `_falta_kit_vix`.
@@ -1541,6 +1559,8 @@ async def _processar_documento_completo_impl(
         confidence_details["kit_vix_ausente"] = True
     if exames_so_lista:
         confidence_details["exames_so_lista"] = exames_so_lista
+    if exames_data_antiga:
+        confidence_details["exames_data_antiga"] = exames_data_antiga
     if poucas_paginas:
         _log_event(
             "paginas_insuficientes",

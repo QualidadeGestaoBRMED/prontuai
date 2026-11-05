@@ -30,6 +30,17 @@ import { DocumentoArquivadoError } from "@/lib/document-archive"
 import { toast } from "sonner"
 import { RequireRole } from "@/components/require-role"
 import { usePermissions } from "@/hooks/usePermissions"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import { buscarEnviosAnteriores, descreverEnvioAnterior, type EnvioAnterior } from "@/lib/reenvio"
 
 type PageState = "upload" | "processing" | "completed"
 
@@ -68,6 +79,11 @@ function PageContent() {
   const [selectedResult, setSelectedResult] = useState<ProcessResult | null>(null)
   const [detailsModalOpen, setDetailsModalOpen] = useState(false)
   const processLockRef = useRef(false)
+  const [verificandoEnvios, setVerificandoEnvios] = useState(false)
+  const [confirmacaoRepetidos, setConfirmacaoRepetidos] = useState<{
+    todos: FileWithPreview[]
+    repetidos: { arquivo: FileWithPreview; anterior: EnvioAnterior }[]
+  } | null>(null)
   const {
     unreadCount,
     activeProcess,
@@ -77,6 +93,7 @@ function PageContent() {
     progressBarMinimized,
     showProgressBar,
     clearProcessingState,
+    addNotification,
   } = useNotifications()
   const { data: session } = useSession()
   const userEmail = session?.user?.email?.toLowerCase()
@@ -148,18 +165,60 @@ function PageContent() {
 
   // Don't auto-navigate to results - let user control the state
 
-  const handleProcessFiles = (files: FileWithPreview[]) => {
-    if (!session?.user?.email && !isDevAuthBypass) {
-      toast.error("Sessão inválida. Faça login novamente para enviar documentos.")
-      return
-    }
+  const iniciarProcessamento = (files: FileWithPreview[]) => {
+    if (files.length === 0) return
     if (processLockRef.current || hasInFlight || pageState === "processing") return
     processLockRef.current = true
     setFilesToProcess(files)
     setPageState("processing")
-    // setChatInitialMessage(
-    //   `Recebi ${files.length} ${files.length === 1 ? "documento" : "documentos"}! Iniciando processamento...`
-    // )
+  }
+
+  // Antes de enviar: o mesmo arquivo já foi enviado? A clínica decide se segue.
+  const handleProcessFiles = async (files: FileWithPreview[]) => {
+    if (!session?.user?.email && !isDevAuthBypass) {
+      toast.error("Sessão inválida. Faça login novamente para enviar documentos.")
+      return
+    }
+    if (processLockRef.current || hasInFlight || pageState === "processing" || verificandoEnvios) return
+    setVerificandoEnvios(true)
+    const arquivos = files.map((f) => f.file).filter((f): f is File => f instanceof File)
+    const anteriores = await buscarEnviosAnteriores(arquivos)
+    setVerificandoEnvios(false)
+    const repetidos = files.flatMap((f) => {
+      const anterior = f.file instanceof File ? anteriores.get(f.file) : undefined
+      return anterior ? [{ arquivo: f, anterior }] : []
+    })
+    if (repetidos.length === 0) {
+      iniciarProcessamento(files)
+      return
+    }
+    setConfirmacaoRepetidos({ todos: files, repetidos })
+  }
+
+  // A clínica escolheu enviar de novo: a notificação registra o aviso.
+  const confirmarRepetidos = (somenteNovos: boolean) => {
+    if (!confirmacaoRepetidos) return
+    const { todos, repetidos } = confirmacaoRepetidos
+    setConfirmacaoRepetidos(null)
+    const ids = new Set(repetidos.map((r) => r.arquivo.id))
+    const enviar = somenteNovos ? todos.filter((f) => !ids.has(f.id)) : todos
+    if (!somenteNovos) {
+      const [primeiro] = repetidos
+      addNotification({
+        type: "system_message",
+        title: "Prontuário já enviado antes",
+        message:
+          repetidos.length === 1
+            ? `${primeiro.arquivo.file.name} já tinha sido enviado ${descreverEnvioAnterior(primeiro.anterior)}. Você escolheu enviar de novo.`
+            : `${repetidos.length} prontuários já tinham sido enviados antes. Você escolheu enviar de novo.`,
+        read: false,
+        variant: "warning",
+        actionUrl: `/historico?viewId=${primeiro.anterior.documento_id}`,
+        actionLabel: "Ver envio anterior",
+        metadata: { documentId: primeiro.anterior.documento_id },
+      })
+    }
+    iniciarProcessamento(enviar)
   }
 
   const handleProcessingComplete = () => {
@@ -427,6 +486,50 @@ function PageContent() {
         result={selectedResult}
         onDownloadPDF={selectedResult ? () => handleDownloadPDF(selectedResult) : undefined}
       />
+      <AlertDialog open={confirmacaoRepetidos !== null} onOpenChange={(aberto) => !aberto && setConfirmacaoRepetidos(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Prontuário já enviado</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2">
+                {confirmacaoRepetidos?.repetidos.length === 1 ? (
+                  <>
+                    <p>
+                      Foi identificado o envio deste prontuário{" "}
+                      {descreverEnvioAnterior(confirmacaoRepetidos.repetidos[0].anterior)}. Deseja continuar?
+                    </p>
+                    <p className="text-xs">Arquivo: {confirmacaoRepetidos.repetidos[0].arquivo.file.name}</p>
+                  </>
+                ) : (
+                  <>
+                    <p>Foi identificado o envio anterior destes prontuários:</p>
+                    <ul className="list-disc space-y-1 pl-5">
+                      {confirmacaoRepetidos?.repetidos.map(({ arquivo, anterior }) => (
+                        <li key={arquivo.id}>
+                          <span className="font-medium">{arquivo.file.name}</span> — {descreverEnvioAnterior(anterior)}
+                        </li>
+                      ))}
+                    </ul>
+                    <p>Deseja continuar?</p>
+                  </>
+                )}
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            {confirmacaoRepetidos && confirmacaoRepetidos.todos.length > confirmacaoRepetidos.repetidos.length && (
+              <AlertDialogAction
+                className="bg-white text-foreground border hover:bg-muted"
+                onClick={() => confirmarRepetidos(true)}
+              >
+                Enviar só os novos
+              </AlertDialogAction>
+            )}
+            <AlertDialogAction onClick={() => confirmarRepetidos(false)}>Continuar</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </SidebarProvider>
     </RequireRole>
   )

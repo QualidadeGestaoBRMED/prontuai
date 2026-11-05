@@ -4,7 +4,8 @@ Endpoints para gerenciamento de documentos.
 from fastapi import APIRouter, HTTPException, status, Depends, Query, Request, BackgroundTasks
 from fastapi.responses import FileResponse
 from typing import List, Any
-from app.core.auth import get_current_user, require_admin, require_checker, require_document_reader
+from pydantic import BaseModel, Field
+from app.core.auth import get_current_user, require_admin, require_checker, require_document_reader, require_roles
 from app.core.database import user_db
 from app.models.user import User, UserRole, GLOBAL_READ_ROLES
 from app.models.document import (
@@ -29,7 +30,7 @@ import os
 import re
 import unicodedata
 from urllib.parse import quote
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 logger = logging.getLogger(__name__)
 
@@ -226,7 +227,7 @@ def _in_memory_paged_documents(
         summary_counts[_status_from_validation(doc)] += 1
 
     if queue == DocumentQueue.PENDENTES:
-        filtered = [d for d in filtered if d.validation_status != "validated"]
+        filtered = [d for d in filtered if d.validation_status not in ("validated", "reenvio")]
     elif queue == DocumentQueue.CHECAGEM:
         filtered = [
             d for d in filtered
@@ -568,6 +569,126 @@ async def get_document(document_id: str, current_user: User = Depends(require_do
         )
 
 
+@router.post("/{document_id}/complemento", response_model=Document)
+async def marcar_como_complemento(
+    document_id: str,
+    request: Request,
+    current_user: User = Depends(
+        require_roles([UserRole.ADMIN, UserRole.MANAGER, UserRole.CHECKER, UserRole.SENDER])
+    ),
+):
+    """
+    Devolve à Checagem um documento marcado como reenvio de prontuário já
+    liberado, quando a clínica ou o revisor dizem que era complemento.
+
+    É a saída para o que a detecção não enxerga: o laudo de um exame que a IA
+    deu como encontrado porque estava listado no ASO. O documento volta ao
+    status que a IA tinha decidido (ver app/services/reenvio_service.py).
+
+    - SENDER: apenas documento da sua clínica
+    - CHECKER/MANAGER/ADMIN: qualquer documento
+    """
+    document = user_db.get_document_by_id(document_id)
+    if not document:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Documento não encontrado")
+    if not current_user.tem_papel(UserRole.ADMIN, UserRole.MANAGER, UserRole.CHECKER):
+        if not current_user.clinic_id or document.clinic_id != current_user.clinic_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Você não tem permissão para acessar este documento",
+            )
+    if document.validation_status != "reenvio":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="O documento não está marcado como reenvio de prontuário já liberado",
+        )
+
+    atualizado = user_db.desfazer_reenvio(document_id, por=current_user.email)
+    if not atualizado:
+        # Outra pessoa desfez entre a leitura e a escrita.
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="O documento não está marcado como reenvio de prontuário já liberado",
+        )
+    request.state.audit = {
+        "action": "documents.reenvio.complemento",
+        "resource": "documents",
+        "resource_id": document_id,
+        "metadata": {"reenvio_de": document.reenvio_de, "status_ia": atualizado.validation_status},
+    }
+    logger.info(
+        "[REENVIO] %s devolveu à Checagem o documento %s (era reenvio de %s)",
+        current_user.email,
+        document_id,
+        document.reenvio_de,
+    )
+    return atualizado
+
+
+class EnviosAnterioresEntrada(BaseModel):
+    hashes: List[str] = Field(..., max_length=100)
+
+
+@router.post("/envios-anteriores")
+async def envios_anteriores(
+    entrada: EnviosAnterioresEntrada,
+    current_user: User = Depends(require_document_reader),
+):
+    """
+    Antes de enviar: para cada PDF (pelo SHA-256 que o navegador calcula), o
+    envio anterior com o mesmo arquivo, se houver — quando foi e em que pé
+    está. A tela de envio pergunta "Foi identificado o envio deste prontuário
+    em DD/MM. Deseja continuar?". Só recebe o hash, nunca o arquivo.
+
+    - SENDER: só os envios da própria clínica (e do mesmo credenciado do BRNET)
+    - demais leitores: todos
+    """
+    hashes = [h.lower() for h in entrada.hashes if re.fullmatch(r"[0-9a-fA-F]{64}", h or "")]
+    restrito = not current_user.tem_papel(UserRole.ADMIN, UserRole.MANAGER, UserRole.CHECKER, UserRole.CURATOR)
+    if restrito and not current_user.clinic_id:
+        return {"envios": {}}
+    return {"envios": user_db.envios_por_hash(hashes, current_user.clinic_id if restrito else None)}
+
+
+@router.get("/reenvios/por-clinica")
+async def reenvios_por_clinica(
+    dias: int = Query(30, ge=1, le=180),
+    current_user: User = Depends(
+        require_roles([UserRole.ADMIN, UserRole.MANAGER, UserRole.CHECKER, UserRole.CURATOR])
+    ),
+):
+    """
+    Clínicas que reenviaram prontuário nos últimos `dias`, da que mais reenvia
+    para a que menos: envios, reenvios (de liberado ou de prontuário ainda em
+    revisão), devolvidos como complemento e o último reenvio. O reenvio não
+    entra na Checagem; é por aqui que a operação vê quem orientar.
+    """
+    desde = datetime.utcnow() - timedelta(days=dias)
+    return {"dias": dias, "clinicas": user_db.reenvios_por_clinica(desde)}
+
+
+@router.get("/{document_id}/envios")
+async def envios_do_colaborador(document_id: str, current_user: User = Depends(require_document_reader)):
+    """
+    Os envios do mesmo colaborador ligados a este documento — o original de que
+    ele é reenvio, os reenvios, os complementos e os outros envios do mesmo
+    pedido do BRNET ou do mesmo CPF —, para o histórico no detalhe.
+
+    - SENDER: só documento da sua clínica, e só os envios dela
+    - demais leitores: tudo
+    """
+    document = user_db.get_document_by_id(document_id)
+    if not document:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Documento não encontrado")
+    restrito = not current_user.tem_papel(UserRole.ADMIN, UserRole.MANAGER, UserRole.CHECKER, UserRole.CURATOR)
+    if restrito and (not current_user.clinic_id or document.clinic_id != current_user.clinic_id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Você não tem permissão para acessar este documento")
+    envios = user_db.envios_relacionados(document_id)
+    if restrito:
+        envios = [envio for envio in envios if envio.get("clinic_id") == current_user.clinic_id]
+    return {"envios": [{k: v for k, v in envio.items() if k != "clinic_id"} for envio in envios]}
+
+
 @router.get("/{document_id}/view")
 async def view_document(document_id: str, current_user: User = Depends(require_document_reader)):
     """
@@ -860,6 +981,23 @@ async def update_document(
                 metrics.REVISAO_DURACAO.record(
                     review_timing["active_ms"] / 1000.0, atributos_revisao
                 )
+        # Rejeitado o original, os envios repetidos que esperavam a revisão dele
+        # voltam à Checagem: um deles pode ser a versão corrigida.
+        if e_decisao and payload.validation_status == "rejected":
+            devolver = getattr(user_db, "devolver_reenvios_em_revisao", None)
+            if callable(devolver):
+                try:
+                    devolvidos = devolver(document_id, por=f"rejeição do original por {current_user.email}")
+                    if devolvidos:
+                        logger.info(
+                            "[REENVIO] original %s rejeitado: %d envio(s) repetido(s) de volta à Checagem",
+                            document_id, len(devolvidos),
+                        )
+                except Exception as devolver_error:
+                    logger.warning(
+                        "[REENVIO] falha ao devolver os repetidos do rejeitado %s: %s",
+                        document_id, type(devolver_error).__name__,
+                    )
         payload_reviewed_by = None
         if isinstance(payload_result, dict):
             payload_reviewed_by = payload_result.get("reviewed_by") or payload_result.get("reviewedBy")
