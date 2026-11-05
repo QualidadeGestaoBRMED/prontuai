@@ -1891,12 +1891,18 @@ class PostgresUserDatabase:
 
             def achado(linhas: list, criterio: str, situacao: str) -> dict:
                 exames, faltantes = [], []
+                # O que falta em TODOS os documentos anteriores: o faltante que outro
+                # documento da mesma expedição trouxe não falta mais (ver
+                # `reenvio_service._motivo_de_complemento`).
+                ainda_faltam: Optional[set[str]] = None
                 for linha in linhas:
                     exames.extend(linha.exams_ocr or [])
                     validacao = compacto(linha).get("validation_result")
-                    if isinstance(validacao, dict):
-                        faltantes.extend(validacao.get("exames_faltantes") or [])
+                    deste = (validacao.get("exames_faltantes") or []) if isinstance(validacao, dict) else []
+                    faltantes.extend(deste)
+                    ainda_faltam = set(deste) if ainda_faltam is None else ainda_faltam & set(deste)
                 return {
+                    "ainda_faltam": sorted(ainda_faltam or []),
                     "documento_id": linhas[0].id,
                     "liberado_em": utc(linhas[0].reviewed_at) if situacao == "liberado" else None,
                     "enviado_em": utc(linhas[0].uploaded_at),

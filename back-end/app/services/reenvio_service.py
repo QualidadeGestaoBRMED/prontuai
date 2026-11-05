@@ -97,13 +97,27 @@ def _exames(itens: Iterable[Any]) -> set[str]:
 
 
 def _motivo_de_complemento(resultado: dict, anterior: dict) -> Optional[str]:
-    """Por que o envio é complemento dos liberados, e não reenvio; None se é reenvio."""
+    """
+    Por que o envio é complemento dos anteriores, e não reenvio; None se é reenvio.
+
+    "Faltava" é o que falta em todos os anteriores (`ainda_faltam`). Antes era
+    "faltante menos qualquer exame lido", e o exame só CITADO no ASO, sem laudo,
+    caía fora: a clínica mandava o laudo que faltava e o envio virava "Já em
+    revisão" (caso de 05/11/2026, glicose em Jaboatão). O envio novo só conta
+    como complemento se o exame deixou de ser faltante NELE: o mesmo ASO
+    reescaneado, ainda sem laudo, continua sendo reenvio.
+    """
     novos = _exames(
         resultado.get("exames_ocr") or (resultado.get("ocr_result") or {}).get("exames_extraidos") or []
     )
     liberados = _exames(anterior.get("exames") or [])
-    faltavam = _exames(anterior.get("faltantes") or []) - liberados
-    if novos & faltavam:
+    if "ainda_faltam" in anterior:
+        faltavam = _exames(anterior.get("ainda_faltam") or [])
+    else:
+        faltavam = _exames(anterior.get("faltantes") or []) - liberados
+    validacao = resultado.get("validation_result")
+    faltam_no_novo = _exames(validacao.get("exames_faltantes") or []) if isinstance(validacao, dict) else set()
+    if (novos - faltam_no_novo) & faltavam:
         return "traz_exame_que_faltava"
     if novos and not novos & liberados:
         return "sem_exame_em_comum"
