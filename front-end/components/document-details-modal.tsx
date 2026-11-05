@@ -13,16 +13,51 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { ProcessResult } from "@/types/process"
+import { ProcessResult, TabelaComparacaoItem } from "@/types/process"
 import ExamesComparativoTable from "@/components/exames-comparativo-table"
 import { Archive, Download } from "lucide-react"
 import { useRouter } from "next/navigation"
+import { CLASSE_TAG_REENVIO, rotuloReenvio } from "@/lib/reenvio"
 
 interface DocumentDetailsModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   result: ProcessResult | null
   onDownloadPDF?: () => void
+}
+
+/**
+ * Os exames da comparação nas duas partes da Checagem: os **previstos no BR NET**
+ * e, numa seção à parte e fechada, os que vieram **além do previsto**. Antes era
+ * uma tabela só ("Comparação Detalhada"), com o "Extra no OCR" no meio da grade
+ * do BR NET — o mesmo pedido de padronização que a Checagem já atendeu.
+ */
+function ExamesPorPrevisao({ tabela }: { tabela: TabelaComparacaoItem[] }) {
+  const previstos = tabela.filter((item) => item.status !== "extra_no_ocr")
+  const alem = tabela.filter((item) => item.status === "extra_no_ocr")
+  return (
+    <div>
+      <h4 className="font-semibold mb-3">Exames previstos no BR NET</h4>
+      {previstos.length > 0 && (
+        <div className="mb-4">
+          <ExamesComparativoTable tabela={previstos} />
+        </div>
+      )}
+      {alem.length > 0 && (
+        <details className="mb-6 rounded-lg border">
+          <summary className="cursor-pointer px-3 py-2 text-sm font-medium">
+            Exames além do previsto no BR NET ({alem.length})
+            <span className="block text-xs font-normal text-muted-foreground">
+              Vieram no prontuário, mas não estão previstos no BR NET para este atendimento.
+            </span>
+          </summary>
+          <div className="border-t px-1 pb-1">
+            <ExamesComparativoTable tabela={alem} rotuloColunaExame="Exame no prontuário" rotuloExtra="Além do previsto" />
+          </div>
+        </details>
+      )}
+    </div>
+  )
 }
 
 export function DocumentDetailsModal({
@@ -69,6 +104,15 @@ export function DocumentDetailsModal({
       return (
         <Badge variant="destructive">
           Documentos Incompletos - Reenviar
+        </Badge>
+      )
+    }
+
+    // Reenvio de prontuário já liberado ou em revisão: não volta para a revisão
+    if (status === "resubmission") {
+      return (
+        <Badge variant="outline" className={CLASSE_TAG_REENVIO}>
+          {rotuloReenvio(result.result.reenvio)}
         </Badge>
       )
     }
@@ -225,6 +269,7 @@ export function DocumentDetailsModal({
               </div>
             </div>
 
+
             {/* Rejection Reason (if rejected) */}
             {result.status === "rejected" && result.rejectionReason && (
               <div className="p-4 border border-red-200 rounded-lg bg-red-50">
@@ -296,16 +341,10 @@ export function DocumentDetailsModal({
 
             <Separator />
 
-            {/* Detailed Comparison Table */}
-            <div>
-              <h4 className="font-semibold mb-3">Comparação Detalhada</h4>
-
-              {Array.isArray(result.result.tabela_comparacao) && result.result.tabela_comparacao.length > 0 && (
-                <div className="mb-6">
-                  <ExamesComparativoTable tabela={result.result.tabela_comparacao} />
-                </div>
-              )}
-            </div>
+            {/* Exames previstos no BR NET e, à parte, os além do previsto — como na Checagem */}
+            <ExamesPorPrevisao
+              tabela={Array.isArray(result.result.tabela_comparacao) ? result.result.tabela_comparacao : []}
+            />
           </div>
         </ScrollArea>
 

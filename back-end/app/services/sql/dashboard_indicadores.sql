@@ -93,6 +93,9 @@ doc AS (
     CROSS JOIN LATERAL (SELECT CASE WHEN d.result_payload LIKE '{%'
                               AND pg_input_is_valid(d.result_payload, 'jsonb')
                          THEN d.result_payload::jsonb END AS payload) p
+    -- Reenvio de prontuário já liberado (migration 015) não conta de novo: o
+    -- liberado original já está na base.
+    WHERE d.validation_status IS DISTINCT FROM 'reenvio'
 ),
 agg AS (
     SELECT

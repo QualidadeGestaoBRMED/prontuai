@@ -175,6 +175,15 @@ def check_if_migration_needed() -> tuple[bool, list[str]]:
         if not cursor.fetchone():
             logger.warning("⚠️  Migration 018 necessária: tabela documento_layout não existe")
             migrations_needed.append("018_add_documento_layout.sql")
+        # Verificar migration 015: reenvio de prontuário já liberado.
+        cursor.execute("""
+            SELECT count(*)
+            FROM information_schema.columns
+            WHERE table_name='documents' AND column_name IN ('pedido_exame_id', 'reenvio_de')
+        """)
+        if cursor.fetchone()[0] < 2:
+            logger.warning("⚠️  Migration 015 necessária: coluna pedido_exame_id ou reenvio_de não existe")
+            migrations_needed.append("015_add_document_reenvio.sql")
 
         cursor.close()
         conn.close()

@@ -38,7 +38,20 @@ ESCALA = 10000
 _RE_COMENTARIO = re.compile(r"^<!--.*-->$")
 # Página de lista de exames, onde o nome do exame lido não é o laudo: a do ASO
 # (o critério de `workflow_service._RE_ABERTURA_LISTA_ASO`) e o voucher.
-_RE_LISTA = re.compile(r"Procedimentos\s+Realizados|Exames\s+complementares|\bVoucher\b", re.I)
+#
+# O rótulo do ASO só vale abrindo a linha ("Exames complementares",
+# "1. PROCEDIMENTOS REALIZADOS / PERFORMED PROCEDURES", "Additional exams /
+# Exames complementares"). No meio de frase ele é texto de laudo: "a correta
+# interpretação dos exames complementares..." no rodapé do laboratório e do
+# EEG, "como parte integrante de exames complementares" no atestado psicológico,
+# a clínica que se chama "... Exames Complementares". Medido nos 726 documentos
+# com layout de 30/10: 2.741 linhas com o rótulo, ~80 no meio de frase, e cada
+# uma rebaixava o laudo inteiro para depois da lista.
+_RE_LISTA = re.compile(
+    r"^\W*(?:\w{1,2}\W+)?(?:Additional\s+Exams\W+)?(?:Procedimentos\s+Realizados|Exames\s+complementares)\b"
+    r"|\bVoucher\b",
+    re.I,
+)
 # Página que cita esse tanto de exames diferentes da tabela também é lista: a
 # cópia do ASO sem o rótulo, a requisição, a guia. Laudo cita o próprio exame —
 # menos o de laboratório, que traz vários analitos numa página só; por isso
@@ -73,10 +86,29 @@ TITULOS_DE_LAUDO: list[tuple[re.Pattern, re.Pattern]] = [
         ),
         (r"\bACUIDADE VISUAL\b|\bOFTALMOLOGIC", r"\bACUIDADE VISUAL\b|\bOFTALMOLOGIC|\bSNELLEN\b|\bISHIHARA\b"),
         (r"\bESPIROMETRIA\b", r"\bESPIROMETRI|\bFUNCAO PULMONAR\b"),
-        (r"\bTORAX\b", r"\bLEITURA RADIOLOGICA\b|\bPNEUMOCONIOSE\b|\b(RADIOGRAFIA|RX|RAIO X) D[EO] TORAX\b"),
+        # O título vem sem o "de" ("Laudo de Raio-X - Tórax (PA)", "Raios X Tórax PA",
+        # "Tórax PA" sozinho), e a folha OIT só traz o nome do exame em pergunta
+        # ("...consistente com pneumoconiose?"), que não vale como título: valem
+        # os cabeçalhos dela. Medido nos 726 documentos com layout de 30/10: 94 →
+        # 140 dos 152 cliques em RX de tórax vão ao laudo, nenhum piora; nos 12
+        # restantes o OCR não tem laudo de tórax.
+        (
+            r"\bTORAX\b",
+            r"\bLEITURA RADIOLOGICA\b|\bPNEUMOCONIOSE\b|\b(RADIOGRAFIA|RX|RAIOS? X) (D[EO] )?TORAX\b|^ TORAX (PA|AP)\b"
+            r"|\bPEQUENAS OPACIDADES\b|\bGRANDES OPACIDADES\b|\bPROFUSAO\b|\bESPESSAMENTO PLEURAL\b",
+        ),
         (r"\bELETROCARDIOGRAMA\b", r"\bELETROCARDIOGRAMA\b|\bECG\b"),
         (r"\bELETROENCEFALOGRAMA\b", r"\bELETROENCEFALOGRAMA\b|\bEEG\b"),
-        (r"\bPSICOLOGIC|\bPSICOSSOCIAL\b", r"\b(AVALIACAO|LAUDO|PARECER) PSICO(LOGIC|SSOCIAL)"),
+        # Laudo psicológico muitas vezes não traz o nome do exame: é a folha dos
+        # testes (Palográfico, aspectos da personalidade) e a assinatura da
+        # psicóloga com o CRP. Com o rótulo de lista corrigido, 22 dos 33 cliques
+        # em exame psicológico que caíam na lista do ASO vão ao laudo (30/10); nos
+        # outros 11 o OCR não tem laudo psicológico.
+        (
+            r"\bPSICOLOGIC|\bPSICOSSOCIAL\b",
+            r"\b(AVALIACAO|LAUDO|PARECER) PSICO(LOGIC|SSOCIAL)|\bPALOGRAFIC|\bASPECTOS DA PERSONALIDADE\b"
+            r"|^ PSICOLOG[AO]S? $|\bCRP (?:[A-Z]{2} )?\d{1,2} \d{3,}",
+        ),
         (r"\bODONTOLOGIC", r"\bODONTOLOGIC|\bODONTOGRAMA\b"),
     )
 ]

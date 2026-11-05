@@ -21,6 +21,8 @@ import { ControleNavegacao, Destaque, VisualizadorPdf } from "@/components/visua
 import { TagNovo } from "@/components/tag-novo"
 import { carregarTextoDocumento, useLocalizacoes } from "@/hooks/use-localizacoes"
 import { cn } from "@/lib/utils"
+import { EnviosDoColaborador } from "@/components/envios-do-colaborador"
+import { mensagemComplemento } from "@/lib/reenvio"
 
 // O que o destaque no PDF aponta: um exame (previsto no BRNET ou além do
 // previsto) ou um campo da Checklist de Campos.
@@ -505,6 +507,17 @@ export function DocumentDetailsModalChecagem({
                 </>
               )}
 
+              {/* Reenvio que voltou para a revisão, e os outros envios do colaborador */}
+              {result.result.reenvio_desfeito && (
+                <>
+                  <Separator />
+                  <div className="rounded-lg border border-violet-200 bg-violet-50 p-4">
+                    <h4 className="mb-1 font-semibold text-violet-900">Complemento</h4>
+                    <p className="text-sm text-violet-800">{mensagemComplemento(result.result.reenvio_desfeito)}</p>
+                  </div>
+                </>
+              )}
+              <EnviosDoColaborador documentId={result.id} />
 
               {/* Checklist de Campos */}
               {result.result.analysis_details?.field_checks?.length ? (
@@ -715,6 +728,17 @@ export function DocumentDetailsModalChecagem({
                     </>
                   )}
 
+                {/* Reenvio que voltou para a revisão, e os outros envios do colaborador */}
+                {result.result.reenvio_desfeito && (
+                  <>
+                    <Separator />
+                    <div className="rounded-lg border border-violet-200 bg-violet-50 p-4">
+                      <h4 className="mb-1 font-semibold text-violet-900">Complemento</h4>
+                      <p className="text-sm text-violet-800">{mensagemComplemento(result.result.reenvio_desfeito)}</p>
+                    </div>
+                  </>
+                )}
+                <EnviosDoColaborador documentId={result.id} />
 
                 {/* Checklist de Campos */}
                 {result.result.analysis_details?.field_checks?.length ? (

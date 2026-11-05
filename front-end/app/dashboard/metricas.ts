@@ -133,6 +133,7 @@ export type IdIndicador =
   | "prazoTecnico"
   | "usandoPouco"
   | "valeIncluir"
+  | "reenvios"
   | "acuracia"
   | "concordancia"
   | "derrubadas"
@@ -322,6 +323,27 @@ export const COMO_CALCULAMOS: Record<IdIndicador, ComoCalculamos> = {
         titulo: "Em que semana cai",
         texto:
           "Na semana da previsão, não na da liberação: pedido previsto para sexta e liberado na segunda conta na semana da sexta. Por isso uma semana fechada ainda muda — quando um pedido Não liberado sai, ele passa para um dos outros dois.",
+      },
+    ],
+  },
+  reenvios: {
+    titulo: "Clínicas para orientar sobre reenvio",
+    pergunta: "Com quais clínicas conversar sobre mandar o mesmo prontuário mais de uma vez.",
+    blocos: [
+      {
+        titulo: "O que é reenvio",
+        texto:
+          "O mesmo prontuário enviado de novo — o mesmo arquivo, o mesmo pedido do BR NET ou o mesmo CPF e empresa em 30 dias — quando o anterior já foi liberado ou ainda está em revisão. O reenvio não entra na Checagem, e a clínica é avisada na hora.",
+      },
+      {
+        titulo: "O que não conta",
+        texto:
+          "Envio depois de uma rejeição e complemento (um laudo ou exame que faltava) seguem para a Checagem como sempre e não são reenvio.",
+      },
+      {
+        titulo: "Os números",
+        texto:
+          "Últimos 30 dias, contados na hora, fora da atualização das 7h. % reenvio é sobre todos os envios da clínica no período. Passe o mouse na barra para ver quantos eram de prontuário liberado, quantos de prontuário em revisão e quantos foram devolvidos como complemento.",
       },
     ],
   },

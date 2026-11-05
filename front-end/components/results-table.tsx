@@ -26,6 +26,7 @@ import { Download, Eye, Search, FileDown } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { ClinicFilter } from "@/components/clinic-filter"
 import type { ClinicOption } from "@/hooks/use-clinic-options"
+import { CLASSE_TAG_REENVIO, mensagemReenvio, rotuloReenvio } from "@/lib/reenvio"
 
 type StatusFilter = "all" | "approved" | "rejected" | "pending_review"
 
@@ -59,7 +60,13 @@ const exportToCSV = (results: ProcessResult[]) => {
     r.patientName,
     r.clinicName || "",
     format(r.uploadedAt, "dd/MM/yyyy HH:mm", { locale: ptBR }),
-    r.status === "approved" ? "Aprovado" : r.status === "rejected" ? "Rejeitado" : "Pendente",
+    r.status === "approved"
+      ? "Aprovado"
+      : r.status === "rejected"
+        ? "Rejeitado"
+        : r.status === "resubmission"
+          ? rotuloReenvio(r.result.reenvio)
+          : "Pendente",
     r.examesFaltantes.toString(),
     r.submittedBy,
   ])
@@ -199,6 +206,17 @@ export function ResultsTable({
     }
     if (status === "rejected" && reviewedBy) {
       return <Badge variant="destructive">Documentos Incompletos</Badge>
+    }
+    if (status === "resubmission") {
+      return (
+        <Badge
+          variant="outline"
+          className={CLASSE_TAG_REENVIO}
+          title={result.result.reenvio ? mensagemReenvio(result.result.reenvio) : undefined}
+        >
+          {rotuloReenvio(result.result.reenvio)}
+        </Badge>
+      )
     }
     return <Badge variant="secondary">{status}</Badge>
   }
