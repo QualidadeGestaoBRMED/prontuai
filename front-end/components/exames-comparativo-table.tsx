@@ -105,8 +105,8 @@ const NOME_DIFERENTE = {
   label: "Nome diferente no laudo",
 };
 
-// Status exibido para o exame cuja coleta é muito anterior ao ASO. Também é aviso:
-// a IA não muda a decisão, e há exame antigo aceito pelo cliente.
+// Status exibido para o exame cuja coleta é muito anterior ao ASO. A IA rejeita o
+// documento por isso (STC-991); o revisor libera quando o cliente autorizou.
 const DATA_ANTIGA = {
   label: "Data antiga",
   icon: <AlertTriangleIcon className="inline-flex stroke-yellow-500" size={16} />,
@@ -116,7 +116,7 @@ const DATA_ANTIGA = {
 // De onde vem o aviso, com as duas datas.
 export function motivoDataAntiga(data: DataAntiga): string {
   const referencia = data.referencia === "aso" ? `do ASO (${data.data_referencia})` : "da análise do documento";
-  return `Coleta em ${data.data_exame}, ${data.dias} dias antes ${referencia}. Confira se o exame é deste atendimento.`;
+  return `Coleta em ${data.data_exame}, ${data.dias} dias antes ${referencia}. Libere só se o cliente autorizou o exame antigo.`;
 }
 
 export function temCpf(pessoa: PessoaNoLaudo): boolean {

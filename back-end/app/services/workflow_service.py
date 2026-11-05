@@ -363,22 +363,30 @@ _RE_VIX_LOGISTICA = re.compile(r"\bVIX LOGISTICA\b")
 _RE_KIT_VIX = re.compile(r"\bVIXPAR\b|\bFM COP\b")
 def decisao_da_ia(resultado: dict) -> str:
     """O `validation_status` com que o documento é gravado: "validated" (Aprovado
-    pela IA) só sem exame faltante e sem laudo de outra pessoa; "pending"
+    pela IA) só sem exame faltante, sem laudo de outra pessoa e sem coleta antiga; "pending"
     (Rejeitado pela IA, vai à Checagem) no resto; "rejected" quando o
     processamento falhou."""
     if resultado.get("status") == "error":
         return "rejected"
     validacao = resultado.get("validation_result") or {}
-    if resultado.get("status") != "success" or validacao.get("exames_faltantes") or validacao.get("outra_pessoa"):
+    if (
+        resultado.get("status") != "success"
+        or validacao.get("exames_faltantes")
+        or validacao.get("outra_pessoa")
+        or validacao.get("data_antiga")
+    ):
         return "pending"
     return "validated"
 
 
 def _rejeitar_por_outra_pessoa(resultado_validacao: dict, pessoas: list[dict]) -> None:
+    _rejeitar_com_motivo(resultado_validacao, identidade_laudo.motivo_rejeicao(pessoas))
+
+
+def _rejeitar_com_motivo(resultado_validacao: dict, motivo: str) -> None:
     """Tira a liberação e põe o motivo na mensagem da IA. Documento que seria
     liberado troca a frase de liberação pelo motivo; o que já tinha faltante
     ganha o motivo depois dela."""
-    motivo = identidade_laudo.motivo_rejeicao(pessoas)
     if resultado_validacao.get("status_liberado"):
         resultado_validacao["mensagem"] = motivo
     else:
@@ -1392,9 +1400,10 @@ async def _processar_documento_completo_impl(
             # Só nomes de exame: a linha de origem pode ter dado do paciente.
             _log_event("exames_so_lista", run_id=run_id, quantos=len(exames_so_lista), exames=exames_so_lista)
 
-    # Aviso de coleta muito anterior ao ASO. Como o selo acima, NÃO muda status,
-    # faltantes, validation_status nem confiança. Ver `data_exame`.
+    # Coleta muito anterior ao ASO: aviso no exame e rejeição pela IA (STC-991).
+    # Não muda faltantes nem confiança. Ver `data_exame`.
     exames_data_antiga: list[str] = []
+    rejeitado_por_data = False
     if not resultado_validacao.get("erro") and data_exame.HABILITADA:
         try:
             exames_data_antiga = data_exame.anotar_comparativo(
@@ -1407,8 +1416,20 @@ async def _processar_documento_completo_impl(
             logger.warning(f"[WORKFLOW] Aviso de data do exame falhou: {type(e).__name__}")
             exames_data_antiga = []
         if exames_data_antiga:
+            rejeitado_por_data = data_exame.REJEITA
+            if rejeitado_por_data:
+                _rejeitar_com_motivo(
+                    resultado_validacao,
+                    data_exame.motivo_rejeicao(resultado_validacao.get("exames_comparativo", [])),
+                )
             metrics.AVISO_DATA_ANTIGA.add(1)
-            _log_event("exames_data_antiga", run_id=run_id, quantos=len(exames_data_antiga), exames=exames_data_antiga)
+            _log_event(
+                "exames_data_antiga",
+                run_id=run_id,
+                quantos=len(exames_data_antiga),
+                exames=exames_data_antiga,
+                rejeitado=rejeitado_por_data,
+            )
 
     # Documento exigido pela empresa, fora da grade do BRNET: entra como faltante
     # para o documento ir à checagem. Fica fora da `tabela_comparacao`, que é só
@@ -1630,6 +1651,7 @@ async def _processar_documento_completo_impl(
             "exames_extras": [e["exame"] for e in resultado_validacao["exames_comparativo"] if e["status"] == "extra_no_ocr"],
             # Rejeita sem faltante: ver `decisao_da_ia`.
             "outra_pessoa": rejeitado_por_outra_pessoa,
+            "data_antiga": rejeitado_por_data,
             "analysis": resultado_validacao["mensagem"]
         },
         "status": "success"  # Será ajustado abaixo se houver erro
