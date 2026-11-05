@@ -427,6 +427,9 @@ def test_documento_com_faltante_ganha_o_motivo_depois():
         ({"status": "success", "validation_result": {"exames_faltantes": []}}, "validated"),
         ({"status": "success", "validation_result": {"exames_faltantes": [], "outra_pessoa": False}}, "validated"),
         ({"status": "success", "validation_result": {"exames_faltantes": [], "outra_pessoa": True}}, "pending"),
+        # Coleta de laboratório 180 dias ou mais antes do ASO (STC-991).
+        ({"status": "success", "validation_result": {"exames_faltantes": [], "data_antiga": True}}, "pending"),
+        ({"status": "success", "validation_result": {"exames_faltantes": [], "data_antiga": False}}, "validated"),
         ({"status": "success", "validation_result": {"exames_faltantes": ["AUDIOMETRIA"]}}, "pending"),
         ({"status": "success"}, "validated"),
         ({"status": "error", "validation_result": {"exames_faltantes": []}}, "rejected"),

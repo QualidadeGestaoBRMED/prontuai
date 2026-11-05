@@ -127,7 +127,7 @@ def test_sinonimo_do_catalogo_acha_o_laudo():
     assert itens[0]["data_antiga"]["dias"] == 343
 
 
-def test_workflow_grava_o_aviso_sem_mudar_status_nem_confianca(monkeypatch):
+def test_workflow_rejeita_coleta_antiga_sem_mudar_faltantes_nem_confianca(monkeypatch):
     import asyncio
     from datetime import timedelta
 
@@ -141,7 +141,7 @@ Local e data: {fmt(hoje)}
 """
     brnet = ["CREATININA"]
 
-    def processar(coleta: date) -> dict:
+    def processar(coleta: date, rejeita: bool = True) -> dict:
         markdown = aso + laudo(2, "CREATININA", fmt(coleta))
 
         async def ocr_falso(arquivo, progress_hook=None):
@@ -169,6 +169,7 @@ Local e data: {fmt(hoje)}
         monkeypatch.setattr(ws.monitoramento_checagem, "HABILITADO", False)
         monkeypatch.setattr(ws.evidencia_laboratorio, "HABILITADA", True)
         monkeypatch.setattr(ws.data_exame, "HABILITADA", True)
+        monkeypatch.setattr(ws.data_exame, "REJEITA", rejeita)
 
         class Arquivo:
             filename = "ficticio.pdf"
@@ -178,6 +179,7 @@ Local e data: {fmt(hoje)}
 
     antigo = processar(hoje - timedelta(days=300))
     recente = processar(hoje - timedelta(days=3))
+    so_aviso = processar(hoje - timedelta(days=300), rejeita=False)
 
     item = antigo["tabela_comparacao"][0]
     assert item["status"] == "encontrado"
@@ -185,9 +187,51 @@ Local e data: {fmt(hoje)}
     assert item["data_antiga"]["referencia"] == "aso"
     assert antigo["confidence_details"]["exames_data_antiga"] == ["CREATININA"]
     assert antigo["validation_result"]["exames_faltantes"] == []
-    assert antigo["decisao_final"] == recente["decisao_final"]
+    # Rejeitado pela IA: vai à Checagem, sem exame faltante, com o motivo na análise.
+    assert antigo["validation_result"]["data_antiga"] is True
+    assert ws.decisao_da_ia(antigo) == "pending"
+    assert "CREATININA (300 dias)" in antigo["validation_result"]["analysis"]
     assert antigo["status"] == recente["status"] == "success"
     assert antigo["confidence_details"]["score"] == recente["confidence_details"]["score"]
+    assert ws.decisao_da_ia(recente) == "validated"
+    assert recente["validation_result"]["data_antiga"] is False
+
+    # DATA_EXAME_REJEITA=false volta a só avisar.
+    assert so_aviso["tabela_comparacao"][0]["data_antiga"]["dias"] == 300
+    assert so_aviso["validation_result"]["data_antiga"] is False
+    assert ws.decisao_da_ia(so_aviso) == "validated"
+    assert so_aviso["decisao_final"] == recente["decisao_final"]
 
     assert "data_antiga" not in recente["tabela_comparacao"][0]
     assert "exames_data_antiga" not in recente["confidence_details"]
+
+
+# ---------------------------------------------------------------------------
+# Rejeição pela IA (STC-991): coleta 180 dias ou mais antes do ASO.
+# ---------------------------------------------------------------------------
+
+def test_motivo_da_rejeicao_traz_exame_e_dias_sem_data_do_paciente():
+    itens = anotado(ASO + laudo(2, "CREATININA", "12/11/2025"), "CREATININA")
+    assert de.motivo_rejeicao(itens) == "Exame coletado 180 dias ou mais antes do ASO: CREATININA (343 dias)."
+
+
+def test_motivo_sem_data_do_aso_usa_a_analise():
+    itens = [{"exame": "CREATININA", "data_antiga": {"dias": 200, "referencia": de.REFERENCIA_PROCESSAMENTO}}]
+    assert de.motivo_rejeicao(itens).endswith("antes da análise do documento: CREATININA (200 dias).")
+
+
+def test_sem_exame_antigo_nao_ha_motivo():
+    itens = anotado(ASO.replace("12/11/2025", "15/10/2026") + laudo(2, "CREATININA", "15/10/2026"), "CREATININA")
+    assert de.motivo_rejeicao(itens) == ""
+
+
+def test_rejeicao_entra_na_mensagem_e_tira_a_liberacao():
+    from app.services import workflow_service as ws
+
+    validacao = {"status_liberado": True, "mensagem": "Todos os exames obrigatórios encontrados."}
+    ws._rejeitar_com_motivo(validacao, "Exame coletado 180 dias ou mais antes do ASO: CREATININA (343 dias).")
+    assert validacao == {"status_liberado": False, "mensagem": "Exame coletado 180 dias ou mais antes do ASO: CREATININA (343 dias)."}
+    # Com faltante, o motivo vem depois da frase que já existia.
+    validacao = {"status_liberado": False, "mensagem": "Falta: AUDIOMETRIA."}
+    ws._rejeitar_com_motivo(validacao, "Exame coletado 180 dias ou mais antes do ASO: CREATININA (343 dias).")
+    assert validacao["mensagem"] == "Falta: AUDIOMETRIA. Exame coletado 180 dias ou mais antes do ASO: CREATININA (343 dias)."

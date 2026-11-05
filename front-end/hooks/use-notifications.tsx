@@ -106,6 +106,7 @@ const normalizeProcessingResultPayload = (result?: DocumentProcessingResult) => 
       exames_faltantes?: unknown
       exames_extras?: unknown
       outra_pessoa?: boolean
+      data_antiga?: boolean
       analysis?: string
     }
   }
@@ -127,6 +128,8 @@ const normalizeProcessingResultPayload = (result?: DocumentProcessingResult) => 
       : tabelaComparacao.filter((e) => e.status === 'faltante').length
   // Laudo de outra pessoa: rejeitado pela IA mesmo sem exame faltante.
   const outraPessoa = raw.validation_result?.outra_pessoa === true
+  // Coleta de laboratório 180 dias ou mais antes do ASO: também rejeita (STC-991).
+  const dataAntiga = raw.validation_result?.data_antiga === true
   const examesExtras =
     asStringArray(raw.validation_result?.exames_extras).length > 0
       ? asStringArray(raw.validation_result?.exames_extras).length
@@ -150,6 +153,7 @@ const normalizeProcessingResultPayload = (result?: DocumentProcessingResult) => 
     examesFaltantes,
     examesExtras,
     outraPessoa,
+    dataAntiga,
     normalizedPayload: {
       ...raw,
       cpf: isPresentString(raw.cpf) ? raw.cpf : displayIdentifier,
@@ -1016,6 +1020,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         examesFaltantes,
         examesExtras,
         outraPessoa,
+        dataAntiga,
         normalizedPayload,
       } = normalizeProcessingResultPayload(doc.result)
       const analysisDetails = doc.result?.analysis_details
@@ -1041,7 +1046,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
           ? ('resubmission' as const)
           : doc.error
           ? ('rejected' as const)
-          : examesFaltantes === 0 && !outraPessoa
+          : examesFaltantes === 0 && !outraPessoa && !dataAntiga
           ? ('approved' as const)
           : ('pending_review' as const),
         rejectionReason: doc.error,

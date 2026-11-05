@@ -1,14 +1,19 @@
 """
-Aviso de exame de laboratório com coleta muito anterior ao ASO.
+Exame de laboratório com coleta muito anterior ao ASO: aviso no exame e rejeição pela IA.
 
 O erro relatado pela operação: a clínica anexa exame do ano anterior e a IA aprova,
 porque a comparação olha só o nome do exame, e a checklist de campos só diz se existe
 alguma data no documento.
 
-É só um aviso. Não muda status, faltantes, validation_status nem confiança: o chamador
-grava `data_antiga` no item e o revisor decide. Há exame antigo aceito de propósito
-(parecer "cliente autorizou"), e a janela aceita por exame ainda não foi definida pela
-Saúde. Não chama API e não envia dado a ninguém; roda sobre o markdown local.
+O chamador grava `data_antiga` no item e, com `REJEITA`, a IA rejeita o documento
+(decisão de 05/11/2026, STC-991): coleta 180 dias ou mais antes do ASO. Há exame antigo
+aceito de propósito, e é o revisor quem libera, com o motivo externo "cliente autorizou".
+Não muda faltantes nem confiança. Não chama API e não envia dado a ninguém; roda sobre o
+markdown local.
+
+Por que 180: na cópia de produção de 03/11, dos 4.553 documentos com coleta lida, 99%
+têm a coleta até 16 dias antes do ASO, 17 ficam entre 31 e 102 dias, nenhum entre 103 e
+316, e 5 entre 317 e 371. Qualquer corte entre 103 e 316 separa os mesmos 5.
 
 Só olha o exame com resultado no PDF (`evidencia == "com_resultado"`) e só a data com
 o rótulo "coleta": data solta é frágil, o histórico de resultados do laudo traz anos
@@ -31,6 +36,8 @@ from app.services import evidencia_laboratorio
 
 # Desliga o aviso sem deploy de código: DATA_EXAME_AVISO=false.
 HABILITADA = os.getenv("DATA_EXAME_AVISO", "true").strip().lower() not in ("0", "false", "nao", "no")
+# Mantém o aviso e volta a só avisar, sem rejeitar: DATA_EXAME_REJEITA=false.
+REJEITA = os.getenv("DATA_EXAME_REJEITA", "true").strip().lower() not in ("0", "false", "nao", "no")
 
 try:
     LIMITE_DIAS = int(os.getenv("DATA_EXAME_LIMITE_DIAS", "180"))
@@ -160,3 +167,24 @@ def anotar_comparativo(
             }
             antigos.append(item["exame"])
     return antigos
+
+
+def motivo_rejeicao(comparativo: Iterable[dict[str, Any]]) -> str:
+    """A frase que vai na mensagem da IA. Só nome do exame e dias: a data é do exame,
+    não identifica o paciente, mas a mensagem também vai ao log."""
+    partes = [
+        f"{item['exame']} ({item['data_antiga']['dias']} dias)"
+        for item in comparativo
+        if isinstance(item, dict) and item.get("data_antiga")
+    ]
+    if not partes:
+        return ""
+    rotulo = "Exame coletado" if len(partes) == 1 else "Exames coletados"
+    # Sem a data do ASO, a conta foi feita contra a data da análise.
+    sem_aso = any(
+        item.get("data_antiga", {}).get("referencia") == REFERENCIA_PROCESSAMENTO
+        for item in comparativo
+        if isinstance(item, dict)
+    )
+    referencia = "antes da análise do documento" if sem_aso else "antes do ASO"
+    return f"{rotulo} {LIMITE_DIAS} dias ou mais {referencia}: {', '.join(partes)}."
