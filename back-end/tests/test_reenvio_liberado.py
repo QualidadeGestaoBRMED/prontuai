@@ -432,6 +432,31 @@ def test_complemento_de_prontuario_em_revisao_segue_para_a_checagem():
     assert detectar(anterior, envio("AUDIOMETRIA")) is None
 
 
+def correcao(*exames, faltantes=()):
+    return {"exames_ocr": list(exames), "validation_result": {"exames_faltantes": list(faltantes)}}
+
+
+def test_laudo_do_exame_so_citado_no_aso_e_complemento():
+    """Caso de 05/11/2026: GLICOSE estava na lista do ASO, sem laudo, e faltava.
+    A clínica mandou o laudo; antes isso virava "Já em revisão"."""
+    anterior = em_revisao(exames=["CLINICO OCUPACIONAL", "GLICOSE"], faltantes=["GLICOSE"])
+    anterior["ainda_faltam"] = ["GLICOSE"]
+    assert detectar(anterior, correcao("CLINICO OCUPACIONAL", "GLICOSE")) is None
+
+
+def test_mesmo_aso_ainda_sem_laudo_continua_reenvio():
+    anterior = em_revisao(exames=["CLINICO OCUPACIONAL", "GLICOSE"], faltantes=["GLICOSE"])
+    anterior["ainda_faltam"] = ["GLICOSE"]
+    assert detectar(anterior, correcao("CLINICO OCUPACIONAL", "GLICOSE", faltantes=["GLICOSE"]))
+
+
+def test_faltante_que_outro_documento_trouxe_nao_conta_com_ainda_faltam():
+    # Dois anteriores: o segundo trouxe a audiometria, então ela não falta mais.
+    anterior = liberado(exames=["CLINICO OCUPACIONAL", "AUDIOMETRIA"], faltantes=["AUDIOMETRIA"])
+    anterior["ainda_faltam"] = []
+    assert detectar(anterior, correcao("CLINICO OCUPACIONAL", "AUDIOMETRIA"))
+
+
 def test_busca_em_revisao_desliga_sem_deploy(monkeypatch):
     monkeypatch.setattr(reenvio_service, "EM_REVISAO", False)
     banco = BancoFalso()
