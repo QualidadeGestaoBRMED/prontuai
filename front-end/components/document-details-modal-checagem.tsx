@@ -21,7 +21,7 @@ import { ControleNavegacao, Destaque, VisualizadorPdf } from "@/components/visua
 import { TagNovo } from "@/components/tag-novo"
 import { carregarTextoDocumento, useLocalizacoes } from "@/hooks/use-localizacoes"
 import { cn } from "@/lib/utils"
-import { EnviosDoColaborador } from "@/components/envios-do-colaborador"
+import { AvisoDeReenvio, EnviosDoColaborador } from "@/components/envios-do-colaborador"
 import { TagReenvio } from "@/components/tag-reenvio"
 
 // O que o destaque no PDF aponta: um exame (previsto no BRNET ou além do
@@ -429,6 +429,7 @@ export function DocumentDetailsModalChecagem({
             <div className="flex flex-col gap-4 lg:grid lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
               <ScrollArea className="h-[70vh] pr-2">
                 <div className="space-y-6">
+              <AvisoDeReenvio documentId={result.id} reenvio={result.result.reenvio} />
               {/* Basic Information */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -641,6 +642,7 @@ export function DocumentDetailsModalChecagem({
           ) : (
             <ScrollArea className="max-h-[calc(90vh-12rem)] pr-2">
               <div className="space-y-6">
+                <AvisoDeReenvio documentId={result.id} reenvio={result.result.reenvio} />
                 {/* Basic Information */}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
