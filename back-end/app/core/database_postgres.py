@@ -1856,6 +1856,7 @@ class PostgresUserDatabase:
                 DocumentModel.uploaded_at,
                 DocumentModel.exams_ocr,
                 DocumentModel.result_payload_compact,
+                DocumentModel.validation_status,
             )
             liberados = (
                 session.query(*colunas)
@@ -1907,6 +1908,9 @@ class PostgresUserDatabase:
                     ainda_faltam = set(deste) if ainda_faltam is None else ainda_faltam & set(deste)
                 return {
                     "ainda_faltam": sorted(ainda_faltam or []),
+                    # Algum anterior aprovado pela IA: sem isso, um envio novo que a
+                    # IA aprovaria é a correção do que ela rejeitou.
+                    "algum_aprovado_pela_ia": any(linha.validation_status == "validated" for linha in linhas),
                     "documento_id": linhas[0].id,
                     "liberado_em": utc(linhas[0].reviewed_at) if situacao == "liberado" else None,
                     "enviado_em": utc(linhas[0].uploaded_at),

@@ -228,7 +228,8 @@ async def processar_documento_completo_api(
                 if resultado.get('status') == 'error':
                     validation_status = 'rejected'
                 reenvio = reenvio_service.liberado_anterior(
-                    user_db, resultado, cpf=cpf, content_hash=content_hash, clinic_id=current_user.clinic_id
+                    user_db, resultado, cpf=cpf, content_hash=content_hash, clinic_id=current_user.clinic_id,
+                    status_ia=validation_status,
                 )
                 if reenvio:
                     reenvio_service.marcar(
@@ -819,7 +820,8 @@ async def process_document_background(
             # Reenvio de prontuário já liberado ou em revisão: não volta para a
             # Checagem, e o resultado do job leva a data para o alerta da clínica.
             reenvio = reenvio_service.liberado_anterior(
-                user_db, resultado, cpf=cpf, content_hash=content_hash, clinic_id=clinic_id_to_use
+                user_db, resultado, cpf=cpf, content_hash=content_hash, clinic_id=clinic_id_to_use,
+                status_ia=validation_status,
             )
             if reenvio:
                 reenvio_service.marcar(

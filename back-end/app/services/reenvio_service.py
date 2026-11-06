@@ -124,6 +124,29 @@ def _motivo_de_complemento(resultado: dict, anterior: dict) -> Optional[str]:
     return None
 
 
+def _motivo_de_correcao(anterior: dict, status_ia: Optional[str]) -> Optional[str]:
+    """
+    Por que o envio repetido ANTES da revisão segue para a Checagem mesmo sem
+    trazer exame que faltava; None se não há motivo. Só vale para "em revisão":
+    o liberado já foi decidido pelo revisor.
+
+    - O processamento deste envio falhou (`status_ia` "rejected": BR NET sem
+      expedição aberta, OCR, IA). A IA nem leu o documento, e escondê-lo como
+      repetido tira da Checagem um PDF que ninguém olhou (Angra dos Reis,
+      05/11/2026: dois reenvios com "Expedição em aberto não encontrada").
+    - A IA rejeitou todos os anteriores e aprovaria este: é a correção do motivo
+      da rejeição, qualquer que seja (laudo de outra pessoa, data antiga,
+      faltante), e não um reenvio.
+    """
+    if anterior.get("situacao") != "em_revisao":
+        return None
+    if status_ia == "rejected":
+        return "falhou_no_processamento"
+    if status_ia == "validated" and not anterior.get("algum_aprovado_pela_ia", True):
+        return "corrige_rejeicao_da_ia"
+    return None
+
+
 def liberado_anterior(
     user_db: Any,
     resultado: Any,
@@ -132,6 +155,7 @@ def liberado_anterior(
     content_hash: Optional[str],
     clinic_id: Optional[str],
     agora: Optional[datetime] = None,
+    status_ia: Optional[str] = None,
 ) -> Optional[dict]:
     """
     O documento já liberado, ou ainda em revisão, de que este envio é reenvio,
@@ -162,13 +186,16 @@ def liberado_anterior(
         if not anterior:
             return None
         # O mesmo arquivo é o mesmo documento, traga o que a IA ler desta vez.
-        complemento = None if anterior["criterio"] == "arquivo" else _motivo_de_complemento(resultado, anterior)
+        if anterior["criterio"] == "arquivo":
+            complemento = None
+        else:
+            complemento = _motivo_de_correcao(anterior, status_ia) or _motivo_de_complemento(resultado, anterior)
     except Exception as exc:  # a detecção nunca derruba o processamento
         logger.warning("[REENVIO] falha ao procurar liberado anterior: %s", type(exc).__name__)
         return None
     if complemento:
         logger.info(
-            "[REENVIO] complemento de liberado, segue para a Checagem: motivo=%s criterio=%s original=%s cpf=%s",
+            "[REENVIO] não é reenvio, segue para a Checagem: motivo=%s criterio=%s original=%s cpf=%s",
             complemento,
             anterior.get("criterio"),
             anterior.get("documento_id"),
