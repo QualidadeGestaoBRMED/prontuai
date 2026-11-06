@@ -1857,6 +1857,9 @@ class PostgresUserDatabase:
                 DocumentModel.exams_ocr,
                 DocumentModel.result_payload_compact,
                 DocumentModel.validation_status,
+                # O texto vai para a comparação página a página do serviço
+                # (`reenvio_service._motivo_de_conteudo`): são poucas linhas.
+                DocumentModel.ocr_markdown,
             )
             liberados = (
                 session.query(*colunas)
@@ -1911,6 +1914,7 @@ class PostgresUserDatabase:
                     # Algum anterior aprovado pela IA: sem isso, um envio novo que a
                     # IA aprovaria é a correção do que ela rejeitou.
                     "algum_aprovado_pela_ia": any(linha.validation_status == "validated" for linha in linhas),
+                    "textos": [linha.ocr_markdown or "" for linha in linhas],
                     "documento_id": linhas[0].id,
                     "liberado_em": utc(linhas[0].reviewed_at) if situacao == "liberado" else None,
                     "enviado_em": utc(linhas[0].uploaded_at),

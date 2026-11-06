@@ -501,6 +501,48 @@ def test_mesmo_arquivo_nao_vira_correcao():
     assert detectar_com_status(anterior, envio("ACUIDADE VISUAL"), "validated")
 
 
+def _texto(*paginas):
+    return "".join(f"\n<!-- pagina {i} -->\n{p}" for i, p in enumerate(paginas, 1))
+
+
+ASO = " ".join(f"ASO admissional linha {i} exame clinico apto funcao operador" for i in range(12))
+FICHA = " ".join(f"ficha medica anamnese item {i} pressao arterial normal" for i in range(12))
+LAUDO = " ".join(f"hemograma completo eritrocitos {i} leucocitos plaquetas valor" for i in range(12))
+
+
+def conteudo(novo, *anteriores):
+    return reenvio_service._motivo_de_conteudo({"ocr_result": {"text": novo}}, {"textos": list(anteriores)})
+
+
+def test_mesmo_documento_escaneado_de_novo_e_reenvio():
+    assert conteudo(_texto(ASO, FICHA), _texto(ASO, FICHA)) is None
+
+
+def test_pagina_que_nao_estava_nos_anteriores_vai_para_a_checagem():
+    """Recife, 06/11/2026: o reenvio trouxe o laudo do hemograma que faltava."""
+    assert conteudo(_texto(ASO, FICHA, LAUDO), _texto(ASO, FICHA)) == "pagina_nova"
+
+
+def test_envio_com_menos_paginas_que_o_anterior_vai_para_a_checagem():
+    """São Luís, 06/11/2026: o ASO voltou sozinho, com a aptidão mudada."""
+    assert conteudo(_texto(ASO), _texto(ASO, FICHA, LAUDO)) == "envio_parcial"
+
+
+def test_pagina_em_branco_nao_decide():
+    assert conteudo(_texto(ASO, "CARIMBO", FICHA), _texto(ASO, FICHA)) is None
+
+
+def test_sem_marcador_de_pagina_nao_decide():
+    assert conteudo(ASO + FICHA + LAUDO, _texto(ASO)) is None
+    assert conteudo(_texto(LAUDO), "") is None
+
+
+def test_anterior_sem_marcador_ainda_serve_de_base():
+    # Documento de antes de 26/10/2026: o texto vale inteiro, sem contar páginas.
+    assert conteudo(_texto(ASO, FICHA), ASO + " " + FICHA) is None
+    assert conteudo(_texto(ASO, LAUDO), ASO + " " + FICHA) == "pagina_nova"
+
+
 def test_busca_em_revisao_desliga_sem_deploy(monkeypatch):
     monkeypatch.setattr(reenvio_service, "EM_REVISAO", False)
     banco = BancoFalso()
