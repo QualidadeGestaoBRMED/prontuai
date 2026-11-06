@@ -26,7 +26,7 @@ import { Download, Eye, Search, FileDown } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { ClinicFilter } from "@/components/clinic-filter"
 import type { ClinicOption } from "@/hooks/use-clinic-options"
-import { CLASSE_TAG_REENVIO, mensagemReenvio, rotuloReenvio } from "@/lib/reenvio"
+import { CLASSE_TAG_REENVIO, rotuloReenvio } from "@/lib/reenvio"
 import { TagReenvio } from "@/components/tag-reenvio"
 
 type StatusFilter = "all" | "approved" | "rejected" | "pending_review"
@@ -61,14 +61,13 @@ const exportToCSV = (results: ProcessResult[]) => {
     r.patientName,
     r.clinicName || "",
     format(r.uploadedAt, "dd/MM/yyyy HH:mm", { locale: ptBR }),
-    (r.status === "approved"
-      ? "Aprovado"
-      : r.status === "rejected"
-        ? "Rejeitado"
-        : r.status === "resubmission"
-          ? rotuloReenvio(r.result.reenvio)
-          : "Pendente") +
-      (r.status !== "resubmission" && r.result.reenvio ? ` (${rotuloReenvio(r.result.reenvio)})` : ""),
+    r.status === "resubmission" || r.result.reenvio
+      ? rotuloReenvio(r.result.reenvio, "clinica")
+      : r.status === "approved"
+        ? "Aprovado"
+        : r.status === "rejected"
+          ? "Rejeitado"
+          : "Pendente",
     r.examesFaltantes.toString(),
     r.submittedBy,
   ])
@@ -197,6 +196,12 @@ export function ResultsTable({
 
   const getStatusBadge = (result: ProcessResult) => {
     const { status, reviewedBy } = result
+    // Reenvio de prontuário já revisado ou em revisão: a tag ocupa o lugar do
+    // status e, ao clicar, abre o aviso com o link do envio anterior. Vale para
+    // o reenvio novo (status da IA, marcado em `reenvio`) e o antigo ("resubmission").
+    if (result.result.reenvio) {
+      return <TagReenvio reenvio={result.result.reenvio} para="clinica" />
+    }
     if (status === "approved" && reviewedBy) {
       return <Badge variant="default" className="bg-green-500 hover:bg-green-600">Aprovado</Badge>
     }
@@ -210,13 +215,10 @@ export function ResultsTable({
       return <Badge variant="destructive">Documentos Incompletos</Badge>
     }
     if (status === "resubmission") {
+      // Reenvio antigo sem a marcação no resultado: só a tag, sem aviso.
       return (
-        <Badge
-          variant="outline"
-          className={CLASSE_TAG_REENVIO}
-          title={result.result.reenvio ? mensagemReenvio(result.result.reenvio) : undefined}
-        >
-          {rotuloReenvio(result.result.reenvio)}
+        <Badge variant="outline" className={CLASSE_TAG_REENVIO}>
+          {rotuloReenvio(null, "clinica")}
         </Badge>
       )
     }
@@ -345,14 +347,7 @@ export function ResultsTable({
                   <TableCell className="text-sm text-muted-foreground">
                     {format(result.uploadedAt, "dd/MM/yyyy HH:mm", { locale: ptBR })}
                   </TableCell>
-                  <TableCell>
-                    {/* Reenvio gravado depois de nov/2026 tem o status da IA: a tag vem ao lado.
-                        O antigo (status "resubmission") já mostra a tag no lugar do status. */}
-                    <div className="flex flex-wrap items-center gap-1">
-                      {getStatusBadge(result)}
-                      {result.status !== "resubmission" && <TagReenvio reenvio={result.result.reenvio} para="clinica" />}
-                    </div>
-                  </TableCell>
+                  <TableCell>{getStatusBadge(result)}</TableCell>
                   <TableCell className="text-center">
                     {result.examesFaltantes > 0 ? (
                       <Badge variant="outline" className="text-red-600 border-red-300">

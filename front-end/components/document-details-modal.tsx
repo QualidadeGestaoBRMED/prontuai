@@ -74,6 +74,12 @@ export function DocumentDetailsModal({
   const getStatusBadge = (result: ProcessResult) => {
     const { status, reviewedBy } = result
 
+    // Reenvio de prontuário já revisado ou em revisão: a tag ocupa o lugar do
+    // status, como na lista, e abre o aviso com o link do envio anterior.
+    if (result.result.reenvio) {
+      return <TagReenvio reenvio={result.result.reenvio} para="clinica" />
+    }
+
     // Approved by human (final approval)
     if (status === "approved" && reviewedBy) {
       return (
@@ -110,11 +116,11 @@ export function DocumentDetailsModal({
       )
     }
 
-    // Reenvio de prontuário já liberado ou em revisão: não volta para a revisão
+    // Reenvio antigo sem a marcação no resultado: só a tag, sem aviso.
     if (status === "resubmission") {
       return (
         <Badge variant="outline" className={CLASSE_TAG_REENVIO}>
-          {rotuloReenvio(result.result.reenvio)}
+          {rotuloReenvio(null, "clinica")}
         </Badge>
       )
     }
@@ -169,8 +175,7 @@ export function DocumentDetailsModal({
             </DialogTitle>
             <DialogDescription>{result.filename}</DialogDescription>
           </div>
-          <div className="absolute top-4 right-12 flex items-center gap-2">
-            {result.status !== "resubmission" && <TagReenvio reenvio={result.result.reenvio} para="clinica" />}
+          <div className="absolute top-4 right-12">
             {getStatusBadge(result)}
           </div>
         </DialogHeader>

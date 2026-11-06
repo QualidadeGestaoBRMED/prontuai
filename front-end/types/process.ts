@@ -32,6 +32,9 @@ export type EnvioDoColaborador = {
   validation_status: string
   revisado: boolean
   revisado_em: string | null
+  /** E-mail e nome de quem revisou. Só para a BR MED; a clínica não recebe. */
+  revisado_por?: string | null
+  revisado_por_nome?: string | null
   papel: 'este' | 'original' | 'reenvio' | 'complemento' | 'outro_envio'
 }
 export type TabelaComparacaoItem = {

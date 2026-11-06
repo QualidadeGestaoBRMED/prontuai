@@ -1,11 +1,13 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { HistoryIcon } from "lucide-react"
+import Link from "next/link"
+import { ExternalLinkIcon, HistoryIcon, InfoIcon } from "lucide-react"
 
+import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
-import { buscarEnvios, dataCurta } from "@/lib/reenvio"
-import type { EnvioDoColaborador } from "@/types/process"
+import { avisoDeReenvio, buscarEnvios, dataCurta, linkNoHistorico, orientacaoDoReenvio } from "@/lib/reenvio"
+import type { EnvioDoColaborador, ReenvioLiberado } from "@/types/process"
 
 const PAPEL: Record<EnvioDoColaborador["papel"], string> = {
   este: "Este envio",
@@ -41,11 +43,13 @@ function ListaDeEnvios({ envios }: { envios: EnvioDoColaborador[] }) {
   )
 }
 
-function useEnvios(documentId: string): EnvioDoColaborador[] | null {
+/** Os envios ligados ao documento; null enquanto carrega. Sem `documentId`, não busca. */
+export function useEnvios(documentId: string | null): EnvioDoColaborador[] | null {
   const [envios, setEnvios] = useState<EnvioDoColaborador[] | null>(null)
   useEffect(() => {
     let ativo = true
     setEnvios(null)
+    if (!documentId) return
     buscarEnvios(documentId)
       .then((lista) => ativo && setEnvios(lista))
       // Histórico é apoio: sem ele o detalhe segue igual.
@@ -55,6 +59,63 @@ function useEnvios(documentId: string): EnvioDoColaborador[] | null {
     }
   }, [documentId])
   return envios
+}
+
+/**
+ * Aviso interno do revisor, no topo do detalhe da Checagem, quando o documento
+ * é reenvio de um prontuário já liberado ou em revisão (`result.reenvio`): quem
+ * revisou o original e quando, e que correção ou identificação errada segue o
+ * procedimento normal. Só a Checagem o usa — a clínica vê a tag, sem nome de
+ * revisor (a rota de envios nem o manda para ela).
+ */
+export function AvisoDeReenvio({ documentId, reenvio }: { documentId: string; reenvio?: ReenvioLiberado | null }) {
+  const envios = useEnvios(reenvio ? documentId : null)
+  if (!reenvio) return null
+  return (
+    <div role="note" className="flex gap-3 rounded-lg border border-sky-200 bg-sky-50 p-3 text-sm text-sky-900">
+      <InfoIcon className="mt-0.5 size-4 shrink-0" />
+      <ConteudoDoAvisoDeReenvio reenvio={reenvio} envios={envios} para="revisor" />
+    </div>
+  )
+}
+
+/**
+ * O texto do aviso de reenvio e o botão que abre o documento original no
+ * Histórico. O mesmo para o revisor (aviso no detalhe da Checagem) e para a
+ * clínica (ao clicar na tag), mudando o texto (`avisoDeReenvio`). O revisor abre
+ * o original em outra aba, para não perder a revisão em andamento.
+ */
+export function ConteudoDoAvisoDeReenvio({
+  reenvio,
+  envios,
+  para,
+}: {
+  reenvio: ReenvioLiberado
+  envios: EnvioDoColaborador[] | null
+  para: "revisor" | "clinica"
+}) {
+  // Enquanto a lista carrega, o aviso sai com o que a detecção gravou.
+  const original = envios?.find((envio) => envio.documento_id === reenvio.documento_id) ?? null
+  const { titulo, detalhe } = avisoDeReenvio(reenvio, original, para)
+  return (
+    <div className="space-y-2">
+      <p>
+        <span className="font-medium">{titulo}</span>
+        {detalhe ? ` ${detalhe}` : ""}
+      </p>
+      <p className="opacity-90">{orientacaoDoReenvio(para)}</p>
+      <Button asChild size="sm" variant="outline" className="h-7 gap-1.5 bg-white text-xs">
+        <Link
+          href={linkNoHistorico(reenvio.documento_id)}
+          target={para === "revisor" ? "_blank" : undefined}
+          rel={para === "revisor" ? "noopener" : undefined}
+        >
+          <ExternalLinkIcon className="size-3.5" />
+          Ver o envio anterior no Histórico
+        </Link>
+      </Button>
+    </div>
+  )
 }
 
 /**
