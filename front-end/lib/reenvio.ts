@@ -29,9 +29,26 @@ export function rotuloReenvio(reenvio?: ReenvioLiberado | null): string {
 }
 
 /**
- * O aviso que a clínica vê quando reenvia um prontuário que já foi liberado ou
- * que ainda está em revisão. O reenvio não vai para a Checagem: sem o aviso, ela
- * entendia que o documento não tinha sido aprovado e mandava de novo.
+ * O que a tag diz ao revisor, ao passar o mouse: desde nov/2026 o reenvio vai
+ * para a Checagem, e é o revisor quem decide se ele traz algo novo.
+ */
+export function explicacaoReenvioParaRevisor(reenvio: ReenvioLiberado): string {
+  const quando = dataDoOriginal(reenvio)
+  const comparar = "Compare com o envio anterior em \"outros envios deste colaborador\"."
+  if (emRevisao(reenvio)) {
+    return quando
+      ? `Prontuário já enviado em ${quando}, ainda em revisão. ${comparar}`
+      : `Prontuário já enviado antes, ainda em revisão. ${comparar}`
+  }
+  return quando
+    ? `Prontuário já liberado em ${quando}. ${comparar}`
+    : `Prontuário já liberado antes. ${comparar}`
+}
+
+/**
+ * O aviso que a clínica via quando reenviava um prontuário já liberado ou em
+ * revisão, no tempo em que o reenvio não ia para a Checagem (até nov/2026).
+ * Fica para os documentos gravados com o status "reenvio".
  */
 export function mensagemReenvio(reenvio: ReenvioLiberado): string {
   const quando = dataDoOriginal(reenvio)

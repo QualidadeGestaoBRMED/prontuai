@@ -778,23 +778,20 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
               result.error_code === "NO_OPEN_EXAM_ORDER"
             )
 
-          // Reenvio de prontuário já liberado não é erro, mesmo quando o BRNET
-          // responde "expedição em aberto não encontrada" — é justamente porque
-          // o pedido já fechou. A clínica vê a data da liberação.
-          const reenvio = result?.reenvio
+          // O reenvio de prontuário já liberado ou em revisão segue para a
+          // Checagem como qualquer envio (nov/2026): sem mensagem própria aqui —
+          // a clínica já foi avisada antes de mandar, na tela de envio.
           updateProcessingDocument(docId, (current) => ({
             ...current,
             stage: 'completed',
             progress: 100,
             displayProgress: 100,
-            statusMessage: reenvio
-              ? mensagemReenvio(reenvio)
-              : backendErrorMessage
+            statusMessage: backendErrorMessage
               ? (hasBusinessRuleRejection
                   ? 'Processamento concluído com rejeição por regra de negócio.'
                   : 'Processamento concluído com erro.')
               : 'Processamento concluído!',
-            error: reenvio ? undefined : backendErrorMessage || current.error,
+            error: backendErrorMessage || current.error,
             result,
           }))
           pollingJobsRef.current.delete(jobId)
@@ -1042,9 +1039,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         patientName,
         uploadedAt: new Date(),
         processedAt: new Date(),
-        status: doc.result?.reenvio
-          ? ('resubmission' as const)
-          : doc.error
+        status: doc.error
           ? ('rejected' as const)
           : examesFaltantes === 0 && !outraPessoa && !dataAntiga
           ? ('approved' as const)

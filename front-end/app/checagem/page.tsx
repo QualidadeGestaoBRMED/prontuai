@@ -134,6 +134,7 @@ export default function Page() {
               ? "rejected"
               : (result.status as "approved" | "rejected"),
         submittedBy: result.submittedBy,
+        reenvio: result.result.reenvio,
       })),
     [dbResults],
   )
