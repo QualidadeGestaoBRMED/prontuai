@@ -432,6 +432,75 @@ def test_complemento_de_prontuario_em_revisao_segue_para_a_checagem():
     assert detectar(anterior, envio("AUDIOMETRIA")) is None
 
 
+def correcao(*exames, faltantes=()):
+    return {"exames_ocr": list(exames), "validation_result": {"exames_faltantes": list(faltantes)}}
+
+
+def test_laudo_do_exame_so_citado_no_aso_e_complemento():
+    """Caso de 05/11/2026: GLICOSE estava na lista do ASO, sem laudo, e faltava.
+    A clínica mandou o laudo; antes isso virava "Já em revisão"."""
+    anterior = em_revisao(exames=["CLINICO OCUPACIONAL", "GLICOSE"], faltantes=["GLICOSE"])
+    anterior["ainda_faltam"] = ["GLICOSE"]
+    assert detectar(anterior, correcao("CLINICO OCUPACIONAL", "GLICOSE")) is None
+
+
+def test_mesmo_aso_ainda_sem_laudo_continua_reenvio():
+    anterior = em_revisao(exames=["CLINICO OCUPACIONAL", "GLICOSE"], faltantes=["GLICOSE"])
+    anterior["ainda_faltam"] = ["GLICOSE"]
+    assert detectar(anterior, correcao("CLINICO OCUPACIONAL", "GLICOSE", faltantes=["GLICOSE"]))
+
+
+def test_faltante_que_outro_documento_trouxe_nao_conta_com_ainda_faltam():
+    # Dois anteriores: o segundo trouxe a audiometria, então ela não falta mais.
+    anterior = liberado(exames=["CLINICO OCUPACIONAL", "AUDIOMETRIA"], faltantes=["AUDIOMETRIA"])
+    anterior["ainda_faltam"] = []
+    assert detectar(anterior, correcao("CLINICO OCUPACIONAL", "AUDIOMETRIA"))
+
+
+def detectar_com_status(anterior, resultado, status_ia):
+    return reenvio_service.liberado_anterior(
+        BancoFalso(devolve=anterior), resultado, cpf=None, content_hash="abc", clinic_id="c1", agora=AGORA,
+        status_ia=status_ia,
+    )
+
+
+def test_envio_que_falhou_nao_esconde_documento_em_revisao():
+    """Angra dos Reis, 05/11/2026: o BR NET não achou a expedição e o reenvio virou "Já em revisão"."""
+    anterior = em_revisao(criterio="cpf_empresa", exames=["ACUIDADE VISUAL"])
+    assert detectar_com_status(anterior, envio(), "rejected") is None
+
+
+def test_envio_que_falhou_depois_de_liberado_continua_reenvio():
+    # Liberado: o BR NET não acha a expedição porque ela já fechou. É o reenvio esperado.
+    anterior = liberado(criterio="cpf_empresa", exames=["ACUIDADE VISUAL"])
+    assert detectar_com_status(anterior, envio(), "rejected")
+
+
+def test_correcao_de_rejeicao_da_ia_segue_para_a_checagem():
+    # Rejeitado por laudo de outra pessoa (sem faltante); o novo seria aprovado.
+    anterior = em_revisao(exames=["ACUIDADE VISUAL"])
+    anterior["algum_aprovado_pela_ia"] = False
+    assert detectar_com_status(anterior, envio("ACUIDADE VISUAL"), "validated") is None
+
+
+def test_repetido_de_documento_aprovado_pela_ia_continua_reenvio():
+    anterior = em_revisao(exames=["ACUIDADE VISUAL"])
+    anterior["algum_aprovado_pela_ia"] = True
+    assert detectar_com_status(anterior, envio("ACUIDADE VISUAL"), "validated")
+
+
+def test_repetido_que_a_ia_rejeita_de_novo_continua_reenvio():
+    anterior = em_revisao(exames=["ACUIDADE VISUAL"])
+    anterior["algum_aprovado_pela_ia"] = False
+    assert detectar_com_status(anterior, envio("ACUIDADE VISUAL"), "pending")
+
+
+def test_mesmo_arquivo_nao_vira_correcao():
+    anterior = em_revisao(criterio="arquivo", exames=["ACUIDADE VISUAL"])
+    anterior["algum_aprovado_pela_ia"] = False
+    assert detectar_com_status(anterior, envio("ACUIDADE VISUAL"), "validated")
+
+
 def test_busca_em_revisao_desliga_sem_deploy(monkeypatch):
     monkeypatch.setattr(reenvio_service, "EM_REVISAO", False)
     banco = BancoFalso()
@@ -441,11 +510,12 @@ def test_busca_em_revisao_desliga_sem_deploy(monkeypatch):
 
 # ── mesmo arquivo: reaproveita o resultado, sem processar de novo ────────────
 
-def test_mesmo_arquivo_so_vale_pelo_hash():
+def test_mesmo_arquivo_so_vale_pelo_hash_na_mesma_clinica():
     banco = BancoFalso(devolve=em_revisao(criterio="arquivo"))
-    assert reenvio_service.mesmo_arquivo(banco, "abc")["criterio"] == "arquivo"
+    assert reenvio_service.mesmo_arquivo(banco, "abc", "c1")["criterio"] == "arquivo"
     assert banco.recebido["content_hash"] == "abc"
-    assert banco.recebido["clinic_id"] is None and banco.recebido["pedido_exame_id"] is None
+    # A clínica vai para a consulta: o mesmo arquivo de outra clínica não é reenvio.
+    assert banco.recebido["clinic_id"] == "c1" and banco.recebido["pedido_exame_id"] is None
     # Outro critério não basta para pular o processamento.
     assert reenvio_service.mesmo_arquivo(BancoFalso(devolve=liberado(criterio="pedido")), "abc") is None
 

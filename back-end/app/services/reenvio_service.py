@@ -97,16 +97,53 @@ def _exames(itens: Iterable[Any]) -> set[str]:
 
 
 def _motivo_de_complemento(resultado: dict, anterior: dict) -> Optional[str]:
-    """Por que o envio é complemento dos liberados, e não reenvio; None se é reenvio."""
+    """
+    Por que o envio é complemento dos anteriores, e não reenvio; None se é reenvio.
+
+    "Faltava" é o que falta em todos os anteriores (`ainda_faltam`). Antes era
+    "faltante menos qualquer exame lido", e o exame só CITADO no ASO, sem laudo,
+    caía fora: a clínica mandava o laudo que faltava e o envio virava "Já em
+    revisão" (caso de 05/11/2026, glicose em Jaboatão). O envio novo só conta
+    como complemento se o exame deixou de ser faltante NELE: o mesmo ASO
+    reescaneado, ainda sem laudo, continua sendo reenvio.
+    """
     novos = _exames(
         resultado.get("exames_ocr") or (resultado.get("ocr_result") or {}).get("exames_extraidos") or []
     )
     liberados = _exames(anterior.get("exames") or [])
-    faltavam = _exames(anterior.get("faltantes") or []) - liberados
-    if novos & faltavam:
+    if "ainda_faltam" in anterior:
+        faltavam = _exames(anterior.get("ainda_faltam") or [])
+    else:
+        faltavam = _exames(anterior.get("faltantes") or []) - liberados
+    validacao = resultado.get("validation_result")
+    faltam_no_novo = _exames(validacao.get("exames_faltantes") or []) if isinstance(validacao, dict) else set()
+    if (novos - faltam_no_novo) & faltavam:
         return "traz_exame_que_faltava"
     if novos and not novos & liberados:
         return "sem_exame_em_comum"
+    return None
+
+
+def _motivo_de_correcao(anterior: dict, status_ia: Optional[str]) -> Optional[str]:
+    """
+    Por que o envio repetido ANTES da revisão segue para a Checagem mesmo sem
+    trazer exame que faltava; None se não há motivo. Só vale para "em revisão":
+    o liberado já foi decidido pelo revisor.
+
+    - O processamento deste envio falhou (`status_ia` "rejected": BR NET sem
+      expedição aberta, OCR, IA). A IA nem leu o documento, e escondê-lo como
+      repetido tira da Checagem um PDF que ninguém olhou (Angra dos Reis,
+      05/11/2026: dois reenvios com "Expedição em aberto não encontrada").
+    - A IA rejeitou todos os anteriores e aprovaria este: é a correção do motivo
+      da rejeição, qualquer que seja (laudo de outra pessoa, data antiga,
+      faltante), e não um reenvio.
+    """
+    if anterior.get("situacao") != "em_revisao":
+        return None
+    if status_ia == "rejected":
+        return "falhou_no_processamento"
+    if status_ia == "validated" and not anterior.get("algum_aprovado_pela_ia", True):
+        return "corrige_rejeicao_da_ia"
     return None
 
 
@@ -118,6 +155,7 @@ def liberado_anterior(
     content_hash: Optional[str],
     clinic_id: Optional[str],
     agora: Optional[datetime] = None,
+    status_ia: Optional[str] = None,
 ) -> Optional[dict]:
     """
     O documento já liberado, ou ainda em revisão, de que este envio é reenvio,
@@ -148,13 +186,16 @@ def liberado_anterior(
         if not anterior:
             return None
         # O mesmo arquivo é o mesmo documento, traga o que a IA ler desta vez.
-        complemento = None if anterior["criterio"] == "arquivo" else _motivo_de_complemento(resultado, anterior)
+        if anterior["criterio"] == "arquivo":
+            complemento = None
+        else:
+            complemento = _motivo_de_correcao(anterior, status_ia) or _motivo_de_complemento(resultado, anterior)
     except Exception as exc:  # a detecção nunca derruba o processamento
         logger.warning("[REENVIO] falha ao procurar liberado anterior: %s", type(exc).__name__)
         return None
     if complemento:
         logger.info(
-            "[REENVIO] complemento de liberado, segue para a Checagem: motivo=%s criterio=%s original=%s cpf=%s",
+            "[REENVIO] não é reenvio, segue para a Checagem: motivo=%s criterio=%s original=%s cpf=%s",
             complemento,
             anterior.get("criterio"),
             anterior.get("documento_id"),
@@ -172,11 +213,12 @@ def liberado_anterior(
     return {"situacao": "liberado", **{chave: anterior[chave] for chave in chaves if chave in anterior}}
 
 
-def mesmo_arquivo(user_db: Any, content_hash: Optional[str]) -> Optional[dict]:
+def mesmo_arquivo(user_db: Any, content_hash: Optional[str], clinic_id: Optional[str] = None) -> Optional[dict]:
     """
-    O documento liberado ou em revisão com este mesmo arquivo (hash do PDF), ou
-    None. Roda ANTES do processamento: achado, o job não refaz OCR, BRNET e IA
-    (ver `resultado_reaproveitado`). Falha na consulta não bloqueia o envio.
+    O documento liberado ou em revisão com este mesmo arquivo (hash do PDF), da
+    mesma clínica, ou None. Roda ANTES do processamento: achado, o job não refaz
+    OCR, BRNET e IA (ver `resultado_reaproveitado`). Sem clínica (envio de gestor
+    da BR MED) não há reenvio. Falha na consulta não bloqueia o envio.
     """
     buscar = getattr(user_db, "buscar_liberado_anterior", None)
     if not content_hash or not callable(buscar):
@@ -187,15 +229,15 @@ def mesmo_arquivo(user_db: Any, content_hash: Optional[str]) -> Optional[dict]:
             pedido_exame_id=None,
             cpf=None,
             cnpj_empresa=None,
-            clinic_id=None,
+            clinic_id=clinic_id,
             desde=datetime.utcnow() - JANELA_CPF_EMPRESA,
             incluir_em_revisao=EM_REVISAO,
         )
     except Exception as exc:
         logger.warning("[REENVIO] falha ao procurar o mesmo arquivo: %s", type(exc).__name__)
         return None
-    # Só o arquivo idêntico pula o processamento; sem clínica, pedido e CPF a
-    # consulta não casa por outro critério, e aqui não se confia nisso.
+    # Só o arquivo idêntico pula o processamento; sem pedido e CPF a consulta
+    # não casa por outro critério, e aqui não se confia nisso.
     return achado if achado and achado.get("criterio") == "arquivo" else None
 
 
