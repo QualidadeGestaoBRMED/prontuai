@@ -51,6 +51,26 @@ export type TabelaComparacaoItem = {
    * na lista…"), guardada quando `justificativa` passa a explicar o "só na lista".
    */
   justificativa_comparacao?: string
+  /**
+   * Pessoas que não são o paciente identificadas no laudo deste exame (nome e
+   * CPF de outro colaborador). Só aviso: não muda status. Ver `OutraPessoa`.
+   */
+  outra_pessoa?: PessoaNoLaudo[]
+  /**
+   * Só em exame de laboratório com resultado no PDF: a coleta é muito anterior ao
+   * ASO. Só aviso: não muda status. Documento antigo não traz o campo.
+   */
+  data_antiga?: DataAntiga
+}
+
+export interface DataAntiga {
+  /** dd/mm/aaaa */
+  data_exame: string
+  /** dd/mm/aaaa */
+  data_referencia: string
+  /** "aso", ou "processamento" quando a data do ASO não foi lida. */
+  referencia: "aso" | "processamento"
+  dias: number
 }
 
 export type FieldCheck = {
@@ -80,6 +100,46 @@ export type AnalysisDetails = {
   }
   field_checks: FieldCheck[]
   match_confidence: MatchConfidence[]
+  /**
+   * Dados de outra pessoa no documento (STC-947). Só vem quando há achado; o
+   * aviso aparece no exame (`TabelaComparacaoItem.outra_pessoa`), e na Checklist
+   * de Campos para a pessoa sem exame.
+   */
+  outra_pessoa?: OutraPessoa[]
+}
+
+/**
+ * Bloco "Nome/Paciente" + CPF de alguém que não é o paciente do pedido — em
+ * geral um laudo de outro colaborador anexado ao prontuário. É só alerta: não
+ * muda status nem faltantes.
+ */
+export type PessoaNoLaudo = {
+  /** Chave do campo em `/localizacoes`, para o clique levar ao trecho no PDF. */
+  chave: string
+  /** Como o OCR leu o nome. */
+  nome: string
+  /** Mascarado: ***.***.***-35. Null no aviso só pelo nome. */
+  cpf: string | null
+  /** Página da primeira ocorrência; null em documento sem marcador de página. */
+  pagina: number | null
+  /**
+   * "nome_e_cpf": nome e CPF de outra pessoa no laudo. "so_nome": só o nome é
+   * diferente, sem CPF para confirmar — aviso mais fraco (pode ser nome mal lido
+   * pelo OCR).
+   */
+  tipo?: "nome_e_cpf" | "so_nome"
+}
+
+export type OutraPessoa = PessoaNoLaudo & {
+  /** Linhas de origem no texto do OCR, com o CPF mascarado. */
+  linhas: string[]
+  /** Exames da tabela em cujo laudo a pessoa aparece; vazio quando nenhum. */
+  exames?: string[]
+  /**
+   * Páginas em que a pessoa aparece fora do laudo de um exame da tabela; null
+   * em documento sem marcador de página. Ausente em payload anterior a 06/11.
+   */
+  paginas_sem_exame?: (number | null)[]
 }
 
 // Documento individual dentro de um lote
@@ -166,6 +226,8 @@ export interface DocumentProcessingResult {
   validation_result?: {
     exames_faltantes: string[]
     exames_extras: string[]
+    // Laudo de outra pessoa no documento: rejeitado pela IA sem exame faltante.
+    outra_pessoa?: boolean
     analysis?: string
     similarity_scores?: Record<string, number>
   }

@@ -15,7 +15,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
-import { TabelaComparacaoItem } from "@/types/process"
+import { DataAntiga, PessoaNoLaudo, TabelaComparacaoItem } from "@/types/process"
 import { ParametroLido, SituacaoParametro } from "@/types/normalidade"
 import { cn } from "@/lib/utils"
 
@@ -28,6 +28,12 @@ export interface ExamesComparativoTableProps {
    * É só exibição: a decisão da IA não muda. A linha de origem fica nas
    * Evidências do modal. Só a tela do revisor liga; a da clínica e o chat
    * seguem como antes. Documento antigo, sem os campos, renderiza igual.
+   *
+   * Liga também o status "Laudo de outra pessoa": o laudo do exame traz nome e
+   * CPF de quem não é o paciente do pedido (STC-947). Só com o nome diferente,
+   * sem CPF, o status é o mais fraco "Nome diferente no laudo". Vale para
+   * encontrado e extra; o motivo, com o nome e o CPF mascarado, fica no tooltip
+   * da justificativa ("Passe o mouse").
    */
   mostrarEvidencia?: boolean;
   /**
@@ -162,15 +168,73 @@ const SO_NA_LISTA = {
   color: "text-yellow-500",
 };
 
+// Status exibido para o exame cujo laudo traz nome e CPF de outra pessoa. É
+// aviso, como o "Só na lista do ASO": a IA não muda a decisão, o revisor confere.
+const OUTRA_PESSOA = {
+  label: "Laudo de outra pessoa",
+  icon: <AlertTriangleIcon className="inline-flex stroke-yellow-500" size={16} />,
+  color: "text-yellow-500",
+};
+
+// O mesmo aviso quando só o nome é diferente, sem CPF para confirmar: pode ser
+// laudo de outro colaborador, ou nome escrito à mão que o OCR leu mal.
+const NOME_DIFERENTE = {
+  ...OUTRA_PESSOA,
+  label: "Nome diferente no laudo",
+};
+
+// Status exibido para o exame cuja coleta é muito anterior ao ASO. A IA rejeita o
+// documento por isso (STC-991); o revisor libera quando o cliente autorizou.
+const DATA_ANTIGA = {
+  label: "Data antiga",
+  icon: <AlertTriangleIcon className="inline-flex stroke-yellow-500" size={16} />,
+  color: "text-yellow-500",
+};
+
+// De onde vem o aviso, com as duas datas.
+export function motivoDataAntiga(data: DataAntiga): string {
+  const referencia = data.referencia === "aso" ? `do ASO (${data.data_referencia})` : "da análise do documento";
+  return `Coleta em ${data.data_exame}, ${data.dias} dias antes ${referencia}. Libere só se o cliente autorizou o exame antigo.`;
+}
+
+export function temCpf(pessoa: PessoaNoLaudo): boolean {
+  return Boolean(pessoa.cpf);
+}
+
+function descreverPessoa(pessoa: PessoaNoLaudo): string {
+  const detalhes = [pessoa.cpf && `CPF ${pessoa.cpf}`, pessoa.pagina && `página ${pessoa.pagina}`].filter(Boolean);
+  return detalhes.length ? `${pessoa.nome} (${detalhes.join(", ")})` : pessoa.nome;
+}
+
+// O motivo do aviso, com quem é a outra pessoa.
+export function motivoOutraPessoa(pessoas: PessoaNoLaudo[]): string {
+  const comCpf = pessoas.filter(temCpf);
+  const soNome = pessoas.filter((p) => !temCpf(p));
+  const frases = [];
+  if (comCpf.length) {
+    frases.push(
+      `O laudo traz nome e CPF de quem não é o paciente do pedido: ${comCpf.map(descreverPessoa).join("; ")}. ` +
+        "Confira se o laudo é de outro colaborador.",
+    );
+  }
+  if (soNome.length) {
+    frases.push(
+      `O laudo traz um nome diferente do paciente do pedido, sem CPF para confirmar: ${soNome.map(descreverPessoa).join("; ")}. ` +
+        "Pode ser laudo de outro colaborador ou o nome mal lido pelo OCR; confira no PDF.",
+    );
+  }
+  return frases.join(" ");
+}
+
 // Componente da tabela de comparação de exames
 /**
  * A ordem em que a tabela mostra os exames: primeiro os "encontrados", depois os
- * "faltantes", depois os "extras". Com a evidência ligada, os "só na lista do ASO"
- * abrem o grupo dos encontrados (continuam encontrados, mas são os que o revisor
- * precisa conferir no PDF); com a normalidade, os de valor fora da faixa vêm logo
- * depois. O sort é estável: fora isso, a ordem do back-end se mantém. Exportada
- * para quem precisa seguir a mesma sequência — o botão que passa de exame em
- * exame no PDF.
+ * "faltantes", depois os "extras". Com a evidência ligada, o laudo de outra
+ * pessoa e depois os "só na lista do ASO" abrem o seu grupo (o status não muda,
+ * mas são os que o revisor precisa conferir no PDF); com a normalidade, os de
+ * valor fora da faixa vêm logo depois. O sort é estável: fora isso, a ordem do
+ * back-end se mantém. Exportada para quem precisa seguir a mesma sequência — o
+ * botão que passa de exame em exame no PDF.
  */
 export function ordenarComparativo(
   tabela: TabelaComparacaoItem[],
@@ -181,6 +245,10 @@ export function ordenarComparativo(
     mostrarEvidencia && item.evidencia === "so_lista";
   const temAlterado = (item: TabelaComparacaoItem) =>
     Boolean(normalidade?.[item.exame]?.some(foraDaFaixa));
+  const ehDataAntiga = (item: TabelaComparacaoItem) => mostrarEvidencia && Boolean(item.data_antiga);
+  // Nome e CPF de outra pessoa primeiro, depois só o nome.
+  const pesoOutraPessoa = (item: TabelaComparacaoItem) =>
+    !mostrarEvidencia || !item.outra_pessoa?.length ? 0 : item.outra_pessoa.some(temCpf) ? 2 : 1;
   const getStatusOrder = (status: TabelaComparacaoItem['status']) => {
     switch (status) {
       case "encontrado":
@@ -196,7 +264,11 @@ export function ordenarComparativo(
   return [...tabela].sort((a, b) => {
     const porStatus = getStatusOrder(a.status) - getStatusOrder(b.status);
     if (porStatus !== 0) return porStatus;
-    return (Number(ehSoLista(b)) - Number(ehSoLista(a))) || (Number(temAlterado(b)) - Number(temAlterado(a)));
+    const porOutraPessoa = pesoOutraPessoa(b) - pesoOutraPessoa(a);
+    if (porOutraPessoa !== 0) return porOutraPessoa;
+    const porSoLista = Number(ehSoLista(b)) - Number(ehSoLista(a));
+    if (porSoLista !== 0) return porSoLista;
+    return (Number(ehDataAntiga(b)) - Number(ehDataAntiga(a))) || (Number(temAlterado(b)) - Number(temAlterado(a)));
   });
 }
 
@@ -238,7 +310,17 @@ export default function ExamesComparativoTable({
         </TableHeader>
         <TableBody ref={corpo}>
           {sortedExames.map((item, index) => {
-            const conf = ehSoLista(item) ? SO_NA_LISTA : getConformidade(item.status, rotuloExtra);
+            const outrasPessoas = mostrarEvidencia ? item.outra_pessoa ?? [] : [];
+            const dataAntiga = mostrarEvidencia ? item.data_antiga : undefined;
+            const conf = outrasPessoas.length
+              ? outrasPessoas.some(temCpf)
+                ? OUTRA_PESSOA
+                : NOME_DIFERENTE
+              : ehSoLista(item)
+                ? SO_NA_LISTA
+                : dataAntiga
+                  ? DATA_ANTIGA
+                  : getConformidade(item.status, rotuloExtra);
             const localizavel = Boolean(localizar?.porExame[item.exame]);
             const selecionado = localizar?.ativo?.exame === item.exame;
             return (
@@ -292,7 +374,9 @@ export default function ExamesComparativoTable({
                         <span className="text-xs">Passe o mouse</span>
                       </span>
                     </TooltipTrigger>
-                    <TooltipContent className="max-w-md">
+                    <TooltipContent className="max-w-md space-y-2">
+                      {outrasPessoas.length > 0 && <p>{motivoOutraPessoa(outrasPessoas)}</p>}
+                      {dataAntiga && <p>{motivoDataAntiga(dataAntiga)}</p>}
                       <p>{item.justificativa}</p>
                     </TooltipContent>
                   </Tooltip>
