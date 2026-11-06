@@ -18,6 +18,8 @@ import ExamesComparativoTable from "@/components/exames-comparativo-table"
 import { Archive, Download } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { CLASSE_TAG_REENVIO, rotuloReenvio } from "@/lib/reenvio"
+import { TagReenvio } from "@/components/tag-reenvio"
+import { EnviosDoColaborador } from "@/components/envios-do-colaborador"
 
 interface DocumentDetailsModalProps {
   open: boolean
@@ -72,6 +74,12 @@ export function DocumentDetailsModal({
   const getStatusBadge = (result: ProcessResult) => {
     const { status, reviewedBy } = result
 
+    // Reenvio de prontuário já revisado ou em revisão: a tag ocupa o lugar do
+    // status, como na lista, e abre o aviso com o link do envio anterior.
+    if (result.result.reenvio) {
+      return <TagReenvio reenvio={result.result.reenvio} para="clinica" />
+    }
+
     // Approved by human (final approval)
     if (status === "approved" && reviewedBy) {
       return (
@@ -108,11 +116,11 @@ export function DocumentDetailsModal({
       )
     }
 
-    // Reenvio de prontuário já liberado ou em revisão: não volta para a revisão
+    // Reenvio antigo sem a marcação no resultado: só a tag, sem aviso.
     if (status === "resubmission") {
       return (
         <Badge variant="outline" className={CLASSE_TAG_REENVIO}>
-          {rotuloReenvio(result.result.reenvio)}
+          {rotuloReenvio(null, "clinica")}
         </Badge>
       )
     }
@@ -238,6 +246,11 @@ export function DocumentDetailsModal({
                 </div>
               )}
             </div>
+
+            {/* Os outros envios do colaborador, com o status de cada um — o mesmo
+                que o revisor vê na Checagem. Para a clínica, a rota só devolve os
+                envios dela. */}
+            <EnviosDoColaborador documentId={result.id} />
 
             <Separator />
 

@@ -21,7 +21,7 @@ import { ControleNavegacao, Destaque, VisualizadorPdf } from "@/components/visua
 import { TagNovo } from "@/components/tag-novo"
 import { carregarTextoDocumento, useLocalizacoes } from "@/hooks/use-localizacoes"
 import { cn } from "@/lib/utils"
-import { EnviosDoColaborador } from "@/components/envios-do-colaborador"
+import { AvisoDeReenvio, EnviosDoColaborador } from "@/components/envios-do-colaborador"
 import { TagReenvio } from "@/components/tag-reenvio"
 
 // O que o destaque no PDF aponta: um exame (previsto no BRNET ou além do
@@ -517,14 +517,17 @@ export function DocumentDetailsModalChecagem({
               )}
 
               {/* Analysis */}
-              {result.result.validation_result?.analysis && (
+              {(result.result.validation_result?.analysis || result.result.reenvio) && (
                 <>
                   <Separator />
                   <div>
                     <h4 className="font-semibold mb-3">Análise de Validação</h4>
-                    <p className="text-sm text-muted-foreground leading-relaxed">
-                      {highlightLiberacao(result.result.validation_result?.analysis)}
-                    </p>
+                    {result.result.validation_result?.analysis && (
+                      <p className="text-sm text-muted-foreground leading-relaxed">
+                        {highlightLiberacao(result.result.validation_result?.analysis)}
+                      </p>
+                    )}
+                    <AvisoDeReenvio documentId={result.id} reenvio={result.result.reenvio} />
                   </div>
                 </>
               )}
@@ -729,14 +732,17 @@ export function DocumentDetailsModalChecagem({
                 )}
 
                 {/* Analysis */}
-                {result.result.validation_result?.analysis && (
+                {(result.result.validation_result?.analysis || result.result.reenvio) && (
                   <>
                     <Separator />
                       <div>
                         <h4 className="font-semibold mb-3">Análise de Validação</h4>
-                        <p className="text-sm text-muted-foreground leading-relaxed">
-                          {highlightLiberacao(result.result.validation_result?.analysis)}
-                        </p>
+                        {result.result.validation_result?.analysis && (
+                          <p className="text-sm text-muted-foreground leading-relaxed">
+                            {highlightLiberacao(result.result.validation_result?.analysis)}
+                          </p>
+                        )}
+                        <AvisoDeReenvio documentId={result.id} reenvio={result.result.reenvio} />
                       </div>
                     </>
                   )}

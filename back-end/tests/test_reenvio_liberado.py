@@ -645,6 +645,10 @@ class BancoDasListas:
     def envios_relacionados(self, did):
         return self.envios
 
+    def get_user_by_email(self, email):
+        from types import SimpleNamespace
+        return SimpleNamespace(name="Fulana Revisora") if email == "revisora@x.com" else None
+
 
 def test_reenvios_por_clinica_no_periodo(monkeypatch):
     import asyncio
@@ -672,6 +676,26 @@ def test_clinica_ve_so_os_proprios_envios_do_colaborador(monkeypatch):
     # O revisor vê todos.
     resposta = asyncio.run(mod.envios_do_colaborador("doc-1", current_user=usuario(UserRole.CHECKER, clinic_id=None)))
     assert len(resposta["envios"]) == 3
+
+
+def test_revisor_ve_quem_revisou_o_original_e_a_clinica_nao(monkeypatch):
+    # O aviso de reenvio da Checagem diz quem revisou o original; o nome e o
+    # e-mail do revisor não vão para a clínica.
+    import asyncio
+    from app.models.user import UserRole
+    mod = carregar(monkeypatch)
+    envios = [
+        {"documento_id": "doc-1", "clinic_id": "c1", "papel": "este", "revisado_por": None},
+        {"documento_id": "doc-0", "clinic_id": "c1", "papel": "original", "revisado_por": "revisora@x.com"},
+        {"documento_id": "doc-2", "clinic_id": "c1", "papel": "outro_envio", "revisado_por": "sem-cadastro@x.com"},
+    ]
+    monkeypatch.setattr(mod, "user_db", BancoDasListas(documento("validated"), envios))
+    revisor = asyncio.run(mod.envios_do_colaborador("doc-1", current_user=usuario(UserRole.CHECKER, clinic_id=None)))
+    original = next(e for e in revisor["envios"] if e["papel"] == "original")
+    assert original["revisado_por"] == "revisora@x.com" and original["revisado_por_nome"] == "Fulana Revisora"
+    assert revisor["envios"][2]["revisado_por_nome"] is None  # sem cadastro: a tela mostra o e-mail
+    clinica = asyncio.run(mod.envios_do_colaborador("doc-1", current_user=usuario(UserRole.SENDER)))
+    assert all("revisado_por" not in e and "revisado_por_nome" not in e for e in clinica["envios"])
 
 
 def test_clinica_nao_ve_envios_de_documento_de_outra(monkeypatch):
