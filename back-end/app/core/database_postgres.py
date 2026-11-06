@@ -2096,22 +2096,27 @@ class PostgresUserDatabase:
         quantos envios no período, quantos foram reenvio (de liberado ou de
         prontuário ainda em revisão), quantos a clínica ou o revisor devolveram
         como complemento, e a data do último reenvio. Para a operação orientar
-        a clínica: o reenvio some da Checagem, e sem isto ninguém o veria.
+        a clínica a não reenviar.
+
+        Reenvio é o documento com `reenvio_de`: desde nov/2026 ele vai para a
+        Checagem com o status da IA, e o status "reenvio" ficou só nos antigos
+        (que também têm `reenvio_de`). O complemento desfeito perde o
+        `reenvio_de` e conta à parte.
         """
         consulta = text(
             """
             SELECT d.clinic_id, c.name,
                    count(*) AS envios,
-                   count(*) FILTER (WHERE d.validation_status = 'reenvio') AS reenvios,
-                   count(*) FILTER (WHERE d.validation_status = 'reenvio'
+                   count(*) FILTER (WHERE d.reenvio_de IS NOT NULL) AS reenvios,
+                   count(*) FILTER (WHERE d.reenvio_de IS NOT NULL
                                     AND d.result_payload_compact ~ '"situacao":\\s*"em_revisao"') AS em_revisao,
                    count(*) FILTER (WHERE d.result_payload_compact LIKE '%"reenvio_desfeito"%') AS complementos,
-                   max(d.uploaded_at) FILTER (WHERE d.validation_status = 'reenvio') AS ultimo
+                   max(d.uploaded_at) FILTER (WHERE d.reenvio_de IS NOT NULL) AS ultimo
             FROM documents d
             LEFT JOIN clinics c ON c.id = d.clinic_id
             WHERE d.uploaded_at >= :desde AND d.archived_at IS NULL
             GROUP BY d.clinic_id, c.name
-            HAVING count(*) FILTER (WHERE d.validation_status = 'reenvio'
+            HAVING count(*) FILTER (WHERE d.reenvio_de IS NOT NULL
                                     OR d.result_payload_compact LIKE '%"reenvio_desfeito"%') > 0
             ORDER BY reenvios DESC, envios DESC
             """
