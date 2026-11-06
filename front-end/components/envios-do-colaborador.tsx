@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import Link from "next/link"
-import { ExternalLinkIcon, HistoryIcon, InfoIcon } from "lucide-react"
+import { AlertTriangleIcon, ExternalLinkIcon, HistoryIcon } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
@@ -62,19 +62,40 @@ export function useEnvios(documentId: string | null): EnvioDoColaborador[] | nul
 }
 
 /**
- * Aviso interno do revisor, no topo do detalhe da Checagem, quando o documento
- * é reenvio de um prontuário já liberado ou em revisão (`result.reenvio`): quem
- * revisou o original e quando, e que correção ou identificação errada segue o
- * procedimento normal. Só a Checagem o usa — a clínica vê a tag, sem nome de
- * revisor (a rota de envios nem o manda para ela).
+ * Aviso interno do revisor, na "Análise de Validação" da Checagem, quando o
+ * documento é reenvio de um prontuário já liberado ou em revisão
+ * (`result.reenvio`): quem revisou o original e quando, que correção ou
+ * identificação errada segue o procedimento normal, e o link do original.
+ * Discreto, no tom do texto da análise (pedido de 06/11/2026: o quadro em
+ * destaque no topo chamava atenção demais). Só a Checagem o usa — a clínica vê
+ * a tag, sem nome de revisor (a rota de envios nem o manda para ela).
  */
 export function AvisoDeReenvio({ documentId, reenvio }: { documentId: string; reenvio?: ReenvioLiberado | null }) {
   const envios = useEnvios(reenvio ? documentId : null)
   if (!reenvio) return null
+  // Enquanto a lista carrega, o aviso sai com o que a detecção gravou.
+  const original = envios?.find((envio) => envio.documento_id === reenvio.documento_id) ?? null
+  const { titulo, detalhe } = avisoDeReenvio(reenvio, original, "revisor")
   return (
-    <div role="note" className="flex gap-3 rounded-lg border border-sky-200 bg-sky-50 p-3 text-sm text-sky-900">
-      <InfoIcon className="mt-0.5 size-4 shrink-0" />
-      <ConteudoDoAvisoDeReenvio reenvio={reenvio} envios={envios} para="revisor" />
+    // Mesmo desenho da linha "N outros envios deste colaborador" logo abaixo:
+    // ícone numa coluna própria, 6px até o texto, e a quebra alinhada pelo texto.
+    // O destaque é só o triângulo âmbar — o mesmo alerta do "Dados de outra
+    // pessoa" —, com o texto no tom da análise e sem caixa colorida.
+    <div role="note" className="mt-2 flex items-start gap-1.5 text-sm text-muted-foreground leading-relaxed">
+      <AlertTriangleIcon className="mt-[0.3rem] size-3.5 shrink-0 text-amber-600" />
+      <p>
+        {titulo}
+        {detalhe ? ` ${detalhe}` : ""} {orientacaoDoReenvio("revisor")}{" "}
+        <Link
+          href={linkNoHistorico(reenvio.documento_id)}
+          target="_blank"
+          rel="noopener"
+          className="inline-flex items-center gap-0.5 underline underline-offset-2 hover:text-foreground"
+        >
+          Ver o envio anterior
+          <ExternalLinkIcon className="size-3" />
+        </Link>
+      </p>
     </div>
   )
 }
