@@ -285,6 +285,35 @@ def test_outra_pessoa_no_audiograma_e_na_acuidade_avisa_nos_dois():
     assert [item["outra_pessoa"][0]["pagina"] for item in comparativo[:2]] == [7, 9]
 
 
+def test_audiometria_da_protegy_com_cabecalho_em_colunas_avisa_junto_com_a_acuidade():
+    # Angra (06/11), com o layout real da Protegy: na audiometria o cabeçalho
+    # tem três colunas, e o CPF do terceiro fica 6 linhas abaixo do nome — fora
+    # da janela, a linha do nome só entra pela pessoa achada com CPF na
+    # acuidade. "Audiometria Tonal" fica a mais de `ALCANCE_EXAME` linhas: o
+    # que liga o bloco ao exame é o título "AVALIAÇÃO AUDIOLÓGICA" acima dele.
+    nome = "JONATHAN FICTICIO SOUZA"
+    markdown = ASO_DA_PACIENTE + (
+        "<!-- pagina 7 -->\nPROTEGY\nAVALIAÇÃO AUDIOLÓGICA\nEmpresa: GRUPO FICTICIO\nCNPJ: 10.412.238/0001-88\n"
+        f"Funcionario: {nome}\nNascimento: 18/05/1997 - 29 anos\nFunção: Credenciada\nCargo: Credenciada\n"
+        f"Setor: Credenciada\nNIT:\nCPF: {CPF_OUTRO}\nDados do exame\nData: 03/11/2026\nOrdem: Referencial\n"
+        "Tipo: Demissional\nRepouso auditivo: 14 horas\nAudiometria Tonal\nOrelha Direita\nOrelha Esquerda\n"
+        "<!-- pagina 9 -->\nACUIDADE VISUAL\nPROTEGY\n"
+        f"Funcionário: {nome}\nCPF: {CPF_OUTRO}\nEmpresa: GRUPO FICTICIO\nCNPJ: 10.412.238/0001-88\n"
+        "VISÃO DE LONGE\n"
+    )
+    linhas = markdown.splitlines()
+    pessoas = il.pessoas_no_documento(linhas, CPF_PACIENTE, PACIENTE)
+    comparativo = [{"exame": e, "status": "encontrado"} for e in ["ACUIDADE VISUAL", "AUDIOMETRIA TONAL", "ESPIROMETRIA"]]
+    il.anotar_comparativo(comparativo, pessoas, linhas, _normalizar, lambda t: SINONIMOS.get(t, set()))
+    (pessoa,) = pessoas
+    assert sorted(pessoa["exames"]) == ["ACUIDADE VISUAL", "AUDIOMETRIA TONAL"]
+    assert pessoa["paginas_sem_exame"] == []
+    assert {item["exame"]: item["outra_pessoa"][0]["pagina"] for item in comparativo if "outra_pessoa" in item} == {
+        "AUDIOMETRIA TONAL": 7,
+        "ACUIDADE VISUAL": 9,
+    }
+
+
 def test_pagina_sem_exame_da_pessoa_que_tambem_esta_num_exame():
     bloco = f"Nome: JOAO FICTICIO SOUZA\nCPF: {CPF_OUTRO}\n"
     markdown = ASO_DA_PACIENTE + (

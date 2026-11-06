@@ -1,3 +1,5 @@
+import type { ReenvioLiberado } from "@/types/process";
+
 export type StatusDocumento = "pendente" | "aprovado" | "rejeitado";
 
 export type DocumentoChecagem = {
@@ -16,6 +18,7 @@ export type DocumentoChecagem = {
   documentoUrl?: string;
   decisaoIA?: 'approved' | 'rejected'; // Indica se IA aprovou ou rejeitou (antes de revisão humana)
   submittedBy?: string; // Email do usuário que enviou
+  reenvio?: ReenvioLiberado | null; // Prontuário já liberado ou em revisão: vira a tag
 };
 
 export type AcaoChecagem = "aprovar" | "rejeitar";
