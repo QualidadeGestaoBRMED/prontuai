@@ -155,6 +155,7 @@ def test_payload_guarda_o_cpf_mascarado_e_a_pagina():
         "pagina": 2,
         "linhas": ["## Nome: JOAO FICTICIO SOUZA", "## CPF: ***.***.***-35"],
         "exames": [],
+        "paginas_sem_exame": [],
     }]
 
 
@@ -249,13 +250,52 @@ def test_empate_fica_com_o_titulo_de_cima():
 
 def test_titulo_em_outra_pagina_ou_fora_da_tabela_deixa_a_pessoa_sem_exame():
     markdown = ASO_DA_PACIENTE + (
-        f"## ESPIROMETRIA\n<!-- pagina 2 -->\n## AVALIAÇÃO AUDIOLÓGICA\n"
+        f"## ESPIROMETRIA\n<!-- pagina 2 -->\n## AVALIAÇÃO DERMATOLÓGICA\n"
         f"## Funcionário: JOAO FICTICIO SOUZA\n## CPF: {CPF_OUTRO}\n"
     )
     comparativo, (pessoa,) = _anotar(markdown, ["ESPIROMETRIA", "AUDIOMETRIA TONAL"])
     assert not any("outra_pessoa" in item for item in comparativo)
-    assert pessoa["exames"] == []
-    assert il.para_payload([pessoa], markdown.splitlines())[0]["exames"] == []
+    assert pessoa["exames"] == [] and pessoa["paginas_sem_exame"] == [2]
+    payload = il.para_payload([pessoa], markdown.splitlines())[0]
+    assert payload["exames"] == [] and payload["paginas_sem_exame"] == [2]
+
+
+def test_titulo_de_laudo_do_clique_no_exame_liga_a_pessoa_ao_exame():
+    # O audiograma não traz o nome do exame da grade nem sinônimo do catálogo:
+    # casa pelo título que o clique no exame já reconhece (`layout_ocr`).
+    markdown = ASO_DA_PACIENTE + (
+        f"<!-- pagina 2 -->\n## AVALIAÇÃO AUDIOLÓGICA\n"
+        f"## Funcionário: JOAO FICTICIO SOUZA\n## CPF: {CPF_OUTRO}\n"
+    )
+    comparativo, (pessoa,) = _anotar(markdown, ["ESPIROMETRIA", "AUDIOMETRIA TONAL"])
+    assert [item["exame"] for item in comparativo if "outra_pessoa" in item] == ["AUDIOMETRIA TONAL"]
+    assert pessoa["paginas_sem_exame"] == []
+
+
+def test_outra_pessoa_no_audiograma_e_na_acuidade_avisa_nos_dois():
+    # Angra (05/11): o CPF do terceiro na audiometria (pág. 7) e na acuidade
+    # (pág. 9); só a acuidade ganhava o aviso.
+    bloco = f"Nome: JOAO FICTICIO SOUZA\nCPF: {CPF_OUTRO}\n"
+    markdown = ASO_DA_PACIENTE + (
+        f"<!-- pagina 7 -->\nAUDIOGRAMA\n{bloco}Orelha direita\n"
+        f"<!-- pagina 9 -->\nTESTE DE SNELLEN\n{bloco}OD 20/20\n"
+    )
+    comparativo, (pessoa,) = _anotar(markdown, ["AUDIOMETRIA", "ACUIDADE VISUAL", "ESPIROMETRIA"])
+    assert [item["exame"] for item in comparativo if "outra_pessoa" in item] == ["AUDIOMETRIA", "ACUIDADE VISUAL"]
+    assert [item["outra_pessoa"][0]["pagina"] for item in comparativo[:2]] == [7, 9]
+
+
+def test_pagina_sem_exame_da_pessoa_que_tambem_esta_num_exame():
+    bloco = f"Nome: JOAO FICTICIO SOUZA\nCPF: {CPF_OUTRO}\n"
+    markdown = ASO_DA_PACIENTE + (
+        f"<!-- pagina 7 -->\nAUDIOGRAMA\n{bloco}Orelha direita\n"
+        f"<!-- pagina 18 -->\nRELATÓRIO DIVERSO\n{bloco}"
+    )
+    comparativo, (pessoa,) = _anotar(markdown, ["AUDIOMETRIA", "ESPIROMETRIA"])
+    assert pessoa["exames"] == ["AUDIOMETRIA"] and pessoa["paginas_sem_exame"] == [18]
+    assert il.motivo_rejeicao([pessoa]) == (
+        "Laudo de outra pessoa no exame: AUDIOMETRIA; e dados de outra pessoa na página 18."
+    )
 
 
 def test_mesma_pessoa_em_dois_laudos_avisa_nos_dois_exames():
@@ -403,6 +443,13 @@ def test_motivo_cita_so_os_exames_e_nunca_a_pessoa():
 def test_motivo_de_um_exame_e_de_pessoa_sem_exame():
     assert il.motivo_rejeicao([{"exames": ["AUDIOMETRIA"]}]) == "Laudo de outra pessoa no exame: AUDIOMETRIA."
     assert il.motivo_rejeicao([{"exames": []}]) == "Dados de outra pessoa no documento."
+    assert il.motivo_rejeicao([{"exames": [], "paginas_sem_exame": [9, 4]}]) == (
+        "Dados de outra pessoa no documento, nas páginas 4 e 9."
+    )
+    # Sem marcador de página no OCR (documento anterior a 26/10).
+    assert il.motivo_rejeicao([{"exames": ["ECG"], "paginas_sem_exame": [None]}]) == (
+        "Laudo de outra pessoa no exame: ECG; e dados de outra pessoa em outra parte do documento."
+    )
 
 
 def test_documento_liberado_vira_rejeitado_com_o_motivo():
@@ -438,3 +485,35 @@ def test_documento_com_faltante_ganha_o_motivo_depois():
 )
 def test_decisao_da_ia(resultado, esperado):
     assert ws.decisao_da_ia(resultado) == esperado
+
+
+# ── Sem BRNET (06/11) ───────────────────────────────────────────────────────
+
+@pytest.fixture
+def sem_banco(monkeypatch):
+    monkeypatch.setattr(ws.nomes_conhecidos, "vocabulario", lambda: set())
+    monkeypatch.setattr(ws, "obter_sinonimos", lambda t: set())
+
+
+def test_sem_brnet_o_aviso_sai_com_as_paginas_e_os_exames_do_ocr(sem_banco):
+    bloco = f"Nome: JOAO FICTICIO SOUZA\nCPF: {CPF_OUTRO}\n"
+    markdown = ASO_DA_PACIENTE + (
+        f"<!-- pagina 7 -->\nAUDIOGRAMA\n{bloco}Orelha direita\n"
+        f"<!-- pagina 18 -->\nRELATÓRIO DIVERSO\n{bloco}"
+    )
+    payload, motivo = ws._outra_pessoa_sem_brnet(markdown, CPF_PACIENTE, PACIENTE, ["AUDIOMETRIA", "ECG"], "run")
+    assert motivo == "Laudo de outra pessoa no exame: AUDIOMETRIA; e dados de outra pessoa na página 18."
+    (pessoa,) = payload
+    assert pessoa["cpf"] == "***.***.***-35" and pessoa["exames"] == ["AUDIOMETRIA"]
+    assert pessoa["paginas_sem_exame"] == [18]
+
+
+def test_sem_brnet_e_sem_outra_pessoa_nada_muda(sem_banco):
+    assert ws._outra_pessoa_sem_brnet(ASO_DA_PACIENTE, CPF_PACIENTE, PACIENTE, [], "run") == (None, None)
+
+
+def test_sem_brnet_falha_na_checagem_nao_derruba(monkeypatch, sem_banco):
+    def explode(*a, **k):
+        raise RuntimeError("x")
+    monkeypatch.setattr(ws.identidade_laudo, "pessoas_no_documento", explode)
+    assert ws._outra_pessoa_sem_brnet(ASO_DA_PACIENTE, CPF_PACIENTE, PACIENTE, [], "run") == (None, None)

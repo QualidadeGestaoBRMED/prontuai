@@ -135,6 +135,11 @@ export type OutraPessoa = PessoaNoLaudo & {
   linhas: string[]
   /** Exames da tabela em cujo laudo a pessoa aparece; vazio quando nenhum. */
   exames?: string[]
+  /**
+   * Páginas em que a pessoa aparece fora do laudo de um exame da tabela; null
+   * em documento sem marcador de página. Ausente em payload anterior a 06/11.
+   */
+  paginas_sem_exame?: (number | null)[]
 }
 
 // Documento individual dentro de um lote

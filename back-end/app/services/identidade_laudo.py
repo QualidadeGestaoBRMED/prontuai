@@ -51,6 +51,7 @@ from difflib import SequenceMatcher
 from typing import Callable, Collection, Iterable, Optional
 
 from app.core.pii import mask_cpf
+from app.services import layout_ocr
 from app.services.ocr_service import _digits_only, _is_valid_cpf
 from app.services.patient_name_extractor import _clean_candidate
 
@@ -458,13 +459,15 @@ def _exame_do_bloco(
     linhas: list[str],
     normalizar: Callable[[str], str],
     normalizadas: dict[int, str],
-    termos: list[tuple[str, list[re.Pattern]]],
+    termos: list[tuple[str, list[re.Pattern], list[re.Pattern]]],
 ) -> Optional[str]:
     """O exame da tabela cujo nome está mais perto do bloco, até `ALCANCE_EXAME`
     linhas com texto acima ou abaixo, sem passar de página. O laudo põe o título
     logo acima da identificação ("## LAUDO DE ESPIROMETRIA" / "DADOS DO
     COLABORADOR" / "Nome:"), ou logo abaixo (Fast Laudos: "Nome:", "CPF:",
-    "Laudo Eletrocardiograma"). Empate fica com o de cima."""
+    "Laudo Eletrocardiograma"). Empate fica com o de cima. Na mesma linha, o
+    nome do exame (ou sinônimo) vence o título de laudo: "ACUIDADE VISUAL" é
+    título também da avaliação oftalmológica, mas é o nome da acuidade."""
     melhor: Optional[tuple[int, str]] = None
     for sentido, inicio in ((-1, bloco[0] - 1), (1, bloco[-1] + 1)):
         i, distancia = inicio, 0
@@ -474,8 +477,12 @@ def _exame_do_bloco(
                 if melhor and distancia >= melhor[0]:
                     break
                 if i not in normalizadas:
-                    normalizadas[i] = normalizar(linhas[i])
-                exame = next((e for e, padroes in termos if any(p.search(normalizadas[i]) for p in padroes)), None)
+                    # Cercada de espaço, como em `layout_ocr.normalizar_linhas`:
+                    # os títulos de laudo de lá ancoram na linha inteira.
+                    normalizadas[i] = f" {normalizar(linhas[i])} "
+                exame = next(
+                    (e for e, nomes, _ in termos if any(p.search(normalizadas[i]) for p in nomes)), None
+                ) or next((e for e, _, titulos in termos if any(p.search(normalizadas[i]) for p in titulos)), None)
                 if exame:
                     melhor = (distancia, exame)
                     break
@@ -493,9 +500,16 @@ def anotar_comparativo(
     """
     Grava a outra pessoa no exame cujo laudo ela identifica: o item da tabela
     ganha `outra_pessoa` ([{chave, nome, cpf mascarado ou None, pagina, tipo}]) e a pessoa,
-    `exames`. Pessoa sem exame da tabela por perto (título que o catálogo não
-    conhece, laudo de exame fora da grade) fica com `exames` vazio, e a tela a
-    mostra à parte. Não mexe em status nem justificativa.
+    `exames`. Cada bloco da pessoa (cada laudo em que ela aparece) é ligado à
+    parte: a mesma pessoa em dois laudos avisa nos dois exames. Bloco sem exame
+    da tabela por perto (título que o catálogo não conhece, laudo de exame fora
+    da grade) entra em `paginas_sem_exame`, e a tela o mostra à parte. Não mexe
+    em status nem justificativa.
+
+    O título do laudo casa com o exame pelo nome, pelos sinônimos do catálogo e
+    pelos títulos que o clique no exame já reconhece (`layout_ocr.TITULOS_DE_LAUDO`:
+    "AUDIOGRAMA", "ECG", "SNELLEN"...). Só nome e sinônimo deixavam o audiograma
+    de outra pessoa sem aviso no exame (Angra, 05/11).
 
     `normalizar` e `sinonimos` são os da comparação (`workflow_service`), para
     o título do laudo casar com o exame como a busca de evidências casa.
@@ -510,15 +524,20 @@ def anotar_comparativo(
         if _CLINICO.search(normalizado):
             candidatos.add(_TITULO_ASO)
         padroes = [re.compile(rf"\b{re.escape(t)}\b") for t in candidatos if len(t) >= 3]
-        termos.append((exame, padroes))
+        termos.append((exame, padroes, layout_ocr.titulos_do_exame(f" {normalizado} ")))
     paginas = _paginas(linhas)
     normalizadas: dict[int, str] = {}
     por_exame: dict[str, list[dict]] = {}
     for pessoa in pessoas:
         pessoa["exames"] = []
+        pessoa["paginas_sem_exame"] = []
         for bloco in _blocos(pessoa, linhas):
             exame = _exame_do_bloco(bloco, linhas, normalizar, normalizadas, termos) if termos else None
-            if not exame or exame in pessoa["exames"]:
+            if not exame:
+                if paginas[bloco[0]] not in pessoa["paginas_sem_exame"]:
+                    pessoa["paginas_sem_exame"].append(paginas[bloco[0]])
+                continue
+            if exame in pessoa["exames"]:
                 continue
             pessoa["exames"].append(exame)
             por_exame.setdefault(exame, []).append({
@@ -538,10 +557,25 @@ def motivo_rejeicao(pessoas: list[dict]) -> str:
     clínica). Só nomes de exame: o nome e o CPF do terceiro ficam no aviso da
     linha do exame, que é só da tela do revisor, e a mensagem também vai ao log."""
     exames = list(dict.fromkeys(e for p in pessoas for e in p.get("exames", [])))
+    paginas = sorted({pg for p in pessoas for pg in p.get("paginas_sem_exame", []) if pg})
+    sem_exame = any(not p.get("exames") or p.get("paginas_sem_exame") for p in pessoas)
     if exames:
         rotulo = "no exame" if len(exames) == 1 else "nos exames"
-        return f"Laudo de outra pessoa {rotulo}: {', '.join(exames)}."
+        frase = f"Laudo de outra pessoa {rotulo}: {', '.join(exames)}"
+        if paginas:
+            return f"{frase}; e dados de outra pessoa {_rotulo_paginas(paginas)}."
+        if sem_exame:
+            return f"{frase}; e dados de outra pessoa em outra parte do documento."
+        return f"{frase}."
+    if paginas:
+        return f"Dados de outra pessoa no documento, {_rotulo_paginas(paginas)}."
     return "Dados de outra pessoa no documento."
+
+
+def _rotulo_paginas(paginas: list[int]) -> str:
+    if len(paginas) == 1:
+        return f"na página {paginas[0]}"
+    return f"nas páginas {', '.join(map(str, paginas[:-1]))} e {paginas[-1]}"
 
 
 def para_payload(pessoas: list[dict], linhas: list[str]) -> list[dict]:
@@ -549,7 +583,8 @@ def para_payload(pessoas: list[dict], linhas: list[str]) -> list[dict]:
     revisor precisa saber de quem é o laudo; o nome já está no PDF), o CPF
     mascarado — também dentro das linhas de origem (`mascarar_cpfs`): o payload
     não guarda o número inteiro do terceiro em lugar nenhum —, a página e os
-    exames em que a tela mostra o aviso (ver `anotar_comparativo`)."""
+    exames em que a tela mostra o aviso e as páginas em que ela aparece fora do
+    laudo de um exame da tabela (ver `anotar_comparativo`)."""
     paginas = _paginas(linhas)
     return [
         {
@@ -560,6 +595,7 @@ def para_payload(pessoas: list[dict], linhas: list[str]) -> list[dict]:
             "pagina": paginas[p["linhas"][0]],
             "linhas": [mascarar_cpfs(linhas[i].strip()) for i in p["linhas"]],
             "exames": p.get("exames", []),
+            "paginas_sem_exame": p.get("paginas_sem_exame", []),
         }
         for p in pessoas
     ]
