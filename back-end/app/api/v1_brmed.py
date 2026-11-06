@@ -229,6 +229,8 @@ async def processar_documento_completo_api(
                     user_db, resultado, cpf=cpf, content_hash=content_hash, clinic_id=current_user.clinic_id,
                     status_ia=validation_status,
                 )
+                # Reenvio segue para a Checagem com o status da IA; a marcação
+                # vira a tag "Já liberado"/"Já em revisão" do revisor.
                 if reenvio:
                     reenvio_service.marcar(
                         resultado,
@@ -236,7 +238,6 @@ async def processar_documento_completo_api(
                         status_ia=validation_status,
                         motivo_ia=resultado.get("erro") or resultado.get("error"),
                     )
-                    validation_status = "reenvio"
 
                 # Criar documento no banco
                 clinic_id = current_user.clinic_id
@@ -813,8 +814,9 @@ async def process_document_background(
             if not clinic_id_to_use:
                 raise ValueError("clinic_id não encontrado para salvar documento")
 
-            # Reenvio de prontuário já liberado ou em revisão: não volta para a
-            # Checagem, e o resultado do job leva a data para o alerta da clínica.
+            # Reenvio de prontuário já liberado ou em revisão: segue para a
+            # Checagem com o status da IA, e a marcação vira a tag "Já
+            # liberado"/"Já em revisão" que o revisor vê.
             reenvio = reenvio_service.liberado_anterior(
                 user_db, resultado, cpf=cpf, content_hash=content_hash, clinic_id=clinic_id_to_use,
                 status_ia=validation_status,
@@ -823,7 +825,6 @@ async def process_document_background(
                 reenvio_service.marcar(
                     resultado, reenvio, status_ia=validation_status, motivo_ia=rejection_reason
                 )
-                validation_status = "reenvio"
 
             document = user_db.create_document(
                 clinic_id=clinic_id_to_use,
