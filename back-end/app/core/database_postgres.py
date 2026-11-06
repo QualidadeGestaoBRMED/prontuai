@@ -2195,7 +2195,9 @@ class PostgresUserDatabase:
                     return "este"
                 if linha.id == original:
                     return "original"
-                if linha.validation_status == "reenvio":
+                # Desde nov/2026 o reenvio fica com o status da IA e só o
+                # `reenvio_de` o marca; o status "reenvio" é dos antigos.
+                if linha.validation_status == "reenvio" or linha.reenvio_de:
                     return "reenvio"
                 if '"reenvio_desfeito"' in (linha.result_payload_compact or ""):
                     return "complemento"
@@ -2209,6 +2211,8 @@ class PostgresUserDatabase:
                     "validation_status": linha.validation_status,
                     "revisado": bool(linha.reviewed_by),
                     "revisado_em": linha.reviewed_at.replace(tzinfo=timezone.utc).isoformat() if linha.reviewed_at else None,
+                    # E-mail do revisor. A rota o tira da resposta da clínica.
+                    "revisado_por": linha.reviewed_by,
                     "clinic_id": linha.clinic_id,
                     "papel": papel(linha),
                 }

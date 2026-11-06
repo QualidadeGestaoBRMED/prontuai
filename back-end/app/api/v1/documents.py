@@ -3,7 +3,7 @@ Endpoints para gerenciamento de documentos.
 """
 from fastapi import APIRouter, HTTPException, status, Depends, Query, Request, BackgroundTasks
 from fastapi.responses import FileResponse
-from typing import List, Any
+from typing import Any, List, Optional
 from pydantic import BaseModel, Field
 from app.core.auth import (
     decide_qualquer_documento,
@@ -682,8 +682,9 @@ async def envios_do_colaborador(document_id: str, current_user: User = Depends(r
     ele é reenvio, os reenvios, os complementos e os outros envios do mesmo
     pedido do BRNET ou do mesmo CPF —, para o histórico no detalhe.
 
-    - SENDER: só documento da sua clínica, e só os envios dela
-    - demais leitores: tudo
+    - SENDER: só documento da sua clínica, e só os envios dela, sem quem revisou
+    - demais leitores: tudo, com o e-mail e o nome do revisor de cada envio —
+      é o que o aviso de reenvio da Checagem mostra ("revisado por Fulana em ...")
     """
     document = user_db.get_document_by_id(document_id)
     if not document:
@@ -694,7 +695,27 @@ async def envios_do_colaborador(document_id: str, current_user: User = Depends(r
     envios = user_db.envios_relacionados(document_id)
     if restrito:
         envios = [envio for envio in envios if envio.get("clinic_id") == current_user.clinic_id]
-    return {"envios": [{k: v for k, v in envio.items() if k != "clinic_id"} for envio in envios]}
+        return {
+            "envios": [{k: v for k, v in envio.items() if k not in ("clinic_id", "revisado_por")} for envio in envios]
+        }
+    nomes: dict[str, Optional[str]] = {}
+    for envio in envios:
+        email = envio.get("revisado_por")
+        if email and email not in nomes:
+            try:
+                revisor = user_db.get_user_by_email(email)
+            except Exception:  # sem o nome, o aviso mostra o e-mail
+                revisor = None
+            nomes[email] = getattr(revisor, "name", None) or None
+    return {
+        "envios": [
+            {
+                **{k: v for k, v in envio.items() if k != "clinic_id"},
+                "revisado_por_nome": nomes.get(envio.get("revisado_por")),
+            }
+            for envio in envios
+        ]
+    }
 
 
 @router.get("/{document_id}/view")
