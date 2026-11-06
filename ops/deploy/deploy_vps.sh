@@ -389,13 +389,16 @@ cd "$DEPLOY_PATH"
 echo ">> build de $IMAGE_REPO:$TAG"
 docker build -t "$IMAGE_REPO:$TAG" ./src
 
-set -a; . ./.env; set +a
+# Sem `. ./.env`: o compose le o .env com parser proprio. Sourcear executava o
+# arquivo como shell, e valor com $, %, espaco ou crase derrubava o deploy (como
+# no workflow backend-ghcr-deploy.yml, corrigido antes).
 export BACKEND_IMAGE="$IMAGE_REPO:$TAG"
 
 echo ">> subindo o container com BACKEND_IMAGE=$BACKEND_IMAGE"
 docker compose -f docker-compose.yml up -d --remove-orphans $SERVICE
 
-PORT="${BACKEND_HTTP_PORT:-8080}"
+PORT="$(docker compose -f docker-compose.yml port "$SERVICE" 80 2>/dev/null | head -1 | cut -d: -f2 || true)"
+PORT="${PORT:-8080}"
 echo ">> health check em http://127.0.0.1:${PORT}/health (ate 60s)"
 for i in $(seq 1 30); do
   if curl -fsS "http://127.0.0.1:${PORT}/health" >/dev/null 2>&1; then
