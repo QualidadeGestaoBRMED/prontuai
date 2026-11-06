@@ -134,6 +134,7 @@ export function PainelChecagem({ atualizarACadaMs = 0 }: { atualizarACadaMs?: nu
               ? "rejected"
               : (result.status as "approved" | "rejected"),
         submittedBy: result.submittedBy,
+        reenvio: result.result.reenvio,
       })),
     [dbResults],
   )

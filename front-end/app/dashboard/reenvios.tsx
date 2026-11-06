@@ -2,8 +2,9 @@
 
 /**
  * Clínicas que reenviam prontuário (STC-827). O reenvio — de prontuário já
- * liberado ou ainda em revisão — não entra na Checagem; sem este card ninguém
- * o veria, e a operação não saberia com quem conversar. Busca própria, fora do
+ * liberado ou ainda em revisão — entra na Checagem com a tag "Já liberado"/"Já
+ * em revisão" (até nov/2026 ficava de fora); este card diz à operação com quem
+ * conversar para a clínica parar de reenviar. Busca própria, fora do
  * cálculo diário do painel: conta até agora, não até as 7h.
  */
 import { useEffect, useState } from "react";
@@ -75,7 +76,7 @@ export function CartaoReenvios({ onAjuda }: { onAjuda: (id: IdIndicador) => void
             ? "Carregando…"
             : linhas.length === 0
               ? `Nenhum reenvio nos últimos ${DIAS} dias`
-              : `${total} ${total === 1 ? "reenvio" : "reenvios"} em ${linhas.length} ${linhas.length === 1 ? "clínica" : "clínicas"} nos últimos ${DIAS} dias · não entraram na Checagem`}
+              : `${total} ${total === 1 ? "reenvio" : "reenvios"} em ${linhas.length} ${linhas.length === 1 ? "clínica" : "clínicas"} nos últimos ${DIAS} dias`}
       </div>
 
       {visiveis.length > 0 && (

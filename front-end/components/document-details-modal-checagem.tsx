@@ -24,6 +24,7 @@ import { TagNovo } from "@/components/tag-novo"
 import { carregarTextoDocumento, useLocalizacoes } from "@/hooks/use-localizacoes"
 import { cn } from "@/lib/utils"
 import { EnviosDoColaborador } from "@/components/envios-do-colaborador"
+import { TagReenvio } from "@/components/tag-reenvio"
 
 // O que o destaque no PDF aponta: um exame (previsto no BRNET ou além do
 // previsto) ou um campo da Checklist de Campos.
@@ -373,7 +374,8 @@ export function DocumentDetailsModalChecagem({
               </DialogTitle>
               <DialogDescription>{result.filename}</DialogDescription>
             </div>
-            <div className="absolute top-4 right-12">
+            <div className="absolute top-4 right-12 flex items-center gap-2">
+              <TagReenvio reenvio={result.result.reenvio} />
               {getStatusBadge(result)}
             </div>
           </DialogHeader>

@@ -333,7 +333,7 @@ export const COMO_CALCULAMOS: Record<IdIndicador, ComoCalculamos> = {
       {
         titulo: "O que é reenvio",
         texto:
-          "O mesmo prontuário enviado de novo — o mesmo arquivo, o mesmo pedido do BR NET ou o mesmo CPF e empresa em 30 dias — quando o anterior já foi liberado ou ainda está em revisão. O reenvio não entra na Checagem, e a clínica é avisada na hora.",
+          "O mesmo prontuário enviado de novo — o mesmo arquivo, o mesmo pedido do BR NET ou o mesmo CPF e empresa em 30 dias — quando o anterior já foi liberado ou ainda está em revisão. A clínica é avisada antes de mandar; se mandar, o reenvio entra na Checagem com a tag \"Já liberado\" ou \"Já em revisão\" para o revisor.",
       },
       {
         titulo: "O que não conta",
