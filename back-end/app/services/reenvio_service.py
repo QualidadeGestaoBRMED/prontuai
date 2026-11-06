@@ -70,6 +70,19 @@ logger = logging.getLogger(__name__)
 JANELA_CPF_EMPRESA = timedelta(days=30)
 EM_REVISAO = os.getenv("REENVIO_EM_REVISAO", "true").strip().lower() not in ("0", "false", "nao", "no")
 
+# Fração do texto de cada página do envio novo que precisa já existir nos
+# anteriores para ele ser o mesmo documento. Calibrado em 06/11/2026 nos 12
+# reenvios de produção conferidos no PDF: o mesmo papel escaneado de novo ficou
+# com a página menos coberta em 0,79 ou mais; página nova (laudo que faltava,
+# laudo de outra pessoa trocado) entre 0,03 e 0,05; ASO reemitido entre 0,48 e 0,60.
+try:
+    COBERTURA_MINIMA = float(os.getenv("REENVIO_COBERTURA_MINIMA", "0.70"))
+except ValueError:
+    COBERTURA_MINIMA = 0.70
+# Página com menos trigramas que isto é verso, folha em branco ou carimbo: não decide.
+_TRIGRAMAS_MINIMOS = 15
+_PAGINA = re.compile(r"<!--\s*pagina\s+\d+\s*-->")
+
 
 def _cnpj_da_empresa(resultado: dict) -> Optional[str]:
     cnpj = re.sub(r"\D", "", str(resultado.get("cnpj_processado") or ""))
@@ -121,6 +134,53 @@ def _motivo_de_complemento(resultado: dict, anterior: dict) -> Optional[str]:
         return "traz_exame_que_faltava"
     if novos and not novos & liberados:
         return "sem_exame_em_comum"
+    return None
+
+
+def _trigramas(texto: str) -> set[str]:
+    palavras = re.sub(r"[^A-Z0-9]+", " ", (texto or "").upper()).split()
+    return {" ".join(palavras[i:i + 3]) for i in range(len(palavras) - 2)}
+
+
+def _paginas(texto: str) -> list[str]:
+    """As páginas do texto do OCR, pelo marcador `<!-- pagina N -->`. Vazio sem
+    marcador: documento processado antes de 26/10/2026, ou OCR que não o grava."""
+    if not texto or not _PAGINA.search(texto):
+        return []
+    return [p for p in _PAGINA.split(texto) if p.strip()]
+
+
+def _motivo_de_conteudo(resultado: dict, anterior: dict) -> Optional[str]:
+    """
+    Por que o envio não é o mesmo documento dos anteriores, olhando o conteúdo;
+    None se é. Os critérios de busca casam o atendimento (pedido, CPF e empresa),
+    não o documento: em 06/11/2026, 9 de 11 "reenvios" de produção eram outra
+    coisa (ASO reemitido, laudo que faltava, laudo de outra pessoa trocado).
+
+    - "pagina_nova": alguma página do envio novo tem menos de `COBERTURA_MINIMA`
+      do seu texto nos anteriores.
+    - "envio_parcial": o envio novo tem menos páginas que o maior anterior. Um ASO
+      mandado sozinho depois do prontuário completo é reemissão ou complemento
+      (São Luís, 06/11: o ASO voltou com Inapto em NR 33 e NR 35, e o texto mal
+      muda — só a marcação).
+
+    Sem marcador de página no envio novo, ou sem o texto dos anteriores, não decide.
+    """
+    ocr = resultado.get("ocr_result") if isinstance(resultado.get("ocr_result"), dict) else {}
+    paginas = _paginas(ocr.get("text") or "")
+    textos = [t for t in anterior.get("textos") or [] if t]
+    if not paginas or not textos:
+        return None
+    base: set[str] = set()
+    for texto in textos:
+        base |= _trigramas(texto)
+    for pagina in paginas:
+        trigramas = _trigramas(pagina)
+        if len(trigramas) >= _TRIGRAMAS_MINIMOS and len(trigramas & base) / len(trigramas) < COBERTURA_MINIMA:
+            return "pagina_nova"
+    maior_anterior = max((len(_paginas(t)) for t in textos), default=0)
+    if maior_anterior and len(paginas) < maior_anterior:
+        return "envio_parcial"
     return None
 
 
@@ -189,7 +249,11 @@ def liberado_anterior(
         if anterior["criterio"] == "arquivo":
             complemento = None
         else:
-            complemento = _motivo_de_correcao(anterior, status_ia) or _motivo_de_complemento(resultado, anterior)
+            complemento = (
+                _motivo_de_correcao(anterior, status_ia)
+                or _motivo_de_complemento(resultado, anterior)
+                or _motivo_de_conteudo(resultado, anterior)
+            )
     except Exception as exc:  # a detecção nunca derruba o processamento
         logger.warning("[REENVIO] falha ao procurar liberado anterior: %s", type(exc).__name__)
         return None
