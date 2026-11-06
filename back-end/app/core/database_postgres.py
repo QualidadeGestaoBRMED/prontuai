@@ -1822,7 +1822,7 @@ class PostgresUserDatabase:
         de que o novo envio é reenvio, ou None.
 
         Três critérios, nesta ordem (ver app/services/reenvio_service.py):
-          1. mesmo arquivo (`content_hash`), de qualquer clínica;
+          1. mesmo arquivo (`content_hash`), da mesma clínica;
           2. mesmo pedido do BRNET, da mesma clínica;
           3. sem pedido: mesmo CPF e mesma empresa (CNPJ lido do ASO), da mesma
              clínica, a partir de `desde`. Com pedido, o critério 3 não vale: o
@@ -1917,14 +1917,18 @@ class PostgresUserDatabase:
                 }
 
             def casar(consulta, situacao: str) -> Optional[dict]:
-                if content_hash:
-                    linha = consulta.filter(DocumentModel.content_hash == content_hash).first()
-                    if linha:
-                        return achado([linha], "arquivo", situacao)
+                # Os três critérios valem só na mesma clínica (ou no mesmo
+                # credenciado). O mesmo arquivo vindo de outra clínica já virou
+                # "Já em revisão" por um envio de gestor da BR MED, gravado na
+                # clínica errada (06/11/2026): segue para a Checagem.
                 clinicas = self._clinicas_equivalentes(session, clinic_id)
                 if not clinicas:
                     return None
                 da_clinica = consulta.filter(DocumentModel.clinic_id.in_(clinicas))
+                if content_hash:
+                    linha = da_clinica.filter(DocumentModel.content_hash == content_hash).first()
+                    if linha:
+                        return achado([linha], "arquivo", situacao)
                 if pedido_exame_id:
                     linhas = da_clinica.filter(DocumentModel.pedido_exame_id == pedido_exame_id).all()
                     return achado(linhas, "pedido", situacao) if linhas else None

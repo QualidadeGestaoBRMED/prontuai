@@ -186,11 +186,12 @@ def liberado_anterior(
     return {"situacao": "liberado", **{chave: anterior[chave] for chave in chaves if chave in anterior}}
 
 
-def mesmo_arquivo(user_db: Any, content_hash: Optional[str]) -> Optional[dict]:
+def mesmo_arquivo(user_db: Any, content_hash: Optional[str], clinic_id: Optional[str] = None) -> Optional[dict]:
     """
-    O documento liberado ou em revisão com este mesmo arquivo (hash do PDF), ou
-    None. Roda ANTES do processamento: achado, o job não refaz OCR, BRNET e IA
-    (ver `resultado_reaproveitado`). Falha na consulta não bloqueia o envio.
+    O documento liberado ou em revisão com este mesmo arquivo (hash do PDF), da
+    mesma clínica, ou None. Roda ANTES do processamento: achado, o job não refaz
+    OCR, BRNET e IA (ver `resultado_reaproveitado`). Sem clínica (envio de gestor
+    da BR MED) não há reenvio. Falha na consulta não bloqueia o envio.
     """
     buscar = getattr(user_db, "buscar_liberado_anterior", None)
     if not content_hash or not callable(buscar):
@@ -201,15 +202,15 @@ def mesmo_arquivo(user_db: Any, content_hash: Optional[str]) -> Optional[dict]:
             pedido_exame_id=None,
             cpf=None,
             cnpj_empresa=None,
-            clinic_id=None,
+            clinic_id=clinic_id,
             desde=datetime.utcnow() - JANELA_CPF_EMPRESA,
             incluir_em_revisao=EM_REVISAO,
         )
     except Exception as exc:
         logger.warning("[REENVIO] falha ao procurar o mesmo arquivo: %s", type(exc).__name__)
         return None
-    # Só o arquivo idêntico pula o processamento; sem clínica, pedido e CPF a
-    # consulta não casa por outro critério, e aqui não se confia nisso.
+    # Só o arquivo idêntico pula o processamento; sem pedido e CPF a consulta
+    # não casa por outro critério, e aqui não se confia nisso.
     return achado if achado and achado.get("criterio") == "arquivo" else None
 
 
