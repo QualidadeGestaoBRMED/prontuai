@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, status, UploadFile, File, Body, Depends, Request
 from fastapi.responses import StreamingResponse
-from app.services import workflow_service, brmed_service, reenvio_service, layout_ocr
+from app.services import workflow_service, brmed_service, layout_ocr, reenvio_service
 from app.core.job_manager import job_manager
 from app.core.auth import create_upload_token, require_sender, require_upload_sender, get_current_user
 from app.models.user import User, UserRole
@@ -224,11 +224,10 @@ async def processar_documento_completo_api(
                 exams_brnet = resultado.get('exames_brnet', []) or resultado.get('brmed_result', {}).get('exames_obrigatorios', [])
                 exams_found = exams_ocr
                 ocr_markdown = resultado.get('ocr_result', {}).get('text', '')
-                validation_status = 'validated' if not resultado.get('validation_result', {}).get('exames_faltantes') and resultado.get('status') == 'success' else 'pending'
-                if resultado.get('status') == 'error':
-                    validation_status = 'rejected'
+                validation_status = workflow_service.decisao_da_ia(resultado)
                 reenvio = reenvio_service.liberado_anterior(
-                    user_db, resultado, cpf=cpf, content_hash=content_hash, clinic_id=current_user.clinic_id
+                    user_db, resultado, cpf=cpf, content_hash=content_hash, clinic_id=current_user.clinic_id,
+                    status_ia=validation_status,
                 )
                 if reenvio:
                     reenvio_service.marcar(
@@ -751,7 +750,7 @@ async def process_document_background(
         # OCR, BRNET e IA. A marcação de reenvio, mais abaixo, acha o original
         # pelo mesmo hash. Ver `reenvio_service.mesmo_arquivo`.
         resultado, layout = None, None
-        original = reenvio_service.mesmo_arquivo(user_db, content_hash)
+        original = reenvio_service.mesmo_arquivo(user_db, content_hash, clinic_id)
         if original:
             try:
                 documento_original = user_db.get_document_by_id(original["documento_id"])
@@ -798,9 +797,7 @@ async def process_document_background(
                 or resultado.get("erro")
                 or resultado.get("error")
             )
-            validation_status = 'validated' if not resultado.get('validation_result', {}).get('exames_faltantes') and resultado.get('status') == 'success' else 'pending'
-            if resultado.get('status') == 'error':
-                validation_status = 'rejected'
+            validation_status = workflow_service.decisao_da_ia(resultado)
 
             clinic_id_to_use = clinic_id
             if not clinic_id_to_use:
@@ -819,7 +816,8 @@ async def process_document_background(
             # Reenvio de prontuário já liberado ou em revisão: não volta para a
             # Checagem, e o resultado do job leva a data para o alerta da clínica.
             reenvio = reenvio_service.liberado_anterior(
-                user_db, resultado, cpf=cpf, content_hash=content_hash, clinic_id=clinic_id_to_use
+                user_db, resultado, cpf=cpf, content_hash=content_hash, clinic_id=clinic_id_to_use,
+                status_ia=validation_status,
             )
             if reenvio:
                 reenvio_service.marcar(

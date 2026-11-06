@@ -5,7 +5,8 @@ import unicodedata
 from typing import Dict, Any, Optional, List
 from fastapi import UploadFile
 from app.services import ocr_service, brmed_service, validacao_service
-from app.services import exam_catalog_source, laudo_evidencia, evidencia_laboratorio, layout_ocr
+from app.services import exam_catalog_source, laudo_evidencia, evidencia_laboratorio, identidade_laudo, layout_ocr
+from app.services import data_exame, monitoramento_checagem, nomes_conhecidos
 from app.core.config import settings
 from app.core import metrics
 from app.core.pii import mask_cpf, mask_identifier, mask_name
@@ -229,6 +230,19 @@ def obter_sinonimos(termo_normalizado: str) -> set[str]:
     )
 
 
+def termos_do_exame(*nomes: Optional[str]) -> set[str]:
+    """O nome do exame e o lido no OCR, normalizados, com os sinônimos do catálogo
+    — o laudo de GLICEMIA DE JEJUM se chama GLICOSE, o de AUDIOMETRIA TONAL,
+    AUDIOGRAMA. É o que o clique no exame procura no PDF."""
+    termos: set[str] = set()
+    for nome in nomes:
+        normalizado = _normalizar_busca(nome or "")
+        if normalizado:
+            termos.add(normalizado)
+            termos |= obter_sinonimos(normalizado)
+    return termos
+
+
 def _log_event(event: str, **payload: Any) -> None:
     try:
         logger.info("[WORKFLOW-EVENT] %s", json.dumps({"event": event, **payload}, ensure_ascii=False))
@@ -347,6 +361,87 @@ def _exames_sem_laudo(markdown: str, exames_brnet: list[str]) -> Optional[list[s
 # então a IA aprovava o documento sem ele.
 _RE_VIX_LOGISTICA = re.compile(r"\bVIX LOGISTICA\b")
 _RE_KIT_VIX = re.compile(r"\bVIXPAR\b|\bFM COP\b")
+def _outra_pessoa_sem_brnet(
+    markdown: str, cpf: Optional[str], nome: Optional[str], exames_ocr: list, run_id: str
+) -> tuple[Optional[list[dict]], Optional[str]]:
+    """
+    A checagem de outra pessoa quando a consulta ao BRNET falha (expedição em
+    aberto não encontrada, erro da API). O documento já sai rejeitado pela
+    falha, mas o laudo de outro colaborador continua lá e o revisor precisa
+    saber: Angra (05/11) tinha a audiometria e o ECG de outra pessoa e, sem
+    BRNET, nenhum aviso.
+
+    Sem a grade do BRNET não há tabela de comparação: o exame vem dos nomes que
+    o OCR extraiu, só para o motivo citar o laudo; a tela mostra a pessoa na
+    Checklist de Campos. O CPF e o nome do paciente são os lidos no documento.
+    Devolve (payload para `analysis_details.outra_pessoa`, motivo), ou
+    (None, None) sem achado. Falha aqui não pode mudar o desfecho da falha.
+    """
+    if not identidade_laudo.HABILITADA:
+        return None, None
+    try:
+        linhas = (markdown or "").splitlines()
+        pessoas = identidade_laudo.pessoas_no_documento(
+            linhas, cpf, nome, nomes_conhecidos=nomes_conhecidos.vocabulario()
+        )
+        if not pessoas:
+            return None, None
+        exames = []
+        for e in exames_ocr or []:
+            exame = e if isinstance(e, str) else (e.get("exame") or e.get("nome")) if isinstance(e, dict) else None
+            if exame and exame not in exames:
+                exames.append(exame)
+        identidade_laudo.anotar_comparativo(
+            [{"exame": e} for e in exames], pessoas, linhas, _normalizar_busca, obter_sinonimos
+        )
+        _log_event(
+            "outra_pessoa",
+            run_id=run_id,
+            quantas=len(pessoas),
+            so_nome=sum(1 for p in pessoas if p["tipo"] == identidade_laudo.SO_NOME),
+            rejeitado=False,
+            sem_brnet=True,
+        )
+        return identidade_laudo.para_payload(pessoas, linhas), identidade_laudo.motivo_rejeicao(pessoas)
+    except Exception as e:
+        logger.warning(f"[WORKFLOW] Checagem de outra pessoa sem BRNET falhou: {type(e).__name__}")
+        return None, None
+
+
+def decisao_da_ia(resultado: dict) -> str:
+    """O `validation_status` com que o documento é gravado: "validated" (Aprovado
+    pela IA) só sem exame faltante, sem laudo de outra pessoa e sem coleta antiga; "pending"
+    (Rejeitado pela IA, vai à Checagem) no resto; "rejected" quando o
+    processamento falhou."""
+    if resultado.get("status") == "error":
+        return "rejected"
+    validacao = resultado.get("validation_result") or {}
+    if (
+        resultado.get("status") != "success"
+        or validacao.get("exames_faltantes")
+        or validacao.get("outra_pessoa")
+        or validacao.get("data_antiga")
+    ):
+        return "pending"
+    return "validated"
+
+
+def _rejeitar_por_outra_pessoa(resultado_validacao: dict, pessoas: list[dict]) -> None:
+    _rejeitar_com_motivo(resultado_validacao, identidade_laudo.motivo_rejeicao(pessoas))
+
+
+def _rejeitar_com_motivo(resultado_validacao: dict, motivo: str) -> None:
+    """Tira a liberação e põe o motivo na mensagem da IA. Documento que seria
+    liberado troca a frase de liberação pelo motivo; o que já tinha faltante
+    ganha o motivo depois dela."""
+    if resultado_validacao.get("status_liberado"):
+        resultado_validacao["mensagem"] = motivo
+    else:
+        mensagem = (resultado_validacao.get("mensagem") or "").strip()
+        resultado_validacao["mensagem"] = f"{mensagem} {motivo}".strip()
+    resultado_validacao["status_liberado"] = False
+
+
 KIT_VIX_FALTANTE = "KIT VIX (ASO VIXPAR E FICHA CLÍNICA)"
 
 
@@ -422,17 +517,35 @@ _TRECHO_ASSINATURA = re.compile(r"assinatura|assinado|carimbo|rubrica|_{3,}", re
 LIMITE_EVIDENCIAS_CAMPO = 3
 
 
+def _span_do_cpf(texto: str, cpf_paciente: str) -> Optional[tuple[int, int]]:
+    """Onde está, na linha, o CPF do paciente — com a pontuação que o OCR der."""
+    for m in identidade_laudo._CPF.finditer(texto):
+        if re.sub(r"\D", "", m.group(0)) == cpf_paciente:
+            return m.span()
+    return None
+
+
 def linhas_dos_campos(
     linhas: list[tuple[str, str]],
     patient_name: Optional[str] = None,
+    patient_cpf: Optional[str] = None,
 ) -> list[tuple[str, str, list[int]]]:
     """
     Para cada campo da checklist, na ordem da tela: (campo, rótulo, índices em
     `linhas` das que o comprovam), até `LIMITE_EVIDENCIAS_CAMPO`. `linhas` são
     pares (texto, texto normalizado por `_normalizar_busca`).
+
+    Com `patient_cpf`, o campo CPF procura o CPF DO PACIENTE, e não qualquer
+    número com formato de CPF: o do médico ou o de outro colaborador também
+    contavam como "Encontrado" (STC-947). Sem ele (documento antigo, passaporte),
+    fica a regra antiga.
     """
     nome = f" {_normalizar_busca(patient_name)} " if patient_name else ""
-    regras = [("cpf", "CPF", lambda texto, normalizado: bool(_CAMPO_CPF.search(texto)))]
+    cpf_paciente = re.sub(r"\D", "", patient_cpf or "")
+    if len(cpf_paciente) == 11:
+        regras = [("cpf", "CPF do paciente", lambda texto, normalizado: bool(_span_do_cpf(texto, cpf_paciente)))]
+    else:
+        regras = [("cpf", "CPF", lambda texto, normalizado: bool(_CAMPO_CPF.search(texto)))]
     if patient_name:
         regras.append((
             "nome_paciente", "Nome do paciente",
@@ -470,13 +583,21 @@ def _trecho_normalizado(texto: str, alvo: str) -> Optional[tuple[int, int]]:
     return (mapa[m.start()], mapa[m.end() - 1] + 1) if m else None
 
 
-def trecho_do_campo(campo: str, texto: str, patient_name: Optional[str] = None) -> Optional[tuple[int, int]]:
+def trecho_do_campo(
+    campo: str,
+    texto: str,
+    patient_name: Optional[str] = None,
+    patient_cpf: Optional[str] = None,
+) -> Optional[tuple[int, int]]:
     """
     Onde, na linha, está o que faz o campo contar como encontrado: o número do
     CPF, a data, a sigla do conselho com o número, a palavra da assinatura (ou a
     linha de assinar), o nome. None quando não dá para apontar — a tela destaca
     a linha inteira.
     """
+    cpf_paciente = re.sub(r"\D", "", patient_cpf or "")
+    if campo == "cpf" and len(cpf_paciente) == 11:
+        return _span_do_cpf(texto, cpf_paciente)
     if campo == "cpf":
         m = _CAMPO_CPF.search(texto)
         return m.span() if m else None
@@ -500,10 +621,11 @@ def trecho_do_campo(campo: str, texto: str, patient_name: Optional[str] = None) 
 def _avaliar_campos(
     markdown: str,
     linhas: list[tuple[str, str]],
-    patient_name: Optional[str] = None
+    patient_name: Optional[str] = None,
+    patient_cpf: Optional[str] = None,
 ) -> list[Dict[str, Any]]:
     checks = []
-    for campo, rotulo, indices in linhas_dos_campos(linhas, patient_name):
+    for campo, rotulo, indices in linhas_dos_campos(linhas, patient_name, patient_cpf):
         evidencias = [linhas[i][0] for i in indices]
         checks.append({
             "field": campo,
@@ -1192,6 +1314,19 @@ async def _processar_documento_completo_impl(
             if business_error
             else "Não foi possível consultar exames obrigatórios."
         )
+        analise_falha = (
+            business_error["message"]
+            if business_error
+            else "Não foi possível validar os exames devido à falha na consulta dos exames obrigatórios."
+        )
+        # O documento já sai rejeitado pela falha; o aviso de outra pessoa vai
+        # junto, no motivo e na Checklist de Campos. Ver `_outra_pessoa_sem_brnet`.
+        outra_pessoa_falha, motivo_outra_pessoa = _outra_pessoa_sem_brnet(
+            markdown_content, cpf_inicial, patient_name, exames_enviados, run_id
+        )
+        if motivo_outra_pessoa:
+            mensagem_falha = f"{mensagem_falha} {motivo_outra_pessoa}"
+            analise_falha = f"{analise_falha} {motivo_outra_pessoa}"
         metrics.DOCUMENTOS_PROCESSADOS.add(1, {"status": "error", **clinica_labels})
         metrics.WORKFLOW_DURACAO.record(time.perf_counter() - start_total)
         return {
@@ -1216,6 +1351,7 @@ async def _processar_documento_completo_impl(
             "error_source": (business_error or {}).get("source") or ((brmed_resultado or {}).get("source") if isinstance(brmed_resultado, dict) else None),
             "error_http_status": (business_error or {}).get("http_status") or ((brmed_resultado or {}).get("http_status") if isinstance(brmed_resultado, dict) else None),
             "business_error": business_error,
+            **({"analysis_details": {"outra_pessoa": outra_pessoa_falha}} if outra_pessoa_falha else {}),
             "ocr_result": {
                 "text": markdown_content,
                 "exames_extraidos": exames_enviados
@@ -1227,11 +1363,8 @@ async def _processar_documento_completo_impl(
             "validation_result": {
                 "exames_faltantes": [],
                 "exames_extras": [],
-                "analysis": (
-                    business_error["message"]
-                    if business_error
-                    else "Não foi possível validar os exames devido à falha na consulta dos exames obrigatórios."
-                )
+                "outra_pessoa": bool(outra_pessoa_falha) and identidade_laudo.REJEITA,
+                "analysis": analise_falha,
             }
         }
 
@@ -1325,6 +1458,37 @@ async def _processar_documento_completo_impl(
             # Só nomes de exame: a linha de origem pode ter dado do paciente.
             _log_event("exames_so_lista", run_id=run_id, quantos=len(exames_so_lista), exames=exames_so_lista)
 
+    # Coleta muito anterior ao ASO: aviso no exame e rejeição pela IA (STC-991).
+    # Não muda faltantes nem confiança. Ver `data_exame`.
+    exames_data_antiga: list[str] = []
+    rejeitado_por_data = False
+    if not resultado_validacao.get("erro") and data_exame.HABILITADA:
+        try:
+            exames_data_antiga = data_exame.anotar_comparativo(
+                resultado_validacao.get("exames_comparativo", []),
+                markdown_content or "",
+                exam_catalog_source.sinonimos_de,
+            )
+        except Exception as e:
+            # Aviso é informativo: falha aqui não pode derrubar a validação.
+            logger.warning(f"[WORKFLOW] Aviso de data do exame falhou: {type(e).__name__}")
+            exames_data_antiga = []
+        if exames_data_antiga:
+            rejeitado_por_data = data_exame.REJEITA
+            if rejeitado_por_data:
+                _rejeitar_com_motivo(
+                    resultado_validacao,
+                    data_exame.motivo_rejeicao(resultado_validacao.get("exames_comparativo", [])),
+                )
+            metrics.AVISO_DATA_ANTIGA.add(1)
+            _log_event(
+                "exames_data_antiga",
+                run_id=run_id,
+                quantos=len(exames_data_antiga),
+                exames=exames_data_antiga,
+                rejeitado=rejeitado_por_data,
+            )
+
     # Documento exigido pela empresa, fora da grade do BRNET: entra como faltante
     # para o documento ir à checagem. Fica fora da `tabela_comparacao`, que é só
     # dos exames exigidos. Ver `_falta_kit_vix`.
@@ -1358,13 +1522,86 @@ async def _processar_documento_completo_impl(
     linhas_markdown = _extrair_linhas_markdown(markdown_content or "")
     analysis_details = {
         "quality": _avaliar_qualidade(markdown_content or "", linhas_markdown),
-        "field_checks": _avaliar_campos(markdown_content or "", linhas_markdown, patient_name),
+        "field_checks": _avaliar_campos(markdown_content or "", linhas_markdown, patient_name, cpf_final),
         "match_confidence": _avaliar_confianca_exames(
             resultado_validacao.get("exames_comparativo", []),
             exames_enviados,
             linhas_markdown
         ),
     }
+
+    # Alerta de dados de outra pessoa (laudo de outro colaborador anexado): grava
+    # para a tela do revisor, no exame cujo laudo traz a outra pessoa, e rejeita
+    # o documento (`_rejeitar_por_outra_pessoa`). Não muda faltantes nem
+    # confiança. Ver `identidade_laudo`.
+    outras_pessoas: list[dict] = []
+    rejeitado_por_outra_pessoa = False
+    if identidade_laudo.HABILITADA:
+        try:
+            linhas_texto = (markdown_content or "").splitlines()
+            outras_pessoas = identidade_laudo.pessoas_no_documento(
+                linhas_texto, cpf_final, patient_name, nomes_conhecidos=nomes_conhecidos.vocabulario()
+            )
+        except Exception as e:
+            # Alerta é informativo: falha aqui não pode derrubar a validação.
+            logger.warning(f"[WORKFLOW] Checagem de outra pessoa falhou: {type(e).__name__}")
+            outras_pessoas = []
+        if outras_pessoas:
+            try:
+                identidade_laudo.anotar_comparativo(
+                    resultado_validacao.get("exames_comparativo") or [],
+                    outras_pessoas,
+                    linhas_texto,
+                    _normalizar_busca,
+                    obter_sinonimos,
+                )
+            except Exception as e:
+                # Sem a ligação ao exame o aviso continua, na Checklist de Campos.
+                logger.warning(f"[WORKFLOW] Ligação do aviso de outra pessoa ao exame falhou: {type(e).__name__}")
+                for pessoa in outras_pessoas:
+                    pessoa["exames"] = []
+                for item in resultado_validacao.get("exames_comparativo") or []:
+                    if isinstance(item, dict):
+                        item.pop("outra_pessoa", None)
+            analysis_details["outra_pessoa"] = identidade_laudo.para_payload(outras_pessoas, linhas_texto)
+            rejeitado_por_outra_pessoa = not resultado_validacao.get("erro") and identidade_laudo.REJEITA
+            if rejeitado_por_outra_pessoa:
+                _rejeitar_por_outra_pessoa(resultado_validacao, outras_pessoas)
+            # Só a contagem: nome e CPF de terceiro não vão para o log.
+            _log_event(
+                "outra_pessoa",
+                run_id=run_id,
+                quantas=len(outras_pessoas),
+                so_nome=sum(1 for p in outras_pessoas if p["tipo"] == identidade_laudo.SO_NOME),
+                rejeitado=rejeitado_por_outra_pessoa,
+            )
+
+    # Monitoramento silencioso do clique no exame e do aviso de outra pessoa:
+    # nada na tela, só contagens no payload, no log e nas métricas. Ver
+    # `monitoramento_checagem`. Falha aqui não pode derrubar o processamento.
+    if monitoramento_checagem.HABILITADO:
+        try:
+            lido_no_ocr = {d.get("exame"): d.get("ocr_match") for d in analysis_details["match_confidence"]}
+            linhas_layout = layout_ocr.alinhar(markdown_content or "", ocr_resultado.get("layout")) or []
+            clique = monitoramento_checagem.medir_clique(
+                linhas_layout,
+                [e.get("exame") for e in resultado_validacao.get("exames_comparativo") or []],
+                lambda exame: termos_do_exame(exame, lido_no_ocr.get(exame)),
+                _normalizar_busca,
+            )
+            avisos = monitoramento_checagem.confirmar_avisos(
+                outras_pessoas,
+                monitoramento_checagem.cpf_existe_no_banco,
+                lambda: monitoramento_checagem.nomes_da_clinica_no_banco(clinic_id),
+            )
+            for medida in clique:
+                metrics.CLIQUE_LAUDO.add(1, medida)
+            for medida in avisos:
+                metrics.AVISO_OUTRA_PESSOA.add(1, medida)
+            analysis_details["monitoramento"] = monitoramento_checagem.resumo(clique, avisos)
+            _log_event("monitoramento_checagem", run_id=run_id, **analysis_details["monitoramento"])
+        except Exception as e:
+            logger.warning(f"[WORKFLOW] Monitoramento da checagem falhou: {type(e).__name__}")
     comparativo = resultado_validacao.get("exames_comparativo", [])
     obrigatorios_total = len([e for e in comparativo if e.get("status") != "extra_no_ocr"])
     obrigatorios_encontrados = len([e for e in comparativo if e.get("status") == "encontrado"])
@@ -1401,6 +1638,8 @@ async def _processar_documento_completo_impl(
         confidence_details["kit_vix_ausente"] = True
     if exames_so_lista:
         confidence_details["exames_so_lista"] = exames_so_lista
+    if exames_data_antiga:
+        confidence_details["exames_data_antiga"] = exames_data_antiga
     if poucas_paginas:
         _log_event(
             "paginas_insuficientes",
@@ -1468,6 +1707,9 @@ async def _processar_documento_completo_impl(
             "exames_faltantes": [e["exame"] for e in resultado_validacao["exames_comparativo"] if e["status"] == "faltante"]
             + ([KIT_VIX_FALTANTE] if falta_kit_vix else []),
             "exames_extras": [e["exame"] for e in resultado_validacao["exames_comparativo"] if e["status"] == "extra_no_ocr"],
+            # Rejeita sem faltante: ver `decisao_da_ia`.
+            "outra_pessoa": rejeitado_por_outra_pessoa,
+            "data_antiga": rejeitado_por_data,
             "analysis": resultado_validacao["mensagem"]
         },
         "status": "success"  # Será ajustado abaixo se houver erro

@@ -1,12 +1,10 @@
 import { authFetch } from "@/lib/auth-fetch"
 import { API_ENDPOINTS } from "@/lib/config"
 import { documentToProcessResult } from "@/lib/document-mapper"
-import type { EnvioDoColaborador, ProcessResult, ReenvioDesfeito, ReenvioLiberado } from "@/types/process"
+import type { EnvioDoColaborador, ProcessResult, ReenvioLiberado } from "@/types/process"
 
 /** Tag de status do reenvio, na tabela e no modal. */
 export const CLASSE_TAG_REENVIO = "border-transparent bg-sky-100 text-sky-800"
-/** Tag do reenvio devolvido à Checagem como complemento. */
-export const CLASSE_TAG_COMPLEMENTO = "border-transparent bg-violet-100 text-violet-800"
 
 /** O original ainda espera o revisor (pendente, ou decidido só pela IA). */
 export function emRevisao(reenvio: ReenvioLiberado): boolean {
@@ -45,22 +43,6 @@ export function mensagemReenvio(reenvio: ReenvioLiberado): string {
   return quando
     ? `Este prontuário já foi liberado em ${quando}. Não é preciso reenviar.`
     : "Este prontuário já foi liberado. Não é preciso reenviar."
-}
-
-/** Devolvido sozinho porque o revisor rejeitou o original (ver `devolver_reenvios_em_revisao`). */
-function voltouPelaRejeicao(desfeito: ReenvioDesfeito): boolean {
-  return desfeito.por.startsWith("rejeição do original")
-}
-
-/** Por que este documento voltou para a Checagem, para o revisor. */
-export function mensagemComplemento(desfeito: ReenvioDesfeito): string {
-  const original = dataDoOriginal(desfeito)
-  const deOriginal = original ? ` O envio anterior é de ${original}.` : ""
-  if (voltouPelaRejeicao(desfeito)) {
-    return `Era um envio repetido e voltou para a revisão porque o envio anterior foi rejeitado — pode ser a versão corrigida.${deOriginal}`
-  }
-  const quando = data(desfeito.em)
-  return `Era um reenvio e foi devolvido para a revisão como complemento por ${desfeito.por}${quando ? ` em ${quando}` : ""}.${deOriginal}`
 }
 
 /**

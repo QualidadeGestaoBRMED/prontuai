@@ -46,6 +46,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
+      # Pedidos guardados são só para testes em staging (STC-981): em produção,
+      # usar pedido antigo liberaria documento sem expedição aberta. O teste
+      # falha aqui, e o job de deploy depende deste.
+      - name: Block staging-only code
+        run: bash ops/deploy/bloquear_codigo_de_staging.sh
+
       - name: Setup Python
         uses: actions/setup-python@v6
         with:
