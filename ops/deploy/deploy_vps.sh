@@ -172,6 +172,13 @@ if ! git show "$SHA:$COMPOSE_SRC" | grep -qE "^[[:space:]]+$SERVICE:"; then
 fi
 info "compose : $COMPOSE_SRC declara '$SERVICE'"
 
+# Pedidos guardados são só para testes em staging (STC-981). O deploy direto não
+# passa pelo CI, então a mesma trava precisa valer aqui, no commit a implantar.
+if [ "$DEPLOY_ENV" = "prod" ]; then
+  bash "$(dirname "${BASH_SOURCE[0]}")/bloquear_codigo_de_staging.sh" "$SHA" \
+    || die "O commit $SHORT tem codigo exclusivo de staging. Nao pode ir para producao."
+fi
+
 # A arvore de trabalho nao vai para o servidor; so o commit. Duas situacoes bem
 # diferentes se escondem em "git status", e tratar as duas igual gera ruido:
 #

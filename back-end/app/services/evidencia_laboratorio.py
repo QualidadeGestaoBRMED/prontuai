@@ -144,6 +144,15 @@ def termos_do_exame(exame: str, sinonimos: Iterable[str] = ()) -> set[str]:
     return {t for t in termos if len(t) >= MIN_TERMO}
 
 
+def termos_do_item(exame: str, sinonimos_de: Callable[[str], Iterable[str]] = lambda _chave: ()) -> set[str]:
+    """Os termos do exame com as variações do catálogo, pela chave com e sem parênteses."""
+    chaves = {chave_catalogo(exame), chave_catalogo(re.sub(r"\(.*?\)", "", exame))}
+    sinonimos: set[str] = set()
+    for chave in chaves:
+        sinonimos |= set(sinonimos_de(chave) or ())
+    return termos_do_exame(exame, sinonimos)
+
+
 def mascarar_linha(linha: str) -> str:
     """Linha do markdown pronta para gravar: CPF mascarado, no máximo 160 caracteres."""
     linha = _CPF.sub("***.***.***-**", re.sub(r"\s+", " ", linha or "").strip())
@@ -235,11 +244,7 @@ def anotar_comparativo(
         if item.get("status") != "encontrado" or not item.get("exame"):
             continue
         exame = item["exame"]
-        chaves = {chave_catalogo(exame), chave_catalogo(re.sub(r"\(.*?\)", "", exame))}
-        sinonimos: set[str] = set()
-        for chave in chaves:
-            sinonimos |= set(sinonimos_de(chave) or ())
-        termos = termos_do_exame(exame, sinonimos)
+        termos = termos_do_item(exame, sinonimos_de)
         if eh_laboratorio(exame):
             evidencia, linha = avaliar(doc, exame, termos)
             if evidencia is None:

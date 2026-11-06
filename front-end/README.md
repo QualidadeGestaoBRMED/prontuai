@@ -35,6 +35,10 @@ The easiest way to deploy your Next.js app is to use the [Vercel Platform](https
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
 
+## Deploy de produção
+
+O front sobe pela Vercel, separado do back-end. A trava `ops/deploy/bloquear_codigo_de_staging.sh` só bloqueia o deploy do back-end.
+
 ## Testes em staging
 
 O card "Testes em staging: pedidos guardados" fica em `/admin/ops-manutencao`, só para ADMIN, e liga ou desliga a função sem reiniciar nada. Fora de staging a rota responde 404 e o card não aparece.

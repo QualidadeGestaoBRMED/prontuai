@@ -1,9 +1,9 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { ReactNode, useEffect, useRef, useState } from "react"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
-import { CheckIcon, XIcon, Download, Loader2, MessageSquareIcon } from "lucide-react"
+import { AlertTriangleIcon, CheckIcon, XIcon, Download, Loader2, MessageSquareIcon } from "lucide-react"
 import {
   Dialog,
   DialogContent,
@@ -15,9 +15,9 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { FieldCheck, ProcessResult, TabelaComparacaoItem } from "@/types/process"
+import { FieldCheck, OutraPessoa, ProcessResult, TabelaComparacaoItem } from "@/types/process"
 import { ParametroLido } from "@/types/normalidade"
-import { ordenarComparativo } from "@/components/exames-comparativo-table"
+import { motivoDataAntiga, ordenarComparativo } from "@/components/exames-comparativo-table"
 import { ComparacaoDetalhada, useNormalidade } from "@/components/comparacao-detalhada"
 import { ControleNavegacao, Destaque, VisualizadorPdf } from "@/components/visualizador-pdf"
 import { TagNovo } from "@/components/tag-novo"
@@ -36,12 +36,12 @@ type Alvo = { tipo: "exame" | "campo"; nome: string }
  * como era.
  */
 function ItemChecklist({
-  item,
+  children,
   localizavel,
   selecionado,
   onLocalizar,
 }: {
-  item: FieldCheck
+  children: ReactNode
   localizavel: boolean
   selecionado: boolean
   onLocalizar: () => void
@@ -52,7 +52,28 @@ function ItemChecklist({
   useEffect(() => {
     if (selecionado) botao.current?.scrollIntoView({ block: "nearest", behavior: "smooth" })
   }, [selecionado])
-  const conteudo = (
+  if (!localizavel) {
+    return <div className="flex items-center justify-between gap-2 rounded border px-3 py-2">{children}</div>
+  }
+  return (
+    <button
+      ref={botao}
+      type="button"
+      onClick={onLocalizar}
+      aria-pressed={selecionado}
+      title="Ver no documento"
+      className={cn(
+        "flex items-center justify-between gap-2 rounded border px-3 py-2 text-left transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30",
+        selecionado && "bg-cyan-50/70 text-primary shadow-[inset_2px_0_0_0_var(--primary)] hover:bg-cyan-50/70",
+      )}
+    >
+      {children}
+    </button>
+  )
+}
+
+function ConteudoCampo({ item }: { item: FieldCheck }) {
+  return (
     <>
       <span className="text-sm">{item.label}</span>
       <Badge
@@ -63,24 +84,48 @@ function ItemChecklist({
       </Badge>
     </>
   )
-  if (!localizavel) {
-    return <div className="flex items-center justify-between rounded border px-3 py-2">{conteudo}</div>
-  }
+}
+
+/**
+ * Pessoa que não é o paciente, identificada no documento fora do laudo de
+ * qualquer exame da tabela (STC-947) — título que o catálogo não conhece, ou
+ * documento sem tabela. Quem está no laudo de um exame aparece na própria linha
+ * do exame, como "Laudo de outra pessoa". Sem CPF (só o nome é diferente), o
+ * aviso é o mais fraco "Nome diferente no documento": pode ser nome mal lido.
+ */
+function ConteudoOutraPessoa({ pessoa, comTabela }: { pessoa: OutraPessoa; comTabela: boolean }) {
+  // Com a tabela de exames, o laudo de exame já tem aviso na linha do exame:
+  // aqui ficam só as páginas fora dele. Sem tabela (consulta ao BRNET falhou),
+  // vale tudo: os exames do laudo e as páginas.
+  const paginas = comTabela && pessoa.exames?.length ? paginasForaDeExame(pessoa) : todasAsPaginas(pessoa)
   return (
-    <button
-      ref={botao}
-      type="button"
-      onClick={onLocalizar}
-      aria-pressed={selecionado}
-      title="Ver no documento"
-      className={cn(
-        "flex items-center justify-between rounded border px-3 py-2 text-left transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30",
-        selecionado && "bg-cyan-50/70 text-primary shadow-[inset_2px_0_0_0_var(--primary)] hover:bg-cyan-50/70",
-      )}
-    >
-      {conteudo}
-    </button>
+    <>
+      <span className="flex min-w-0 flex-col">
+        <span className="text-sm">{pessoa.cpf ? "Dados de outra pessoa" : "Nome diferente no documento"}</span>
+        <span className="text-xs text-yellow-600">
+          {pessoa.nome}
+          {pessoa.cpf ? ` · CPF ${pessoa.cpf}` : ""}
+          {!comTabela && pessoa.exames?.length ? ` · laudo de ${pessoa.exames.join(", ")}` : ""}
+          {paginas.length ? ` · ${paginas.length === 1 ? "página" : "páginas"} ${paginas.join(", ")}` : ""}
+        </span>
+      </span>
+      <Badge variant="secondary" className="shrink-0 gap-1 bg-yellow-100 text-yellow-700">
+        <AlertTriangleIcon className="size-3" />
+        Conferir
+      </Badge>
+    </>
   )
+}
+
+function paginasForaDeExame(pessoa: OutraPessoa): number[] {
+  return (pessoa.paginas_sem_exame ?? []).filter((p): p is number => typeof p === "number")
+}
+
+// Payload anterior a 06/11 não tem `paginas_sem_exame`: fica a primeira página.
+function todasAsPaginas(pessoa: OutraPessoa): number[] {
+  const paginas = paginasForaDeExame(pessoa)
+  if (pessoa.pagina && !paginas.includes(pessoa.pagina)) paginas.unshift(pessoa.pagina)
+  return paginas.sort((a, b) => a - b)
 }
 
 interface DocumentDetailsModalChecagemProps {
@@ -178,11 +223,21 @@ export function DocumentDetailsModalChecagem({
   // ocorrências do trecho, quando há mais de uma (não no valor lido, que é um só).
   const fieldChecks = result.result.analysis_details?.field_checks ?? []
   const tabela = Array.isArray(result.result.tabela_comparacao) ? result.result.tabela_comparacao : []
+  // A pessoa achada no laudo de um exame aparece na linha do exame; as demais,
+  // como item da Checklist de Campos.
+  // Também a que está num exame e aparece em outra página, e, sem tabela de
+  // exames (a consulta ao BRNET falhou), todas.
+  const comTabela = Array.isArray(result.result.tabela_comparacao) && result.result.tabela_comparacao.length > 0
+  const pessoasSemExame = (result.result.analysis_details?.outra_pessoa ?? []).filter(
+    (p) => !comTabela || !p.exames?.length || paginasForaDeExame(p).length > 0 || p.paginas_sem_exame?.includes(null),
+  )
   const sequencia = (tipo: Alvo["tipo"]) =>
     tipo === "exame"
       ? [...new Set(ordenarComparativo(tabela, true, normalidade.fase === "pronta" ? normalidade.porExame : undefined).map((i) => i.exame))]
           .filter((exame) => localizacoes.porExame[exame]?.length)
-      : fieldChecks.map((c) => c.field).filter((campo) => localizacoes.porCampo[campo]?.length)
+      : [...fieldChecks.map((c) => c.field), ...pessoasSemExame.map((p) => p.chave)].filter(
+          (campo) => localizacoes.porCampo[campo]?.length,
+        )
   const navegacao: ControleNavegacao[] = []
   if (destaque) {
     const { tipo, nome } = destaque.alvo
@@ -193,7 +248,12 @@ export function DocumentDetailsModalChecagem({
       navegacao.push({
         rotulo: `${tipo} ${posicao + 1} de ${itens.length}`,
         // O nome fica no tooltip: o rótulo mostra só a posição, como a ocorrência.
-        dica: tipo === "exame" ? nome : fieldChecks.find((c) => c.field === nome)?.label ?? nome,
+        dica:
+          tipo === "exame"
+            ? nome
+            : fieldChecks.find((c) => c.field === nome)?.label ??
+              pessoasSemExame.find((p) => p.chave === nome)?.nome ??
+              nome,
         rotuloAnterior: tipo === "exame" ? "Exame anterior" : "Campo anterior",
         rotuloProximo: tipo === "exame" ? "Próximo exame" : "Próximo campo",
         onAnterior: () => mostrarOcorrencia(vizinho(-1), 0),
@@ -426,7 +486,7 @@ export function DocumentDetailsModalChecagem({
               <EnviosDoColaborador documentId={result.id} />
 
               {/* Checklist de Campos */}
-              {result.result.analysis_details?.field_checks?.length ? (
+              {fieldChecks.length || pessoasSemExame.length ? (
                 <>
                   <Separator />
                   <div>
@@ -438,14 +498,25 @@ export function DocumentDetailsModalChecagem({
                       </p>
                     )}
                     <div className="grid grid-cols-2 gap-2">
-                      {result.result.analysis_details.field_checks.map((item) => (
+                      {fieldChecks.map((item) => (
                         <ItemChecklist
                           key={item.field}
-                          item={item}
                           localizavel={Boolean(localizacoes.porCampo[item.field]?.length)}
                           selecionado={ehOAlvo({ tipo: "campo", nome: item.field })}
                           onLocalizar={() => irPara({ tipo: "campo", nome: item.field })}
-                        />
+                        >
+                          <ConteudoCampo item={item} />
+                        </ItemChecklist>
+                      ))}
+                      {pessoasSemExame.map((pessoa) => (
+                        <ItemChecklist
+                          key={pessoa.chave}
+                          localizavel={Boolean(localizacoes.porCampo[pessoa.chave]?.length)}
+                          selecionado={ehOAlvo({ tipo: "campo", nome: pessoa.chave })}
+                          onLocalizar={() => irPara({ tipo: "campo", nome: pessoa.chave })}
+                        >
+                          <ConteudoOutraPessoa pessoa={pessoa} comTabela={comTabela} />
+                        </ItemChecklist>
                       ))}
                     </div>
 
@@ -454,7 +525,7 @@ export function DocumentDetailsModalChecagem({
                         Evidências (trechos do OCR onde o campo aparece)
                       </summary>
                       <div className="mt-2 space-y-2">
-                        {result.result.analysis_details.field_checks.map((item) => (
+                        {fieldChecks.map((item) => (
                           item.evidence?.length ? (
                             <div key={`${item.field}-evidence`} className="text-sm">
                               <p className="font-medium">{item.label}</p>
@@ -624,7 +695,7 @@ export function DocumentDetailsModalChecagem({
                 <EnviosDoColaborador documentId={result.id} />
 
                 {/* Checklist de Campos */}
-                {result.result.analysis_details?.field_checks?.length ? (
+                {fieldChecks.length || pessoasSemExame.length ? (
                   <>
                     <Separator />
                     <div>
@@ -636,14 +707,25 @@ export function DocumentDetailsModalChecagem({
                         </p>
                       )}
                       <div className="grid grid-cols-2 gap-2">
-                        {result.result.analysis_details.field_checks.map((item) => (
+                        {fieldChecks.map((item) => (
                           <ItemChecklist
                             key={item.field}
-                            item={item}
                             localizavel={Boolean(localizacoes.porCampo[item.field]?.length)}
                             selecionado={ehOAlvo({ tipo: "campo", nome: item.field })}
                             onLocalizar={() => irPara({ tipo: "campo", nome: item.field })}
-                          />
+                          >
+                            <ConteudoCampo item={item} />
+                          </ItemChecklist>
+                        ))}
+                        {pessoasSemExame.map((pessoa) => (
+                          <ItemChecklist
+                            key={pessoa.chave}
+                            localizavel={Boolean(localizacoes.porCampo[pessoa.chave]?.length)}
+                            selecionado={ehOAlvo({ tipo: "campo", nome: pessoa.chave })}
+                            onLocalizar={() => irPara({ tipo: "campo", nome: pessoa.chave })}
+                          >
+                            <ConteudoOutraPessoa pessoa={pessoa} comTabela={comTabela} />
+                          </ItemChecklist>
                         ))}
                       </div>
 
@@ -652,7 +734,7 @@ export function DocumentDetailsModalChecagem({
                           Evidências (trechos do OCR onde o campo aparece)
                         </summary>
                         <div className="mt-2 space-y-2">
-                          {result.result.analysis_details.field_checks.map((item) => (
+                          {fieldChecks.map((item) => (
                             item.evidence?.length ? (
                               <div key={`${item.field}-evidence`} className="text-sm">
                                 <p className="font-medium">{item.label}</p>
@@ -768,6 +850,12 @@ function EvidenciasExames({ tabela }: { tabela?: TabelaComparacaoItem[] }) {
               {item.exame} · Linha de origem:{" "}
               <span className="font-mono break-words">{item.linha_origem?.trim()}</span>. Nenhum resultado
               encontrado no PDF.
+            </li>
+          ) : item.data_antiga ? (
+            <li key={`exame-${idx}`} className="text-yellow-500">
+              {item.exame} · Linha de origem:{" "}
+              <span className="font-mono break-words">{item.linha_origem?.trim()}</span>.{" "}
+              {motivoDataAntiga(item.data_antiga)}
             </li>
           ) : (
             <li key={`exame-${idx}`} className="text-muted-foreground">
