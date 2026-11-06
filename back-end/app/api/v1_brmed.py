@@ -749,7 +749,7 @@ async def process_document_background(
         # OCR, BRNET e IA. A marcação de reenvio, mais abaixo, acha o original
         # pelo mesmo hash. Ver `reenvio_service.mesmo_arquivo`.
         resultado, layout = None, None
-        original = reenvio_service.mesmo_arquivo(user_db, content_hash)
+        original = reenvio_service.mesmo_arquivo(user_db, content_hash, clinic_id)
         if original:
             try:
                 documento_original = user_db.get_document_by_id(original["documento_id"])

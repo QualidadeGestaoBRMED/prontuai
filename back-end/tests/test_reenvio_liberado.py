@@ -466,11 +466,12 @@ def test_busca_em_revisao_desliga_sem_deploy(monkeypatch):
 
 # ── mesmo arquivo: reaproveita o resultado, sem processar de novo ────────────
 
-def test_mesmo_arquivo_so_vale_pelo_hash():
+def test_mesmo_arquivo_so_vale_pelo_hash_na_mesma_clinica():
     banco = BancoFalso(devolve=em_revisao(criterio="arquivo"))
-    assert reenvio_service.mesmo_arquivo(banco, "abc")["criterio"] == "arquivo"
+    assert reenvio_service.mesmo_arquivo(banco, "abc", "c1")["criterio"] == "arquivo"
     assert banco.recebido["content_hash"] == "abc"
-    assert banco.recebido["clinic_id"] is None and banco.recebido["pedido_exame_id"] is None
+    # A clínica vai para a consulta: o mesmo arquivo de outra clínica não é reenvio.
+    assert banco.recebido["clinic_id"] == "c1" and banco.recebido["pedido_exame_id"] is None
     # Outro critério não basta para pular o processamento.
     assert reenvio_service.mesmo_arquivo(BancoFalso(devolve=liberado(criterio="pedido")), "abc") is None
 
