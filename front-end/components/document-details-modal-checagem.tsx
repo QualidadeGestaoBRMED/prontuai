@@ -384,7 +384,6 @@ export function DocumentDetailsModalChecagem({
             <div className="flex flex-col gap-4 lg:grid lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
               <ScrollArea className="h-[70vh] pr-2">
                 <div className="space-y-6">
-              <AvisoDeReenvio documentId={result.id} reenvio={result.result.reenvio} />
               {/* Basic Information */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -473,14 +472,17 @@ export function DocumentDetailsModalChecagem({
               )}
 
               {/* Analysis */}
-              {result.result.validation_result?.analysis && (
+              {(result.result.validation_result?.analysis || result.result.reenvio) && (
                 <>
                   <Separator />
                   <div>
                     <h4 className="font-semibold mb-3">Análise de Validação</h4>
-                    <p className="text-sm text-muted-foreground leading-relaxed">
-                      {highlightLiberacao(result.result.validation_result?.analysis)}
-                    </p>
+                    {result.result.validation_result?.analysis && (
+                      <p className="text-sm text-muted-foreground leading-relaxed">
+                        {highlightLiberacao(result.result.validation_result?.analysis)}
+                      </p>
+                    )}
+                    <AvisoDeReenvio documentId={result.id} reenvio={result.result.reenvio} />
                   </div>
                 </>
               )}
@@ -594,7 +596,6 @@ export function DocumentDetailsModalChecagem({
           ) : (
             <ScrollArea className="max-h-[calc(90vh-12rem)] pr-2">
               <div className="space-y-6">
-                <AvisoDeReenvio documentId={result.id} reenvio={result.result.reenvio} />
                 {/* Basic Information */}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
@@ -683,14 +684,17 @@ export function DocumentDetailsModalChecagem({
                 )}
 
                 {/* Analysis */}
-                {result.result.validation_result?.analysis && (
+                {(result.result.validation_result?.analysis || result.result.reenvio) && (
                   <>
                     <Separator />
                       <div>
                         <h4 className="font-semibold mb-3">Análise de Validação</h4>
-                        <p className="text-sm text-muted-foreground leading-relaxed">
-                          {highlightLiberacao(result.result.validation_result?.analysis)}
-                        </p>
+                        {result.result.validation_result?.analysis && (
+                          <p className="text-sm text-muted-foreground leading-relaxed">
+                            {highlightLiberacao(result.result.validation_result?.analysis)}
+                          </p>
+                        )}
+                        <AvisoDeReenvio documentId={result.id} reenvio={result.result.reenvio} />
                       </div>
                     </>
                   )}
