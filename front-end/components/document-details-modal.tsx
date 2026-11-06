@@ -18,6 +18,7 @@ import ExamesComparativoTable from "@/components/exames-comparativo-table"
 import { Archive, Download } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { CLASSE_TAG_REENVIO, rotuloReenvio } from "@/lib/reenvio"
+import { TagReenvio } from "@/components/tag-reenvio"
 
 interface DocumentDetailsModalProps {
   open: boolean
@@ -167,7 +168,8 @@ export function DocumentDetailsModal({
             </DialogTitle>
             <DialogDescription>{result.filename}</DialogDescription>
           </div>
-          <div className="absolute top-4 right-12">
+          <div className="absolute top-4 right-12 flex items-center gap-2">
+            {result.status !== "resubmission" && <TagReenvio reenvio={result.result.reenvio} para="clinica" />}
             {getStatusBadge(result)}
           </div>
         </DialogHeader>
