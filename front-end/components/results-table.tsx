@@ -27,6 +27,7 @@ import { cn } from "@/lib/utils"
 import { ClinicFilter } from "@/components/clinic-filter"
 import type { ClinicOption } from "@/hooks/use-clinic-options"
 import { CLASSE_TAG_REENVIO, mensagemReenvio, rotuloReenvio } from "@/lib/reenvio"
+import { TagReenvio } from "@/components/tag-reenvio"
 
 type StatusFilter = "all" | "approved" | "rejected" | "pending_review"
 
@@ -60,13 +61,14 @@ const exportToCSV = (results: ProcessResult[]) => {
     r.patientName,
     r.clinicName || "",
     format(r.uploadedAt, "dd/MM/yyyy HH:mm", { locale: ptBR }),
-    r.status === "approved"
+    (r.status === "approved"
       ? "Aprovado"
       : r.status === "rejected"
         ? "Rejeitado"
         : r.status === "resubmission"
           ? rotuloReenvio(r.result.reenvio)
-          : "Pendente",
+          : "Pendente") +
+      (r.status !== "resubmission" && r.result.reenvio ? ` (${rotuloReenvio(r.result.reenvio)})` : ""),
     r.examesFaltantes.toString(),
     r.submittedBy,
   ])
@@ -343,7 +345,14 @@ export function ResultsTable({
                   <TableCell className="text-sm text-muted-foreground">
                     {format(result.uploadedAt, "dd/MM/yyyy HH:mm", { locale: ptBR })}
                   </TableCell>
-                  <TableCell>{getStatusBadge(result)}</TableCell>
+                  <TableCell>
+                    {/* Reenvio gravado depois de nov/2026 tem o status da IA: a tag vem ao lado.
+                        O antigo (status "resubmission") já mostra a tag no lugar do status. */}
+                    <div className="flex flex-wrap items-center gap-1">
+                      {getStatusBadge(result)}
+                      {result.status !== "resubmission" && <TagReenvio reenvio={result.result.reenvio} para="clinica" />}
+                    </div>
+                  </TableCell>
                   <TableCell className="text-center">
                     {result.examesFaltantes > 0 ? (
                       <Badge variant="outline" className="text-red-600 border-red-300">

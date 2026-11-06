@@ -60,8 +60,10 @@ function useEnvios(documentId: string): EnvioDoColaborador[] | null {
 /**
  * Os outros envios do mesmo colaborador — o original, os reenvios, os
  * complementos e os outros envios do mesmo pedido do BRNET ou do mesmo CPF —
- * para o revisor, na Checagem: uma linha discreta que abre a lista só se ele
- * quiser. Some quando o documento é o único envio.
+ * para o revisor, na Checagem, e para a clínica, no detalhe do Histórico, de
+ * Pendentes e do Anexar (a rota só devolve a ela os envios da própria clínica):
+ * uma linha discreta que abre a lista só se quiser. Some quando o documento é o
+ * único envio.
  */
 export function EnviosDoColaborador({ documentId }: { documentId: string }) {
   const envios = useEnvios(documentId)
