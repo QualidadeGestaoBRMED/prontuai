@@ -19,6 +19,7 @@ import { Archive, Download } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { CLASSE_TAG_REENVIO, rotuloReenvio } from "@/lib/reenvio"
 import { TagReenvio } from "@/components/tag-reenvio"
+import { EnviosDoColaborador } from "@/components/envios-do-colaborador"
 
 interface DocumentDetailsModalProps {
   open: boolean
@@ -240,6 +241,11 @@ export function DocumentDetailsModal({
                 </div>
               )}
             </div>
+
+            {/* Os outros envios do colaborador, com o status de cada um — o mesmo
+                que o revisor vê na Checagem. Para a clínica, a rota só devolve os
+                envios dela. */}
+            <EnviosDoColaborador documentId={result.id} />
 
             <Separator />
 
