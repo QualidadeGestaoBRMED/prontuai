@@ -361,6 +361,53 @@ def _exames_sem_laudo(markdown: str, exames_brnet: list[str]) -> Optional[list[s
 # então a IA aprovava o documento sem ele.
 _RE_VIX_LOGISTICA = re.compile(r"\bVIX LOGISTICA\b")
 _RE_KIT_VIX = re.compile(r"\bVIXPAR\b|\bFM COP\b")
+def _outra_pessoa_sem_brnet(
+    markdown: str, cpf: Optional[str], nome: Optional[str], exames_ocr: list, run_id: str
+) -> tuple[Optional[list[dict]], Optional[str]]:
+    """
+    A checagem de outra pessoa quando a consulta ao BRNET falha (expedição em
+    aberto não encontrada, erro da API). O documento já sai rejeitado pela
+    falha, mas o laudo de outro colaborador continua lá e o revisor precisa
+    saber: Angra (05/11) tinha a audiometria e o ECG de outra pessoa e, sem
+    BRNET, nenhum aviso.
+
+    Sem a grade do BRNET não há tabela de comparação: o exame vem dos nomes que
+    o OCR extraiu, só para o motivo citar o laudo; a tela mostra a pessoa na
+    Checklist de Campos. O CPF e o nome do paciente são os lidos no documento.
+    Devolve (payload para `analysis_details.outra_pessoa`, motivo), ou
+    (None, None) sem achado. Falha aqui não pode mudar o desfecho da falha.
+    """
+    if not identidade_laudo.HABILITADA:
+        return None, None
+    try:
+        linhas = (markdown or "").splitlines()
+        pessoas = identidade_laudo.pessoas_no_documento(
+            linhas, cpf, nome, nomes_conhecidos=nomes_conhecidos.vocabulario()
+        )
+        if not pessoas:
+            return None, None
+        exames = []
+        for e in exames_ocr or []:
+            exame = e if isinstance(e, str) else (e.get("exame") or e.get("nome")) if isinstance(e, dict) else None
+            if exame and exame not in exames:
+                exames.append(exame)
+        identidade_laudo.anotar_comparativo(
+            [{"exame": e} for e in exames], pessoas, linhas, _normalizar_busca, obter_sinonimos
+        )
+        _log_event(
+            "outra_pessoa",
+            run_id=run_id,
+            quantas=len(pessoas),
+            so_nome=sum(1 for p in pessoas if p["tipo"] == identidade_laudo.SO_NOME),
+            rejeitado=False,
+            sem_brnet=True,
+        )
+        return identidade_laudo.para_payload(pessoas, linhas), identidade_laudo.motivo_rejeicao(pessoas)
+    except Exception as e:
+        logger.warning(f"[WORKFLOW] Checagem de outra pessoa sem BRNET falhou: {type(e).__name__}")
+        return None, None
+
+
 def decisao_da_ia(resultado: dict) -> str:
     """O `validation_status` com que o documento é gravado: "validated" (Aprovado
     pela IA) só sem exame faltante, sem laudo de outra pessoa e sem coleta antiga; "pending"
@@ -1267,6 +1314,19 @@ async def _processar_documento_completo_impl(
             if business_error
             else "Não foi possível consultar exames obrigatórios."
         )
+        analise_falha = (
+            business_error["message"]
+            if business_error
+            else "Não foi possível validar os exames devido à falha na consulta dos exames obrigatórios."
+        )
+        # O documento já sai rejeitado pela falha; o aviso de outra pessoa vai
+        # junto, no motivo e na Checklist de Campos. Ver `_outra_pessoa_sem_brnet`.
+        outra_pessoa_falha, motivo_outra_pessoa = _outra_pessoa_sem_brnet(
+            markdown_content, cpf_inicial, patient_name, exames_enviados, run_id
+        )
+        if motivo_outra_pessoa:
+            mensagem_falha = f"{mensagem_falha} {motivo_outra_pessoa}"
+            analise_falha = f"{analise_falha} {motivo_outra_pessoa}"
         metrics.DOCUMENTOS_PROCESSADOS.add(1, {"status": "error", **clinica_labels})
         metrics.WORKFLOW_DURACAO.record(time.perf_counter() - start_total)
         return {
@@ -1291,6 +1351,7 @@ async def _processar_documento_completo_impl(
             "error_source": (business_error or {}).get("source") or ((brmed_resultado or {}).get("source") if isinstance(brmed_resultado, dict) else None),
             "error_http_status": (business_error or {}).get("http_status") or ((brmed_resultado or {}).get("http_status") if isinstance(brmed_resultado, dict) else None),
             "business_error": business_error,
+            **({"analysis_details": {"outra_pessoa": outra_pessoa_falha}} if outra_pessoa_falha else {}),
             "ocr_result": {
                 "text": markdown_content,
                 "exames_extraidos": exames_enviados
@@ -1302,11 +1363,8 @@ async def _processar_documento_completo_impl(
             "validation_result": {
                 "exames_faltantes": [],
                 "exames_extras": [],
-                "analysis": (
-                    business_error["message"]
-                    if business_error
-                    else "Não foi possível validar os exames devido à falha na consulta dos exames obrigatórios."
-                )
+                "outra_pessoa": bool(outra_pessoa_falha) and identidade_laudo.REJEITA,
+                "analysis": analise_falha,
             }
         }
 
