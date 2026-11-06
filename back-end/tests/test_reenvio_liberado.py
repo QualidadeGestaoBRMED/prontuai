@@ -457,6 +457,50 @@ def test_faltante_que_outro_documento_trouxe_nao_conta_com_ainda_faltam():
     assert detectar(anterior, correcao("CLINICO OCUPACIONAL", "AUDIOMETRIA"))
 
 
+def detectar_com_status(anterior, resultado, status_ia):
+    return reenvio_service.liberado_anterior(
+        BancoFalso(devolve=anterior), resultado, cpf=None, content_hash="abc", clinic_id="c1", agora=AGORA,
+        status_ia=status_ia,
+    )
+
+
+def test_envio_que_falhou_nao_esconde_documento_em_revisao():
+    """Angra dos Reis, 05/11/2026: o BR NET não achou a expedição e o reenvio virou "Já em revisão"."""
+    anterior = em_revisao(criterio="cpf_empresa", exames=["ACUIDADE VISUAL"])
+    assert detectar_com_status(anterior, envio(), "rejected") is None
+
+
+def test_envio_que_falhou_depois_de_liberado_continua_reenvio():
+    # Liberado: o BR NET não acha a expedição porque ela já fechou. É o reenvio esperado.
+    anterior = liberado(criterio="cpf_empresa", exames=["ACUIDADE VISUAL"])
+    assert detectar_com_status(anterior, envio(), "rejected")
+
+
+def test_correcao_de_rejeicao_da_ia_segue_para_a_checagem():
+    # Rejeitado por laudo de outra pessoa (sem faltante); o novo seria aprovado.
+    anterior = em_revisao(exames=["ACUIDADE VISUAL"])
+    anterior["algum_aprovado_pela_ia"] = False
+    assert detectar_com_status(anterior, envio("ACUIDADE VISUAL"), "validated") is None
+
+
+def test_repetido_de_documento_aprovado_pela_ia_continua_reenvio():
+    anterior = em_revisao(exames=["ACUIDADE VISUAL"])
+    anterior["algum_aprovado_pela_ia"] = True
+    assert detectar_com_status(anterior, envio("ACUIDADE VISUAL"), "validated")
+
+
+def test_repetido_que_a_ia_rejeita_de_novo_continua_reenvio():
+    anterior = em_revisao(exames=["ACUIDADE VISUAL"])
+    anterior["algum_aprovado_pela_ia"] = False
+    assert detectar_com_status(anterior, envio("ACUIDADE VISUAL"), "pending")
+
+
+def test_mesmo_arquivo_nao_vira_correcao():
+    anterior = em_revisao(criterio="arquivo", exames=["ACUIDADE VISUAL"])
+    anterior["algum_aprovado_pela_ia"] = False
+    assert detectar_com_status(anterior, envio("ACUIDADE VISUAL"), "validated")
+
+
 def test_busca_em_revisao_desliga_sem_deploy(monkeypatch):
     monkeypatch.setattr(reenvio_service, "EM_REVISAO", False)
     banco = BancoFalso()
