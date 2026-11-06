@@ -46,6 +46,7 @@ import {
 } from "@/components/ui/table";
 import type { DocumentoChecagem, StatusDocumento } from "@/types/checagem";
 import { ClinicFilter } from "@/components/clinic-filter";
+import { TagReenvio } from "@/components/tag-reenvio";
 import { DateFilter } from "@/components/date-filter";
 import type { ClinicOption } from "@/hooks/use-clinic-options";
 import type { FiltroData } from "@/hooks/use-documents-paged";
@@ -287,32 +288,40 @@ export function CheckagemTable({
         cell: ({ row }) => {
           const status = row.getValue("status") as StatusDocumento;
           const decisaoIA = row.original.decisaoIA;
+          let badge;
           // Show badge indicating AI decision
           if (decisaoIA === 'approved') {
-            return (
+            badge = (
               <Badge variant="outline" className="bg-green-100 text-green-700 border-green-300">
                 Aprovado pela IA
               </Badge>
             );
           } else if (decisaoIA === 'rejected') {
-            return (
+            badge = (
               <Badge variant="outline" className="bg-orange-100 text-orange-700 border-orange-300">
                 Rejeitado pela IA
               </Badge>
             );
+          } else {
+            // Fallback for already reviewed documents
+            const styles = {
+              pendente: "bg-yellow-400/20 text-yellow-700 border-yellow-400/50",
+              aprovado: "bg-green-400/20 text-green-700 border-green-400/50",
+              rejeitado: "bg-red-400/20 text-red-700 border-red-400/50",
+            }[status];
+            badge = (
+              <Badge variant="outline" className={cn("capitalize", styles)}>
+                {status}
+              </Badge>
+            );
           }
 
-          // Fallback for already reviewed documents
-          const styles = {
-            pendente: "bg-yellow-400/20 text-yellow-700 border-yellow-400/50",
-            aprovado: "bg-green-400/20 text-green-700 border-green-400/50",
-            rejeitado: "bg-red-400/20 text-red-700 border-red-400/50",
-          }[status];
-
+          // Reenvio: a tag fica ao lado do status, para o revisor ver já na lista.
           return (
-            <Badge variant="outline" className={cn("capitalize", styles)}>
-              {status}
-            </Badge>
+            <div className="flex flex-wrap items-center gap-1">
+              {badge}
+              <TagReenvio reenvio={row.original.reenvio} />
+            </div>
           );
         },
         meta: {

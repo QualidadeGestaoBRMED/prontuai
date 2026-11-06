@@ -313,10 +313,11 @@ RESULTADO_APROVADO = {
 }
 
 
-def test_reenvio_de_liberado_sai_como_reenvio_e_o_job_leva_o_aviso(monkeypatch, tmp_path):
+def test_reenvio_de_liberado_vai_para_a_checagem_com_a_marcacao(monkeypatch, tmp_path):
     achado = {"documento_id": "original", "liberado_em": "2026-10-15T13:00:00+00:00", "criterio": "pedido"}
     banco, jobs = processar(monkeypatch, tmp_path, achado, RESULTADO_APROVADO)
-    assert banco.criado["validation_status"] == "reenvio"
+    # O status é o da IA: o documento entra na Checagem, e a marcação vira a tag.
+    assert banco.criado["validation_status"] == "validated"
     assert banco.criado["reenvio_de"] == "original"
     assert jobs.concluido["reenvio"] == {**achado, "situacao": "liberado", "status_ia": "validated", "motivo_ia": None}
     assert jobs.falhou is None
@@ -324,15 +325,16 @@ def test_reenvio_de_liberado_sai_como_reenvio_e_o_job_leva_o_aviso(monkeypatch, 
     assert banco.busca["clinic_id"] == "c1"
 
 
-def test_reenvio_com_expedicao_fechada_nao_vira_rejeicao(monkeypatch, tmp_path):
+def test_reenvio_com_expedicao_fechada_vai_para_a_checagem_rejeitado_com_o_motivo(monkeypatch, tmp_path):
     """O BRNET recusa ("expedição em aberto não encontrada") porque o pedido já fechou."""
     resultado = {"status": "error", "erro": "Expedição em aberto não encontrada para o paciente informado.",
                  "cpf_processado": "05700231735", "cnpj_processado": "12345678000190"}
     achado = {"documento_id": "original", "liberado_em": "2026-10-15T13:00:00+00:00", "criterio": "cpf_empresa"}
     banco, jobs = processar(monkeypatch, tmp_path, achado, resultado)
-    assert banco.criado["validation_status"] == "reenvio"
-    assert banco.criado["rejection_reason"] is None
-    # Se for complemento, o documento volta a ser a rejeição que a IA tinha dado.
+    # Rejeitado pela IA, com o motivo, e a tag "Já liberado" ao lado: o revisor decide.
+    assert banco.criado["validation_status"] == "rejected"
+    assert banco.criado["rejection_reason"] == resultado["erro"]
+    assert banco.criado["reenvio_de"] == "original"
     assert jobs.concluido["reenvio"]["status_ia"] == "rejected"
     assert jobs.concluido["reenvio"]["motivo_ia"] == resultado["erro"]
 
@@ -608,11 +610,12 @@ class BancoDoArquivoIgual(BancoDoJob):
         self.layout_gravado = (did, layout)
 
 
-def test_mesmo_arquivo_nao_refaz_ocr_e_sai_como_reenvio(monkeypatch, tmp_path):
+def test_mesmo_arquivo_nao_refaz_ocr_e_vai_para_a_checagem_marcado(monkeypatch, tmp_path):
     # `resultado=None`: se o workflow for chamado, o teste quebra.
     banco, jobs = processar(monkeypatch, tmp_path, None, None, banco=BancoDoArquivoIgual())
     assert jobs.falhou is None
-    assert banco.criado["validation_status"] == "reenvio"
+    # A decisão da IA do resultado reaproveitado, sem o revisor do original.
+    assert banco.criado["validation_status"] == "validated"
     assert banco.criado["reenvio_de"] == "d1"
     assert banco.criado["ocr_markdown"] == "texto do OCR"
     # A decisão do revisor do original não vem junto: o reenvio não sai como revisado.

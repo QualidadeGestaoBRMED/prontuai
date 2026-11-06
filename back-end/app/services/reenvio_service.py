@@ -53,6 +53,19 @@ reenvios do período —, mas custam um processamento inteiro cada.
 
 Quem não é reenvio continua igual e segue para a Checagem: reenvio corrigido
 depois de rejeição (100 no período) e complemento.
+
+**O reenvio também vai para a Checagem (nov/2026).** Até aqui o reenvio saía
+com `validation_status = "reenvio"` e ficava fora da fila. A vistoria de
+06/11/2026 mostrou que esconder custa caro: dos 11 reenvios de produção, 9
+traziam mudança (ASO reemitido com Inapto, laudo trocado, questionário novo),
+e cada regra para separar o "mesmo documento" do "documento mudado" (texto do
+OCR, páginas) errava em algum caso. Agora o reenvio é gravado com o status que
+a IA decidiu e entra na Checagem como qualquer envio; a detecção continua e só
+marca o documento (`reenvio` no resultado, `reenvio_de` na coluna) para o
+revisor ver a tag "Já liberado"/"Já em revisão" e decidir. O complemento e a
+comparação página a página continuam e agora decidem só a tag: envio com página
+nova entra sem ela. O status "reenvio" fica só nos documentos gravados antes da
+mudança.
 """
 import copy
 import logging
