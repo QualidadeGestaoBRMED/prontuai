@@ -172,11 +172,13 @@ if ! git show "$SHA:$COMPOSE_SRC" | grep -qE "^[[:space:]]+$SERVICE:"; then
 fi
 info "compose : $COMPOSE_SRC declara '$SERVICE'"
 
-# Pedidos guardados são só para testes em staging (STC-981). O deploy direto não
-# passa pelo CI, então a mesma trava precisa valer aqui, no commit a implantar.
+# Ferramentas só de staging (STC-981, back-end/app/staging): o código pode estar no
+# commit, mas o compose de produção não pode ter as chaves que as ligam. O deploy
+# direto não passa pelo CI, então a conferência vale aqui também; a do ambiente
+# final do container vem depois de enviar o compose.
 if [ "$DEPLOY_ENV" = "prod" ]; then
-  bash "$(dirname "${BASH_SOURCE[0]}")/bloquear_codigo_de_staging.sh" "$SHA" \
-    || die "O commit $SHORT tem codigo exclusivo de staging. Nao pode ir para producao."
+  bash "$(dirname "${BASH_SOURCE[0]}")/conferir_producao_sem_ferramentas_de_staging.sh" "$SHA" \
+    || die "O compose de producao do commit $SHORT liga ferramentas de staging."
 fi
 
 # A arvore de trabalho nao vai para o servidor; so o commit. Duas situacoes bem
@@ -376,6 +378,16 @@ git show "$SHA:$COMPOSE_SRC" \
   | remote "cat > '$DEPLOY_PATH/docker-compose.yml'" \
   || die "Falha ao enviar o $COMPOSE_SRC."
 info "docker-compose.yml atualizado a partir do commit"
+
+# Ambiente FINAL do container (.env do servidor + compose), antes do build e da
+# subida. O servidor só devolve as linhas de APP_ENV e FERRAMENTAS_DE_STAGING.
+if [ "$DEPLOY_ENV" = "prod" ]; then
+  remote "set -o pipefail; cd '$DEPLOY_PATH' && BACKEND_IMAGE=conferencia docker compose -f docker-compose.yml config \
+            | { grep -Ei 'FERRAMENTAS_DE_STAGING|APP_ENV' || true; } && echo CONFERENCIA_OK" \
+    | bash "$(dirname "${BASH_SOURCE[0]}")/conferir_producao_sem_ferramentas_de_staging.sh" --config \
+    || die "O ambiente de producao em $DEPLOY_PATH liga ferramentas de staging (APP_ENV=staging ou FERRAMENTAS_DE_STAGING)."
+  info "ambiente de producao sem ferramentas de staging"
+fi
 step_ok
 
 # ----------------------------------------------------------- 4. build e subida

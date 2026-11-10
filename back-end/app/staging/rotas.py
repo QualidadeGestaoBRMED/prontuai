@@ -1,9 +1,10 @@
 """
-Chave dos pedidos guardados, para o card de `/admin/ops-manutencao` (STC-981).
+Chave dos pedidos guardados, para o card de `/admin/staging` (STC-981).
 
-Fora de staging as rotas respondem 404 para qualquer pessoa, antes mesmo da
-autenticação, e a tela esconde o card. Ver `app/services/pedidos_guardados.py`.
-Toda troca da chave cai em `audit_logs` pelo middleware.
+Fora de staging (sem as duas chaves de `app.staging.ativo()`) as rotas respondem
+404 para qualquer pessoa, antes mesmo da autenticação, e a tela esconde o card.
+Ver `app/staging/pedidos_guardados.py`. Toda troca da chave cai em `audit_logs`
+pelo middleware.
 """
 from datetime import datetime
 from typing import Optional
@@ -13,7 +14,7 @@ from pydantic import BaseModel
 
 from app.core.auth import require_admin
 from app.models.user import User
-from app.services import pedidos_guardados
+from app.staging import pedidos_guardados
 
 
 def _so_em_staging() -> None:

@@ -7,7 +7,7 @@ paciente informado." e o documento é rejeitado. Em produção essa é a regra
 certa. Em staging ela impede repetir um teste com documento real: nos 14 dias
 até 04/11/2026, 10 dos 15 documentos enviados lá receberam essa mensagem.
 
-Com a chave ligada no painel (`/admin/ops-manutencao`):
+Com a chave ligada no painel (`/admin/staging`):
 
 - toda consulta bem-sucedida guarda a resposta, uma linha por CPF ou passaporte
   e CNPJ, a mesma chave que a API usa;
@@ -17,17 +17,17 @@ Com a chave ligada no painel (`/admin/ops-manutencao`):
   `fonte_exames_obrigatorios`.
 
 **Esta função não pode valer em produção:** usar pedido antigo liberaria documento
-sem expedição aberta. Por isso, fora de `APP_ENV=staging`:
+sem expedição aberta. Por isso, sem as duas chaves de `app.staging.ativo()`
+(`APP_ENV=staging` e `FERRAMENTAS_DE_STAGING=true`):
 
-- nada é lido nem gravado, e nem a chave é consultada. Sem `APP_ENV` definido, o
-  ambiente assumido é `production` (`app/core/config.py`);
+- nada é lido nem gravado, e nem a chave do painel é consultada;
 - as rotas do painel respondem 404, e a tela esconde o card;
 - as tabelas não existem. Elas são criadas aqui na primeira vez que staging as usa,
   e não por migração nem por modelo do SQLAlchemy, de propósito: a migração roda
-  no startup e não é desfeita ao voltar a imagem, então um merge por engano
-  alteraria o banco de produção.
+  no startup de qualquer ambiente e não é desfeita ao voltar a imagem.
 
-Além disso, o deploy de produção falha se encontrar este código na `v1`.
+O código pode estar na `v1`; o deploy de produção confere que o ambiente de lá não
+tem nenhuma das duas chaves. Ver `app/staging/__init__.py`.
 
 É apoio a teste: uma falha aqui nunca muda o que a API respondeu. Só o tipo do
 erro vai para o log, porque a resposta tem nome e CPF do paciente.
@@ -43,12 +43,11 @@ from typing import Any, Optional
 
 from sqlalchemy import text
 
-from app.core.config import settings
+from app import staging
 
 logger = logging.getLogger(__name__)
 
 FONTE = "pedido_guardado"
-_AMBIENTE = "staging"
 _MENSAGEM_SEM_EXPEDICAO = "expedicao em aberto nao encontrada"
 
 _DDL = (
@@ -78,8 +77,8 @@ _tabelas_prontas = False
 
 
 def disponivel() -> bool:
-    """A função só existe em staging."""
-    return settings.APP_ENV == _AMBIENTE
+    """A função só existe em staging, com as duas chaves de `app.staging`."""
+    return staging.ativo()
 
 
 def _engine():

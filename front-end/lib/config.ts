@@ -89,7 +89,7 @@ export const API_ENDPOINTS = {
   DASHBOARD_INDICADORES: `${API_PROXY_BASE}/v1/dashboard/indicadores`,
   DASHBOARD_ABORDAGENS: `${API_PROXY_BASE}/v1/dashboard/abordagens`,
 
-  // Só responde em staging; fora dele, 404.
+  // Ferramenta só de staging (components/staging): fora de lá, 404.
   PEDIDOS_GUARDADOS: `${API_PROXY_BASE}/v1/testes-staging/pedidos-guardados`,
 
   // Maintenance

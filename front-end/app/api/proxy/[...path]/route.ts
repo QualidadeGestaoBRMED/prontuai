@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getToken } from "next-auth/jwt"
 import { API_URL } from "@/lib/config"
 import { sessionTokenParams } from "@/lib/session-cookie"
+import { API_FERRAMENTAS_DE_STAGING, ehRotaDeStaging, ferramentasDeStagingAtivas } from "@/lib/staging"
 
 const HOP_BY_HOP_HEADERS = new Set([
   "connection",
@@ -65,6 +66,12 @@ async function proxy(request: NextRequest, context: { params: Promise<{ path: st
   const { path } = await context.params
   if (!path || path.length === 0) {
     return NextResponse.json({ detail: "Proxy path inválido." }, { status: 400 })
+  }
+
+  // Ferramentas só de staging (`lib/staging.ts`): fora de staging o pedido nem
+  // chega ao back-end, que também responde 404 sem as duas chaves dele.
+  if (ehRotaDeStaging(path.join("/"), API_FERRAMENTAS_DE_STAGING) && !ferramentasDeStagingAtivas()) {
+    return NextResponse.json({ detail: "Not Found" }, { status: 404 })
   }
 
   const token = await getToken({ req: request, ...sessionTokenParams })
