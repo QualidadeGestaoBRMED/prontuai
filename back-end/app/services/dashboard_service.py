@@ -174,8 +174,10 @@ WHERE c.name NOT IN ('teste', 'testando', 'Clinica Default')
   AND d.result_payload LIKE '{%'
   AND pg_input_is_valid(d.result_payload, 'jsonb')
   AND d.result_payload::jsonb #>> '{brmed_result,pedido_exame_id}' ~ '^\d{1,18}$'
-  -- Reenvio de prontuário já liberado: o pedido já tem a linha do original.
+  -- Reenvio: o pedido já tem a linha do original. Desde 06/11/2026 só a coluna
+  -- `reenvio_de` marca o reenvio; o status 'reenvio' é dos gravados antes disso.
   AND d.validation_status IS DISTINCT FROM 'reenvio'
+  AND d.reenvio_de IS NULL
 """
 
 # Acurácia por exame, do parecer do revisor no modal de feedback (migration 008).
