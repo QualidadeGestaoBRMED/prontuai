@@ -235,6 +235,32 @@ def test_eeg_e_classificado_antes_do_ecg():
     assert le.tipo_do_exame(norm("ELETROCARDIOGRAMA")) == "ECG"
 
 
+# Listas que o `sem_listas` passou a reconhecer em 10/11/2026 (casos 21, 51 e 55
+# das divergências de novembro): sem elas, o nome na lista contava como laudo.
+@pytest.mark.parametrize("lista", [
+    # e-mail de agendamento "Exames agendados", até a quebra de página
+    "TEM O AGENDAMENTO DE UM PERIODICO EXAMES AGENDADOS ACUIDADE VISUAL AVALIAÇÃO ODONTOLÓGICA "
+    "AVALIAÇÃO PSICOLÓGICA ELETROENCEFALOGRAMA PAGINA 17 LEITURA PAGINA 17 CONFIANCA 96",
+    # certificado médico marítimo, até "This is to certify"
+    "ADDITIONAL EXAMS EXAMES COMPLEMENTARES AVALIAÇÃO ODONTOLÓGICA DENTAL ASSESSMENT "
+    "AVALIAÇÃO PSICOLÓGICA PSYCHOLOGICAL ASSESSMENT ELETROENCEFALOGRAMA "
+    "THIS IS TO CERTIFY THAT THE SEAFARER IS FIT FOR SERVICE",
+    # tela de atendimento do portal impressa no PDF, até a ficha médica
+    "OLÁ EXCELLENCE VOCÊ ESTÁ LOGADO EM RIO DE JANEIRO ATENDIMENTO ADMISSIONAL EXAMES ACUIDADE VISUAL "
+    "AVALIAÇÃO PSICOLÓGICA AVALIAÇÃO ODONTOLÓGICA ELETROENCEFALOGRAMA FICHA MÉDICA ANAMNESE",
+])
+def test_listas_de_agendamento_certificado_e_tela_nao_contam_como_laudo(lista):
+    status, mud = ajusta(TRES, lista)
+    assert set(status.values()) == {"faltante"}
+    assert {m["tipo"] for m in mud} == {"PSICOLOGICA", "ODONTOLOGICA", "EEG"}
+
+
+def test_tela_de_atendimento_nao_apaga_a_ficha_medica():
+    # O bloco termina antes da ficha: o título dela continua no texto.
+    tela = "VOCÊ ESTÁ LOGADO EM CENTRO EXAMES CLINICO OCUPACIONAL FICHA MÉDICA ANAMNESE"
+    assert "FICHA MEDICA" in le.sem_listas(md(tela))
+
+
 def test_ggt_julgado_pelo_resultado_perto_do_nome():
     # A normalização do motor reescreve "GAMA-GT" e "GAMA GLUTAMIL TRANSFERASE" como GGT.
     item = [("GGT", "encontrado")]

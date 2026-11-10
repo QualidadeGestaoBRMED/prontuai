@@ -215,9 +215,12 @@ _SOROLOGIA_JANELA = 400
 # O bloco só sai quando o fechamento aparece dentro do alcance; sem ele, o texto
 # fica, que é o lado seguro.
 _BLOCOS_DE_LISTA: list[tuple[re.Pattern, re.Pattern, int]] = [
-    # ASO: "Procedimentos realizados / Exames complementares" até a conclusão
+    # ASO: "Procedimentos realizados / Exames complementares" até a conclusão. O
+    # certificado médico marítimo ("Additional exams / Exames complementares")
+    # fecha em "This is to certify / Este é para certificar", não na conclusão.
     (re.compile(r"PROCEDIMENTOS REALIZADOS|EXAMES COMPLEMENTARES"),
-     re.compile(r"CONCLUSAO CONCLUSION|PACIENTE E CONSIDERADO|PATIENT IS CONSIDERED"), 2500),
+     re.compile(r"CONCLUSAO CONCLUSION|PACIENTE E CONSIDERADO|PATIENT IS CONSIDERED"
+                r"|THIS IS TO CERTIFY|ESTE E PARA CERTIFICAR"), 2500),
     # voucher BR MED
     (re.compile(r"\b04 EXAMES\b"),
      re.compile(r"TODOS OS EXAMES LISTADOS SAO OBRIGATORIOS|\b05 ORIENTACOES|\b05 OBSERVACOES"), 2000),
@@ -227,6 +230,13 @@ _BLOCOS_DE_LISTA: list[tuple[re.Pattern, re.Pattern, int]] = [
      re.compile(r"LOCAL DO ATENDIMENTO|OPCIONAL"), 2000),
     (re.compile(r"ORIENTACOES DE PREPARO PARA EXAMES"),
      re.compile(r"OBSERVACOES IMPORTANTES|IMPORTANT NOTICE|ASSINATURA DO RESPONSAVEL"), 2000),
+    # e-mail de agendamento no formato "Exames agendados", que termina na página
+    # ou na assinatura do e-mail
+    (re.compile(r"\bEXAMES AGENDADOS\b"),
+     re.compile(r"\bPAGINA \d+ LEITURA\b|ATENCIOSAMENTE|DIREITOS RESERVADOS|LOCAL DO ATENDIMENTO"), 1500),
+    # tela de atendimento do portal impressa no PDF ("Você está logado em …"),
+    # com a lista dos exames do atendimento, até a ficha médica ou a página
+    (re.compile(r"\bVOCE ESTA LOGADO\b"), re.compile(r"\bFICHA MEDICA\b|\bPAGINA \d+ LEITURA\b"), 2000),
 ]
 
 
