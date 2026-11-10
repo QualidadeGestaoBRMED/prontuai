@@ -6,7 +6,7 @@ from typing import Dict, Any, Optional, List
 from fastapi import UploadFile
 from app.services import ocr_service, brmed_service, validacao_service
 from app.services import exam_catalog_source, laudo_evidencia, evidencia_laboratorio, identidade_laudo, layout_ocr
-from app.services import data_exame, monitoramento_checagem, nomes_conhecidos, regras_identificacao
+from app.services import data_exame, monitoramento_checagem, nomes_conhecidos, regras_identificacao, sinais_vitais
 from app.core.config import settings
 from app.core import metrics
 from app.core.pii import mask_cpf, mask_identifier, mask_name
@@ -356,11 +356,20 @@ def _exames_sem_laudo(markdown: str, exames_brnet: list[str]) -> Optional[list[s
     return [nome for norm, nome in alvos.items() if norm not in encontrados]
 
 
-# Kit VIX: a VIX Logística exige, além do ASO da BR MED, o kit próprio — ASO
-# VIXPAR e ficha clínica (formulário FM.COP). O BRNET não manda essa exigência,
-# então a IA aprovava o documento sem ele.
+# Kit VIX: a VIX Logística e a Autoport exigem, além do ASO da BR MED, o kit
+# próprio — ASO VIXPAR e Ficha Clínica. O BRNET não manda essa exigência, então a
+# IA aprovava o documento sem ele.
 _RE_VIX_LOGISTICA = re.compile(r"\bVIX LOGISTICA\b")
-_RE_KIT_VIX = re.compile(r"\bVIXPAR\b|\bFM COP\b")
+# Empresas do grupo pela raiz do CNPJ do ASO (`cnpj_processado`). O nome no texto
+# não serve para a Autoport: os formulários da VIX trazem "Autoport" no rodapé e
+# são usados por clínicas para outras empresas. VIX Transportes Dedicados
+# (09452900) fica fora: tem aprovado sem o kit. Let's Rent a Car (00873894) também,
+# até a operação dizer se exige: em set–nov, 1 rejeitado e 1 aprovado sem o kit.
+_RAIZES_CNPJ_KIT_VIX = {"32681371": "VIX Logística", "07677731": "Autoport"}
+# Os formulários do kit, pelo código: FM.COP.MED/002 é a Ficha Clínica; /001, /003
+# e /004 são o ASO VIXPAR. O OCR lê MED/032 e MID/002, daí a folga nos dígitos.
+_RE_FICHA_VIX = re.compile(r"\bFM COP M[A-Z]{1,2} 0[03]2\b")
+_RE_ASO_VIX = re.compile(r"\bVIXPAR\b|\bFM COP M[A-Z]{1,2} 00[134]\b")
 def _outra_pessoa_sem_brnet(
     markdown: str, cpf: Optional[str], nome: Optional[str], exames_ocr: list, run_id: str
 ) -> tuple[Optional[list[dict]], Optional[str]]:
@@ -410,7 +419,8 @@ def _outra_pessoa_sem_brnet(
 
 def decisao_da_ia(resultado: dict) -> str:
     """O `validation_status` com que o documento é gravado: "validated" (Aprovado
-    pela IA) só sem exame faltante, sem laudo de outra pessoa e sem coleta antiga; "pending"
+    pela IA) só sem exame faltante, sem laudo de outra pessoa, sem coleta antiga e sem
+    sinais vitais impossíveis na ficha; "pending"
     (Rejeitado pela IA, vai à Checagem) no resto; "rejected" quando o
     processamento falhou."""
     if resultado.get("status") == "error":
@@ -421,6 +431,7 @@ def decisao_da_ia(resultado: dict) -> str:
         or validacao.get("exames_faltantes")
         or validacao.get("outra_pessoa")
         or validacao.get("data_antiga")
+        or validacao.get("sinais_vitais")
     ):
         return "pending"
     return "validated"
@@ -445,18 +456,28 @@ def _rejeitar_com_motivo(resultado_validacao: dict, motivo: str) -> None:
 KIT_VIX_FALTANTE = "KIT VIX (ASO VIXPAR E FICHA CLÍNICA)"
 
 
-def _falta_kit_vix(markdown: str) -> bool:
-    """Documento da VIX Logística sem o kit da VIX.
+def _falta_kit_vix(markdown: str, cnpj: Optional[str] = None) -> bool:
+    """Documento da VIX Logística ou da Autoport sem o kit da VIX completo.
 
     Medido no texto gravado de 14/09 a 19/10/2026: pega 4 documentos, todos
     rejeitados pelo revisor por falta do kit, e nenhum dos 30 aprovados que
     citam a VIX Logística — todos trazem o kit. Não vale para a VIX
     Transportes, que tem aprovados sem VIXPAR.
+
+    Ajuste de 10/11/2026 (conferência das divergências de novembro): a Autoport
+    escapava, porque o gatilho era só o texto "VIX LOGISTICA", e o ASO VIXPAR
+    sozinho contava como kit, mas faltava a Ficha Clínica. Nos aprovados pela IA
+    de set–nov, pela empresa do CNPJ: Autoport sem a ficha = 6 rejeitados pelo
+    revisor (4 pelo kit, 2 por outro motivo) e nenhum aprovado; com a ficha, a
+    ficha sempre veio com o ASO VIXPAR. +6/−0 contra o revisor.
     """
     if not markdown:
         return False
     texto = f" {_normalizar_busca(markdown)} "
-    return bool(_RE_VIX_LOGISTICA.search(texto)) and not _RE_KIT_VIX.search(texto)
+    da_vix = bool(_RE_VIX_LOGISTICA.search(texto)) or re.sub(r"\D", "", cnpj or "")[:8] in _RAIZES_CNPJ_KIT_VIX
+    if not da_vix:
+        return False
+    return not (_RE_FICHA_VIX.search(texto) and _RE_ASO_VIX.search(texto))
 
 
 def _paginas_insuficientes(paginas: Optional[int], exigidos: int) -> bool:
@@ -1475,7 +1496,7 @@ async def _processar_documento_completo_impl(
     # Documento exigido pela empresa, fora da grade do BRNET: entra como faltante
     # para o documento ir à checagem. Fica fora da `tabela_comparacao`, que é só
     # dos exames exigidos. Ver `_falta_kit_vix`.
-    falta_kit_vix = not resultado_validacao.get("erro") and _falta_kit_vix(markdown_content or "")
+    falta_kit_vix = not resultado_validacao.get("erro") and _falta_kit_vix(markdown_content or "", cnpj_processado)
     if falta_kit_vix:
         resultado_validacao["status_liberado"] = False
         faltantes_exames = [
@@ -1484,9 +1505,23 @@ async def _processar_documento_completo_impl(
         resultado_validacao["mensagem"] = (
             f"Faltam exames obrigatórios: {', '.join(faltantes_exames)}. Falta também o {KIT_VIX_FALTANTE}."
             if faltantes_exames
-            else f"Falta o {KIT_VIX_FALTANTE}, exigido pela VIX Logística."
+            else f"Falta o {KIT_VIX_FALTANTE}, exigido pela empresa (grupo VIX)."
         )
         _log_event("kit_vix_ausente", run_id=run_id)
+
+    # Peso e altura impossíveis na ficha médica (trocados na digitação): vai à
+    # checagem com o aviso, sem mexer nos exames. Ver `sinais_vitais`.
+    sinais_impossiveis = None
+    if not resultado_validacao.get("erro"):
+        try:
+            sinais_impossiveis = sinais_vitais.incoerencia(markdown_content or "")
+        except Exception as e:
+            logger.warning(f"[WORKFLOW] Checagem de sinais vitais falhou: {type(e).__name__}")
+    if sinais_impossiveis:
+        resultado_validacao["status_liberado"] = False
+        mensagem = (resultado_validacao.get("mensagem") or "").strip()
+        resultado_validacao["mensagem"] = f"{mensagem} {sinais_vitais.motivo(sinais_impossiveis)}".strip()
+        _log_event("sinais_vitais_impossiveis", run_id=run_id)
     await send_progress(90, "validacao", "Validação concluída, preparando resultado...")
     logger.info(f"[WORKFLOW] Validação concluída.")
     _log_event(
@@ -1619,6 +1654,8 @@ async def _processar_documento_completo_impl(
     }
     if falta_kit_vix:
         confidence_details["kit_vix_ausente"] = True
+    if sinais_impossiveis:
+        confidence_details["sinais_vitais_impossiveis"] = True
     if exames_so_lista:
         confidence_details["exames_so_lista"] = exames_so_lista
     if exames_data_antiga:
@@ -1693,6 +1730,7 @@ async def _processar_documento_completo_impl(
             # Rejeita sem faltante: ver `decisao_da_ia`.
             "outra_pessoa": rejeitado_por_outra_pessoa,
             "data_antiga": rejeitado_por_data,
+            "sinais_vitais": sinais_impossiveis,
             "analysis": resultado_validacao["mensagem"]
         },
         "status": "success"  # Será ajustado abaixo se houver erro
