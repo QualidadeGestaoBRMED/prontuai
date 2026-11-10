@@ -173,8 +173,9 @@ try:
     )
 
     # Monitoramento silencioso da checagem (`monitoramento_checagem`): nada
-    # aparece na tela. Atributos bounded: `grupo` é a lista fixa de
-    # `REGUA_LAUDO` (clínico, audiometria...), `resultado`/`confirmacao`/`tipo`
+    # aparece na tela. Atributos bounded: `grupo` é o `parametros.grupo` das
+    # regras `regua_monitoramento` do catálogo (clínico, audiometria... — uma
+    # dezena, curada no painel), `resultado`/`confirmacao`/`tipo`
     # são poucos valores fixos. Nenhum nome, CPF ou documento vira atributo.
     CLIQUE_LAUDO = _meter.create_counter(
         "prontuai_clique_laudo",

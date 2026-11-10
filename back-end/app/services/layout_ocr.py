@@ -30,6 +30,8 @@ import re
 from dataclasses import dataclass, field
 from typing import Any, Callable, Iterable, Optional
 
+from app.services import regras_identificacao
+
 VERSAO = 1
 ESCALA = 10000
 
@@ -62,56 +64,10 @@ _RE_UNIDADE_LABORATORIO = re.compile(
     r"\b(?:[MNPU]?G|MCG)\s*/\s*(?:DL|ML|L)\b|\bU/L\b|/\s*MM3\b|\bMMOL\b|\bUI/", re.I
 )
 
-# Título de laudo que não é o nome do exame no BRNET nem sinônimo do catálogo:
-# o laudo do Clínico Ocupacional se chama "Ficha Médica"; o de Audiometria
-# Tonal, "Avaliação Audiológica" ou "Audiograma". Sem eles o clique só achava o
-# nome do exame na lista do ASO e no voucher. Casa no nome normalizado do exame
-# (`workflow_service._normalizar_busca`) → títulos, também normalizados.
-#
-# Fica fora do catálogo de propósito: sinônimo do catálogo muda a comparação
-# (o que conta como exame encontrado); isto aqui só diz onde o laudo começa.
-# Medido nos 498 PDFs com texto embutido da pasta de documentos da semana
-# (1.191 cliques em exame; acerto = a primeira ocorrência cai na página com o
-# CONTEÚDO do laudo — anamnese, limiares tonais, CVF/VEF1, mg/dL —, não no
-# título): 48% antes, 92% depois. Clínico 0% → 96%, Audiometria 12% → 81%,
-# Acuidade 43% → 93%, RX de tórax 56% → 90%, Glicemia 92% → 99%; 1 piorou.
-TITULOS_DE_LAUDO: list[tuple[re.Pattern, re.Pattern]] = [
-    (re.compile(a), re.compile(t))
-    for a, t in (
-        (r"\bCLINICO\b", r"\bFICHA (MEDICA|CLINICA)\b|\bPRONTUARIO (MEDICO|CLINICO)\b"),
-        (
-            r"\bAUDIOMETRIA\b",
-            r"\bAUDIOMETRIA\b|\bAUDIOLOGI|\bAUDIOGRAMA\b|\bLOGOAUDIOMETRIA\b|\bAUDIOMETRO\b"
-            r"|\bREPOUSO AUDITIVO\b|\bLIMIARES? TONA",
-        ),
-        (r"\bACUIDADE VISUAL\b|\bOFTALMOLOGIC", r"\bACUIDADE VISUAL\b|\bOFTALMOLOGIC|\bSNELLEN\b|\bISHIHARA\b"),
-        (r"\bESPIROMETRIA\b", r"\bESPIROMETRI|\bFUNCAO PULMONAR\b"),
-        # O título vem sem o "de" ("Laudo de Raio-X - Tórax (PA)", "Raios X Tórax PA",
-        # "Tórax PA" sozinho), e a folha OIT só traz o nome do exame em pergunta
-        # ("...consistente com pneumoconiose?"), que não vale como título: valem
-        # os cabeçalhos dela. Medido nos 726 documentos com layout de 30/10: 94 →
-        # 140 dos 152 cliques em RX de tórax vão ao laudo, nenhum piora; nos 12
-        # restantes o OCR não tem laudo de tórax.
-        (
-            r"\bTORAX\b",
-            r"\bLEITURA RADIOLOGICA\b|\bPNEUMOCONIOSE\b|\b(RADIOGRAFIA|RX|RAIOS? X) (D[EO] )?TORAX\b|^ TORAX (PA|AP)\b"
-            r"|\bPEQUENAS OPACIDADES\b|\bGRANDES OPACIDADES\b|\bPROFUSAO\b|\bESPESSAMENTO PLEURAL\b",
-        ),
-        (r"\bELETROCARDIOGRAMA\b", r"\bELETROCARDIOGRAMA\b|\bECG\b"),
-        (r"\bELETROENCEFALOGRAMA\b", r"\bELETROENCEFALOGRAMA\b|\bEEG\b"),
-        # Laudo psicológico muitas vezes não traz o nome do exame: é a folha dos
-        # testes (Palográfico, aspectos da personalidade) e a assinatura da
-        # psicóloga com o CRP. Com o rótulo de lista corrigido, 22 dos 33 cliques
-        # em exame psicológico que caíam na lista do ASO vão ao laudo (30/10); nos
-        # outros 11 o OCR não tem laudo psicológico.
-        (
-            r"\bPSICOLOGIC|\bPSICOSSOCIAL\b",
-            r"\b(AVALIACAO|LAUDO|PARECER) PSICO(LOGIC|SSOCIAL)|\bPALOGRAFIC|\bASPECTOS DA PERSONALIDADE\b"
-            r"|^ PSICOLOG[AO]S? $|\bCRP (?:[A-Z]{2} )?\d{1,2} \d{3,}",
-        ),
-        (r"\bODONTOLOGIC", r"\bODONTOLOGIC|\bODONTOGRAMA\b"),
-    )
-]
+# Título de laudo que não é o nome do exame no BRNET nem sinônimo do catálogo
+# (o laudo do Clínico se chama "Ficha Médica"; o da Audiometria, "Audiograma")
+# vem do Catálogo de Exames, papel `titulo_laudo` de `regras_identificacao`. As
+# medições que justificaram cada título estão nas notas de cada regra.
 # Título é linha curta (texto normalizado) e não é pergunta de questionário
 # ("Você já fez audiometria?", na anamnese psicossocial).
 MAX_TITULO = 70
@@ -262,8 +218,13 @@ def caixa_json(caixa: tuple[int, int, int, int]) -> dict[str, float]:
 
 
 def titulos_do_exame(exame_normalizado: str) -> list[re.Pattern]:
-    """Os títulos de laudo de `TITULOS_DE_LAUDO` que valem para o exame."""
-    return [titulo for exame, titulo in TITULOS_DE_LAUDO if exame.search(exame_normalizado)]
+    """Os títulos de laudo do catálogo (papel `titulo_laudo`) que valem para o
+    exame, pelo nome normalizado (`workflow_service._normalizar_busca`)."""
+    return [
+        regra.regex
+        for regra in regras_identificacao.do_nome(regras_identificacao.TITULO_LAUDO, exame_normalizado)
+        if regra.regex is not None
+    ]
 
 
 def paginas_de_lista(

@@ -6,7 +6,7 @@ from typing import Dict, Any, Optional, List
 from fastapi import UploadFile
 from app.services import ocr_service, brmed_service, validacao_service
 from app.services import exam_catalog_source, laudo_evidencia, evidencia_laboratorio, identidade_laudo, layout_ocr
-from app.services import data_exame, monitoramento_checagem, nomes_conhecidos
+from app.services import data_exame, monitoramento_checagem, nomes_conhecidos, regras_identificacao
 from app.core.config import settings
 from app.core import metrics
 from app.core.pii import mask_cpf, mask_identifier, mask_name
@@ -692,28 +692,11 @@ def _token_overlap_match(a: str, b: str) -> bool:
     max_len = max(len(t) for t in overlap)
     return overlap_ratio >= 0.75 or (overlap_ratio >= 0.5 and max_len >= 8)
 
-def _has_audiometria_marker_text(normalizado: str) -> bool:
-    if not normalizado:
-        return False
-    padded = f" {normalizado} "
-    if "AUDIOMETRIA" in normalizado or "AUDIOMETR" in normalizado:
-        return True
-    if "AUDIOMETRO" in normalizado:
-        return True
-    if "FONOAUDIO" in normalizado or "FONOAUDIOLOG" in normalizado:
-        return True
-    if " ORELHA DIREITA " in padded or " ORELHA ESQUERDA " in padded:
-        return True
-    if " HZ " in padded and " DB " in padded:
-        return True
-    if (" OD " in padded or " OE " in padded) and (" HZ " in padded or " DB " in padded):
-        return True
-    if (" SRT " in padded or " IRF " in padded) and (" OD " in padded or " OE " in padded):
-        return True
-    return False
-
-def _is_audiometria_marker(normalizado: str) -> bool:
-    return _has_audiometria_marker_text(normalizado)
+def _marcadores_do_exame(norm_brnet: str) -> list:
+    """Regras `marcador_ocr` do catálogo que valem para o exame do BRNET: nome
+    lido pelo OCR que conta como ele mesmo fora do catálogo de variações
+    (FONOAUDIOLÓGICA, AUDIÔMETRO e 'OD 500 HZ 20 DB' para a audiometria)."""
+    return regras_identificacao.do_nome(regras_identificacao.MARCADOR_OCR, norm_brnet)
 
 def _match_ocr_exame(
     exame_brnet: str,
@@ -742,9 +725,9 @@ def _match_ocr_exame(
                     "evidence": _buscar_evidencias(exame, linhas)
                 }
 
-    if "AUDIOMETRIA" in norm_brnet:
+    for regra in _marcadores_do_exame(norm_brnet):
         for exame in exames_ocr:
-            if _is_audiometria_marker(_normalizar_busca(exame)):
+            if regras_identificacao.marcador(regra, _normalizar_busca(exame)):
                 return {
                     "match_type": "parcial",
                     "ocr_match": exame,
@@ -834,7 +817,13 @@ def _filtrar_exames_ocr(
         brnet_norm_set.add(normalizado)
         brnet_norm_list.append((exame, normalizado))
     termos_validos = obter_master_exam_terms() | brnet_norm_set
-    contains_audiometria = any("AUDIOMETRIA" in normalizado for _, normalizado in brnet_norm_list)
+    # Marcadores do catálogo que valem para algum exame pedido: nome do OCR que
+    # passa o portão mesmo fora do vocabulário (ver `_marcadores_do_exame`).
+    marcadores = [
+        regra
+        for regra in regras_identificacao.regras(regras_identificacao.MARCADOR_OCR)
+        if any(regra.casa_nome(normalizado) for _, normalizado in brnet_norm_list)
+    ]
 
     filtrados = []
     vistos = set()
@@ -845,7 +834,7 @@ def _filtrar_exames_ocr(
             continue
         chave = normalizado
         if normalizado not in termos_validos:
-            if contains_audiometria and _is_audiometria_marker(normalizado):
+            if any(regras_identificacao.marcador(regra, normalizado) for regra in marcadores):
                 chave = normalizado
             else:
                 for _, brnet_norm in brnet_norm_list:
@@ -920,20 +909,14 @@ def _filtrar_exames_ocr(
                         tem_valor,
                     )
 
-        # Fallbacks por marcador no texto: audiometria e GGT
-        has_audiometria_marker = _has_audiometria_marker_text(markdown_norm)
-        if contains_audiometria and has_audiometria_marker:
+        # Marca no texto (regras `marcador_texto` do catálogo: audiometria, GGT):
+        # o exame do BRNET cujo nome casa a regra é dado como presente.
+        for regra in regras_identificacao.regras(regras_identificacao.MARCADOR_TEXTO):
+            if not regras_identificacao.marcador(regra, markdown_norm):
+                continue
             for exame in exames_brnet:
                 normalizado = _normalizar_busca(exame)
-                if "AUDIOMETRIA" in normalizado and normalizado not in vistos:
-                    vistos.add(normalizado)
-                    filtrados.append(exame)
-
-        has_ggt_marker = " GGT " in markdown_norm or " GAMA GLUTAMIL " in markdown_norm
-        if has_ggt_marker:
-            for exame in exames_brnet:
-                normalizado = _normalizar_busca(exame)
-                if "GGT" in normalizado and normalizado not in vistos:
+                if regra.casa_nome(normalizado) and normalizado not in vistos:
                     vistos.add(normalizado)
                     filtrados.append(exame)
 

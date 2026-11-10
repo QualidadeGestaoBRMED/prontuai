@@ -40,7 +40,7 @@ O QUE FICOU DE FORA, E POR QUÊ
              isoladas são "D. alt." e "S, alt" em prosa.
 
     `AUDIOMETRIA`  Casaria dentro de `AUDIOMETRIA VOCAL`, que é outro exame. O
-             motor já trata audiometria com folga em `_is_audiometria_marker`.
+             motor já trata audiometria com folga pela regra `marcador_ocr.audiometria` do catálogo.
 
     `AUDIOMETRIA NORMAL`  É conclusão de laudo, não nome de exame.
 

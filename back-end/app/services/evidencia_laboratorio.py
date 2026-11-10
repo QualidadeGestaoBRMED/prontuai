@@ -33,6 +33,8 @@ import unicodedata
 from bisect import bisect_right
 from typing import Any, Callable, Iterable, Optional
 
+from app.services import regras_identificacao
+
 # Desliga a regra sem deploy de código: EVIDENCIA_LABORATORIO=false.
 HABILITADA = os.getenv("EVIDENCIA_LABORATORIO", "true").strip().lower() not in ("0", "false", "nao", "no")
 
@@ -57,42 +59,9 @@ MIN_TERMO = 3
 # Quem é laboratório
 # ---------------------------------------------------------------------------
 
-# Casa contra o nome normalizado do exame do BRNET. A lista é a do protótipo
-# medido; cada entrada é palavra inteira.
-_LABORATORIO = re.compile(
-    r"\b("
-    # função renal e metabólica
-    r"UREIA|CREATININA|ACIDO URICO|GLICEMIA|GLICOSE|HEMOGLOBINA GLICADA"
-    # lipídios
-    r"|COLESTEROL|TRIGLICERIDEOS|HDL|LDL"
-    # hematologia
-    r"|HEMOGRAMA|RETICULOCITOS|PLAQUETAS|FERRITINA"
-    # função hepática: GAMA cobre "GAMA GT"/"GAMA GLUTAMIL"
-    r"|TGO|TGP|GAMA|GGT|BILIRRUBINA|FOSFATASE"
-    # hormônios e marcadores
-    r"|TSH|T4|PSA"
-    # eletrólitos e metais
-    r"|POTASSIO|SODIO|CALCIO|ZINCO|CHUMBO"
-    # sorologia
-    r"|VDRL"
-    # ACIDO solto pega os indicadores biológicos de urina (hipúrico, metil-hipúrico,
-    # trans-mucônico), que também trazem resultado com unidade.
-    r"|ACIDO"
-    r")\b"
-)
-
-# Termos extras que provam o exame pelo laudo dos componentes. A glicemia de
-# jejum sai no laudo como "Glicose"; o hemograma, pelas séries. Os outros são o
-# nome que o laboratório imprime e o BRNET não usa — cada um veio de um selo à
-# toa conferido no texto (26/10/2026): "Gama glutamil transferase", a grafia
-# "Triglicerides" e o "HbA1c" do laudo de hemoglobina glicada.
-_TERMOS_EXTRAS: tuple[tuple[str, frozenset[str]], ...] = (
-    ("GLICEMIA", frozenset({"GLICOSE"})),
-    ("HEMOGRAMA", frozenset({"ERITROGRAMA", "LEUCOGRAMA", "HEMACIAS", "HEMATOCRITO", "PLAQUETAS"})),
-    ("GGT", frozenset({"GAMA GLUTAMIL", "GAMA GLUTAMILTRANSFERASE"})),
-    ("TRIGLICERIDEOS", frozenset({"TRIGLICERIDES", "TRIGLICERIDIOS"})),
-    ("HEMOGLOBINA GLICADA", frozenset({"HBA1C", "A1C"})),
-)
+# Quem é laboratório e os outros nomes com que o laudo imprime o analito vêm do
+# Catálogo de Exames (`regras_identificacao`, papéis `laboratorio` e
+# `termos_extras`). Os padrões casam no nome normalizado por `normalizar` daqui.
 
 # ---------------------------------------------------------------------------
 # O que é resultado
@@ -126,21 +95,22 @@ def chave_catalogo(texto: str) -> str:
 
 
 def eh_laboratorio(exame: str) -> bool:
-    return bool(_LABORATORIO.search(normalizar(exame)))
+    nome = normalizar(exame)
+    return any(r.casa_nome(nome) for r in regras_identificacao.regras(regras_identificacao.LABORATORIO))
 
 
 def termos_do_exame(exame: str, sinonimos: Iterable[str] = ()) -> set[str]:
     """
     Termos de busca: o nome do BRNET, o nome sem parênteses, cada parte entre
-    parênteses, as variações do catálogo e os extras de `_TERMOS_EXTRAS`.
+    parênteses, as variações do catálogo e os termos extras do catálogo (papel
+    `termos_extras`).
     """
     nome = normalizar(exame)
     termos = {nome, normalizar(re.sub(r"\(.*?\)", "", exame or ""))}
     termos |= {normalizar(p) for p in re.findall(r"\((.*?)\)", exame or "")}
     termos |= {normalizar(s) for s in sinonimos}
-    for gatilho, extras in _TERMOS_EXTRAS:
-        if gatilho in nome:
-            termos |= extras
+    for regra in regras_identificacao.do_nome(regras_identificacao.TERMOS_EXTRAS, nome):
+        termos |= set(regra.parametros["termos"])
     return {t for t in termos if len(t) >= MIN_TERMO}
 
 
