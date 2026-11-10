@@ -950,6 +950,66 @@
       "notas": "Julgado pelo nome do exame fora das listas do ASO/voucher."
     },
     {
+      "chave": "marca_laudo.psicologica",
+      "perfil": "psicologico",
+      "papel": "marca_laudo",
+      "ordem": 22,
+      "padrao_nome": "PSICOLOG",
+      "condicao": {
+        "regex": "PSICOLOG|\\bCRP\\b|PALOGRAF|INSTRUMENTOS UTILIZADOS|ATENCAO (?:CONCENTRADA|DIFUSA|DIVIDIDA)|BETA III|\\bTADIM\\b|\\bBPA\\b|\\bBFP\\b|PERSONALIDADE|PSICOTECNIC|\\bTEPIC\\b|\\bAC 15\\b"
+      },
+      "parametros": {
+        "tipo": "PSICOLOGICA",
+        "estrategia": "nome_fora_das_listas"
+      },
+      "motivo": null,
+      "exemplos": {
+        "nome_sim": [
+          "AVALIACAO PSICOLOGICA"
+        ],
+        "nome_nao": [
+          "PSICOSSOCIAL"
+        ],
+        "texto_sim": [
+          " PARECER PSICOLOGICO CONCLUSAO APTO CRP 06 12345 ",
+          " INSTRUMENTOS UTILIZADOS PALOGRAFICO BETA III CTA AC E ENTREVISTA "
+        ],
+        "texto_nao": [
+          " FICHA MEDICA OCUPACIONAL ",
+          " AVALIACAO PSICOSSOCIAL ANAMNESE PARA TRABALHO EM ALTURA "
+        ]
+      },
+      "notas": "Exige laudo fora das listas do ASO/voucher. A marca inclui a bateria de testes: há laudo que não escreve 'psicológica' fora da lista (INSTRUMENTOS UTILIZADOS PALOGRÁFICO BETA III). Psicossocial não casa o nome e fica sem exigência. Medido em 10/11/2026 no texto gravado dos aprovados pela IA, contra o revisor, junto com as outras duas regras de 10/11 (psicológica, odontológica, EEG): set +6/−4, out +12/−6, nov 03–10 +6/0. Dos aprovados barrados, 9 conferidos no PDF: 8 sem o laudo no documento."
+    },
+    {
+      "chave": "marca_laudo.odontologica",
+      "perfil": "odontologico",
+      "papel": "marca_laudo",
+      "ordem": 24,
+      "padrao_nome": "ODONTOL",
+      "condicao": {
+        "regex": "ODONTO|\\bCRO\\b|DENTISTA|SAUDE BUCAL"
+      },
+      "parametros": {
+        "tipo": "ODONTOLOGICA",
+        "estrategia": "nome_fora_das_listas"
+      },
+      "motivo": null,
+      "exemplos": {
+        "nome_sim": [
+          "AVALIACAO ODONTOLOGICA"
+        ],
+        "texto_sim": [
+          " ODONTOGRAMA SEM ALTERACOES CIRURGIAO DENTISTA CRO 1234 ",
+          " ATESTADO DE SAUDE BUCAL ASSOALHO BUCAL SEM ALTERACOES "
+        ],
+        "texto_nao": [
+          " FICHA MEDICA OCUPACIONAL "
+        ]
+      },
+      "notas": "Exige laudo fora das listas do ASO/voucher. 'Atestado de Saúde Bucal' (Protegy) não escreve odonto nem traz o CRO legível; sem SAUDE BUCAL ele era dado como ausente no teste em staging de 10/11. Medido em 10/11/2026 no texto gravado dos aprovados pela IA, contra o revisor, junto com as outras duas regras de 10/11 (psicológica, odontológica, EEG): set +6/−4, out +12/−6, nov 03–10 +6/0. Dos aprovados barrados, 9 conferidos no PDF: 8 sem o laudo no documento."
+    },
+    {
       "chave": "marca_laudo.audiometria",
       "perfil": "audiometria",
       "papel": "marca_laudo",
@@ -1081,18 +1141,27 @@
       "papel": "marca_laudo",
       "ordem": 80,
       "padrao_nome": "ELETROENCEFAL|\\bEEG\\b",
-      "condicao": null,
+      "condicao": {
+        "regex": "ELETROENCEFAL|\\bEEG\\b|ATIVIDADE DE BASE|RITMO DE BASE|FOTOESTIMUL|HIPERPNEIA|HIPERVENTILA|ONDAS (?:ALFA|TETA|DELTA)"
+      },
       "parametros": {
         "tipo": "EEG",
-        "estrategia": "marca"
+        "estrategia": "nome_fora_das_listas"
       },
       "motivo": null,
       "exemplos": {
         "nome_sim": [
           "ELETROENCEFALOGRAMA"
+        ],
+        "texto_sim": [
+          " LAUDO DE ELETROENCEFALOGRAMA ATIVIDADE DE BASE ORGANIZADA ",
+          " FOTOESTIMULACAO INTERMITENTE E HIPERPNEIA SEM ALTERACOES "
+        ],
+        "texto_nao": [
+          " ELETROCARDIOGRAMA RITMO SINUSAL "
         ]
       },
-      "notas": null
+      "notas": "Exige laudo fora das listas do ASO/voucher desde 10/11/2026; antes só classificava. O traçado é imagem: a marca é o laudo ou a descrição do exame. Medido em 10/11/2026 no texto gravado dos aprovados pela IA, contra o revisor, junto com as outras duas regras de 10/11 (psicológica, odontológica, EEG): set +6/−4, out +12/−6, nov 03–10 +6/0. Dos aprovados barrados, 9 conferidos no PDF: 8 sem o laudo no documento."
     },
     {
       "chave": "marca_laudo.glicose",
