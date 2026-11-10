@@ -185,6 +185,16 @@ def check_if_migration_needed() -> tuple[bool, list[str]]:
             logger.warning("⚠️  Migration 015 necessária: coluna pedido_exame_id ou reenvio_de não existe")
             migrations_needed.append("015_add_document_reenvio.sql")
 
+        # Verificar migration 019: regras de identificação de exame (STC-1052).
+        cursor.execute("""
+            SELECT table_name
+            FROM information_schema.tables
+            WHERE table_name='exam_report_rules'
+        """)
+        if not cursor.fetchone():
+            logger.warning("⚠️  Migration 019 necessária: tabela exam_report_rules não existe")
+            migrations_needed.append("019_add_exam_report_rules.sql")
+
         cursor.close()
         conn.close()
 
@@ -327,6 +337,46 @@ def run_data_migration() -> bool:
         return False
 
 
+def semear_regras_de_exame() -> bool:
+    """
+    Grava a carga inicial das regras de identificação de exame (migração 019)
+    quando a tabela existe e está vazia. Roda em todo startup: é só um COUNT
+    quando já há regras, e cobre a tabela criada por fora (create_all) sem a
+    carga. Regra desativada no painel continua na tabela, então nada é
+    regravado por cima da curadoria.
+    """
+    import psycopg2
+
+    database_url = os.getenv("DATABASE_URL")
+    if not database_url:
+        return False
+    conn = None
+    try:
+        conn = psycopg2.connect(database_url)
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT 1 FROM information_schema.tables WHERE table_name='exam_report_rules'"
+        )
+        existe = cursor.fetchone() is not None
+        cursor.close()
+        if not existe:
+            return False
+        from app.services import regras_identificacao
+
+        gravadas = regras_identificacao.semear_se_vazio(conn)
+        if gravadas:
+            regras_identificacao.invalidar()
+        return True
+    except Exception as e:
+        logger.exception(f"❌ Erro ao gravar a carga inicial das regras de exame: {e}")
+        if conn is not None:
+            conn.rollback()
+        return False
+    finally:
+        if conn is not None:
+            conn.close()
+
+
 def auto_migrate():
     """
     Função principal - executa migração automaticamente se necessário.
@@ -341,6 +391,7 @@ def auto_migrate():
 
     if not needs_migration:
         logger.info("Nenhuma migração necessária - banco já atualizado")
+        semear_regras_de_exame()
         return
 
     # 2. Executar migrações SQL
@@ -349,6 +400,10 @@ def auto_migrate():
     if not run_migration(migration_files):
         logger.error("Falha ao executar migração SQL - aplicação pode não funcionar corretamente")
         return
+
+    # Carga inicial das regras de exame (019). Fora do SQL porque ela vem do
+    # JSON que o teste de regressão também lê.
+    semear_regras_de_exame()
 
     # 3. Migrar dados existentes (somente se migration 001 foi executada)
     if "001_add_multi_tenant.sql" in migration_files:
