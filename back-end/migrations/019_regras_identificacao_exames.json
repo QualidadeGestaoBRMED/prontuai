@@ -776,6 +776,35 @@
       "notas": null
     },
     {
+      "chave": "prova_conteudo.rx_oit",
+      "perfil": "rx_oit",
+      "papel": "prova_conteudo",
+      "ordem": 55,
+      "padrao_nome": "OIT",
+      "condicao": {
+        "regex": "LEITURA RADIOLOGICA|PNEUMOCONIOSE|CLASSIFICACAO INTERNACIONAL|QUALIDADE TECNICA|QUALIDADE DA RADIOGRAFIA|PROFUSAO|PEQUENAS OPACIDADES|GRANDES OPACIDADES"
+      },
+      "parametros": {},
+      "motivo": "folha de leitura radiológica OIT preenchida",
+      "exemplos": {
+        "nome_sim": [
+          "RADIOGRAFIA DE TORAX PADRAO OIT"
+        ],
+        "nome_nao": [
+          "RADIOGRAFIA DE TORAX PA"
+        ],
+        "texto_sim": [
+          " FOLHA DE LEITURA RADIOLOGICA OIT 2011 CLASSIFICACAO INTERNACIONAL DE RADIOGRAFIAS DE PNEUMOCONIOSE ",
+          " QUALIDADE DA RADIOGRAFIA 1 PROFUSAO 0 0 PEQUENAS OPACIDADES "
+        ],
+        "texto_nao": [
+          " RADIOGRAFIA DE TORAX PADRAO OIT 04 11 2026 ",
+          " RAIO X DE TORAX CONCLUSAO NORMAL "
+        ]
+      },
+      "notas": "Recupera o RX OIT dado como faltante pela comparação quando a folha de leitura OIT está no documento. Medido em 10/11/2026 (set–nov, cópia de produção): muda 3 documentos, os 3 liberados pelo revisor; nenhum rejeitado tem a folha. Caso da Mediar de 04/11 (folha na p. 11, título lido inteiro pelo OCR)."
+    },
+    {
       "chave": "prova_conteudo.rx",
       "perfil": "rx",
       "papel": "prova_conteudo",

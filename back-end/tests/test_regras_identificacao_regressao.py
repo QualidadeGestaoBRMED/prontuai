@@ -23,6 +23,8 @@ mesma mudança (não pelo catálogo, que é o que se testa):
   - 10/11/2026 — avaliação psicológica, odontológica e EEG exigem laudo fora das
     listas do ASO/voucher (`marca_laudo.psicologica`, `.odontologica`, `.eeg`).
     Campos `nomes.*.tipo` e `trechos.*.falta_laudo`. Medição nas notas das regras.
+  - 10/11/2026 — RX OIT dado como faltante é recuperado pela folha de leitura OIT
+    (`prova_conteudo.rx_oit`). Campo `trechos.*.faltante`.
 
 Rodar: PYTHONPATH=back-end pytest back-end/tests/test_regras_identificacao_regressao.py -q --noconftest
 """
