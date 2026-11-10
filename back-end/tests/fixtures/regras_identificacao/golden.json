@@ -15019,7 +15019,9 @@
     "TRIGLICERÍDEOS": "LIPIDES",
     "VDRL": "SOROLOGIA"
    },
-   "faltante": {},
+   "faltante": {
+    "RADIOGRAFIA DE TÓRAX - PADRÃO OIT": "folha de leitura radiológica OIT preenchida"
+   },
    "filtro": [
     "RADIOGRAFIA DE TÓRAX PA"
    ],
@@ -15077,7 +15079,9 @@
     "TRIGLICERÍDEOS": "LIPIDES",
     "VDRL": "SOROLOGIA"
    },
-   "faltante": {},
+   "faltante": {
+    "RADIOGRAFIA DE TÓRAX - PADRÃO OIT": "folha de leitura radiológica OIT preenchida"
+   },
    "filtro": [],
    "ident": [
     [

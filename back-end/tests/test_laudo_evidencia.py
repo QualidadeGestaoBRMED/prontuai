@@ -80,6 +80,23 @@ def test_rx_reconhecido_pela_conclusao_do_laudo():
     assert status["RADIOGRAFIA DE COLUNA LOMBO SACRA AP/PERFIL"] == "encontrado"
 
 
+def test_rx_oit_recuperado_pela_folha_de_leitura():
+    # Mediar, 04/11/2026: a comparação não listou a folha e o RX OIT saiu faltante.
+    folha = ("FOLHA DE LEITURA RADIOLÓGICA OIT 2011 CLASSIFICAÇÃO INTERNACIONAL DE RADIOGRAFIAS "
+             "DE PNEUMOCONIOSE 1A QUALIDADE TÉCNICA 1 2 3 4 1B RADIOGRAFIA NORMAL Sim")
+    status, mud = ajusta([("RADIOGRAFIA DE TÓRAX - PADRÃO OIT", "faltante")], folha)
+    assert status["RADIOGRAFIA DE TÓRAX - PADRÃO OIT"] == "encontrado"
+    assert mud[0]["regra"] == "conteudo_do_laudo"
+    assert "OIT" in le.evidencia_de_faltante(norm("RADIOGRAFIA DE TÓRAX - PADRÃO OIT"), md(folha))
+
+
+def test_rx_oit_so_listado_nao_e_recuperado_pela_folha():
+    # A lista do ASO cita o exame, mas não traz nenhum termo da folha OIT.
+    lista = "Procedimentos realizados RADIOGRAFIA DE TÓRAX PADRÃO OIT 04/11/2026 Conclusão / Conclusion apto"
+    motivo = le.evidencia_de_faltante(norm("RADIOGRAFIA DE TÓRAX - PADRÃO OIT"), md(lista)) or ""
+    assert "OIT" not in motivo
+
+
 FICHA_ACUIDADE = ("ACUIDADE VISUAL Método de avaliação: Escala optométrica de Snellen "
                   "Com correção ( ) Sem correção (X) Olho direito {od} Olho esquerdo {oe} "
                   "Teste de Ishihara: normal")
