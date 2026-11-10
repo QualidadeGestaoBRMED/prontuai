@@ -31,6 +31,22 @@ Ajustes de 03/11/2026: Clínico, glicemia, teste ergométrico e GGT passaram a e
 laudo. Regras escolhidas nos envios de 14/09 a 18/10 e confirmadas nos de 19/10 a
 03/11 (5.863 documentos revisados, contra a decisão do revisor): +39 corrigidos, −7.
 Hemograma ficou FORA (+17, −31) e reticulócitos também (+4, −4).
+
+Ajustes de 10/11/2026: avaliação psicológica, avaliação odontológica e EEG passaram a
+exigir laudo FORA das listas de exames (ASO, voucher, e-mail de agendamento), como o
+teste ergométrico. Na conferência das divergências de novembro no PDF, "só listado"
+era a maior causa de aprovação indevida (22 de 87), e esses três tipos não tinham
+nenhuma exigência. Medido no texto gravado dos aprovados pela IA, contra a decisão
+do revisor e só nos documentos que as regras anteriores não barravam: setembro
++6/−4, outubro +12/−6, novembro (03–10/11) +6/0; 8 dos 788 aprovados sem revisão
+iriam para a fila. Dos 10 aprovados que passariam a ser barrados, 9 foram
+conferidos no PDF: em 8 o laudo não está no documento (o revisor aprovou sem ele)
+e o outro é a anamnese psicossocial de altura, que não é avaliação psicológica. A marca da psicológica
+inclui a bateria de testes porque há laudo que não escreve "psicológica" fora do
+título da lista ("INSTRUMENTOS UTILIZADOS PALOGRÁFICO BETA III"), e a da odontológica
+aceita o "Atestado de Saúde Bucal" da Protegy, que não escreve "odonto" nem traz o
+CRO legível (no teste em staging de 10/11 ele era dado como ausente). Acuidade ficou
+FORA: a mesma regra dava +3/−3. Psicossocial e RX comum também (+1/−10 e +2/−9).
 """
 from __future__ import annotations
 
@@ -113,8 +129,16 @@ _TIPOS: list[tuple[str, re.Pattern, re.Pattern]] = [
     ("CLINICO", re.compile(r"\bCLINICO\b"),
      re.compile(r"\bFICHA (MEDICA|CLINICA)\b|\bPRONTUARIO (MEDICO|CLINICO)\b"
                 r"|^(?=.*ANAMNESE)(?=.*(?:EXAME FISICO|PRESSAO ARTERIAL|AUSCULTA|FREQUENCIA CARDIACA))")),
-    # Marca julgada fora das listas, em `falta_laudo`.
-    ("ERGOMETRICO", re.compile(r"ERGOMETRI"), None),
+    # Marca julgada fora das listas (`_MARCA_FORA_DAS_LISTAS`): o próprio nome do
+    # exame é a marca, desde que não esteja só na lista do ASO ou do voucher.
+    ("ERGOMETRICO", re.compile(r"ERGOMETRI"), re.compile(r"ERGOMETRI")),
+    # Psicossocial não casa aqui ("PSICOSSOCIAL" não tem PSICOLOG) e fica sem
+    # exigência: o formulário de anamnese psicossocial não tem marca estável.
+    ("PSICOLOGICA", re.compile(r"PSICOLOG"),
+     re.compile(r"PSICOLOG|\bCRP\b|PALOGRAF|INSTRUMENTOS UTILIZADOS|ATENCAO (?:CONCENTRADA|DIFUSA|DIVIDIDA)"
+                r"|BETA III|\bTADIM\b|\bBPA\b|\bBFP\b|PERSONALIDADE|PSICOTECNIC|\bTEPIC\b|\bAC 15\b")),
+    # "Atestado de Saúde Bucal" (Protegy) não escreve "odonto" nem o CRO legível.
+    ("ODONTOLOGICA", re.compile(r"ODONTOL"), re.compile(r"ODONTO|\bCRO\b|DENTISTA|SAUDE BUCAL")),
     ("AUDIOMETRIA", re.compile(r"AUDIOMETR"),
      re.compile(r"ORELHA (DIREITA|ESQUERDA)|\bKHZ\b|VIA AEREA|LIMIARES|LOGOAUDIOMETRIA|\bIRF\b|\bSRT\b|\bLRF\b")),
     # A ficha OIT da CMTL escreve "Qualidade da radiografia", "Profusão" e "Pequenas
@@ -128,7 +152,10 @@ _TIPOS: list[tuple[str, re.Pattern, re.Pattern]] = [
     ("ESPIROMETRIA", re.compile(r"ESPIROMETR"), None),
     ("ECG", re.compile(r"ELETROCARDIO|\bECG\b"),
      re.compile(r"RITMO SINUSAL|\bQRS\b|\bEIXO\b|INTERVALO PR|\bQTC?\b|\bBPM\b")),
-    ("EEG", re.compile(r"ELETROENCEFAL|\bEEG\b"), None),
+    # O traçado é imagem; o que o texto traz é o laudo ou a descrição do exame.
+    ("EEG", re.compile(r"ELETROENCEFAL|\bEEG\b"),
+     re.compile(r"ELETROENCEFAL|\bEEG\b|ATIVIDADE DE BASE|RITMO DE BASE|FOTOESTIMUL|HIPERPNEIA"
+                r"|HIPERVENTILA|ONDAS (?:ALFA|TETA|DELTA)")),
     # As duas palavras em qualquer ponto do documento. Exigir uma perto da outra
     # barrava mais documentos certos do que pegava (replay de 05/10).
     ("GLICOSE", re.compile(r"GLICEMIA|GLICOSE"),
@@ -236,15 +263,17 @@ def _sorologia_tem_laudo(exame_norm: str, markdown_norm: str, marca_documento: r
     return bool(marca_documento.search(markdown_norm))
 
 
-_ERGOMETRICO_NOME = re.compile(r"ERGOMETRI")
+# Tipos cuja marca só vale fora das listas de exames: o nome deles é a própria
+# marca (ou parte dela) e aparece em toda lista do ASO.
+_MARCA_FORA_DAS_LISTAS = frozenset({"ERGOMETRICO", "PSICOLOGICA", "ODONTOLOGICA", "EEG"})
 
 
 def falta_laudo(exame_norm: str, markdown_norm: str) -> Optional[str]:
     """Tipo do exame quando ele exige laudo e a marca do laudo não está no documento."""
     for nome, padrao, marca in _TIPOS:
         if padrao.search(exame_norm):
-            if nome == "ERGOMETRICO":
-                return None if _ERGOMETRICO_NOME.search(sem_listas(markdown_norm)) else nome
+            if nome in _MARCA_FORA_DAS_LISTAS:
+                return None if marca.search(sem_listas(markdown_norm)) else nome
             if nome == "GGT":
                 evidencia, _linha = evidencia_laboratorio.avaliar(markdown_norm, exame_norm)
                 return nome if evidencia == evidencia_laboratorio.SO_LISTA else None

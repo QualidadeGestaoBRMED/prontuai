@@ -189,6 +189,52 @@ def test_ergometrico_so_na_lista_vira_faltante_e_com_laudo_continua():
     assert ajusta(item, f"{lista} LAUDO DE TESTE ERGOMÉTRICO protocolo de Bruce")[0]["TESTE ERGOMÉTRICO"] == "encontrado"
 
 
+# Formatos das divergências de novembro/2026 conferidas no PDF: o exame só aparece
+# na lista "Procedimentos realizados" do ASO ou no voucher BR MED.
+LISTA_ASO = ("ATESTADO DE SAÚDE OCUPACIONAL Procedimentos realizados / Exames complementares: "
+             "AVALIAÇÃO PSICOLÓGICA 05/11/2026 AVALIAÇÃO ODONTOLÓGICA 05/11/2026 "
+             "ELETROENCEFALOGRAMA 05/11/2026 Conclusão / Conclusion: Paciente é considerado apto")
+VOUCHER = ("04 Exames AVALIAÇÃO PSICOLÓGICA AVALIAÇÃO ODONTOLÓGICA ELETROENCEFALOGRAMA "
+           "Todos os exames listados são obrigatórios")
+TRES = [("AVALIAÇÃO PSICOLÓGICA", "encontrado"), ("AVALIAÇÃO ODONTOLÓGICA", "encontrado"),
+        ("ELETROENCEFALOGRAMA", "encontrado")]
+
+
+@pytest.mark.parametrize("lista", [LISTA_ASO, VOUCHER])
+def test_psicologica_odontologica_e_eeg_so_listados_viram_faltantes(lista):
+    status, mud = ajusta(TRES, lista)
+    assert set(status.values()) == {"faltante"}
+    assert {m["tipo"] for m in mud} == {"PSICOLOGICA", "ODONTOLOGICA", "EEG"}
+
+
+@pytest.mark.parametrize("exame,laudo", [
+    ("AVALIAÇÃO PSICOLÓGICA", "PARECER PSICOLÓGICO Conclusão: apto. Psicóloga CRP 06/12345"),
+    # Laudo que só traz a bateria de testes, sem a palavra "psicológica".
+    ("AVALIAÇÃO PSICOLÓGICA", "Instrumentos utilizados: Palográfico, Beta III, CTA AC e entrevista"),
+    ("AVALIAÇÃO PSICOLÓGICA", "Teste de atenção concentrada: médio superior"),
+    ("AVALIAÇÃO ODONTOLÓGICA", "Odontograma sem alterações. Cirurgião-dentista CRO 1234"),
+    # Protegy: o título é o único sinal no texto.
+    ("AVALIAÇÃO ODONTOLÓGICA", "## ATESTADO DE SAÚDE BUCAL Assoalho bucal sem alterações"),
+    ("ELETROENCEFALOGRAMA", "Laudo de eletroencefalograma: atividade de base organizada"),
+    ("ELETROENCEFALOGRAMA", "Fotoestimulação intermitente e hiperpneia sem alterações"),
+])
+def test_psicologica_odontologica_e_eeg_com_laudo_continuam(exame, laudo):
+    status, mud = ajusta([(exame, "encontrado")], f"{LISTA_ASO} {laudo}")
+    assert status[exame] == "encontrado" and not mud
+
+
+def test_psicossocial_nao_e_exigido_como_psicologica():
+    # A anamnese psicossocial de altura não tem marca estável: fica sem exigência.
+    assert le.tipo_do_exame(norm("PSICOSSOCIAL")) is None
+    status, mud = ajusta([("PSICOSSOCIAL", "encontrado")], "Procedimentos realizados PSICOSSOCIAL 26/10/2026")
+    assert status["PSICOSSOCIAL"] == "encontrado" and not mud
+
+
+def test_eeg_e_classificado_antes_do_ecg():
+    assert le.tipo_do_exame(norm("ELETROENCEFALOGRAMA")) == "EEG"
+    assert le.tipo_do_exame(norm("ELETROCARDIOGRAMA")) == "ECG"
+
+
 def test_ggt_julgado_pelo_resultado_perto_do_nome():
     # A normalização do motor reescreve "GAMA-GT" e "GAMA GLUTAMIL TRANSFERASE" como GGT.
     item = [("GGT", "encontrado")]
