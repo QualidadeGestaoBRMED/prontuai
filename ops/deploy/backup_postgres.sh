@@ -14,11 +14,12 @@
 #                                          fica SO local (sem copia externa) e o script avisa
 #                                          em vez de falhar — util antes de configurar o R2/S3.
 #   BACKUP_S3_PREFIX                    - prefixo base no bucket (default: postgres-backups/prontuai).
-#                                          O script acrescenta a cadencia: <prefixo>/daily|weekly|monthly
+#                                          O script acrescenta a cadencia: <prefixo>/daily|weekly|monthly|predeploy
 #   BACKUP_COMPRESS                     - metodo/nivel do pg_dump (default: zstd:19). Requer pg_dump 16+;
 #                                          com binario mais antigo cai no zlib padrao automaticamente
-#   BACKUP_CADENCE_OVERRIDE             - forca "daily"/"weekly"/"monthly" (default: decidido pela data).
-#                                          Util para gerar um completo sob demanda antes de uma migracao
+#   BACKUP_CADENCE_OVERRIDE             - forca "daily"/"weekly"/"monthly"/"predeploy" (default: decidido
+#                                          pela data). "predeploy" e o dump de garantia do deploy (workflow e
+#                                          deploy_vps.sh): completo, em pasta propria, com retencao curta
 #   BACKUP_S3_ENDPOINT_URL              - endpoint S3-compativel (vazio = AWS S3 padrao;
 #                                          para R2: https://<account_id>.r2.cloudflarestorage.com)
 #   BACKUP_S3_REGION                    - default: auto (funciona pro R2; use us-east-1 etc para AWS S3)
@@ -88,6 +89,11 @@ TIMESTAMP="$(date -u +%Y%m%d-%H%M%S)"
 #   monthly/  dia 1 do mes   - completo, retencao infinita (lifecycle nao expira)
 #   weekly/   domingo        - completo, retencao ~90d
 #   daily/    demais dias    - SEM audit_logs, retencao ~30d
+#   predeploy/ antes do deploy - completo, retencao ~14d (so via BACKUP_CADENCE_OVERRIDE)
+#
+# O dump do deploy tem pasta propria por dois motivos medidos em 10/11/26: caindo
+# no daily/, ele era 25 dos 53 diarios (2,4 GB, metade da faixa) e saia sem
+# audit_logs — o dump de garantia de uma migracao nao cobria a trilha.
 #
 # audit_logs cresce ~1.150 linhas por dia util (~23 MB/mes) e e imutavel depois
 # de escrita. Mante-la no dump diario significaria reenviar o mesmo dado 365
@@ -106,6 +112,12 @@ else
   BACKUP_CADENCE="daily"
 fi
 BACKUP_CADENCE="${BACKUP_CADENCE_OVERRIDE:-$BACKUP_CADENCE}"
+# A cadencia vira pasta no bucket: um erro de digitacao criaria uma faixa que
+# nenhuma lifecycle rule nem o offload alcancam.
+case "$BACKUP_CADENCE" in
+  daily|weekly|monthly|predeploy) ;;
+  *) die "BACKUP_CADENCE_OVERRIDE invalido: $BACKUP_CADENCE (use daily, weekly, monthly ou predeploy)" ;;
+esac
 
 PG_DUMP_SCOPE_ARGS=()
 if [ "$BACKUP_CADENCE" = "daily" ]; then
@@ -141,8 +153,14 @@ fi
 # pg_dump em formato custom (-Fc): ja comprimido, restauravel com pg_restore
 # e permite restaurar tabelas/objetos individualmente se preciso.
 # Detecta suporte a zstd; pg_dump < 16 so aceita nivel numerico (zlib).
+#
+# Sem pipe direto para o grep: com pipefail, o `grep -q` sai no primeiro match e
+# fecha o pipe, o `docker exec` ainda escrevendo morre de SIGPIPE e o teste
+# inteiro falha. Era um sorteio: 03, 05 e 10/11/26 sairam em zlib, 2,2-2,5x
+# maiores que os vizinhos em zstd.
 PG_COMPRESS_ARGS=()
-if docker exec prontuai-db pg_dump --help 2>/dev/null | grep -q -- '--compress=METHOD'; then
+PG_DUMP_HELP="$(docker exec prontuai-db pg_dump --help 2>/dev/null || true)"
+if grep -q -- '--compress=METHOD' <<<"$PG_DUMP_HELP"; then
   PG_COMPRESS_ARGS+=(--compress="$BACKUP_COMPRESS")
 else
   log "AVISO: pg_dump sem suporte a --compress=METHOD; usando compressao zlib padrao do -Fc."

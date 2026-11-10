@@ -124,6 +124,11 @@ distintos, para que cada faixa tenha sua propria regra de expiracao:
 | `monthly/` | dia 1 do mes  | completo         | nunca expira      |
 | `weekly/`  | domingo       | completo         | 90 dias           |
 | `daily/`   | demais dias   | sem `audit_logs` | 30 dias           |
+| `predeploy/` | antes de todo deploy | completo | 14 dias          |
+
+`predeploy/` nao sai da data: o workflow de deploy e o `deploy_vps.sh` chamam o
+script com `BACKUP_CADENCE_OVERRIDE=predeploy`. Antes de 10/11/26 esse dump caia
+no `daily/` em dia util — eram 25 de 53 diarios — e saia sem `audit_logs`.
 
 `audit_logs` cresce ~1.150 linhas por dia util (~23 MB/mes) e nao muda depois
 de escrita. Mante-la no dump diario custaria reenviar o mesmo dado 365 vezes
@@ -144,7 +149,10 @@ aws s3api put-bucket-lifecycle-configuration --bucket <bucket> \
        "Expiration":{"Days":30}},
       {"ID":"weekly-90d","Status":"Enabled",
        "Filter":{"Prefix":"postgres-backups/prontuai/weekly/"},
-       "Expiration":{"Days":90}}
+       "Expiration":{"Days":90}},
+      {"ID":"predeploy-14d","Status":"Enabled",
+       "Filter":{"Prefix":"postgres-backups/prontuai/predeploy/"},
+       "Expiration":{"Days":14}}
     ]}'
 ```
 

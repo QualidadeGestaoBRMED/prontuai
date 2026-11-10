@@ -221,7 +221,9 @@ jobs:
           if [ -x "$DB_DEPLOY_DIR/script/backup_postgres.sh" ]; then
             echo ">> backup via $DB_DEPLOY_DIR/script/backup_postgres.sh (vai para o bucket)"
             cd "$DB_DEPLOY_DIR"
-            ./script/backup_postgres.sh
+            # predeploy/: completo (com audit_logs) e fora do daily/, que o
+            # dump de deploy enchia (25 de 53 diarios em 10/11/26).
+            BACKUP_CADENCE_OVERRIDE=predeploy ./script/backup_postgres.sh
             exit 0
           fi
 
