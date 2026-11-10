@@ -22,8 +22,10 @@ de crontab do usuario (sobrevive a reboot, tem logs no journal, e retry via
 ## Instalar
 
 ```bash
-# copie os scripts + lib.sh para a pasta dedicada na VPS (uma vez, e de novo
-# sempre que editar os scripts — nao ha CI para isso ainda):
+# copie os scripts + lib.sh para a pasta dedicada na VPS. So na instalacao:
+# depois disso, o workflow .github/workflows/db-scripts-sync.yml leva cada
+# mudanca mergeada na v1 (a versao anterior fica em script/.anterior/).
+# Os units do systemd abaixo continuam manuais.
 mkdir -p /home/ec2-user/prontuai-db/script
 cp ops/deploy/backup_postgres.sh ops/deploy/restore_postgres.sh \
    ops/deploy/purge_old_records.sh ops/deploy/archive_documents_to_drive.sh \

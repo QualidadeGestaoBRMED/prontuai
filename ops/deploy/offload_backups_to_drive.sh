@@ -21,7 +21,9 @@
 # Por que daily/ fica de fora no default: o backup_postgres.sh conta com uma
 # lifecycle rule expirando daily/ em ~30 dias. Mover um diario para o Drive o
 # tornaria eterno (o Drive nao tem lifecycle) por um dado que ia sumir de
-# qualquer forma. monthly/ e o que cresce sem limite (retencao infinita), e e
+# qualquer forma. O mesmo vale para predeploy/ (lifecycle de ~14 dias); ele
+# so e aceito em OFFLOAD_CADENCES para uma execucao manual de emergencia.
+# monthly/ e o que cresce sem limite (retencao infinita), e e
 # por isso que vem antes de weekly/.
 #
 # `legado` sao os dumps soltos na raiz do prefixo, sem subpasta de cadencia:
@@ -106,7 +108,7 @@ awk -v t="$GATILHO_GB" -v a="$ALVO_GB" 'BEGIN { exit !(t+0 > 0 && a+0 > 0 && a+0
 case "$MANTER" in ''|*[!0-9]*) die "OFFLOAD_KEEP_LATEST invalido: $MANTER" ;; esac
 [ "$MANTER" -ge 1 ] || die "OFFLOAD_KEEP_LATEST tem que ser >= 1: o restore de emergencia sai do R2."
 for c in $CADENCIAS; do
-  case "$c" in legado|daily|weekly|monthly) ;; *) die "Cadencia invalida em OFFLOAD_CADENCES: $c" ;; esac
+  case "$c" in legado|daily|weekly|monthly|predeploy) ;; *) die "Cadencia invalida em OFFLOAD_CADENCES: $c" ;; esac
 done
 
 # ---------------------------------------------------------------------------

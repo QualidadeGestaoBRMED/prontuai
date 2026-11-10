@@ -1,0 +1,132 @@
+name: DB Scripts Sync
+
+# Leva os scripts de manutencao do banco (backup, offload, purga, arquivamento,
+# restore e o lib.sh que todos usam) para /home/ec2-user/prontuai-db/script/ no
+# EC2, de onde os timers do systemd os executam. Antes era copia manual, e a
+# correcao de compressao do backup (STC-1057) ficaria no repo sem chegar ao host.
+#
+# Workflow separado do deploy de proposito: mudar um script nao deve rebuildar a
+# imagem nem reiniciar o back-end (o JobManager e em memoria; restart derruba
+# job em andamento).
+#
+# Os units do systemd (ops/deploy/systemd/) NAO entram: exigem sudo e
+# daemon-reload, e continuam manuais.
+
+on:
+  push:
+    branches:
+      - v1
+    paths:
+      - "ops/deploy/lib.sh"
+      - "ops/deploy/backup_postgres.sh"
+      - "ops/deploy/restore_postgres.sh"
+      - "ops/deploy/purge_old_records.sh"
+      - "ops/deploy/archive_documents_to_drive.sh"
+      - "ops/deploy/offload_backups_to_drive.sh"
+      - ".github/workflows/db-scripts-sync.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Grupo proprio, e nao o backend-deploy-v1: o GitHub guarda so UM run pendente
+# por grupo e cancela o pendente anterior quando chega outro — um sync na fila
+# poderia cancelar um deploy em silencio. Rodar ao lado do deploy e seguro: a
+# troca e por rename (ver abaixo), entao um backup em execucao nao e afetado.
+concurrency:
+  group: db-scripts-sync
+  cancel-in-progress: false
+
+env:
+  DB_DEPLOY_DIR: ${{ vars.AWS_VPS_DB_DEPLOY_DIR || '/home/ec2-user/prontuai-db' }}
+  # lib.sh primeiro: script novo com lib velho pode chamar funcao que nao
+  # existe; o contrario (lib novo, script velho) e compativel.
+  SCRIPTS: >-
+    lib.sh
+    backup_postgres.sh
+    restore_postgres.sh
+    purge_old_records.sh
+    archive_documents_to_drive.sh
+    offload_backups_to_drive.sh
+
+jobs:
+  sync:
+    name: Sync DB scripts to EC2
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/v1'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Check script syntax
+        run: |
+          set -euo pipefail
+          for f in $SCRIPTS; do bash -n "ops/deploy/$f"; echo "ok  $f"; done
+
+      - name: Prepare SSH key
+        env:
+          AWS_VPS_SSH_KEY: ${{ secrets.AWS_VPS_SSH_KEY }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$AWS_VPS_SSH_KEY" > ~/.ssh/aws_vps_key
+          chmod 600 ~/.ssh/aws_vps_key
+
+      - name: Upload and install on EC2
+        env:
+          AWS_VPS_HOST: ${{ secrets.AWS_VPS_HOST }}
+          AWS_VPS_USER: ${{ secrets.AWS_VPS_USER }}
+          AWS_VPS_PORT: ${{ vars.AWS_VPS_PORT || '22' }}
+        run: |
+          set -euo pipefail
+          SSH_OPTS=(-i ~/.ssh/aws_vps_key -o StrictHostKeyChecking=accept-new
+                    -o ServerAliveInterval=30 -o ServerAliveCountMax=20)
+          destino="$AWS_VPS_USER@$AWS_VPS_HOST"
+          novo="$DB_DEPLOY_DIR/script/.novo"
+
+          # Sobe para uma pasta de espera, nunca direto sobre os scripts: um
+          # scp interrompido deixaria um script pela metade para o timer rodar.
+          ssh "${SSH_OPTS[@]}" -p "$AWS_VPS_PORT" "$destino" \
+            "rm -rf '$novo' && mkdir -p '$novo'"
+          arquivos=()
+          for f in $SCRIPTS; do arquivos+=("ops/deploy/$f"); done
+          scp "${SSH_OPTS[@]}" -P "$AWS_VPS_PORT" "${arquivos[@]}" "$destino:$novo/"
+
+          ssh "${SSH_OPTS[@]}" -p "$AWS_VPS_PORT" "$destino" \
+            "DB_DEPLOY_DIR='$DB_DEPLOY_DIR' SCRIPTS='$SCRIPTS' bash -s" <<'REMOTE'
+          set -euo pipefail
+          dir="$DB_DEPLOY_DIR/script"
+          novo="$dir/.novo"
+          anterior="$dir/.anterior"
+
+          # Confere tudo antes de trocar qualquer um: ou entra o conjunto, ou nada.
+          for f in $SCRIPTS; do
+            [ -s "$novo/$f" ] || { echo "Faltou $f no upload; nada foi trocado." >&2; exit 1; }
+            bash -n "$novo/$f"
+          done
+
+          mkdir -p "$anterior"
+          for f in $SCRIPTS; do
+            if [ -f "$dir/$f" ] && cmp -s "$novo/$f" "$dir/$f"; then
+              echo "=  $f (igual)"
+              rm -f "$novo/$f"
+              continue
+            fi
+            if [ -f "$dir/$f" ]; then
+              # So a versao imediatamente anterior; para voltar:
+              #   cp -p .anterior/<arquivo> <arquivo>
+              cp -p "$dir/$f" "$anterior/$f"
+              echo "~  $f (versao anterior em script/.anterior/)"
+            else
+              echo "+  $f (novo no host)"
+            fi
+            chmod 755 "$novo/$f"
+            # rename e atomico: um backup/offload em execucao segue lendo o
+            # arquivo antigo (bash le o script aos poucos; sobrescrever no lugar
+            # corromperia a execucao em andamento).
+            mv -f "$novo/$f" "$dir/$f"
+          done
+          rm -rf "$novo"
+
+          echo "--- sha256 no host"
+          cd "$dir" && sha256sum $SCRIPTS
+          REMOTE

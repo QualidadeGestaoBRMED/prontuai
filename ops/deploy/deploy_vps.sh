@@ -324,11 +324,12 @@ if [ "$NEEDS_DUMP" -eq 1 ]; then
   else
     # Reusa o backup_postgres.sh da VPS quando existir: ele ja sabe comprimir,
     # mandar para o bucket e respeitar a retencao — e agora pega o flock, entao
-    # nao concorre com a purga semanal.
+    # nao concorre com a purga semanal. predeploy/ = completo e fora do daily/
+    # (mesma cadencia do workflow; ver backup_postgres.sh).
     if remote "test -x '$DB_DEPLOY_DIR/script/backup_postgres.sh'"; then
-      info "usando $DB_DEPLOY_DIR/script/backup_postgres.sh (vai para o bucket)"
-      trace "$DB_DEPLOY_DIR/script/backup_postgres.sh"
-      remote "cd '$DB_DEPLOY_DIR' && ./script/backup_postgres.sh" \
+      info "usando $DB_DEPLOY_DIR/script/backup_postgres.sh (vai para o bucket, em predeploy/)"
+      trace "BACKUP_CADENCE_OVERRIDE=predeploy $DB_DEPLOY_DIR/script/backup_postgres.sh"
+      remote "cd '$DB_DEPLOY_DIR' && BACKUP_CADENCE_OVERRIDE=predeploy ./script/backup_postgres.sh" \
         || die "O backup falhou. NAO vou implantar sem dump.
   Se o banco estiver indisponivel, resolva isso primeiro; se precisar seguir
   mesmo assim (ciente do risco), use --skip-dump."
