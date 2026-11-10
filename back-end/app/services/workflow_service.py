@@ -6,7 +6,7 @@ from typing import Dict, Any, Optional, List
 from fastapi import UploadFile
 from app.services import ocr_service, brmed_service, validacao_service
 from app.services import exam_catalog_source, laudo_evidencia, evidencia_laboratorio, identidade_laudo, layout_ocr
-from app.services import data_exame, monitoramento_checagem, nomes_conhecidos, regras_identificacao
+from app.services import data_exame, monitoramento_checagem, nomes_conhecidos, regras_identificacao, sinais_vitais
 from app.core.config import settings
 from app.core import metrics
 from app.core.pii import mask_cpf, mask_identifier, mask_name
@@ -419,7 +419,8 @@ def _outra_pessoa_sem_brnet(
 
 def decisao_da_ia(resultado: dict) -> str:
     """O `validation_status` com que o documento é gravado: "validated" (Aprovado
-    pela IA) só sem exame faltante, sem laudo de outra pessoa e sem coleta antiga; "pending"
+    pela IA) só sem exame faltante, sem laudo de outra pessoa, sem coleta antiga e sem
+    sinais vitais impossíveis na ficha; "pending"
     (Rejeitado pela IA, vai à Checagem) no resto; "rejected" quando o
     processamento falhou."""
     if resultado.get("status") == "error":
@@ -430,6 +431,7 @@ def decisao_da_ia(resultado: dict) -> str:
         or validacao.get("exames_faltantes")
         or validacao.get("outra_pessoa")
         or validacao.get("data_antiga")
+        or validacao.get("sinais_vitais")
     ):
         return "pending"
     return "validated"
@@ -1507,6 +1509,19 @@ async def _processar_documento_completo_impl(
         )
         _log_event("kit_vix_ausente", run_id=run_id)
 
+    # Peso e altura impossíveis na ficha médica (trocados na digitação): vai à
+    # checagem com o aviso, sem mexer nos exames. Ver `sinais_vitais`.
+    sinais_impossiveis = None
+    if not resultado_validacao.get("erro"):
+        try:
+            sinais_impossiveis = sinais_vitais.incoerencia(markdown_content or "")
+        except Exception as e:
+            logger.warning(f"[WORKFLOW] Checagem de sinais vitais falhou: {type(e).__name__}")
+    if sinais_impossiveis:
+        resultado_validacao["status_liberado"] = False
+        mensagem = (resultado_validacao.get("mensagem") or "").strip()
+        resultado_validacao["mensagem"] = f"{mensagem} {sinais_vitais.motivo(sinais_impossiveis)}".strip()
+        _log_event("sinais_vitais_impossiveis", run_id=run_id)
     await send_progress(90, "validacao", "Validação concluída, preparando resultado...")
     logger.info(f"[WORKFLOW] Validação concluída.")
     _log_event(
@@ -1639,6 +1654,8 @@ async def _processar_documento_completo_impl(
     }
     if falta_kit_vix:
         confidence_details["kit_vix_ausente"] = True
+    if sinais_impossiveis:
+        confidence_details["sinais_vitais_impossiveis"] = True
     if exames_so_lista:
         confidence_details["exames_so_lista"] = exames_so_lista
     if exames_data_antiga:
@@ -1713,6 +1730,7 @@ async def _processar_documento_completo_impl(
             # Rejeita sem faltante: ver `decisao_da_ia`.
             "outra_pessoa": rejeitado_por_outra_pessoa,
             "data_antiga": rejeitado_por_data,
+            "sinais_vitais": sinais_impossiveis,
             "analysis": resultado_validacao["mensagem"]
         },
         "status": "success"  # Será ajustado abaixo se houver erro
