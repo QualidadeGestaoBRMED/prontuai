@@ -85,6 +85,13 @@ _ACUIDADE_TABELA = re.compile(
     r"OLHO DIREITO OLHO ESQUERDO (?:S C |C C |SEM CORRECAO |COM CORRECAO )?20 \d{2,3}\b"
 )
 _SENSO_CROMATICO = re.compile(r"ISHIHARA|CROMATIC")
+# Folha de leitura radiológica OIT: o laudo do RX de tórax padrão OIT. A ficha da
+# CMTL escreve "Qualidade da radiografia", "Profusão" e "Pequenas opacidades" no
+# lugar das quatro primeiras. Também é a marca de (2), em `_TIPOS`.
+_FOLHA_OIT = re.compile(
+    r"LEITURA RADIOLOGICA|PNEUMOCONIOSE|CLASSIFICACAO INTERNACIONAL|QUALIDADE TECNICA"
+    r"|QUALIDADE DA RADIOGRAFIA|PROFUSAO|PEQUENAS OPACIDADES|GRANDES OPACIDADES"
+)
 
 
 def evidencia_de_faltante(exame_norm: str, markdown_norm: str) -> Optional[str]:
@@ -105,6 +112,11 @@ def evidencia_de_faltante(exame_norm: str, markdown_norm: str) -> Optional[str]:
                 return "laudo de etanol em urina"
         elif _ETANOL_SANGUE.search(markdown_norm):
             return "laudo de etanol em sangue/soro"
+    # Antes do RX comum: a folha OIT não escreve "conclusão" perto de "radiografia".
+    # Medido em 10/11/2026 (set–nov): RX OIT faltante com a folha no texto = 6
+    # documentos, todos liberados pelo revisor; nenhum rejeitado tem a folha.
+    if "OIT" in exame_norm and _FOLHA_OIT.search(markdown_norm):
+        return "folha de leitura radiológica OIT preenchida"
     if re.search(r"RADIOGRAF|RAIO X|\bRX\b", exame_norm) and _RX_COM_CONCLUSAO.search(markdown_norm):
         return "laudo radiológico com conclusão"
     if "ACUIDADE" in exame_norm and (
@@ -145,9 +157,7 @@ _TIPOS: list[tuple[str, re.Pattern, re.Pattern]] = [
     # opacidades", e nenhuma das quatro primeiras marcas: era rebaixada em todo envio.
     # De 14/09 a 19/10, 7 documentos dela; o revisor aprovou 6 e rejeitou 1 por data
     # invertida no ASO.
-    ("RX_OIT", re.compile(r"OIT"),
-     re.compile(r"LEITURA RADIOLOGICA|PNEUMOCONIOSE|CLASSIFICACAO INTERNACIONAL|QUALIDADE TECNICA"
-                r"|QUALIDADE DA RADIOGRAFIA|PROFUSAO|PEQUENAS OPACIDADES|GRANDES OPACIDADES")),
+    ("RX_OIT", re.compile(r"OIT"), _FOLHA_OIT),
     ("RX", re.compile(r"RADIOGRAF|RAIO X|\bRX\b"), None),
     ("ESPIROMETRIA", re.compile(r"ESPIROMETR"), None),
     ("ECG", re.compile(r"ELETROCARDIO|\bECG\b"),
