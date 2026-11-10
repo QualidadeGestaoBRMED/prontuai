@@ -6,7 +6,7 @@ import logging
 import hashlib
 import hmac
 from app.core.config import settings
-from app.services import exam_catalog_source
+from app.services import exam_catalog_source, regras_identificacao
 from tenacity import retry, wait_exponential, stop_after_attempt
 import numpy as np
 import faiss
@@ -164,29 +164,6 @@ def _token_overlap_match(a: str, b: str) -> bool:
     max_len = max(len(t) for t in overlap)
     return overlap_ratio >= 0.75 or (overlap_ratio >= 0.5 and max_len >= 8)
 
-def _has_audiometria_marker_text(normalizado: str) -> bool:
-    if not normalizado:
-        return False
-    padded = f" {normalizado} "
-    if "AUDIOMETRIA" in normalizado or "AUDIOMETR" in normalizado:
-        return True
-    if "AUDIOMETRO" in normalizado:
-        return True
-    if "FONOAUDIO" in normalizado or "FONOAUDIOLOG" in normalizado:
-        return True
-    if " ORELHA DIREITA " in padded or " ORELHA ESQUERDA " in padded:
-        return True
-    if " HZ " in padded and " DB " in padded:
-        return True
-    if (" OD " in padded or " OE " in padded) and (" HZ " in padded or " DB " in padded):
-        return True
-    if (" SRT " in padded or " IRF " in padded) and (" OD " in padded or " OE " in padded):
-        return True
-    return False
-
-def _is_audiometria_marker(norm_ocr: str) -> bool:
-    return _has_audiometria_marker_text(norm_ocr)
-
 def _build_synonym_map() -> Dict[str, set[str]]:
     synonym_map: Dict[str, set[str]] = {}
     data_sources = []
@@ -234,10 +211,10 @@ def _match_exame_local(exame_brnet: str, exames_ocr: List[str]) -> Optional[str]
         if synonyms and norm_ocr in synonyms:
             return exame
 
-    if "AUDIOMETRIA" in norm_brnet:
+    # Nome do OCR que vale como o exame pela marca (catálogo, `marcador_ocr`).
+    for regra in regras_identificacao.do_nome(regras_identificacao.MARCADOR_OCR, norm_brnet):
         for exame in exames_ocr:
-            norm_ocr = _normalizar_exame(exame)
-            if _is_audiometria_marker(norm_ocr):
+            if regras_identificacao.marcador(regra, _normalizar_exame(exame)):
                 return exame
 
     for exame in exames_ocr:
