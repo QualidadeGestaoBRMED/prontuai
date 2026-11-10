@@ -307,7 +307,8 @@ def test_banco_fora_cai_na_carga_inicial_com_log_de_erro(monkeypatch, caplog):
     with caplog.at_level(logging.ERROR, logger=ri.__name__):
         conjunto = ri.conjunto()
     assert conjunto.origem == "semente"
-    assert len(ri.regras(ri.MARCA_LAUDO)) == 17
+    # 17 do STC-1052 + psicológica e odontológica (10/11/2026).
+    assert len(ri.regras(ri.MARCA_LAUDO)) == 19
     assert "Catálogo de regras indisponível" in caplog.text
 
 

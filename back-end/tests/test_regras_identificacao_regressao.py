@@ -16,6 +16,14 @@ Não regere o gabarito para fazer o teste passar: diferença aqui é mudança de
 comportamento da IA, e tem de ser medida (replay) antes de entrar. Mudança de
 regra pelo painel não passa por aqui — este teste fixa a carga INICIAL.
 
+Mudanças medidas que entraram na carga depois do STC-1052, com o gabarito
+regerado SÓ nos campos que elas afetam, pelo código de referência da v1 com a
+mesma mudança (não pelo catálogo, que é o que se testa):
+
+  - 10/11/2026 — avaliação psicológica, odontológica e EEG exigem laudo fora das
+    listas do ASO/voucher (`marca_laudo.psicologica`, `.odontologica`, `.eeg`).
+    Campos `nomes.*.tipo` e `trechos.*.falta_laudo`. Medição nas notas das regras.
+
 Rodar: PYTHONPATH=back-end pytest back-end/tests/test_regras_identificacao_regressao.py -q --noconftest
 """
 import json
@@ -97,7 +105,8 @@ def test_gabarito_cobre_os_nomes_que_importam():
     # teste de cima passa sem provar nada.
     assert len(NOMES) >= 790
     tipos = {v["tipo"] for v in GOLDEN["nomes"].values()}
-    assert len(tipos - {None}) == 17, "os 17 tipos de marca_laudo aparecem no gabarito"
+    # 17 do STC-1052 + psicológica e odontológica (10/11/2026).
+    assert len(tipos - {None}) == 19, "os 19 tipos de marca_laudo aparecem no gabarito"
     assert sum(1 for v in GOLDEN["nomes"].values() if v["titulos"]) >= 80
     assert sum(1 for v in GOLDEN["nomes"].values() if v["aud_ws"] == "parcial") >= 15
 
