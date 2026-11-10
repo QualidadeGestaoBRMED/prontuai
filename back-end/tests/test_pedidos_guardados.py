@@ -6,10 +6,11 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from app.api.v1 import testes_staging
 from app.core.auth import require_admin
 from app.core.config import settings
-from app.services import brmed_service, pedidos_guardados
+from app.services import brmed_service
+from app.staging import VARIAVEL, pedidos_guardados
+from app.staging import rotas as testes_staging
 
 CPF = "12345678909"
 CNPJ = "12345678000190"
@@ -60,7 +61,9 @@ def banco(monkeypatch):
 
 @pytest.fixture
 def staging(monkeypatch):
+    """As duas chaves de `app.staging.ativo()`."""
     monkeypatch.setattr(settings, "APP_ENV", "staging")
+    monkeypatch.setenv(VARIAVEL, "true")
 
 
 def _consultar(monkeypatch, resposta_da_api):
@@ -78,7 +81,9 @@ def _consultar(monkeypatch, resposta_da_api):
 
 @pytest.mark.parametrize("ambiente", ["production", "prod", "local", "test", "development", "STAGING", ""])
 def test_so_existe_em_staging(monkeypatch, ambiente):
+    # Mesmo com a segunda chave ligada: ela sozinha não basta.
     monkeypatch.setattr(settings, "APP_ENV", ambiente)
+    monkeypatch.setenv(VARIAVEL, "true")
     assert pedidos_guardados.disponivel() is False
 
 

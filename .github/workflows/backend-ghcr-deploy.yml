@@ -46,11 +46,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
-      # Pedidos guardados são só para testes em staging (STC-981): em produção,
-      # usar pedido antigo liberaria documento sem expedição aberta. O teste
-      # falha aqui, e o job de deploy depende deste.
-      - name: Block staging-only code
-        run: bash ops/deploy/bloquear_codigo_de_staging.sh
+      # Ferramentas só de staging (STC-981, `back-end/app/staging`) podem estar no
+      # código, mas o compose de produção não pode ter as chaves que as ligam. O
+      # job de deploy depende deste; no servidor, a conferência se repete sobre o
+      # ambiente final do container, antes de subir.
+      - name: Confirm production compose has no staging tools
+        run: bash ops/deploy/conferir_producao_sem_ferramentas_de_staging.sh
 
       - name: Setup Python
         uses: actions/setup-python@v6
@@ -194,6 +195,23 @@ jobs:
             -o ServerAliveInterval=30 -o ServerAliveCountMax=20 \
             back-end/docker-compose.aws.yml \
             "$AWS_VPS_USER@$AWS_VPS_HOST:$DEPLOY_PATH/docker-compose.yml"
+
+      # O ambiente FINAL do container (.env do servidor + compose) não pode ter as
+      # chaves das ferramentas de staging (STC-981, `back-end/app/staging`). Vem
+      # antes do dump e da subida. O servidor só devolve as linhas de APP_ENV e
+      # FERRAMENTAS_DE_STAGING: o resto do .env (segredos) não sai de lá.
+      - name: Confirm production environment has no staging tools
+        env:
+          AWS_VPS_HOST: ${{ secrets.AWS_VPS_HOST }}
+          AWS_VPS_USER: ${{ secrets.AWS_VPS_USER }}
+          AWS_VPS_PORT: ${{ vars.AWS_VPS_PORT || '22' }}
+        run: |
+          ssh -i ~/.ssh/aws_vps_key -p "$AWS_VPS_PORT" -o StrictHostKeyChecking=accept-new \
+            -o ServerAliveInterval=30 -o ServerAliveCountMax=20 \
+            "$AWS_VPS_USER@$AWS_VPS_HOST" \
+            "set -o pipefail; cd '$DEPLOY_PATH' && BACKEND_IMAGE=conferencia docker compose -f docker-compose.yml config \
+               | { grep -Ei 'FERRAMENTAS_DE_STAGING|APP_ENV' || true; } && echo CONFERENCIA_OK" \
+            | bash ops/deploy/conferir_producao_sem_ferramentas_de_staging.sh --config
 
       - name: Dump do banco antes de subir
         env:
