@@ -2,6 +2,11 @@ import { NextResponse } from "next/server";
 import type { NextFetchEvent, NextRequest } from "next/server";
 import { withAuth } from "next-auth/middleware";
 import { SESSION_COOKIE_NAME } from "@/lib/session-cookie";
+import {
+  PAGINA_FERRAMENTAS_DE_STAGING,
+  ehRotaDeStaging,
+  ferramentasDeStagingAtivas,
+} from "@/lib/staging";
 
 const bypassAuth =
   process.env.NODE_ENV !== "production" &&
@@ -19,6 +24,14 @@ const authMiddleware = withAuth({
 });
 
 export default function middleware(req: NextRequest, event: NextFetchEvent) {
+  // Ferramentas só de staging (`lib/staging.ts`): fora de staging a página não
+  // existe, nem para quem está logado. Vem antes do login e do bypass de dev.
+  if (
+    ehRotaDeStaging(req.nextUrl.pathname, PAGINA_FERRAMENTAS_DE_STAGING) &&
+    !ferramentasDeStagingAtivas()
+  ) {
+    return new NextResponse("Not Found", { status: 404 });
+  }
   if (bypassAuth) {
     return NextResponse.next();
   }

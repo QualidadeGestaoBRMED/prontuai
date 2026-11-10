@@ -37,8 +37,13 @@ Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/bui
 
 ## Deploy de produção
 
-O front sobe pela Vercel, separado do back-end. A trava `ops/deploy/bloquear_codigo_de_staging.sh` só bloqueia o deploy do back-end.
+O front sobe pela Vercel, separado do back-end. A conferência `ops/deploy/conferir_producao_sem_ferramentas_de_staging.sh` vale só para o deploy do back-end.
 
 ## Testes em staging
 
-O card "Testes em staging: pedidos guardados" fica em `/admin/ops-manutencao`, só para ADMIN, e liga ou desliga a função sem reiniciar nada. Fora de staging a rota responde 404 e o card não aparece.
+As ferramentas só de staging ficam em `/admin/staging` (só ADMIN), com o código em `components/staging/` e `lib/staging.ts` (e, no back-end, em `app/staging/`). O código pode ir para a `v1`: o que as liga são as variáveis de ambiente, nunca a branch.
+
+- Front: `FERRAMENTAS_DE_STAGING=true` nas variáveis de ambiente da Vercel **só do ambiente de staging**. É variável de servidor, sem `NEXT_PUBLIC_`. Sem ela, `/admin/staging` responde 404 já no `middleware.ts`, antes do login, e o proxy não repassa `/v1/testes-staging`.
+- Back-end: `APP_ENV=staging` e `FERRAMENTAS_DE_STAGING=true` (ver `back-end/app/staging/__init__.py`).
+
+O card "Testes em staging: pedidos guardados" liga ou desliga a função sem reiniciar nada.
