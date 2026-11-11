@@ -115,6 +115,82 @@ def test_extrair_cnpj_do_voucher_ignora_cnpj_fora_do_cabecalho():
     assert ocr_service._extrair_cnpj_do_voucher(markdown) is None
 
 
+def test_extrair_cnpj_regex_prioriza_aso_sobre_audiograma_da_clinica():
+    """Kit juntado com o audiograma da clínica antes do ASO.
+
+    O cabeçalho do audiograma traz o CNPJ da clínica e o do "Empregador"; o da
+    consulta é o da empresa do ASO. Pegar o primeiro rótulo dava "Paciente não
+    encontrado" (kit de 09/11/2026, audiograma REFORGE + ASO BR MED).
+    """
+    markdown = (
+        "<!-- pagina 1 -->\n"
+        "Audiograma\n"
+        "## CLINICA PARCEIRA\n"
+        "CEP: 13170-675 - CNPJ: 11.243.246/0001-00\n"
+        "## AUDIOGRAMA PERIÓDICO (SEQUENCIAL)\n"
+        "Empregador:\n"
+        "OUTRA EMPRESA LTDA\n"
+        "## CNPJ:\n"
+        "36.182.482/0001-95\n"
+        "<!-- pagina 2 -->\n"
+        "Atestado de Saúde Ocupacional\n"
+        "\n"
+        "## BR MED\n"
+        "\n"
+        "Medical Health Certificate\n"
+        "EMPRESA DO PEDIDO LTDA\n"
+        "\n"
+        "## CNPJ: 03.214.786/0004-80\n"
+        "\n"
+        "1. Identificação / Identification:\n"
+    )
+    assert ocr_service.extrair_cnpj_regex(markdown) == "03214786000480"
+
+
+def test_extrair_cnpj_regex_aso_vence_voucher():
+    markdown = (
+        "## VOUCHER\n"
+        "EMPRESA X\n"
+        "CNPJ: 12.345.678/0001-95\n"
+        "1. Identificacao / Identification:\n"
+        "Atestado de Saúde Ocupacional\n"
+        "Medical Health Certificate\n"
+        "EMPRESA DO PEDIDO LTDA\n"
+        "CNPJ: 03.214.786/0004-80\n"
+        "1. Identificação / Identification:\n"
+    )
+    assert ocr_service.extrair_cnpj_regex(markdown) == "03214786000480"
+
+
+def test_extrair_cnpj_do_aso_valor_na_linha_de_baixo():
+    """Formulário de ASO da VIX: rótulo sozinho e o valor na linha seguinte."""
+    markdown = (
+        "ASO Atestado de Saúde Ocupacional\n"
+        "Razão Social:\n"
+        "## EMPRESA DO PEDIDO LTDA\n"
+        "## CNPJ :\n"
+        "03.214.786/0004-80\n"
+        "Responsável PCMSO\n"
+    )
+    assert ocr_service._extrair_cnpj_do_aso(markdown) == "03214786000480"
+
+
+def test_extrair_cnpj_do_aso_ignora_recibo_e_cnpj_apos_identificacao():
+    """O recibo cita o ASO no meio da frase e não abre janela; o CNPJ depois da
+    seção 1 não é o da empresa."""
+    markdown = (
+        "Recebi a Segunda via deste ASO (Atestado de Saúde Ocupacional) e todas as informações\n"
+        "<!-- pagina 2 -->\n"
+        "LABORATORIO X\n"
+        "CNPJ: 11.243.246/0001-00\n"
+        "Atestado de Saúde Ocupacional\n"
+        "EMPRESA DO PEDIDO LTDA\n"
+        "1. Identificação / Identification:\n"
+        "CNPJ: 03.214.786/0004-80\n"
+    )
+    assert ocr_service._extrair_cnpj_do_aso(markdown) is None
+
+
 def test_extrair_cnpj_regex_loga_a_fonte(caplog):
     """O campo fonte= permite validar no log se o CNPJ veio do voucher."""
     voucher = (
@@ -134,6 +210,12 @@ def test_extrair_cnpj_regex_loga_a_fonte(caplog):
     with caplog.at_level(logging.INFO, logger="app.services.ocr_service"):
         assert ocr_service.extrair_cnpj_regex("EMPRESA X\nCNPJ: 12.345.678/0001-95\n") == "12345678000195"
     assert "fonte=documento_rotulo" in caplog.text
+
+    caplog.clear()
+    aso = "Atestado de Saúde Ocupacional\nEMPRESA X\nCNPJ: 03.214.786/0004-80\n"
+    with caplog.at_level(logging.INFO, logger="app.services.ocr_service"):
+        assert ocr_service.extrair_cnpj_regex(aso) == "03214786000480"
+    assert "fonte=aso" in caplog.text
 
 
 def test_extrair_passaporte_regex():
