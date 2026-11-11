@@ -40,7 +40,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { buscarEnviosAnteriores, descreverEnvioAnterior, type EnvioAnterior } from "@/lib/reenvio"
+import { avisoDeArquivoRejeitado, buscarEnviosAnteriores, descreverEnvioAnterior, type EnvioAnterior } from "@/lib/reenvio"
 
 type PageState = "upload" | "processing" | "completed"
 
@@ -84,6 +84,10 @@ function PageContent() {
     todos: FileWithPreview[]
     repetidos: { arquivo: FileWithPreview; anterior: EnvioAnterior }[]
   } | null>(null)
+  // Repetidos de um envio rejeitado pelo revisor: o aviso diz que o mesmo
+  // arquivo, sem correção, tende a ser rejeitado de novo.
+  const rejeitadosRepetidos =
+    confirmacaoRepetidos?.repetidos.filter(({ anterior }) => anterior.situacao === "rejeitado").length ?? 0
   const {
     unreadCount,
     activeProcess,
@@ -496,8 +500,12 @@ function PageContent() {
                   <>
                     <p>
                       Foi identificado o envio deste prontuário{" "}
-                      {descreverEnvioAnterior(confirmacaoRepetidos.repetidos[0].anterior)}. Deseja continuar?
+                      {descreverEnvioAnterior(confirmacaoRepetidos.repetidos[0].anterior)}.
                     </p>
+                    {rejeitadosRepetidos === 1 && (
+                      <p className="font-medium text-red-700">{avisoDeArquivoRejeitado(1)}</p>
+                    )}
+                    <p>Deseja continuar?</p>
                     <p className="text-xs">Arquivo: {confirmacaoRepetidos.repetidos[0].arquivo.file.name}</p>
                   </>
                 ) : (
@@ -510,6 +518,9 @@ function PageContent() {
                         </li>
                       ))}
                     </ul>
+                    {rejeitadosRepetidos > 0 && (
+                      <p className="font-medium text-red-700">{avisoDeArquivoRejeitado(rejeitadosRepetidos)}</p>
+                    )}
                     <p>Deseja continuar?</p>
                   </>
                 )}
