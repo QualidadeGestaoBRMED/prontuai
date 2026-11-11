@@ -1361,6 +1361,57 @@ _VOUCHER_CNPJ_MAX_LINES = 25
 _VOUCHER_CNPJ_STOP_RE = re.compile(r"IDENTIFICA[ÇC][ÃA]O|IDENTIFICATION", flags=re.IGNORECASE)
 _CNPJ_LABEL_RE = re.compile(r"CNPJ[^0-9]{0,10}([0-9.\-/ ]{14,24})", flags=re.IGNORECASE)
 
+# Título do ASO: "Atestado de Saúde Ocupacional" / "Medical Health Certificate"
+# (BR MED) ou "ASO Atestado de Saúde Ocupacional" (formulário da VIX). Só vale
+# como título a linha curta: o recibo do ASO repete o nome no meio da frase
+# ("Recebi a Segunda via deste ASO (Atestado de Saúde Ocupacional)") e a
+# janela aberta ali cairia no CNPJ do laudo da página seguinte.
+_ASO_ANCHOR_RE = re.compile(
+    r"^[#>*\s]*(?:ASO\b[\s\-–:]*)?"
+    r"(?:ATESTADO\s+DE\s+SA[ÚU]DE\s+OCUPACIONAL|MEDICAL\s+HEALTH\s+CERTIFICATE)\b",
+    flags=re.IGNORECASE,
+)
+_ASO_ANCHOR_MAX_CHARS = 70
+# No ASO o CNPJ da empresa fica entre o título e a seção "1. Identificação":
+# medido nos 13 mil ASOs do texto gravado até 30/10/2026, a 7–12 linhas do título.
+_ASO_CNPJ_MAX_LINES = 15
+# Formulário da VIX: o rótulo vem sozinho e o valor na linha de baixo
+# ("## CNPJ :" / "09.452.900/0028-64").
+_CNPJ_SO_ROTULO_RE = re.compile(r"^[#>*\s]*CNPJ\s*[:.]?\s*$", flags=re.IGNORECASE)
+_CNPJ_VALOR_LINHA_RE = re.compile(
+    r"^[#>*\s]*(\d{2}[.\s]?\d{3}[.\s]?\d{3}\s*/\s*\d{4}\s*-?\s*\d{2})\b"
+)
+
+
+def _extrair_cnpj_do_aso(markdown: str) -> Optional[str]:
+    """CNPJ da empresa impresso no cabeçalho do ASO.
+
+    É sempre este o CNPJ da consulta: o ASO é emitido para a empresa do pedido no
+    BR NET. Os outros documentos do kit imprimem o CNPJ de quem os emitiu — o
+    audiograma da clínica parceira, o laudo do laboratório — e, quando o PDF é
+    juntado com eles antes do ASO, o CNPJ da clínica ganhava por ordem de
+    aparição e a consulta voltava "Paciente não encontrado". Medido no texto
+    gravado até 30/10/2026: 232 documentos com essa falha tinham o CNPJ do ASO
+    diferente do consultado, e nenhum documento que achou o pedido mudaria.
+    """
+    linhas = markdown.splitlines()
+    for idx, linha in enumerate(linhas):
+        if len(linha.strip()) > _ASO_ANCHOR_MAX_CHARS or not _ASO_ANCHOR_RE.match(linha):
+            continue
+        fim = min(idx + 1 + _ASO_CNPJ_MAX_LINES, len(linhas))
+        for pos in range(idx + 1, fim):
+            linha_janela = linhas[pos]
+            if _VOUCHER_CNPJ_STOP_RE.search(linha_janela):
+                break
+            match = _CNPJ_LABEL_RE.search(linha_janela)
+            if match and _is_valid_cnpj(match.group(1)):
+                return _digits_only(match.group(1))
+            if _CNPJ_SO_ROTULO_RE.match(linha_janela) and pos + 1 < len(linhas):
+                valor = _CNPJ_VALOR_LINHA_RE.match(linhas[pos + 1])
+                if valor and _is_valid_cnpj(valor.group(1)):
+                    return _digits_only(valor.group(1))
+    return None
+
 
 def _extrair_cnpj_do_voucher(markdown: str) -> Optional[str]:
     """CNPJ impresso na página de voucher da BR MED.
@@ -1388,11 +1439,12 @@ def _extrair_cnpj_do_voucher(markdown: str) -> Optional[str]:
 
 
 def _log_cnpj_extraido(cnpj: str, fonte: str) -> str:
-    """Registra de onde saiu o CNPJ, para validar a prioridade do voucher.
+    """Registra de onde saiu o CNPJ, para validar a prioridade do ASO.
 
-    fonte=voucher: cabeçalho da página de voucher da BR MED (o cadastro que a
-    API externa reconhece). fonte=documento_*: fallback por ordem de aparição,
-    que pode trazer o CNPJ de um laudo de terceiro anexado ao mesmo PDF.
+    fonte=aso: cabeçalho do ASO (a empresa do pedido). fonte=voucher: cabeçalho
+    da página de voucher da BR MED, quando não há ASO legível.
+    fonte=documento_*: fallback por ordem de aparição, que pode trazer o CNPJ de
+    um laudo de terceiro anexado ao mesmo PDF.
     """
     logger.info("[OCR] CNPJ extraído via regex: %s fonte=%s", mask_identifier(cnpj), fonte)
     return cnpj
@@ -1401,6 +1453,12 @@ def _log_cnpj_extraido(cnpj: str, fonte: str) -> str:
 def extrair_cnpj_regex(markdown: str) -> str:
     if not markdown:
         return None
+
+    # O CNPJ da consulta é sempre o do ASO; voucher e ordem de aparição só
+    # entram quando o cabeçalho do ASO não foi lido.
+    cnpj_aso = _extrair_cnpj_do_aso(markdown)
+    if cnpj_aso:
+        return _log_cnpj_extraido(cnpj_aso, "aso")
 
     cnpj_voucher = _extrair_cnpj_do_voucher(markdown)
     if cnpj_voucher:
