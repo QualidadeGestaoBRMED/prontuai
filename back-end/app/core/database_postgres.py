@@ -2041,8 +2041,9 @@ class PostgresUserDatabase:
         """
         Para cada hash de PDF, o envio mais recente com esse mesmo arquivo:
         quando foi, a situação ("liberado", "rejeitado", "em_revisao" ou
-        "reenvio") e o nome do arquivo. É o aviso da tela de envio, antes de
-        mandar: "Foi identificado o envio deste prontuário em DD/MM".
+        "reenvio"), o nome do arquivo e, no rejeitado, o motivo que o revisor
+        escreveu — a clínica já o vê no Histórico. É o aviso da tela de envio,
+        antes de mandar: "Foi identificado o envio deste prontuário em DD/MM".
 
         Com `clinic_id` (a clínica que está enviando), só os envios dela e do
         mesmo credenciado do BRNET — a clínica não fica sabendo do envio de
@@ -2060,6 +2061,7 @@ class PostgresUserDatabase:
                 DocumentModel.validation_status,
                 DocumentModel.reviewed_by,
                 DocumentModel.filename,
+                DocumentModel.rejection_reason,
             ).filter(DocumentModel.content_hash.in_(hashes), DocumentModel.archived_at.is_(None))
             if clinic_id is not None:
                 clinicas = self._clinicas_equivalentes(session, clinic_id)
@@ -2081,6 +2083,7 @@ class PostgresUserDatabase:
                     "enviado_em": linha.uploaded_at.replace(tzinfo=timezone.utc).isoformat() if linha.uploaded_at else None,
                     "situacao": situacao,
                     "filename": linha.filename,
+                    "motivo": (linha.rejection_reason or None) if situacao == "rejeitado" else None,
                 }
             return achados
         finally:

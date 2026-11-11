@@ -22,7 +22,8 @@ import hashlib
 import threading
 from pathlib import Path
 from uuid import uuid4
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+from typing import Any, Optional
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -426,6 +427,67 @@ async def processar_documento_stream_api(
         }
     )
 
+# ---------------------------------------------------------------------------
+# Envio do mesmo arquivo (duplicidade "hard", UPLOAD_DEDUP_HARD)
+#
+# O mesmo PDF (hash) já enviado pelo mesmo usuário não é processado de novo: o
+# job devolve o resultado do original. Até 11/11/2026 isso valia também para o
+# original rejeitado pelo revisor, e a clínica que reenviava via na tela o
+# resultado antigo da IA como "Aguardando Revisão", sem nenhum documento novo —
+# a operação não achava o envio (11/11: dois prontuários rejeitados por falta
+# de Anti-HBS, reenviados idênticos pela mesma clínica).
+#
+# Agora:
+#   - original rejeitado pelo revisor: o envio é processado como documento
+#     novo e vai para a revisão. A tela de envio já mostrou, antes, o motivo da
+#     rejeição e que o mesmo arquivo sem correção tende a ser rejeitado de novo
+#     (`envios_por_hash`).
+#   - demais (em revisão, liberado): continua sem documento novo, mas o
+#     resultado sai marcado como reenvio (`reenvio`), e a tela mostra a tag
+#     "Já revisado"/"Já em revisão" no lugar do status antigo da IA.
+# ---------------------------------------------------------------------------
+
+
+def _rejeitado_pelo_revisor(documento: Any) -> bool:
+    """Rejeição decidida por gente. A rejeição só da IA ainda espera o revisor."""
+    return getattr(documento, "validation_status", None) == "rejected" and bool(getattr(documento, "reviewed_by", None))
+
+
+def _iso_utc(valor: Any) -> Optional[str]:
+    if not isinstance(valor, datetime):
+        return None
+    return (valor if valor.tzinfo else valor.replace(tzinfo=timezone.utc)).isoformat()
+
+
+def _resultado_do_mesmo_arquivo(documento: Any) -> dict:
+    """O resultado do original, com `document_id` e a marcação de reenvio.
+
+    A marcação tem o formato do `reenvio` do `reenvio_service`, que é o que a
+    tela de envio já sabe mostrar (tag e aviso com o link do envio anterior).
+    """
+    payload = documento.result_payload if isinstance(documento.result_payload, dict) else {}
+    resultado = dict(payload)
+    if documento.id and resultado.get("document_id") is None:
+        resultado["document_id"] = documento.id
+    liberado = documento.validation_status == "validated" and bool(documento.reviewed_by)
+    resultado["reenvio"] = {
+        "documento_id": documento.id,
+        "liberado_em": _iso_utc(documento.reviewed_at) if liberado else None,
+        "enviado_em": _iso_utc(documento.uploaded_at),
+        "criterio": "arquivo",
+        "situacao": "liberado" if liberado else "em_revisao",
+    }
+    return resultado
+
+
+def _mensagem_do_mesmo_arquivo(documento: Any) -> str:
+    quando = documento.uploaded_at.strftime("%d/%m/%Y") if isinstance(documento.uploaded_at, datetime) else None
+    envio = f"enviado em {quando}" if quando else "enviado antes"
+    if documento.validation_status == "validated" and documento.reviewed_by:
+        return f"Este arquivo já foi {envio} e já foi revisado. Nenhum envio novo foi criado."
+    return f"Este arquivo já foi {envio} e ainda aguarda revisão. Nenhum envio novo foi criado."
+
+
 @router.post("/processar-documento-async", summary="Processar documento em background (assíncrono)")
 async def processar_documento_async_api(
     arquivo: UploadFile = File(...),
@@ -507,13 +569,17 @@ async def processar_documento_async_api(
                         content_hash=content_hash,
                         clinic_id=current_user.clinic_id,
                     )
-                    if existing_doc:
-                        result_payload = existing_doc.result_payload if isinstance(existing_doc.result_payload, dict) else {}
-                        if not isinstance(result_payload, dict):
-                            result_payload = {}
-                        if existing_doc.id and result_payload.get("document_id") is None:
-                            result_payload = dict(result_payload)
-                            result_payload["document_id"] = existing_doc.id
+                    if existing_doc and _rejeitado_pelo_revisor(existing_doc):
+                        # A clínica foi avisada antes de enviar (tela de envio,
+                        # com o motivo da rejeição) e escolheu mandar de novo:
+                        # o envio vai para a revisão como documento novo.
+                        logger.info(
+                            "[REQUEST-ASYNC] Mesmo arquivo do documento %s, rejeitado pelo revisor: "
+                            "processado como envio novo.",
+                            existing_doc.id,
+                        )
+                    elif existing_doc:
+                        result_payload = _resultado_do_mesmo_arquivo(existing_doc)
                         job_id = await job_manager.create_job(
                             job_type="document_processing",
                             metadata={
@@ -534,7 +600,7 @@ async def processar_documento_async_api(
                         return {
                             "job_id": job_id,
                             "status": "duplicate",
-                            "message": "Upload duplicado detectado. Resultado reutilizado.",
+                            "message": _mensagem_do_mesmo_arquivo(existing_doc),
                             "poll_url": f"/v1/jobs/{job_id}",
                             "document_id": existing_doc.id,
                         }

@@ -166,6 +166,8 @@ export type EnvioAnterior = {
   enviado_em: string | null
   situacao: "liberado" | "rejeitado" | "em_revisao" | "reenvio"
   filename: string
+  /** Motivo escrito pelo revisor, só no rejeitado. */
+  motivo?: string | null
 }
 
 const SITUACAO_ANTERIOR: Record<EnvioAnterior["situacao"], string> = {
@@ -175,10 +177,23 @@ const SITUACAO_ANTERIOR: Record<EnvioAnterior["situacao"], string> = {
   reenvio: "enviado como repetido",
 }
 
-/** "em 01/10/2026 (já liberado)" */
+/** "em 01/10/2026 (já liberado)"; no rejeitado, com o motivo: "(rejeitado: Faltou: Anti-HBS)" */
 export function descreverEnvioAnterior(anterior: EnvioAnterior): string {
   const quando = data(anterior.enviado_em)
-  return `${quando ? `em ${quando} ` : ""}(${SITUACAO_ANTERIOR[anterior.situacao] ?? anterior.situacao})`
+  const situacao = SITUACAO_ANTERIOR[anterior.situacao] ?? anterior.situacao
+  const motivo = anterior.situacao === "rejeitado" ? anterior.motivo?.trim().replace(/\.+$/, "") : ""
+  return `${quando ? `em ${quando} ` : ""}(${motivo ? `${situacao}: ${motivo}` : situacao})`
+}
+
+/**
+ * O aviso da tela de envio quando o arquivo é o mesmo de um envio rejeitado
+ * pelo revisor. O envio segue para a revisão como documento novo, mas o
+ * arquivo não mudou: sem a correção, a rejeição tende a se repetir.
+ */
+export function avisoDeArquivoRejeitado(quantos: number): string {
+  return quantos === 1
+    ? "É o mesmo arquivo, sem nenhuma alteração. Se continuar, ele vai para a revisão de novo, mas, se a pendência não foi corrigida no arquivo, será rejeitado outra vez."
+    : "Os rejeitados são os mesmos arquivos, sem nenhuma alteração. Se continuar, eles vão para a revisão de novo, mas, se a pendência não foi corrigida no arquivo, serão rejeitados outra vez."
 }
 
 /** SHA-256 do arquivo, em hexadecimal — o mesmo `content_hash` que o back-end grava. */
