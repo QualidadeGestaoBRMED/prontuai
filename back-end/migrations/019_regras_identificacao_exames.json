@@ -1045,7 +1045,7 @@
       "ordem": 30,
       "padrao_nome": "AUDIOMETR",
       "condicao": {
-        "regex": "ORELHA (DIREITA|ESQUERDA)|\\bKHZ\\b|VIA AEREA|LIMIARES|LOGOAUDIOMETRIA|\\bIRF\\b|\\bSRT\\b|\\bLRF\\b"
+        "regex": "ORELHA (DIREITA|ESQUERDA)|\\bKHZ\\b|VIA AEREA|LIMIARES|LOGOAUDIOMETRIA|\\bIRF\\b|\\bSRT\\b|\\bLRF\\b|\\bLIMIAR\\b|MEATOSCOPIA|\\bAUDIOGRAMA\\b"
       },
       "parametros": {
         "tipo": "AUDIOMETRIA",
@@ -1058,13 +1058,16 @@
         ],
         "texto_sim": [
           " ORELHA DIREITA 20 DB ",
-          " LOGOAUDIOMETRIA SRT 15 "
+          " LOGOAUDIOMETRIA SRT 15 ",
+          " AUDIOGRAMA PERIODICO SEQUENCIAL LIMIAR OD LIMIAR OE ",
+          " MEATOSCOPIA SEM ALTERACOES "
         ],
         "texto_nao": [
-          " AUDIOMETRIA TONAL 10 10 2026 "
+          " AUDIOMETRIA TONAL 10 10 2026 ",
+          " AUDIOMETRIA TONAL PURE TONE AUDIOMETRY 09 11 26 "
         ]
       },
-      "notas": null
+      "notas": "11/11/2026 — audiograma de clínica parceira em gráfico (REFORGE: \"LIMIAR OD/OE\", frequências 1K–8K, \"VA\" e dB) não tinha nenhuma marca e a audiometria virava faltante. Acrescentados LIMIAR (singular), MEATOSCOPIA e AUDIOGRAMA. Replay no texto gravado até 30/10/2026 (5.707 documentos com audiometria pedida, 183 sem marca): +17 aprovados pelo revisor deixam de ser faltante, 0 rejeitados por audiometria passam; 5 rejeitados por outro motivo e 2 pendentes também ganham a marca. HZ ficou fora: pegava 1 rejeitado por audiometria. dB+OD+OE juntos rendia o mesmo e não cabe numa regex única de marca_laudo."
     },
     {
       "chave": "marca_laudo.rx_oit",

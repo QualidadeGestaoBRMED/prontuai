@@ -25,6 +25,10 @@ mesma mudança (não pelo catálogo, que é o que se testa):
     Campos `nomes.*.tipo` e `trechos.*.falta_laudo`. Medição nas notas das regras.
   - 10/11/2026 — RX OIT dado como faltante é recuperado pela folha de leitura OIT
     (`prova_conteudo.rx_oit`). Campo `trechos.*.faltante`.
+  - 11/11/2026 — audiograma em gráfico (título AUDIOGRAMA, "LIMIAR OD/OE",
+    meatoscopia) passa a ser marca do laudo de audiometria
+    (`marca_laudo.audiometria`). Campo `trechos.audiograma_so_frequencias.falta_laudo`.
+    Medição nas notas da regra.
 
 Rodar: PYTHONPATH=back-end pytest back-end/tests/test_regras_identificacao_regressao.py -q --noconftest
 """
