@@ -5,7 +5,8 @@ novo e grava só contagens (payload, log e métricas OTLP).
 
 1. Clique no exame (`layout_ocr.localizar_termos`). Para cada exame da tabela,
    a primeira página para onde o clique leva tem o CONTEÚDO do laudo daquele
-   exame? A régua (`REGUA_LAUDO`) é independente dos títulos que o clique usa:
+   exame? A régua (papel `regua_monitoramento` do Catálogo de Exames) é
+   independente dos títulos que o clique usa:
    anamnese e exame físico para o Clínico, limiares e frequências para a
    Audiometria, CVF e VEF1 para a Espirometria, mg/dL para a Glicemia.
    Resultado por exame: "acerto", "erro", "sem_laudo" (nenhuma página do PDF
@@ -37,41 +38,23 @@ import unicodedata
 from collections import Counter
 from typing import Any, Callable, Iterable, Optional
 
-from app.services import identidade_laudo, layout_ocr
+from app.services import identidade_laudo, layout_ocr, regras_identificacao
 
 HABILITADO = os.getenv("MONITORAMENTO_CHECAGEM", "true").strip().lower() not in ("0", "false", "nao", "no")
 
-_FREQUENCIAS = re.compile(r"\b(?:250|500|1000|1K|2000|2K|3000|3K|4000|4K|6000|6K|8000|8K)\b")
+# A régua (grupo, exame que ela mede e conteúdo de laudo na página) vem do
+# Catálogo de Exames, papel `regua_monitoramento`. A página chega sem acento e
+# em maiúsculas; o nome do exame, normalizado como na rota de localização.
 
 
-def _todos(*padroes: str) -> Callable[[str], bool]:
-    compilados = [re.compile(p) for p in padroes]
-    return lambda pagina: all(p.search(pagina) for p in compilados)
+def regua_do_exame(exame_normalizado: str) -> Optional[regras_identificacao.Regra]:
+    """A régua que mede o exame (a primeira que casa o nome), ou None."""
+    return regras_identificacao.primeira_do_nome(regras_identificacao.REGUA_MONITORAMENTO, exame_normalizado)
 
 
-def _audiometria(pagina: str) -> bool:
-    return len(set(_FREQUENCIAS.findall(pagina))) >= 4 or bool(re.search(r"LIMIAR", pagina) and re.search(r"\bDB\b", pagina))
-
-
-# (grupo, casa no nome normalizado do exame, conteúdo de laudo na página).
-# A página chega sem acento e em maiúsculas.
-REGUA_LAUDO: list[tuple[str, re.Pattern, Callable[[str], bool]]] = [
-    (grupo, re.compile(exame), conteudo)
-    for grupo, exame, conteudo in (
-        ("clinico", r"\bCLINICO\b",
-         _todos(r"ANAMNESE", r"EXAME FISICO|PRESSAO ARTERIAL|AUSCULTA|FREQUENCIA CARDIACA")),
-        ("audiometria", r"\bAUDIOMETRIA\b", _audiometria),
-        ("acuidade", r"\bACUIDADE VISUAL\b|\bOFTALMOLOGIC", _todos(r"SNELLEN|ISHIHARA|JAEGER|\b20/\d{2,3}\b")),
-        ("espirometria", r"\bESPIROMETRIA\b", _todos(r"\bCVF\b", r"\b(?:VEF|FEV) ?1")),
-        ("ecg", r"\bELETROCARDIOGRAMA\b", _todos(r"RITMO SINUSAL|\bQRS\b|EIXO ELETRICO")),
-        ("eeg", r"\bELETROENCEFALOGRAMA\b",
-         _todos(r"ELETROGENESE|ATIVIDADE DE BASE|RITMO ALFA|ATIVIDADE ELETRICA CEREBRAL|PAROXISM")),
-        ("glicemia", r"\bGLICEMIA\b|\bGLICOSE\b", _todos(r"GLICOSE|GLICEMIA", r"MG/ ?DL")),
-        ("hemograma", r"\bHEMOGRAMA\b", _todos(r"HEMACIAS|ERITROCITOS", r"LEUCOCITOS")),
-        ("rx_torax", r"\bTORAX\b",
-         _todos(r"PNEUMOCONIOSE|CAMPOS PULMONARES|SEIOS COSTOFRENICOS|LEITURA RADIOLOGICA")),
-    )
-]
+def grupo_da_regua(exame_normalizado: str) -> Optional[str]:
+    regra = regua_do_exame(exame_normalizado)
+    return regra.parametros["grupo"] if regra else None
 
 
 def _sem_acento(texto: str) -> str:
@@ -99,11 +82,11 @@ def medir_clique(
     medidas = []
     for exame in exames:
         normalizado = normalizar(exame)
-        regua = next(((g, c) for g, e, c in REGUA_LAUDO if e.search(normalizado)), None)
+        regua = regua_do_exame(normalizado)
         if regua is None:
             continue
-        grupo, conteudo = regua
-        certas = {p for p, texto in texto_da_pagina.items() if conteudo(texto)}
+        grupo = regua.parametros["grupo"]
+        certas = {p for p, texto in texto_da_pagina.items() if regua.vale(texto)}
         ocorrencias = layout_ocr.localizar_termos(
             linhas, normalizadas, termos[exame], listas, layout_ocr.titulos_do_exame(normalizado)
         )

@@ -51,7 +51,7 @@ from difflib import SequenceMatcher
 from typing import Callable, Collection, Iterable, Optional
 
 from app.core.pii import mask_cpf
-from app.services import layout_ocr
+from app.services import layout_ocr, regras_identificacao
 from app.services.ocr_service import _digits_only, _is_valid_cpf
 from app.services.patient_name_extractor import _clean_candidate
 
@@ -92,9 +92,9 @@ _ROTULO_CPF = re.compile(r"(?i)\bC\.?P\.?F\b|IDENTIFICA[CÇ][AÃ]O|DOCUMENTO")
 # Linhas com texto olhadas acima e abaixo do bloco de identificação em busca do
 # título do laudo. Nos documentos de out/2026 o título fica a até 8 linhas.
 ALCANCE_EXAME = 10
-# O ASO identifica o paciente logo abaixo do título, e o exame dele é o clínico.
-_CLINICO = re.compile(r"\bCLINICO\b")
-_TITULO_ASO = "ATESTADO DE SAUDE OCUPACIONAL"
+# O ASO identifica o paciente logo abaixo do título, e o exame dele é o clínico:
+# títulos assim, que não são nome nem sinônimo do exame, vêm do Catálogo de
+# Exames (`regras_identificacao`, papel `titulo_identidade`).
 
 # Força do aviso: nome e CPF de outra pessoa, ou só o nome (ver `pessoas_no_documento`).
 NOME_E_CPF = "nome_e_cpf"
@@ -507,7 +507,7 @@ def anotar_comparativo(
     em status nem justificativa.
 
     O título do laudo casa com o exame pelo nome, pelos sinônimos do catálogo e
-    pelos títulos que o clique no exame já reconhece (`layout_ocr.TITULOS_DE_LAUDO`:
+    pelos títulos que o clique no exame já reconhece (catálogo, papel `titulo_laudo`:
     "AUDIOGRAMA", "ECG", "SNELLEN"...). Só nome e sinônimo deixavam o audiograma
     de outra pessoa sem aviso no exame (Angra, 05/11).
 
@@ -521,8 +521,8 @@ def anotar_comparativo(
             continue
         normalizado = normalizar(exame)
         candidatos = {normalizado} | sinonimos(normalizado)
-        if _CLINICO.search(normalizado):
-            candidatos.add(_TITULO_ASO)
+        for regra in regras_identificacao.do_nome(regras_identificacao.TITULO_IDENTIDADE, normalizado):
+            candidatos |= set(regra.parametros["termos"])
         padroes = [re.compile(rf"\b{re.escape(t)}\b") for t in candidatos if len(t) >= 3]
         termos.append((exame, padroes, layout_ocr.titulos_do_exame(f" {normalizado} ")))
     paginas = _paginas(linhas)

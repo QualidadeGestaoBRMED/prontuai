@@ -1,0 +1,2183 @@
+{
+  "versao": 1,
+  "perfis": [
+    {
+      "chave": "clinico",
+      "nome": "Clínico ocupacional",
+      "descricao": "A própria consulta: o laudo é a ficha médica."
+    },
+    {
+      "chave": "audiometria",
+      "nome": "Audiometria",
+      "descricao": ""
+    },
+    {
+      "chave": "acuidade",
+      "nome": "Acuidade visual / oftalmológico",
+      "descricao": ""
+    },
+    {
+      "chave": "espirometria",
+      "nome": "Espirometria",
+      "descricao": ""
+    },
+    {
+      "chave": "rx_torax",
+      "nome": "Radiografia de tórax",
+      "descricao": ""
+    },
+    {
+      "chave": "rx_oit",
+      "nome": "Radiografia de tórax padrão OIT",
+      "descricao": ""
+    },
+    {
+      "chave": "rx",
+      "nome": "Radiografia (outras)",
+      "descricao": ""
+    },
+    {
+      "chave": "ecg",
+      "nome": "Eletrocardiograma",
+      "descricao": ""
+    },
+    {
+      "chave": "eeg",
+      "nome": "Eletroencefalograma",
+      "descricao": ""
+    },
+    {
+      "chave": "psicologico",
+      "nome": "Avaliação psicológica / psicossocial",
+      "descricao": ""
+    },
+    {
+      "chave": "odontologico",
+      "nome": "Avaliação odontológica",
+      "descricao": ""
+    },
+    {
+      "chave": "ergometrico",
+      "nome": "Teste ergométrico",
+      "descricao": ""
+    },
+    {
+      "chave": "glicemia",
+      "nome": "Glicemia / glicose",
+      "descricao": ""
+    },
+    {
+      "chave": "hemograma",
+      "nome": "Hemograma",
+      "descricao": ""
+    },
+    {
+      "chave": "lipidios",
+      "nome": "Perfil lipídico",
+      "descricao": ""
+    },
+    {
+      "chave": "ggt",
+      "nome": "Gama GT",
+      "descricao": ""
+    },
+    {
+      "chave": "transaminases",
+      "nome": "Transaminases (TGO/TGP)",
+      "descricao": ""
+    },
+    {
+      "chave": "creat_ureia",
+      "nome": "Creatinina e ureia",
+      "descricao": ""
+    },
+    {
+      "chave": "sorologia",
+      "nome": "Sorologias (hepatites, HIV, VDRL)",
+      "descricao": ""
+    },
+    {
+      "chave": "urina",
+      "nome": "Urina tipo I / EAS",
+      "descricao": ""
+    },
+    {
+      "chave": "toxicologico",
+      "nome": "Toxicológico",
+      "descricao": ""
+    },
+    {
+      "chave": "etanol",
+      "nome": "Etanol",
+      "descricao": ""
+    },
+    {
+      "chave": "laboratorio",
+      "nome": "Exames de laboratório (classificação)",
+      "descricao": "Quem é exame de laboratório para o selo de resultado."
+    },
+    {
+      "chave": "hemoglobina_glicada",
+      "nome": "Hemoglobina glicada",
+      "descricao": ""
+    }
+  ],
+  "regras": [
+    {
+      "chave": "titulo_laudo.clinico",
+      "perfil": "clinico",
+      "papel": "titulo_laudo",
+      "ordem": 10,
+      "padrao_nome": "\\bCLINICO\\b",
+      "condicao": {
+        "regex": "\\bFICHA (MEDICA|CLINICA)\\b|\\bPRONTUARIO (MEDICO|CLINICO)\\b"
+      },
+      "parametros": {},
+      "motivo": null,
+      "exemplos": {
+        "nome_sim": [
+          "CLINICO OCUPACIONAL",
+          "EXAME CLINICO"
+        ],
+        "nome_nao": [
+          "CLINICA GERAL"
+        ],
+        "texto_sim": [
+          " FICHA MEDICA ",
+          " PRONTUARIO CLINICO "
+        ],
+        "texto_nao": [
+          " ATESTADO DE SAUDE OCUPACIONAL "
+        ]
+      },
+      "notas": "Títulos de laudo que não são nome nem sinônimo do exame. Medido nos 498 PDFs com texto embutido da pasta da semana (1.191 cliques; acerto = 1ª ocorrência na página com o conteúdo do laudo): 48% antes, 92% depois. Clínico 0% → 96%."
+    },
+    {
+      "chave": "titulo_laudo.audiometria",
+      "perfil": "audiometria",
+      "papel": "titulo_laudo",
+      "ordem": 20,
+      "padrao_nome": "\\bAUDIOMETRIA\\b",
+      "condicao": {
+        "regex": "\\bAUDIOMETRIA\\b|\\bAUDIOLOGI|\\bAUDIOGRAMA\\b|\\bLOGOAUDIOMETRIA\\b|\\bAUDIOMETRO\\b|\\bREPOUSO AUDITIVO\\b|\\bLIMIARES? TONA"
+      },
+      "parametros": {},
+      "motivo": null,
+      "exemplos": {
+        "nome_sim": [
+          "AUDIOMETRIA TONAL",
+          "AUDIOMETRIA TONAL OCUPACIONAL"
+        ],
+        "nome_nao": [
+          "IMITANCIOMETRIA"
+        ],
+        "texto_sim": [
+          " AVALIACAO AUDIOLOGICA ",
+          " AUDIOGRAMA ",
+          " REPOUSO AUDITIVO 14 HORAS ",
+          " LIMIARES TONAIS "
+        ],
+        "texto_nao": [
+          " ESPIROMETRIA ",
+          " LIMIAR TONAL "
+        ]
+      },
+      "notas": "Audiometria 12% → 81% no clique (498 PDFs, 29/10)."
+    },
+    {
+      "chave": "titulo_laudo.acuidade",
+      "perfil": "acuidade",
+      "papel": "titulo_laudo",
+      "ordem": 30,
+      "padrao_nome": "\\bACUIDADE VISUAL\\b|\\bOFTALMOLOGIC",
+      "condicao": {
+        "regex": "\\bACUIDADE VISUAL\\b|\\bOFTALMOLOGIC|\\bSNELLEN\\b|\\bISHIHARA\\b"
+      },
+      "parametros": {},
+      "motivo": null,
+      "exemplos": {
+        "nome_sim": [
+          "ACUIDADE VISUAL",
+          "AVALIACAO OFTALMOLOGICA"
+        ],
+        "nome_nao": [
+          "ACUIDADE AUDITIVA"
+        ],
+        "texto_sim": [
+          " TESTE DE ISHIHARA ",
+          " ESCALA DE SNELLEN "
+        ],
+        "texto_nao": [
+          " AUDIOGRAMA "
+        ]
+      },
+      "notas": "Acuidade 43% → 93% no clique (498 PDFs, 29/10)."
+    },
+    {
+      "chave": "titulo_laudo.espirometria",
+      "perfil": "espirometria",
+      "papel": "titulo_laudo",
+      "ordem": 40,
+      "padrao_nome": "\\bESPIROMETRIA\\b",
+      "condicao": {
+        "regex": "\\bESPIROMETRI|\\bFUNCAO PULMONAR\\b"
+      },
+      "parametros": {},
+      "motivo": null,
+      "exemplos": {
+        "nome_sim": [
+          "ESPIROMETRIA"
+        ],
+        "texto_sim": [
+          " PROVA DE FUNCAO PULMONAR ",
+          " LAUDO DE ESPIROMETRIA "
+        ],
+        "texto_nao": [
+          " FUNCAO RENAL "
+        ]
+      },
+      "notas": null
+    },
+    {
+      "chave": "titulo_laudo.rx_torax",
+      "perfil": "rx_torax",
+      "papel": "titulo_laudo",
+      "ordem": 50,
+      "padrao_nome": "\\bTORAX\\b",
+      "condicao": {
+        "regex": "\\bLEITURA RADIOLOGICA\\b|\\bPNEUMOCONIOSE\\b|\\b(RADIOGRAFIA|RX|RAIOS? X) (D[EO] )?TORAX\\b|^ TORAX (PA|AP)\\b|\\bPEQUENAS OPACIDADES\\b|\\bGRANDES OPACIDADES\\b|\\bPROFUSAO\\b|\\bESPESSAMENTO PLEURAL\\b"
+      },
+      "parametros": {},
+      "motivo": null,
+      "exemplos": {
+        "nome_sim": [
+          "RAIO X DE TORAX PA",
+          "RADIOGRAFIA DE TORAX PA OIT"
+        ],
+        "nome_nao": [
+          "RADIOGRAFIA DE COLUNA LOMBAR"
+        ],
+        "texto_sim": [
+          " LAUDO DE RAIO X TORAX PA ",
+          " TORAX PA ",
+          " FOLHA DE LEITURA RADIOLOGICA ",
+          " RX TORAX "
+        ],
+        "texto_nao": [
+          " EXAME DO TORAX SEM ALTERACOES ",
+          " CONSISTENTE COM TORAX "
+        ]
+      },
+      "notas": "O título vem sem o 'de' ('Laudo de Raio-X - Tórax (PA)', 'Tórax PA' sozinho), e a folha OIT só traz o nome em pergunta: valem os cabeçalhos dela. 726 documentos com layout (30/10): 94 → 140 dos 152 cliques em RX de tórax vão ao laudo, nenhum piora."
+    },
+    {
+      "chave": "titulo_laudo.ecg",
+      "perfil": "ecg",
+      "papel": "titulo_laudo",
+      "ordem": 60,
+      "padrao_nome": "\\bELETROCARDIOGRAMA\\b",
+      "condicao": {
+        "regex": "\\bELETROCARDIOGRAMA\\b|\\bECG\\b"
+      },
+      "parametros": {},
+      "motivo": null,
+      "exemplos": {
+        "nome_sim": [
+          "ELETROCARDIOGRAMA"
+        ],
+        "texto_sim": [
+          " ECG DE REPOUSO ",
+          " LAUDO MEDICO ELETROCARDIOGRAMA "
+        ],
+        "texto_nao": [
+          " ELETROENCEFALOGRAMA "
+        ]
+      },
+      "notas": null
+    },
+    {
+      "chave": "titulo_laudo.eeg",
+      "perfil": "eeg",
+      "papel": "titulo_laudo",
+      "ordem": 70,
+      "padrao_nome": "\\bELETROENCEFALOGRAMA\\b",
+      "condicao": {
+        "regex": "\\bELETROENCEFALOGRAMA\\b|\\bEEG\\b"
+      },
+      "parametros": {},
+      "motivo": null,
+      "exemplos": {
+        "nome_sim": [
+          "ELETROENCEFALOGRAMA"
+        ],
+        "texto_sim": [
+          " EEG ",
+          " ELETROENCEFALOGRAMA DIGITAL "
+        ],
+        "texto_nao": [
+          " ELETROCARDIOGRAMA "
+        ]
+      },
+      "notas": null
+    },
+    {
+      "chave": "titulo_laudo.psicologico",
+      "perfil": "psicologico",
+      "papel": "titulo_laudo",
+      "ordem": 80,
+      "padrao_nome": "\\bPSICOLOGIC|\\bPSICOSSOCIAL\\b",
+      "condicao": {
+        "regex": "\\b(AVALIACAO|LAUDO|PARECER) PSICO(LOGIC|SSOCIAL)|\\bPALOGRAFIC|\\bASPECTOS DA PERSONALIDADE\\b|^ PSICOLOG[AO]S? $|\\bCRP (?:[A-Z]{2} )?\\d{1,2} \\d{3,}"
+      },
+      "parametros": {},
+      "motivo": null,
+      "exemplos": {
+        "nome_sim": [
+          "AVALIACAO PSICOLOGICA",
+          "AVALIACAO PSICOSSOCIAL"
+        ],
+        "nome_nao": [
+          "PSIQUIATRIA"
+        ],
+        "texto_sim": [
+          " TESTE PALOGRAFICO ",
+          " PSICOLOGA ",
+          " CRP 06 123456 ",
+          " PARECER PSICOLOGICO "
+        ],
+        "texto_nao": [
+          " PSICOLOGA RESPONSAVEL PELA CLINICA ",
+          " CRM 123456 "
+        ]
+      },
+      "notas": "Laudo psicológico muitas vezes não traz o nome do exame: é a folha dos testes (Palográfico) e a assinatura com o CRP. 22 dos 33 cliques que caíam na lista do ASO vão ao laudo (30/10)."
+    },
+    {
+      "chave": "titulo_laudo.odontologico",
+      "perfil": "odontologico",
+      "papel": "titulo_laudo",
+      "ordem": 90,
+      "padrao_nome": "\\bODONTOLOGIC",
+      "condicao": {
+        "regex": "\\bODONTOLOGIC|\\bODONTOGRAMA\\b"
+      },
+      "parametros": {},
+      "motivo": null,
+      "exemplos": {
+        "nome_sim": [
+          "AVALIACAO ODONTOLOGICA"
+        ],
+        "texto_sim": [
+          " ODONTOGRAMA "
+        ],
+        "texto_nao": [
+          " AUDIOGRAMA "
+        ]
+      },
+      "notas": null
+    },
+    {
+      "chave": "titulo_identidade.clinico",
+      "perfil": "clinico",
+      "papel": "titulo_identidade",
+      "ordem": 10,
+      "padrao_nome": "\\bCLINICO\\b",
+      "condicao": null,
+      "parametros": {
+        "termos": [
+          "ATESTADO DE SAUDE OCUPACIONAL"
+        ]
+      },
+      "motivo": null,
+      "exemplos": {
+        "nome_sim": [
+          "CLINICO OCUPACIONAL"
+        ],
+        "nome_nao": [
+          "AUDIOMETRIA TONAL"
+        ]
+      },
+      "notas": "O laudo do clínico é o próprio ASO: o título dele liga a outra pessoa ao exame."
+    },
+    {
+      "chave": "marcador_ocr.audiometria",
+      "perfil": "audiometria",
+      "papel": "marcador_ocr",
+      "ordem": 10,
+      "padrao_nome": "AUDIOMETRIA",
+      "condicao": {
+        "algum": [
+          {
+            "regex": "AUDIOMETR"
+          },
+          {
+            "regex": "FONOAUDIO"
+          },
+          {
+            "regex": " ORELHA (?:DIREITA|ESQUERDA) "
+          },
+          {
+            "todos": [
+              {
+                "regex": " HZ "
+              },
+              {
+                "regex": " DB "
+              }
+            ]
+          },
+          {
+            "todos": [
+              {
+                "regex": " O[DE] "
+              },
+              {
+                "regex": " (?:HZ|DB) "
+              }
+            ]
+          },
+          {
+            "todos": [
+              {
+                "regex": " (?:SRT|IRF) "
+              },
+              {
+                "regex": " O[DE] "
+              }
+            ]
+          }
+        ]
+      },
+      "parametros": {},
+      "motivo": null,
+      "exemplos": {
+        "nome_sim": [
+          "AUDIOMETRIA TONAL",
+          "AUDIOMETRIA OCUPACIONAL"
+        ],
+        "nome_nao": [
+          "IMITANCIOMETRIA"
+        ],
+        "texto_sim": [
+          "FONOAUDIOLOGICA",
+          "AUDIOMETRO",
+          "OD 500 HZ 20 DB",
+          "SRT OD",
+          "ORELHA DIREITA",
+          "HZ DB"
+        ],
+        "texto_nao": [
+          "",
+          "ORELHA",
+          "OD",
+          "DB",
+          "SRT",
+          "HZ",
+          "ESPIROMETRIA",
+          "IMITANCIOMETRIA"
+        ]
+      },
+      "notas": "Nome lido pelo OCR que vale como audiometria mesmo fora do catálogo (FONOAUDIOLÓGICA, AUDIÔMETRO, 'OD 500 HZ 20 DB'). Avaliado sobre o nome com espaço nas pontas."
+    },
+    {
+      "chave": "marcador_texto.audiometria",
+      "perfil": "audiometria",
+      "papel": "marcador_texto",
+      "ordem": 10,
+      "padrao_nome": "AUDIOMETRIA",
+      "condicao": {
+        "algum": [
+          {
+            "regex": "AUDIOMETR"
+          },
+          {
+            "regex": "FONOAUDIO"
+          },
+          {
+            "regex": " ORELHA (?:DIREITA|ESQUERDA) "
+          },
+          {
+            "todos": [
+              {
+                "regex": " HZ "
+              },
+              {
+                "regex": " DB "
+              }
+            ]
+          },
+          {
+            "todos": [
+              {
+                "regex": " O[DE] "
+              },
+              {
+                "regex": " (?:HZ|DB) "
+              }
+            ]
+          },
+          {
+            "todos": [
+              {
+                "regex": " (?:SRT|IRF) "
+              },
+              {
+                "regex": " O[DE] "
+              }
+            ]
+          }
+        ]
+      },
+      "parametros": {},
+      "motivo": null,
+      "exemplos": {
+        "nome_sim": [
+          "AUDIOMETRIA TONAL"
+        ],
+        "texto_sim": [
+          " EXAME EM CABINE ORELHA ESQUERDA LIMIARES NORMAIS "
+        ],
+        "texto_nao": [
+          " EXAME CLINICO SEM ALTERACOES "
+        ]
+      },
+      "notas": "Exame do BRNET com AUDIOMETRIA no nome é dado como encontrado quando o texto do documento tem marca de audiometria."
+    },
+    {
+      "chave": "marcador_texto.ggt",
+      "perfil": "ggt",
+      "papel": "marcador_texto",
+      "ordem": 20,
+      "padrao_nome": "GGT",
+      "condicao": {
+        "algum": [
+          {
+            "regex": " GGT "
+          },
+          {
+            "regex": " GAMA GLUTAMIL "
+          }
+        ]
+      },
+      "parametros": {},
+      "motivo": null,
+      "exemplos": {
+        "nome_sim": [
+          "GGT",
+          "DOSAGEM DE GGT"
+        ],
+        "nome_nao": [
+          "TGO",
+          "GAMA GT"
+        ],
+        "texto_sim": [
+          " GGT 30 U L ",
+          " DOSAGEM DE GAMA GLUTAMIL REALIZADA "
+        ],
+        "texto_nao": [
+          " TGO 19 U L ",
+          " GAMAGLUTAMIL "
+        ]
+      },
+      "notas": "Exame do BRNET com GGT no nome é dado como encontrado quando o texto cita GGT/gama glutamil."
+    },
+    {
+      "chave": "prova_conteudo.lipidograma",
+      "perfil": "lipidios",
+      "papel": "prova_conteudo",
+      "ordem": 10,
+      "padrao_nome": "LIPIDOGRAMA|PERFIL LIPIDICO",
+      "condicao": {
+        "contar": [
+          {
+            "regex": "COLESTEROL TOTAL.{0,150}MG ?DL"
+          },
+          {
+            "regex": "HDL.{0,150}MG ?DL"
+          },
+          {
+            "regex": "LDL.{0,150}MG ?DL"
+          },
+          {
+            "regex": "TRIGLICER.{0,150}MG ?DL"
+          }
+        ],
+        "minimo": 3
+      },
+      "parametros": {},
+      "motivo": "laudos dos componentes do perfil lipídico com resultado em mg/dL",
+      "exemplos": {
+        "nome_sim": [
+          "LIPIDOGRAMA",
+          "PERFIL LIPIDICO"
+        ],
+        "nome_nao": [
+          "COLESTEROL TOTAL"
+        ],
+        "texto_sim": [
+          " COLESTEROL TOTAL 180 MG DL HDL 50 MG DL LDL 110 MG DL "
+        ],
+        "texto_nao": [
+          " COLESTEROL TOTAL 180 MG DL HDL 50 MG DL ",
+          " PADRONIZACAO DO PERFIL LIPIDICO "
+        ]
+      },
+      "notas": "Recuperar faltante pelo conteúdo: replay em 2.581 documentos (14/09 a 05/10) contra o revisor, +15 corrigidos, −2."
+    },
+    {
+      "chave": "prova_conteudo.toxicologico",
+      "perfil": "toxicologico",
+      "papel": "prova_conteudo",
+      "ordem": 20,
+      "padrao_nome": "^(?=.*TOXICOL)(?!.*CAPILAR)",
+      "condicao": {
+        "todos": [
+          {
+            "contar": [
+              {
+                "regex": "COCAINA"
+              },
+              {
+                "regex": "BENZOILECGONINA"
+              },
+              {
+                "regex": "CANABIN"
+              },
+              {
+                "regex": "THC"
+              },
+              {
+                "regex": "ANFETAMIN"
+              },
+              {
+                "regex": "OPIACE"
+              },
+              {
+                "regex": "BARBITUR"
+              },
+              {
+                "regex": "BENZODIAZEP"
+              },
+              {
+                "regex": "METADONA"
+              },
+              {
+                "regex": "FENCICLIDINA"
+              }
+            ],
+            "minimo": 4
+          },
+          {
+            "regex": "NEGATIVO|NAO DETECTADO|POSITIVO|DETECTADO"
+          }
+        ]
+      },
+      "parametros": {},
+      "motivo": "laudos por substância ({contagem} drogas) com resultado",
+      "exemplos": {
+        "nome_sim": [
+          "TOXICOLOGICO",
+          "EXAME TOXICOLOGICO DE LARGA JANELA"
+        ],
+        "nome_nao": [
+          "TOXICOLOGICO CAPILAR"
+        ],
+        "texto_sim": [
+          " COCAINA NEGATIVO BENZOILECGONINA NEGATIVO CANABINOIDES THC NEGATIVO ANFETAMINAS NEGATIVO "
+        ],
+        "texto_nao": [
+          " COCAINA NEGATIVO ANFETAMINA NEGATIVO OPIACEOS NEGATIVO ",
+          " COCAINA BENZOILECGONINA THC ANFETAMINA "
+        ]
+      },
+      "notas": null
+    },
+    {
+      "chave": "prova_conteudo.glicemia",
+      "perfil": "glicemia",
+      "papel": "prova_conteudo",
+      "ordem": 30,
+      "padrao_nome": "GLICEMIA",
+      "condicao": {
+        "regex": "(GLICOSE|GLICEMIA).{0,150}MG ?DL"
+      },
+      "parametros": {},
+      "motivo": "laudo de glicose com resultado em mg/dL",
+      "exemplos": {
+        "nome_sim": [
+          "GLICEMIA DE JEJUM"
+        ],
+        "nome_nao": [
+          "GLICOSE"
+        ],
+        "texto_sim": [
+          " GLICOSE RESULTADO 93 MG DL "
+        ],
+        "texto_nao": [
+          " GLICEMIA DE JEJUM 15 10 2026 "
+        ]
+      },
+      "notas": null
+    },
+    {
+      "chave": "prova_conteudo.etanol_urina",
+      "perfil": "etanol",
+      "papel": "prova_conteudo",
+      "ordem": 40,
+      "padrao_nome": "^(?=.*(?:ETANOL|ALCOOL))(?=.*URIN)",
+      "condicao": {
+        "regex": "(ETANOL|ALCOOL ETILICO).{0,200}URINA|URINA.{0,200}(ETANOL|ALCOOL ETILICO)"
+      },
+      "parametros": {},
+      "motivo": "laudo de etanol em urina",
+      "exemplos": {
+        "nome_sim": [
+          "ETANOL URINARIO",
+          "ALCOOL NA URINA"
+        ],
+        "nome_nao": [
+          "ETANOL SANGUINEO"
+        ],
+        "texto_sim": [
+          " ETANOL MATERIAL URINA RESULTADO NAO DETECTADO "
+        ],
+        "texto_nao": [
+          " ETANOL SORO "
+        ]
+      },
+      "notas": null
+    },
+    {
+      "chave": "prova_conteudo.etanol_sangue",
+      "perfil": "etanol",
+      "papel": "prova_conteudo",
+      "ordem": 50,
+      "padrao_nome": "^(?=.*(?:ETANOL|ALCOOL))(?!.*URIN)",
+      "condicao": {
+        "regex": "(ETANOL|ALCOOL ETILICO).{0,200}(SORO|SANGUE|PLASMA)|(SORO|SANGUE|PLASMA).{0,200}(ETANOL|ALCOOL ETILICO)"
+      },
+      "parametros": {},
+      "motivo": "laudo de etanol em sangue/soro",
+      "exemplos": {
+        "nome_sim": [
+          "ETANOL SANGUINEO",
+          "ALCOOLEMIA"
+        ],
+        "nome_nao": [
+          "ETANOL URINARIO"
+        ],
+        "texto_sim": [
+          " ALCOOL ETILICO ETANOL EM SANGUE TOTAL "
+        ],
+        "texto_nao": [
+          " ETANOL URINA "
+        ]
+      },
+      "notas": null
+    },
+    {
+      "chave": "prova_conteudo.rx_oit",
+      "perfil": "rx_oit",
+      "papel": "prova_conteudo",
+      "ordem": 55,
+      "padrao_nome": "OIT",
+      "condicao": {
+        "regex": "LEITURA RADIOLOGICA|PNEUMOCONIOSE|CLASSIFICACAO INTERNACIONAL|QUALIDADE TECNICA|QUALIDADE DA RADIOGRAFIA|PROFUSAO|PEQUENAS OPACIDADES|GRANDES OPACIDADES"
+      },
+      "parametros": {},
+      "motivo": "folha de leitura radiológica OIT preenchida",
+      "exemplos": {
+        "nome_sim": [
+          "RADIOGRAFIA DE TORAX PADRAO OIT"
+        ],
+        "nome_nao": [
+          "RADIOGRAFIA DE TORAX PA"
+        ],
+        "texto_sim": [
+          " FOLHA DE LEITURA RADIOLOGICA OIT 2011 CLASSIFICACAO INTERNACIONAL DE RADIOGRAFIAS DE PNEUMOCONIOSE ",
+          " QUALIDADE DA RADIOGRAFIA 1 PROFUSAO 0 0 PEQUENAS OPACIDADES "
+        ],
+        "texto_nao": [
+          " RADIOGRAFIA DE TORAX PADRAO OIT 04 11 2026 ",
+          " RAIO X DE TORAX CONCLUSAO NORMAL "
+        ]
+      },
+      "notas": "Recupera o RX OIT dado como faltante pela comparação quando a folha de leitura OIT está no documento. Medido em 10/11/2026 (set–nov, cópia de produção): muda 3 documentos, os 3 liberados pelo revisor; nenhum rejeitado tem a folha. Caso da Mediar de 04/11 (folha na p. 11, título lido inteiro pelo OCR)."
+    },
+    {
+      "chave": "prova_conteudo.rx",
+      "perfil": "rx",
+      "papel": "prova_conteudo",
+      "ordem": 60,
+      "padrao_nome": "RADIOGRAF|RAIO X|\\bRX\\b",
+      "condicao": {
+        "regex": "(RAIO X|RADIOGRAFIA|\\bRX\\b).{0,300}(CONCLUS|IMPRESSAO|CORPOS VERTEBRAIS|ESPACOS INTERVERTEBRAIS|CAMPOS PULMONARES|SEIOS COSTOFRENICOS)"
+      },
+      "parametros": {},
+      "motivo": "laudo radiológico com conclusão",
+      "exemplos": {
+        "nome_sim": [
+          "RAIO X DE TORAX PA",
+          "RADIOGRAFIA DA COLUNA LOMBAR",
+          "RX DE TORAX"
+        ],
+        "texto_sim": [
+          " RADIOGRAFIA DA COLUNA CORPOS VERTEBRAIS PRESERVADOS ",
+          " RAIO X TORAX CONCLUSAO NORMAL "
+        ],
+        "texto_nao": [
+          " RAIO X DE TORAX 10 10 2026 "
+        ]
+      },
+      "notas": null
+    },
+    {
+      "chave": "prova_conteudo.acuidade",
+      "perfil": "acuidade",
+      "papel": "prova_conteudo",
+      "ordem": 70,
+      "padrao_nome": "^(?=.*ACUIDADE)(?!.*CROMATIC)",
+      "condicao": {
+        "algum": [
+          {
+            "todos": [
+              {
+                "regex": "OLHO DIREITO (?:COM CORRECAO |SEM CORRECAO )?20 \\d{2,3}\\b"
+              },
+              {
+                "regex": "OLHO ESQUERDO (?:COM CORRECAO |SEM CORRECAO )?20 \\d{2,3}\\b"
+              }
+            ]
+          },
+          {
+            "regex": "OLHO DIREITO OLHO ESQUERDO (?:S C |C C |SEM CORRECAO |COM CORRECAO )?20 \\d{2,3}\\b"
+          }
+        ]
+      },
+      "parametros": {},
+      "motivo": "tabela de Snellen com resultado nos dois olhos",
+      "exemplos": {
+        "nome_sim": [
+          "ACUIDADE VISUAL"
+        ],
+        "nome_nao": [
+          "ACUIDADE VISUAL E SENSO CROMATICO"
+        ],
+        "texto_sim": [
+          " OLHO DIREITO 20 25 OLHO ESQUERDO 20 25 ",
+          " AV PARA LONGE OLHO DIREITO OLHO ESQUERDO S C 20 50 20 40 "
+        ],
+        "texto_nao": [
+          " OLHO DIREITO OLHO ESQUERDO TESTE DE ISHIHARA ",
+          " OLHO DIREITO 20 20 OLHO ESQUERDO "
+        ]
+      },
+      "notas": "'Snellen' está IMPRESSO no formulário da BR MED, preenchido ou em branco (2.570 ocorrências desde ago/26): a palavra não prova nada. Prova a fração anotada nos DOIS olhos, ou a tabela de oftalmologista (olhos como cabeçalho de coluna, 23 documentos de 14/09 a 19/10, todos preenchidos)."
+    },
+    {
+      "chave": "prova_conteudo.acuidade_cromatica",
+      "perfil": "acuidade",
+      "papel": "prova_conteudo",
+      "ordem": 80,
+      "padrao_nome": "^(?=.*ACUIDADE)(?=.*CROMATIC)",
+      "condicao": {
+        "todos": [
+          {
+            "algum": [
+              {
+                "todos": [
+                  {
+                    "regex": "OLHO DIREITO (?:COM CORRECAO |SEM CORRECAO )?20 \\d{2,3}\\b"
+                  },
+                  {
+                    "regex": "OLHO ESQUERDO (?:COM CORRECAO |SEM CORRECAO )?20 \\d{2,3}\\b"
+                  }
+                ]
+              },
+              {
+                "regex": "OLHO DIREITO OLHO ESQUERDO (?:S C |C C |SEM CORRECAO |COM CORRECAO )?20 \\d{2,3}\\b"
+              }
+            ]
+          },
+          {
+            "regex": "ISHIHARA|CROMATIC"
+          }
+        ]
+      },
+      "parametros": {},
+      "motivo": "tabela de Snellen com resultado nos dois olhos",
+      "exemplos": {
+        "nome_sim": [
+          "ACUIDADE VISUAL E SENSO CROMATICO"
+        ],
+        "nome_nao": [
+          "ACUIDADE VISUAL"
+        ],
+        "texto_sim": [
+          " OLHO DIREITO 20 20 OLHO ESQUERDO 20 20 TESTE DE ISHIHARA NORMAL "
+        ],
+        "texto_nao": [
+          " OLHO DIREITO 20 20 OLHO ESQUERDO 20 20 "
+        ]
+      },
+      "notas": "Com senso cromático no nome, o teste de Ishihara também precisa estar no documento."
+    },
+    {
+      "chave": "marca_laudo.clinico",
+      "perfil": "clinico",
+      "papel": "marca_laudo",
+      "ordem": 10,
+      "padrao_nome": "\\bCLINICO\\b",
+      "condicao": {
+        "regex": "\\bFICHA (MEDICA|CLINICA)\\b|\\bPRONTUARIO (MEDICO|CLINICO)\\b|^(?=.*ANAMNESE)(?=.*(?:EXAME FISICO|PRESSAO ARTERIAL|AUSCULTA|FREQUENCIA CARDIACA))"
+      },
+      "parametros": {
+        "tipo": "CLINICO",
+        "estrategia": "marca"
+      },
+      "motivo": null,
+      "exemplos": {
+        "nome_sim": [
+          "CLINICO OCUPACIONAL"
+        ],
+        "texto_sim": [
+          " FICHA MEDICA ",
+          " ANAMNESE NEGA COMORBIDADES EXAME FISICO SEM ALTERACOES "
+        ],
+        "texto_nao": [
+          " ANAMNESE OCUPACIONAL QUEIXAS NENHUMA ",
+          " ATESTADO DE SAUDE OCUPACIONAL "
+        ]
+      },
+      "notas": "O Clínico é a própria consulta: o laudo é a ficha médica ou a anamnese com o exame físico. Clínico, glicemia, ergométrico e GGT passaram a exigir laudo em 03/11: +39 corrigidos, −7 em 5.863 documentos."
+    },
+    {
+      "chave": "marca_laudo.ergometrico",
+      "perfil": "ergometrico",
+      "papel": "marca_laudo",
+      "ordem": 20,
+      "padrao_nome": "ERGOMETRI",
+      "condicao": {
+        "regex": "ERGOMETRI"
+      },
+      "parametros": {
+        "tipo": "ERGOMETRICO",
+        "estrategia": "nome_fora_das_listas"
+      },
+      "motivo": null,
+      "exemplos": {
+        "nome_sim": [
+          "TESTE ERGOMETRICO"
+        ],
+        "texto_sim": [
+          " TESTE ERGOMETRICO PROTOCOLO DE BRUCE "
+        ],
+        "texto_nao": [
+          " ELETROCARDIOGRAMA "
+        ]
+      },
+      "notas": "Julgado pelo nome do exame fora das listas do ASO/voucher."
+    },
+    {
+      "chave": "marca_laudo.psicologica",
+      "perfil": "psicologico",
+      "papel": "marca_laudo",
+      "ordem": 22,
+      "padrao_nome": "PSICOLOG",
+      "condicao": {
+        "regex": "PSICOLOG|\\bCRP\\b|PALOGRAF|INSTRUMENTOS UTILIZADOS|ATENCAO (?:CONCENTRADA|DIFUSA|DIVIDIDA)|BETA III|\\bTADIM\\b|\\bBPA\\b|\\bBFP\\b|PERSONALIDADE|PSICOTECNIC|\\bTEPIC\\b|\\bAC 15\\b"
+      },
+      "parametros": {
+        "tipo": "PSICOLOGICA",
+        "estrategia": "nome_fora_das_listas"
+      },
+      "motivo": null,
+      "exemplos": {
+        "nome_sim": [
+          "AVALIACAO PSICOLOGICA"
+        ],
+        "nome_nao": [
+          "PSICOSSOCIAL"
+        ],
+        "texto_sim": [
+          " PARECER PSICOLOGICO CONCLUSAO APTO CRP 06 12345 ",
+          " INSTRUMENTOS UTILIZADOS PALOGRAFICO BETA III CTA AC E ENTREVISTA "
+        ],
+        "texto_nao": [
+          " FICHA MEDICA OCUPACIONAL ",
+          " AVALIACAO PSICOSSOCIAL ANAMNESE PARA TRABALHO EM ALTURA "
+        ]
+      },
+      "notas": "Exige laudo fora das listas do ASO/voucher. A marca inclui a bateria de testes: há laudo que não escreve 'psicológica' fora da lista (INSTRUMENTOS UTILIZADOS PALOGRÁFICO BETA III). Psicossocial não casa o nome e fica sem exigência. Medido em 10/11/2026 no texto gravado dos aprovados pela IA, contra o revisor, junto com as outras duas regras de 10/11 (psicológica, odontológica, EEG): set +6/−4, out +12/−6, nov 03–10 +6/0. Dos aprovados barrados, 9 conferidos no PDF: 8 sem o laudo no documento."
+    },
+    {
+      "chave": "marca_laudo.odontologica",
+      "perfil": "odontologico",
+      "papel": "marca_laudo",
+      "ordem": 24,
+      "padrao_nome": "ODONTOL",
+      "condicao": {
+        "regex": "ODONTO|\\bCRO\\b|DENTISTA|SAUDE BUCAL"
+      },
+      "parametros": {
+        "tipo": "ODONTOLOGICA",
+        "estrategia": "nome_fora_das_listas"
+      },
+      "motivo": null,
+      "exemplos": {
+        "nome_sim": [
+          "AVALIACAO ODONTOLOGICA"
+        ],
+        "texto_sim": [
+          " ODONTOGRAMA SEM ALTERACOES CIRURGIAO DENTISTA CRO 1234 ",
+          " ATESTADO DE SAUDE BUCAL ASSOALHO BUCAL SEM ALTERACOES "
+        ],
+        "texto_nao": [
+          " FICHA MEDICA OCUPACIONAL "
+        ]
+      },
+      "notas": "Exige laudo fora das listas do ASO/voucher. 'Atestado de Saúde Bucal' (Protegy) não escreve odonto nem traz o CRO legível; sem SAUDE BUCAL ele era dado como ausente no teste em staging de 10/11. Medido em 10/11/2026 no texto gravado dos aprovados pela IA, contra o revisor, junto com as outras duas regras de 10/11 (psicológica, odontológica, EEG): set +6/−4, out +12/−6, nov 03–10 +6/0. Dos aprovados barrados, 9 conferidos no PDF: 8 sem o laudo no documento."
+    },
+    {
+      "chave": "marca_laudo.audiometria",
+      "perfil": "audiometria",
+      "papel": "marca_laudo",
+      "ordem": 30,
+      "padrao_nome": "AUDIOMETR",
+      "condicao": {
+        "regex": "ORELHA (DIREITA|ESQUERDA)|\\bKHZ\\b|VIA AEREA|LIMIARES|LOGOAUDIOMETRIA|\\bIRF\\b|\\bSRT\\b|\\bLRF\\b|\\bLIMIAR\\b|MEATOSCOPIA|\\bAUDIOGRAMA\\b"
+      },
+      "parametros": {
+        "tipo": "AUDIOMETRIA",
+        "estrategia": "marca"
+      },
+      "motivo": null,
+      "exemplos": {
+        "nome_sim": [
+          "AUDIOMETRIA TONAL"
+        ],
+        "texto_sim": [
+          " ORELHA DIREITA 20 DB ",
+          " LOGOAUDIOMETRIA SRT 15 ",
+          " AUDIOGRAMA PERIODICO SEQUENCIAL LIMIAR OD LIMIAR OE ",
+          " MEATOSCOPIA SEM ALTERACOES "
+        ],
+        "texto_nao": [
+          " AUDIOMETRIA TONAL 10 10 2026 ",
+          " AUDIOMETRIA TONAL PURE TONE AUDIOMETRY 09 11 26 "
+        ]
+      },
+      "notas": "11/11/2026 — audiograma de clínica parceira em gráfico (REFORGE: \"LIMIAR OD/OE\", frequências 1K–8K, \"VA\" e dB) não tinha nenhuma marca e a audiometria virava faltante. Acrescentados LIMIAR (singular), MEATOSCOPIA e AUDIOGRAMA. Replay no texto gravado até 30/10/2026 (5.707 documentos com audiometria pedida, 183 sem marca): +17 aprovados pelo revisor deixam de ser faltante, 0 rejeitados por audiometria passam; 5 rejeitados por outro motivo e 2 pendentes também ganham a marca. HZ ficou fora: pegava 1 rejeitado por audiometria. dB+OD+OE juntos rendia o mesmo e não cabe numa regex única de marca_laudo."
+    },
+    {
+      "chave": "marca_laudo.rx_oit",
+      "perfil": "rx_oit",
+      "papel": "marca_laudo",
+      "ordem": 40,
+      "padrao_nome": "OIT",
+      "condicao": {
+        "regex": "LEITURA RADIOLOGICA|PNEUMOCONIOSE|CLASSIFICACAO INTERNACIONAL|QUALIDADE TECNICA|QUALIDADE DA RADIOGRAFIA|PROFUSAO|PEQUENAS OPACIDADES|GRANDES OPACIDADES"
+      },
+      "parametros": {
+        "tipo": "RX_OIT",
+        "estrategia": "marca"
+      },
+      "motivo": null,
+      "exemplos": {
+        "nome_sim": [
+          "RADIOGRAFIA DE TORAX PA OIT"
+        ],
+        "nome_nao": [
+          "RADIOGRAFIA DE TORAX PA"
+        ],
+        "texto_sim": [
+          " FOLHA DE LEITURA RADIOLOGICA ",
+          " QUALIDADE DA RADIOGRAFIA 1 PROFUSAO 0 0 "
+        ],
+        "texto_nao": [
+          " RADIOGRAFIA DE TORAX PA OIT 10 10 2026 "
+        ]
+      },
+      "notas": "A ficha OIT da CMTL escreve 'Qualidade da radiografia', 'Profusão' e 'Pequenas opacidades' e nenhuma das quatro primeiras marcas: era rebaixada em todo envio (7 documentos de 14/09 a 19/10). Tem de vir ANTES da regra rx."
+    },
+    {
+      "chave": "marca_laudo.rx",
+      "perfil": "rx",
+      "papel": "marca_laudo",
+      "ordem": 50,
+      "padrao_nome": "RADIOGRAF|RAIO X|\\bRX\\b",
+      "condicao": null,
+      "parametros": {
+        "tipo": "RX",
+        "estrategia": "marca"
+      },
+      "motivo": null,
+      "exemplos": {
+        "nome_sim": [
+          "RADIOGRAFIA DE TORAX PA",
+          "RX DE COLUNA"
+        ]
+      },
+      "notas": null
+    },
+    {
+      "chave": "marca_laudo.espirometria",
+      "perfil": "espirometria",
+      "papel": "marca_laudo",
+      "ordem": 60,
+      "padrao_nome": "ESPIROMETR",
+      "condicao": null,
+      "parametros": {
+        "tipo": "ESPIROMETRIA",
+        "estrategia": "marca"
+      },
+      "motivo": null,
+      "exemplos": {
+        "nome_sim": [
+          "ESPIROMETRIA"
+        ]
+      },
+      "notas": null
+    },
+    {
+      "chave": "marca_laudo.ecg",
+      "perfil": "ecg",
+      "papel": "marca_laudo",
+      "ordem": 70,
+      "padrao_nome": "ELETROCARDIO|\\bECG\\b",
+      "condicao": {
+        "regex": "RITMO SINUSAL|\\bQRS\\b|\\bEIXO\\b|INTERVALO PR|\\bQTC?\\b|\\bBPM\\b"
+      },
+      "parametros": {
+        "tipo": "ECG",
+        "estrategia": "marca"
+      },
+      "motivo": null,
+      "exemplos": {
+        "nome_sim": [
+          "ELETROCARDIOGRAMA",
+          "ECG"
+        ],
+        "texto_sim": [
+          " RITMO SINUSAL FC 68 BPM "
+        ],
+        "texto_nao": [
+          " ELETROCARDIOGRAMA 10 10 2026 "
+        ]
+      },
+      "notas": null
+    },
+    {
+      "chave": "marca_laudo.eeg",
+      "perfil": "eeg",
+      "papel": "marca_laudo",
+      "ordem": 80,
+      "padrao_nome": "ELETROENCEFAL|\\bEEG\\b",
+      "condicao": {
+        "regex": "ELETROENCEFAL|\\bEEG\\b|ATIVIDADE DE BASE|RITMO DE BASE|FOTOESTIMUL|HIPERPNEIA|HIPERVENTILA|ONDAS (?:ALFA|TETA|DELTA)"
+      },
+      "parametros": {
+        "tipo": "EEG",
+        "estrategia": "nome_fora_das_listas"
+      },
+      "motivo": null,
+      "exemplos": {
+        "nome_sim": [
+          "ELETROENCEFALOGRAMA"
+        ],
+        "texto_sim": [
+          " LAUDO DE ELETROENCEFALOGRAMA ATIVIDADE DE BASE ORGANIZADA ",
+          " FOTOESTIMULACAO INTERMITENTE E HIPERPNEIA SEM ALTERACOES "
+        ],
+        "texto_nao": [
+          " ELETROCARDIOGRAMA RITMO SINUSAL "
+        ]
+      },
+      "notas": "Exige laudo fora das listas do ASO/voucher desde 10/11/2026; antes só classificava. O traçado é imagem: a marca é o laudo ou a descrição do exame. Medido em 10/11/2026 no texto gravado dos aprovados pela IA, contra o revisor, junto com as outras duas regras de 10/11 (psicológica, odontológica, EEG): set +6/−4, out +12/−6, nov 03–10 +6/0. Dos aprovados barrados, 9 conferidos no PDF: 8 sem o laudo no documento."
+    },
+    {
+      "chave": "marca_laudo.glicose",
+      "perfil": "glicemia",
+      "papel": "marca_laudo",
+      "ordem": 90,
+      "padrao_nome": "GLICEMIA|GLICOSE",
+      "condicao": {
+        "regex": "^(?=.*(?:GLICOSE|GLICEMIA))(?=.*MG ?DL)"
+      },
+      "parametros": {
+        "tipo": "GLICOSE",
+        "estrategia": "marca"
+      },
+      "motivo": null,
+      "exemplos": {
+        "nome_sim": [
+          "GLICEMIA DE JEJUM",
+          "GLICOSE"
+        ],
+        "texto_sim": [
+          " GLICOSE PEDIDO RESULTADO 93 MG DL "
+        ],
+        "texto_nao": [
+          " GLICEMIA DE JEJUM 15 10 2026 "
+        ]
+      },
+      "notas": "As duas palavras em qualquer ponto do documento: exigir uma perto da outra barrava mais documentos certos do que pegava (replay de 05/10)."
+    },
+    {
+      "chave": "marca_laudo.hemograma",
+      "perfil": "hemograma",
+      "papel": "marca_laudo",
+      "ordem": 100,
+      "padrao_nome": "HEMOGRAMA",
+      "condicao": null,
+      "parametros": {
+        "tipo": "HEMOGRAMA",
+        "estrategia": "marca"
+      },
+      "motivo": null,
+      "exemplos": {
+        "nome_sim": [
+          "HEMOGRAMA COMPLETO"
+        ]
+      },
+      "notas": "Sem exigência: hemograma exigindo laudo deu +17, −31 (03/11)."
+    },
+    {
+      "chave": "marca_laudo.lipides",
+      "perfil": "lipidios",
+      "papel": "marca_laudo",
+      "ordem": 110,
+      "padrao_nome": "TRIGLICER|LIPIDOGRAMA|COLESTEROL",
+      "condicao": {
+        "regex": "(TRIGLICER|COLESTEROL).{0,150}MG ?DL"
+      },
+      "parametros": {
+        "tipo": "LIPIDES",
+        "estrategia": "marca"
+      },
+      "motivo": null,
+      "exemplos": {
+        "nome_sim": [
+          "COLESTEROL TOTAL",
+          "TRIGLICERIDEOS",
+          "LIPIDOGRAMA"
+        ],
+        "texto_sim": [
+          " TRIGLICERIDES RESULTADO 140 MG DL "
+        ],
+        "texto_nao": [
+          " COLESTEROL TOTAL 10 10 2026 "
+        ]
+      },
+      "notas": null
+    },
+    {
+      "chave": "marca_laudo.ggt",
+      "perfil": "ggt",
+      "papel": "marca_laudo",
+      "ordem": 120,
+      "padrao_nome": "\\bGGT\\b",
+      "condicao": null,
+      "parametros": {
+        "tipo": "GGT",
+        "estrategia": "laboratorio"
+      },
+      "motivo": null,
+      "exemplos": {
+        "nome_sim": [
+          "GGT"
+        ],
+        "nome_nao": [
+          "TGO"
+        ]
+      },
+      "notas": "Julgado pelo resultado perto do nome (selo de laboratório). Antes das transaminases, que também casam GGT e continuam sem exigência."
+    },
+    {
+      "chave": "marca_laudo.transaminases",
+      "perfil": "transaminases",
+      "papel": "marca_laudo",
+      "ordem": 130,
+      "padrao_nome": "\\bTGO\\b|\\bTGP\\b|\\bAST\\b|\\bALT\\b|GGT|TRANSAMINASE",
+      "condicao": null,
+      "parametros": {
+        "tipo": "TRANSAMINASES",
+        "estrategia": "marca"
+      },
+      "motivo": null,
+      "exemplos": {
+        "nome_sim": [
+          "TGO",
+          "TGP ALT",
+          "TRANSAMINASE OXALACETICA"
+        ]
+      },
+      "notas": "Sem exigência: barravam mais documentos certos do que pegavam (05/10)."
+    },
+    {
+      "chave": "marca_laudo.creat_ureia",
+      "perfil": "creat_ureia",
+      "papel": "marca_laudo",
+      "ordem": 140,
+      "padrao_nome": "CREATININA|UREIA",
+      "condicao": null,
+      "parametros": {
+        "tipo": "CREAT_UREIA",
+        "estrategia": "marca"
+      },
+      "motivo": null,
+      "exemplos": {
+        "nome_sim": [
+          "CREATININA",
+          "UREIA"
+        ]
+      },
+      "notas": null
+    },
+    {
+      "chave": "marca_laudo.sorologia",
+      "perfil": "sorologia",
+      "papel": "marca_laudo",
+      "ordem": 150,
+      "padrao_nome": "ANTI ?HBS|HBSAG|HCV|ANTI ?HAV|ANTI ?HVA|VDRL|\\bHIV\\b|ANTI ?HBC",
+      "condicao": {
+        "regex": "NAO REAGENTE|\\bREAGENTE\\b|\\bINDICE\\b|MUI ML|\\bUI ML\\b|\\bS CO\\b"
+      },
+      "parametros": {
+        "tipo": "SOROLOGIA",
+        "estrategia": "sorologia",
+        "marca_proximidade": "NAO REAGENTE|\\bREAGENTE\\b|\\bINDICE\\b|MUI ML|\\bUI ML\\b|\\bS CO\\b|INDETERMINADO",
+        "janela": 400
+      },
+      "motivo": null,
+      "exemplos": {
+        "nome_sim": [
+          "ANTI HBS",
+          "HBSAG",
+          "ANTI HCV",
+          "ANTI HVA IGG",
+          "VDRL",
+          "HIV"
+        ],
+        "texto_sim": [
+          " RESULTADO NAO REAGENTE "
+        ],
+        "texto_nao": [
+          " ANTI HCV 10 10 2026 "
+        ]
+      },
+      "notas": "A marca do documento inteiro só vale para analito sem regra sorologia_analito; os demais são julgados por proximidade. 'HVA' é como o BRNET grafa a hepatite A."
+    },
+    {
+      "chave": "marca_laudo.urina",
+      "perfil": "urina",
+      "papel": "marca_laudo",
+      "ordem": 160,
+      "padrao_nome": "\\bEAS\\b|URINA ROTINA|SUMARIO DE URINA|URINA TIPO",
+      "condicao": {
+        "regex": "DENSIDADE|SEDIMENTO|NITRITO|CELULAS EPITELIAIS|CILINDROS"
+      },
+      "parametros": {
+        "tipo": "URINA",
+        "estrategia": "marca"
+      },
+      "motivo": null,
+      "exemplos": {
+        "nome_sim": [
+          "URINA TIPO I",
+          "EAS",
+          "SUMARIO DE URINA"
+        ],
+        "texto_sim": [
+          " DENSIDADE 1 020 NITRITO NEGATIVO "
+        ],
+        "texto_nao": [
+          " URINA TIPO I 10 10 2026 "
+        ]
+      },
+      "notas": null
+    },
+    {
+      "chave": "marca_laudo.toxicologico",
+      "perfil": "toxicologico",
+      "papel": "marca_laudo",
+      "ordem": 170,
+      "padrao_nome": "TOXICOL",
+      "condicao": null,
+      "parametros": {
+        "tipo": "TOXICOLOGICO",
+        "estrategia": "marca"
+      },
+      "motivo": null,
+      "exemplos": {
+        "nome_sim": [
+          "TOXICOLOGICO"
+        ]
+      },
+      "notas": null
+    },
+    {
+      "chave": "sorologia_analito.hcv",
+      "perfil": "sorologia",
+      "papel": "sorologia_analito",
+      "ordem": 10,
+      "padrao_nome": "HCV",
+      "condicao": {
+        "regex": "\\bHCV\\b|HEPATITE C\\b"
+      },
+      "parametros": {},
+      "motivo": null,
+      "exemplos": {
+        "nome_sim": [
+          "ANTI HCV"
+        ],
+        "texto_sim": [
+          " SOROLOGIA PARA HEPATITE C NAO REAGENTE "
+        ],
+        "texto_nao": [
+          " HBSAG "
+        ]
+      },
+      "notas": "Marca PERTO do analito, fora das listas: valendo para o documento inteiro, o 'NÃO REAGENTE' do HBsAg provava um anti-HCV só listado. 4.706 documentos (14/09 a 19/10): barra 4, todos rejeitados pelo revisor, nenhum aprovado."
+    },
+    {
+      "chave": "sorologia_analito.hbsag",
+      "perfil": "sorologia",
+      "papel": "sorologia_analito",
+      "ordem": 20,
+      "padrao_nome": "HBSAG|HBS AG",
+      "condicao": {
+        "regex": "HBS ?AG"
+      },
+      "parametros": {},
+      "motivo": null,
+      "exemplos": {
+        "nome_sim": [
+          "HBSAG"
+        ],
+        "texto_sim": [
+          " HBS AG NAO REAGENTE "
+        ]
+      },
+      "notas": null
+    },
+    {
+      "chave": "sorologia_analito.anti_hbs",
+      "perfil": "sorologia",
+      "papel": "sorologia_analito",
+      "ordem": 30,
+      "padrao_nome": "ANTI ?HBS\\b",
+      "condicao": {
+        "regex": "ANTI? ?HBS\\b|\\bHBS ANTI\\b"
+      },
+      "parametros": {},
+      "motivo": null,
+      "exemplos": {
+        "nome_sim": [
+          "ANTI HBS"
+        ],
+        "nome_nao": [
+          "HBSAG"
+        ],
+        "texto_sim": [
+          " ANT HBS 85 ",
+          " HBS ANTI REAGENTE "
+        ],
+        "texto_nao": [
+          " HBSAG "
+        ]
+      },
+      "notas": "'ANT HBS' no OCR da Qualimetra e 'HBS ANTI' (colunas trocadas) nos laudos da Clínica AP."
+    },
+    {
+      "chave": "sorologia_analito.hav_igg",
+      "perfil": "sorologia",
+      "papel": "sorologia_analito",
+      "ordem": 40,
+      "padrao_nome": "(?:HAV|HVA) IGG|IGG (?:HAV|HVA)",
+      "condicao": {
+        "regex": "(?:HAV|HVA)\\b.{0,25}IGG|IGG.{0,25}(?:HAV|HVA)\\b|HEPATITE A.{0,40}IGG"
+      },
+      "parametros": {},
+      "motivo": null,
+      "exemplos": {
+        "nome_sim": [
+          "ANTI HAV IGG",
+          "ANTI HVA IGG"
+        ],
+        "texto_sim": [
+          " HEPATITE A ANTICORPOS IGG REAGENTE "
+        ]
+      },
+      "notas": null
+    },
+    {
+      "chave": "sorologia_analito.hav_igm",
+      "perfil": "sorologia",
+      "papel": "sorologia_analito",
+      "ordem": 50,
+      "padrao_nome": "(?:HAV|HVA) IGM|IGM (?:HAV|HVA)",
+      "condicao": {
+        "regex": "(?:HAV|HVA)\\b.{0,25}IGM|IGM.{0,25}(?:HAV|HVA)\\b|HEPATITE A.{0,40}IGM"
+      },
+      "parametros": {},
+      "motivo": null,
+      "exemplos": {
+        "nome_sim": [
+          "ANTI HAV IGM"
+        ],
+        "texto_sim": [
+          " ANTI HAV IGM NAO REAGENTE "
+        ]
+      },
+      "notas": null
+    },
+    {
+      "chave": "sorologia_analito.anti_hav",
+      "perfil": "sorologia",
+      "papel": "sorologia_analito",
+      "ordem": 60,
+      "padrao_nome": "ANTI ?(?:HAV|HVA)\\b",
+      "condicao": {
+        "regex": "\\b(?:HAV|HVA)\\b|HEPATITE A"
+      },
+      "parametros": {},
+      "motivo": null,
+      "exemplos": {
+        "nome_sim": [
+          "ANTI HAV"
+        ],
+        "texto_sim": [
+          " HEPATITE A TOTAL "
+        ]
+      },
+      "notas": null
+    },
+    {
+      "chave": "sorologia_analito.vdrl",
+      "perfil": "sorologia",
+      "papel": "sorologia_analito",
+      "ordem": 70,
+      "padrao_nome": "VDRL",
+      "condicao": {
+        "regex": "VDRL|SIFILIS"
+      },
+      "parametros": {},
+      "motivo": null,
+      "exemplos": {
+        "nome_sim": [
+          "VDRL"
+        ],
+        "texto_sim": [
+          " SIFILIS NAO REAGENTE "
+        ]
+      },
+      "notas": null
+    },
+    {
+      "chave": "sorologia_analito.hiv",
+      "perfil": "sorologia",
+      "papel": "sorologia_analito",
+      "ordem": 80,
+      "padrao_nome": "\\bHIV\\b",
+      "condicao": {
+        "regex": "\\bHIV\\b"
+      },
+      "parametros": {},
+      "motivo": null,
+      "exemplos": {
+        "nome_sim": [
+          "HIV 1 E 2"
+        ],
+        "nome_nao": [
+          "HIVES"
+        ],
+        "texto_sim": [
+          " HIV 1 E 2 "
+        ]
+      },
+      "notas": null
+    },
+    {
+      "chave": "sorologia_analito.anti_hbc",
+      "perfil": "sorologia",
+      "papel": "sorologia_analito",
+      "ordem": 90,
+      "padrao_nome": "ANTI ?HBC|HBC",
+      "condicao": {
+        "regex": "HBC"
+      },
+      "parametros": {},
+      "motivo": null,
+      "exemplos": {
+        "nome_sim": [
+          "ANTI HBC TOTAL"
+        ],
+        "texto_sim": [
+          " ANTI HBC TOTAL NAO REAGENTE "
+        ]
+      },
+      "notas": null
+    },
+    {
+      "chave": "regua_monitoramento.clinico",
+      "perfil": "clinico",
+      "papel": "regua_monitoramento",
+      "ordem": 10,
+      "padrao_nome": "\\bCLINICO\\b",
+      "condicao": {
+        "todos": [
+          {
+            "regex": "ANAMNESE"
+          },
+          {
+            "regex": "EXAME FISICO|PRESSAO ARTERIAL|AUSCULTA|FREQUENCIA CARDIACA"
+          }
+        ]
+      },
+      "parametros": {
+        "grupo": "clinico"
+      },
+      "motivo": null,
+      "exemplos": {
+        "nome_sim": [
+          "CLINICO OCUPACIONAL"
+        ],
+        "texto_sim": [
+          "ANAMNESE: NEGA\nEXAME FISICO: PRESSAO ARTERIAL 120X80"
+        ],
+        "texto_nao": [
+          "ANAMNESE OCUPACIONAL"
+        ]
+      },
+      "notas": "Régua do monitoramento silencioso do clique: conteúdo de laudo na página, independente dos títulos que o clique usa."
+    },
+    {
+      "chave": "regua_monitoramento.audiometria",
+      "perfil": "audiometria",
+      "papel": "regua_monitoramento",
+      "ordem": 20,
+      "padrao_nome": "\\bAUDIOMETRIA\\b",
+      "condicao": {
+        "algum": [
+          {
+            "distintos": "\\b(?:250|500|1000|1K|2000|2K|3000|3K|4000|4K|6000|6K|8000|8K)\\b",
+            "minimo": 4
+          },
+          {
+            "todos": [
+              {
+                "regex": "LIMIAR"
+              },
+              {
+                "regex": "\\bDB\\b"
+              }
+            ]
+          }
+        ]
+      },
+      "parametros": {
+        "grupo": "audiometria"
+      },
+      "motivo": null,
+      "exemplos": {
+        "nome_sim": [
+          "AUDIOMETRIA TONAL"
+        ],
+        "nome_nao": [
+          "AUDIOMETR"
+        ],
+        "texto_sim": [
+          "250 500 1000 2000 HZ",
+          "LIMIAR TONAL 20 DB"
+        ],
+        "texto_nao": [
+          "500 1000 HZ 500 1000",
+          "LIMIAR SEM UNIDADE"
+        ]
+      },
+      "notas": null
+    },
+    {
+      "chave": "regua_monitoramento.acuidade",
+      "perfil": "acuidade",
+      "papel": "regua_monitoramento",
+      "ordem": 30,
+      "padrao_nome": "\\bACUIDADE VISUAL\\b|\\bOFTALMOLOGIC",
+      "condicao": {
+        "todos": [
+          {
+            "regex": "SNELLEN|ISHIHARA|JAEGER|\\b20/\\d{2,3}\\b"
+          }
+        ]
+      },
+      "parametros": {
+        "grupo": "acuidade"
+      },
+      "motivo": null,
+      "exemplos": {
+        "nome_sim": [
+          "ACUIDADE VISUAL"
+        ],
+        "texto_sim": [
+          "OLHO DIREITO 20/25",
+          "JAEGER J1"
+        ],
+        "texto_nao": [
+          "OLHO DIREITO 20 25"
+        ]
+      },
+      "notas": null
+    },
+    {
+      "chave": "regua_monitoramento.espirometria",
+      "perfil": "espirometria",
+      "papel": "regua_monitoramento",
+      "ordem": 40,
+      "padrao_nome": "\\bESPIROMETRIA\\b",
+      "condicao": {
+        "todos": [
+          {
+            "regex": "\\bCVF\\b"
+          },
+          {
+            "regex": "\\b(?:VEF|FEV) ?1"
+          }
+        ]
+      },
+      "parametros": {
+        "grupo": "espirometria"
+      },
+      "motivo": null,
+      "exemplos": {
+        "nome_sim": [
+          "ESPIROMETRIA"
+        ],
+        "texto_sim": [
+          "CVF 4,2 L VEF1 3,4 L"
+        ],
+        "texto_nao": [
+          "CVF 4,2 L"
+        ]
+      },
+      "notas": null
+    },
+    {
+      "chave": "regua_monitoramento.ecg",
+      "perfil": "ecg",
+      "papel": "regua_monitoramento",
+      "ordem": 50,
+      "padrao_nome": "\\bELETROCARDIOGRAMA\\b",
+      "condicao": {
+        "todos": [
+          {
+            "regex": "RITMO SINUSAL|\\bQRS\\b|EIXO ELETRICO"
+          }
+        ]
+      },
+      "parametros": {
+        "grupo": "ecg"
+      },
+      "motivo": null,
+      "exemplos": {
+        "nome_sim": [
+          "ELETROCARDIOGRAMA"
+        ],
+        "texto_sim": [
+          "RITMO SINUSAL"
+        ],
+        "texto_nao": [
+          "ELETROCARDIOGRAMA"
+        ]
+      },
+      "notas": null
+    },
+    {
+      "chave": "regua_monitoramento.eeg",
+      "perfil": "eeg",
+      "papel": "regua_monitoramento",
+      "ordem": 60,
+      "padrao_nome": "\\bELETROENCEFALOGRAMA\\b",
+      "condicao": {
+        "todos": [
+          {
+            "regex": "ELETROGENESE|ATIVIDADE DE BASE|RITMO ALFA|ATIVIDADE ELETRICA CEREBRAL|PAROXISM"
+          }
+        ]
+      },
+      "parametros": {
+        "grupo": "eeg"
+      },
+      "motivo": null,
+      "exemplos": {
+        "nome_sim": [
+          "ELETROENCEFALOGRAMA"
+        ],
+        "texto_sim": [
+          "ATIVIDADE DE BASE ORGANIZADA"
+        ],
+        "texto_nao": [
+          "EEG"
+        ]
+      },
+      "notas": null
+    },
+    {
+      "chave": "regua_monitoramento.glicemia",
+      "perfil": "glicemia",
+      "papel": "regua_monitoramento",
+      "ordem": 70,
+      "padrao_nome": "\\bGLICEMIA\\b|\\bGLICOSE\\b",
+      "condicao": {
+        "todos": [
+          {
+            "regex": "GLICOSE|GLICEMIA"
+          },
+          {
+            "regex": "MG/ ?DL"
+          }
+        ]
+      },
+      "parametros": {
+        "grupo": "glicemia"
+      },
+      "motivo": null,
+      "exemplos": {
+        "nome_sim": [
+          "GLICEMIA DE JEJUM",
+          "GLICOSE"
+        ],
+        "texto_sim": [
+          "GLICOSE 93 MG/DL"
+        ],
+        "texto_nao": [
+          "GLICOSE 93 MG DL"
+        ]
+      },
+      "notas": null
+    },
+    {
+      "chave": "regua_monitoramento.hemograma",
+      "perfil": "hemograma",
+      "papel": "regua_monitoramento",
+      "ordem": 80,
+      "padrao_nome": "\\bHEMOGRAMA\\b",
+      "condicao": {
+        "todos": [
+          {
+            "regex": "HEMACIAS|ERITROCITOS"
+          },
+          {
+            "regex": "LEUCOCITOS"
+          }
+        ]
+      },
+      "parametros": {
+        "grupo": "hemograma"
+      },
+      "motivo": null,
+      "exemplos": {
+        "nome_sim": [
+          "HEMOGRAMA COMPLETO"
+        ],
+        "texto_sim": [
+          "HEMACIAS 4,8 LEUCOCITOS 6500"
+        ],
+        "texto_nao": [
+          "HEMACIAS 4,8"
+        ]
+      },
+      "notas": null
+    },
+    {
+      "chave": "regua_monitoramento.rx_torax",
+      "perfil": "rx_torax",
+      "papel": "regua_monitoramento",
+      "ordem": 90,
+      "padrao_nome": "\\bTORAX\\b",
+      "condicao": {
+        "todos": [
+          {
+            "regex": "PNEUMOCONIOSE|CAMPOS PULMONARES|SEIOS COSTOFRENICOS|LEITURA RADIOLOGICA"
+          }
+        ]
+      },
+      "parametros": {
+        "grupo": "rx_torax"
+      },
+      "motivo": null,
+      "exemplos": {
+        "nome_sim": [
+          "RAIO X DE TORAX PA"
+        ],
+        "texto_sim": [
+          "CAMPOS PULMONARES LIVRES"
+        ],
+        "texto_nao": [
+          "TORAX PA"
+        ]
+      },
+      "notas": null
+    },
+    {
+      "chave": "laboratorio.renal_metabolica",
+      "perfil": "laboratorio",
+      "papel": "laboratorio",
+      "ordem": 10,
+      "padrao_nome": "\\b(UREIA|CREATININA|ACIDO URICO|GLICEMIA|GLICOSE|HEMOGLOBINA GLICADA)\\b",
+      "condicao": null,
+      "parametros": {},
+      "motivo": null,
+      "exemplos": {
+        "nome_sim": [
+          "UREIA",
+          "CREATININA",
+          "GLICEMIA DE JEJUM",
+          "HEMOGLOBINA GLICADA"
+        ],
+        "nome_nao": [
+          "AUDIOMETRIA TONAL"
+        ]
+      },
+      "notas": null
+    },
+    {
+      "chave": "laboratorio.lipidios",
+      "perfil": "laboratorio",
+      "papel": "laboratorio",
+      "ordem": 20,
+      "padrao_nome": "\\b(COLESTEROL|TRIGLICERIDEOS|HDL|LDL)\\b",
+      "condicao": null,
+      "parametros": {},
+      "motivo": null,
+      "exemplos": {
+        "nome_sim": [
+          "COLESTEROL TOTAL",
+          "HDL",
+          "TRIGLICERIDEOS"
+        ],
+        "nome_nao": [
+          "TRIGLICERIDES"
+        ]
+      },
+      "notas": null
+    },
+    {
+      "chave": "laboratorio.hematologia",
+      "perfil": "laboratorio",
+      "papel": "laboratorio",
+      "ordem": 30,
+      "padrao_nome": "\\b(HEMOGRAMA|RETICULOCITOS|PLAQUETAS|FERRITINA)\\b",
+      "condicao": null,
+      "parametros": {},
+      "motivo": null,
+      "exemplos": {
+        "nome_sim": [
+          "HEMOGRAMA COMPLETO",
+          "PLAQUETAS"
+        ]
+      },
+      "notas": null
+    },
+    {
+      "chave": "laboratorio.hepatica",
+      "perfil": "laboratorio",
+      "papel": "laboratorio",
+      "ordem": 40,
+      "padrao_nome": "\\b(TGO|TGP|GAMA|GGT|BILIRRUBINA|FOSFATASE)\\b",
+      "condicao": null,
+      "parametros": {},
+      "motivo": null,
+      "exemplos": {
+        "nome_sim": [
+          "TGO",
+          "GAMA GT",
+          "BILIRRUBINA TOTAL"
+        ],
+        "nome_nao": [
+          "GAMAGLUTAMIL",
+          "BILIRRUBINAS"
+        ]
+      },
+      "notas": null
+    },
+    {
+      "chave": "laboratorio.hormonios",
+      "perfil": "laboratorio",
+      "papel": "laboratorio",
+      "ordem": 50,
+      "padrao_nome": "\\b(TSH|T4|PSA)\\b",
+      "condicao": null,
+      "parametros": {},
+      "motivo": null,
+      "exemplos": {
+        "nome_sim": [
+          "TSH",
+          "T4 LIVRE",
+          "PSA"
+        ]
+      },
+      "notas": null
+    },
+    {
+      "chave": "laboratorio.eletrolitos_metais",
+      "perfil": "laboratorio",
+      "papel": "laboratorio",
+      "ordem": 60,
+      "padrao_nome": "\\b(POTASSIO|SODIO|CALCIO|ZINCO|CHUMBO)\\b",
+      "condicao": null,
+      "parametros": {},
+      "motivo": null,
+      "exemplos": {
+        "nome_sim": [
+          "POTASSIO",
+          "CHUMBO NO SANGUE"
+        ]
+      },
+      "notas": null
+    },
+    {
+      "chave": "laboratorio.sorologia",
+      "perfil": "laboratorio",
+      "papel": "laboratorio",
+      "ordem": 70,
+      "padrao_nome": "\\b(VDRL)\\b",
+      "condicao": null,
+      "parametros": {},
+      "motivo": null,
+      "exemplos": {
+        "nome_sim": [
+          "VDRL"
+        ],
+        "nome_nao": [
+          "ANTI HCV"
+        ]
+      },
+      "notas": null
+    },
+    {
+      "chave": "laboratorio.indicadores_biologicos",
+      "perfil": "laboratorio",
+      "papel": "laboratorio",
+      "ordem": 80,
+      "padrao_nome": "\\b(ACIDO)\\b",
+      "condicao": null,
+      "parametros": {},
+      "motivo": null,
+      "exemplos": {
+        "nome_sim": [
+          "ACIDO HIPURICO",
+          "ACIDO TRANS TRANS MUCONICO"
+        ]
+      },
+      "notas": "ACIDO solto pega os indicadores biológicos de urina (hipúrico, metil-hipúrico, trans-mucônico), que trazem resultado com unidade."
+    },
+    {
+      "chave": "termos_extras.glicemia",
+      "perfil": "glicemia",
+      "papel": "termos_extras",
+      "ordem": 10,
+      "padrao_nome": "GLICEMIA",
+      "condicao": null,
+      "parametros": {
+        "termos": [
+          "GLICOSE"
+        ]
+      },
+      "motivo": null,
+      "exemplos": {
+        "nome_sim": [
+          "GLICEMIA DE JEJUM"
+        ]
+      },
+      "notas": "A glicemia de jejum sai no laudo como 'Glicose'."
+    },
+    {
+      "chave": "termos_extras.hemograma",
+      "perfil": "hemograma",
+      "papel": "termos_extras",
+      "ordem": 20,
+      "padrao_nome": "HEMOGRAMA",
+      "condicao": null,
+      "parametros": {
+        "termos": [
+          "ERITROGRAMA",
+          "HEMACIAS",
+          "HEMATOCRITO",
+          "LEUCOGRAMA",
+          "PLAQUETAS"
+        ]
+      },
+      "motivo": null,
+      "exemplos": {
+        "nome_sim": [
+          "HEMOGRAMA COMPLETO"
+        ]
+      },
+      "notas": null
+    },
+    {
+      "chave": "termos_extras.ggt",
+      "perfil": "ggt",
+      "papel": "termos_extras",
+      "ordem": 30,
+      "padrao_nome": "GGT",
+      "condicao": null,
+      "parametros": {
+        "termos": [
+          "GAMA GLUTAMIL",
+          "GAMA GLUTAMILTRANSFERASE"
+        ]
+      },
+      "motivo": null,
+      "exemplos": {
+        "nome_sim": [
+          "GGT"
+        ]
+      },
+      "notas": "Nomes que o laboratório imprime e o BRNET não usa; cada um veio de um selo à toa conferido no texto (26/10)."
+    },
+    {
+      "chave": "termos_extras.triglicerideos",
+      "perfil": "lipidios",
+      "papel": "termos_extras",
+      "ordem": 40,
+      "padrao_nome": "TRIGLICERIDEOS",
+      "condicao": null,
+      "parametros": {
+        "termos": [
+          "TRIGLICERIDES",
+          "TRIGLICERIDIOS"
+        ]
+      },
+      "motivo": null,
+      "exemplos": {
+        "nome_sim": [
+          "TRIGLICERIDEOS"
+        ]
+      },
+      "notas": null
+    },
+    {
+      "chave": "termos_extras.hemoglobina_glicada",
+      "perfil": "hemoglobina_glicada",
+      "papel": "termos_extras",
+      "ordem": 50,
+      "padrao_nome": "HEMOGLOBINA\\ GLICADA",
+      "condicao": null,
+      "parametros": {
+        "termos": [
+          "A1C",
+          "HBA1C"
+        ]
+      },
+      "motivo": null,
+      "exemplos": {
+        "nome_sim": [
+          "HEMOGLOBINA GLICADA"
+        ]
+      },
+      "notas": null
+    }
+  ]
+}
