@@ -31,6 +31,22 @@ Ajustes de 03/11/2026: Clínico, glicemia, teste ergométrico e GGT passaram a e
 laudo. Regras escolhidas nos envios de 14/09 a 18/10 e confirmadas nos de 19/10 a
 03/11 (5.863 documentos revisados, contra a decisão do revisor): +39 corrigidos, −7.
 Hemograma ficou FORA (+17, −31) e reticulócitos também (+4, −4).
+
+Ajustes de 10/11/2026: avaliação psicológica, avaliação odontológica e EEG passaram a
+exigir laudo FORA das listas de exames (ASO, voucher, e-mail de agendamento), como o
+teste ergométrico. Na conferência das divergências de novembro no PDF, "só listado"
+era a maior causa de aprovação indevida (22 de 87), e esses três tipos não tinham
+nenhuma exigência. Medido no texto gravado dos aprovados pela IA, contra a decisão
+do revisor e só nos documentos que as regras anteriores não barravam: setembro
++6/−4, outubro +12/−6, novembro (03–10/11) +6/0; 8 dos 788 aprovados sem revisão
+iriam para a fila. Dos 10 aprovados que passariam a ser barrados, 9 foram
+conferidos no PDF: em 8 o laudo não está no documento (o revisor aprovou sem ele)
+e o outro é a anamnese psicossocial de altura, que não é avaliação psicológica. A marca da psicológica
+inclui a bateria de testes porque há laudo que não escreve "psicológica" fora do
+título da lista ("INSTRUMENTOS UTILIZADOS PALOGRÁFICO BETA III"), e a da odontológica
+aceita o "Atestado de Saúde Bucal" da Protegy, que não escreve "odonto" nem traz o
+CRO legível (no teste em staging de 10/11 ele era dado como ausente). Acuidade ficou
+FORA: a mesma regra dava +3/−3. Psicossocial e RX comum também (+1/−10 e +2/−9).
 """
 from __future__ import annotations
 
@@ -69,6 +85,13 @@ _ACUIDADE_TABELA = re.compile(
     r"OLHO DIREITO OLHO ESQUERDO (?:S C |C C |SEM CORRECAO |COM CORRECAO )?20 \d{2,3}\b"
 )
 _SENSO_CROMATICO = re.compile(r"ISHIHARA|CROMATIC")
+# Folha de leitura radiológica OIT: o laudo do RX de tórax padrão OIT. A ficha da
+# CMTL escreve "Qualidade da radiografia", "Profusão" e "Pequenas opacidades" no
+# lugar das quatro primeiras. Também é a marca de (2), em `_TIPOS`.
+_FOLHA_OIT = re.compile(
+    r"LEITURA RADIOLOGICA|PNEUMOCONIOSE|CLASSIFICACAO INTERNACIONAL|QUALIDADE TECNICA"
+    r"|QUALIDADE DA RADIOGRAFIA|PROFUSAO|PEQUENAS OPACIDADES|GRANDES OPACIDADES"
+)
 
 
 def evidencia_de_faltante(exame_norm: str, markdown_norm: str) -> Optional[str]:
@@ -89,6 +112,11 @@ def evidencia_de_faltante(exame_norm: str, markdown_norm: str) -> Optional[str]:
                 return "laudo de etanol em urina"
         elif _ETANOL_SANGUE.search(markdown_norm):
             return "laudo de etanol em sangue/soro"
+    # Antes do RX comum: a folha OIT não escreve "conclusão" perto de "radiografia".
+    # Medido em 10/11/2026 (set–nov): RX OIT faltante com a folha no texto = 6
+    # documentos, todos liberados pelo revisor; nenhum rejeitado tem a folha.
+    if "OIT" in exame_norm and _FOLHA_OIT.search(markdown_norm):
+        return "folha de leitura radiológica OIT preenchida"
     if re.search(r"RADIOGRAF|RAIO X|\bRX\b", exame_norm) and _RX_COM_CONCLUSAO.search(markdown_norm):
         return "laudo radiológico com conclusão"
     if "ACUIDADE" in exame_norm and (
@@ -113,22 +141,31 @@ _TIPOS: list[tuple[str, re.Pattern, re.Pattern]] = [
     ("CLINICO", re.compile(r"\bCLINICO\b"),
      re.compile(r"\bFICHA (MEDICA|CLINICA)\b|\bPRONTUARIO (MEDICO|CLINICO)\b"
                 r"|^(?=.*ANAMNESE)(?=.*(?:EXAME FISICO|PRESSAO ARTERIAL|AUSCULTA|FREQUENCIA CARDIACA))")),
-    # Marca julgada fora das listas, em `falta_laudo`.
-    ("ERGOMETRICO", re.compile(r"ERGOMETRI"), None),
+    # Marca julgada fora das listas (`_MARCA_FORA_DAS_LISTAS`): o próprio nome do
+    # exame é a marca, desde que não esteja só na lista do ASO ou do voucher.
+    ("ERGOMETRICO", re.compile(r"ERGOMETRI"), re.compile(r"ERGOMETRI")),
+    # Psicossocial não casa aqui ("PSICOSSOCIAL" não tem PSICOLOG) e fica sem
+    # exigência: o formulário de anamnese psicossocial não tem marca estável.
+    ("PSICOLOGICA", re.compile(r"PSICOLOG"),
+     re.compile(r"PSICOLOG|\bCRP\b|PALOGRAF|INSTRUMENTOS UTILIZADOS|ATENCAO (?:CONCENTRADA|DIFUSA|DIVIDIDA)"
+                r"|BETA III|\bTADIM\b|\bBPA\b|\bBFP\b|PERSONALIDADE|PSICOTECNIC|\bTEPIC\b|\bAC 15\b")),
+    # "Atestado de Saúde Bucal" (Protegy) não escreve "odonto" nem o CRO legível.
+    ("ODONTOLOGICA", re.compile(r"ODONTOL"), re.compile(r"ODONTO|\bCRO\b|DENTISTA|SAUDE BUCAL")),
     ("AUDIOMETRIA", re.compile(r"AUDIOMETR"),
      re.compile(r"ORELHA (DIREITA|ESQUERDA)|\bKHZ\b|VIA AEREA|LIMIARES|LOGOAUDIOMETRIA|\bIRF\b|\bSRT\b|\bLRF\b")),
     # A ficha OIT da CMTL escreve "Qualidade da radiografia", "Profusão" e "Pequenas
     # opacidades", e nenhuma das quatro primeiras marcas: era rebaixada em todo envio.
     # De 14/09 a 19/10, 7 documentos dela; o revisor aprovou 6 e rejeitou 1 por data
     # invertida no ASO.
-    ("RX_OIT", re.compile(r"OIT"),
-     re.compile(r"LEITURA RADIOLOGICA|PNEUMOCONIOSE|CLASSIFICACAO INTERNACIONAL|QUALIDADE TECNICA"
-                r"|QUALIDADE DA RADIOGRAFIA|PROFUSAO|PEQUENAS OPACIDADES|GRANDES OPACIDADES")),
+    ("RX_OIT", re.compile(r"OIT"), _FOLHA_OIT),
     ("RX", re.compile(r"RADIOGRAF|RAIO X|\bRX\b"), None),
     ("ESPIROMETRIA", re.compile(r"ESPIROMETR"), None),
     ("ECG", re.compile(r"ELETROCARDIO|\bECG\b"),
      re.compile(r"RITMO SINUSAL|\bQRS\b|\bEIXO\b|INTERVALO PR|\bQTC?\b|\bBPM\b")),
-    ("EEG", re.compile(r"ELETROENCEFAL|\bEEG\b"), None),
+    # O traçado é imagem; o que o texto traz é o laudo ou a descrição do exame.
+    ("EEG", re.compile(r"ELETROENCEFAL|\bEEG\b"),
+     re.compile(r"ELETROENCEFAL|\bEEG\b|ATIVIDADE DE BASE|RITMO DE BASE|FOTOESTIMUL|HIPERPNEIA"
+                r"|HIPERVENTILA|ONDAS (?:ALFA|TETA|DELTA)")),
     # As duas palavras em qualquer ponto do documento. Exigir uma perto da outra
     # barrava mais documentos certos do que pegava (replay de 05/10).
     ("GLICOSE", re.compile(r"GLICEMIA|GLICOSE"),
@@ -188,9 +225,12 @@ _SOROLOGIA_JANELA = 400
 # O bloco só sai quando o fechamento aparece dentro do alcance; sem ele, o texto
 # fica, que é o lado seguro.
 _BLOCOS_DE_LISTA: list[tuple[re.Pattern, re.Pattern, int]] = [
-    # ASO: "Procedimentos realizados / Exames complementares" até a conclusão
+    # ASO: "Procedimentos realizados / Exames complementares" até a conclusão. O
+    # certificado médico marítimo ("Additional exams / Exames complementares")
+    # fecha em "This is to certify / Este é para certificar", não na conclusão.
     (re.compile(r"PROCEDIMENTOS REALIZADOS|EXAMES COMPLEMENTARES"),
-     re.compile(r"CONCLUSAO CONCLUSION|PACIENTE E CONSIDERADO|PATIENT IS CONSIDERED"), 2500),
+     re.compile(r"CONCLUSAO CONCLUSION|PACIENTE E CONSIDERADO|PATIENT IS CONSIDERED"
+                r"|THIS IS TO CERTIFY|ESTE E PARA CERTIFICAR"), 2500),
     # voucher BR MED
     (re.compile(r"\b04 EXAMES\b"),
      re.compile(r"TODOS OS EXAMES LISTADOS SAO OBRIGATORIOS|\b05 ORIENTACOES|\b05 OBSERVACOES"), 2000),
@@ -200,6 +240,13 @@ _BLOCOS_DE_LISTA: list[tuple[re.Pattern, re.Pattern, int]] = [
      re.compile(r"LOCAL DO ATENDIMENTO|OPCIONAL"), 2000),
     (re.compile(r"ORIENTACOES DE PREPARO PARA EXAMES"),
      re.compile(r"OBSERVACOES IMPORTANTES|IMPORTANT NOTICE|ASSINATURA DO RESPONSAVEL"), 2000),
+    # e-mail de agendamento no formato "Exames agendados", que termina na página
+    # ou na assinatura do e-mail
+    (re.compile(r"\bEXAMES AGENDADOS\b"),
+     re.compile(r"\bPAGINA \d+ LEITURA\b|ATENCIOSAMENTE|DIREITOS RESERVADOS|LOCAL DO ATENDIMENTO"), 1500),
+    # tela de atendimento do portal impressa no PDF ("Você está logado em …"),
+    # com a lista dos exames do atendimento, até a ficha médica ou a página
+    (re.compile(r"\bVOCE ESTA LOGADO\b"), re.compile(r"\bFICHA MEDICA\b|\bPAGINA \d+ LEITURA\b"), 2000),
 ]
 
 
@@ -236,15 +283,17 @@ def _sorologia_tem_laudo(exame_norm: str, markdown_norm: str, marca_documento: r
     return bool(marca_documento.search(markdown_norm))
 
 
-_ERGOMETRICO_NOME = re.compile(r"ERGOMETRI")
+# Tipos cuja marca só vale fora das listas de exames: o nome deles é a própria
+# marca (ou parte dela) e aparece em toda lista do ASO.
+_MARCA_FORA_DAS_LISTAS = frozenset({"ERGOMETRICO", "PSICOLOGICA", "ODONTOLOGICA", "EEG"})
 
 
 def falta_laudo(exame_norm: str, markdown_norm: str) -> Optional[str]:
     """Tipo do exame quando ele exige laudo e a marca do laudo não está no documento."""
     for nome, padrao, marca in _TIPOS:
         if padrao.search(exame_norm):
-            if nome == "ERGOMETRICO":
-                return None if _ERGOMETRICO_NOME.search(sem_listas(markdown_norm)) else nome
+            if nome in _MARCA_FORA_DAS_LISTAS:
+                return None if marca.search(sem_listas(markdown_norm)) else nome
             if nome == "GGT":
                 evidencia, _linha = evidencia_laboratorio.avaliar(markdown_norm, exame_norm)
                 return nome if evidencia == evidencia_laboratorio.SO_LISTA else None

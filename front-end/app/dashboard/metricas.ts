@@ -160,7 +160,7 @@ export const COMO_CALCULAMOS: Record<IdIndicador, ComoCalculamos> = {
       {
         titulo: "O que conta",
         texto:
-          "Cada prontuário que uma clínica subiu no ProntuAI é um documento. Reenvio conta de novo: o mesmo prontuário mandado duas vezes são dois envios.",
+          "Cada prontuário que uma clínica subiu no ProntuAI é um documento. O reenvio do mesmo documento não conta de novo: o que chega com a tag \"Já liberado\" ou \"Já em revisão\" fica só no original. O documento ajustado depois de uma rejeição conta como envio novo, assim como o complemento (o laudo que faltava, outra parte da expedição).",
       },
       {
         titulo: "Em que período cai",
@@ -181,7 +181,7 @@ export const COMO_CALCULAMOS: Record<IdIndicador, ComoCalculamos> = {
       {
         titulo: "O que conta",
         texto:
-          "Documento que uma pessoa do time BR MED — checador, gestor ou administrador — aprovou ou rejeitou. A decisão automática da IA não conta: documento aprovado pela IA e ainda não conferido fica fora.",
+          "Documento que uma pessoa do time BR MED — checador, gestor ou administrador — aprovou ou rejeitou. A decisão automática da IA não conta: documento aprovado pela IA e ainda não conferido fica fora. O reenvio do mesmo documento não gera outra análise: se o revisor decidiu no reenvio, a análise vale para o original. O documento ajustado depois de uma rejeição é outra avaliação e conta de novo.",
       },
       {
         titulo: "Em que período cai",

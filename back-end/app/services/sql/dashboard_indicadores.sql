@@ -77,11 +77,22 @@ ia AS (
       AND metadata_json::jsonb ->> 'validation_status' IN ('validated', 'pending', 'rejected')
     ORDER BY resource_id, created_at DESC, id DESC
 ),
+-- Original cujo reenvio foi decidido por um revisor. Desde 06/11/2026 o reenvio
+-- vai para a Checagem com a decisao da IA (app/services/reenvio_service.py), e o
+-- revisor pode bater o martelo nele em vez de no original. Como o reenvio sai da
+-- base logo abaixo, a revisao dele conta para o original: o pedido e analisado
+-- uma vez, e o trabalho do revisor nao some do painel.
+reenvio_revisado AS (
+    SELECT DISTINCT r.reenvio_de AS document_id
+    FROM documents r
+    JOIN humano h ON h.document_id = r.id
+    WHERE r.reenvio_de IS NOT NULL
+),
 -- base de utilizacao
 doc AS (
     SELECT
         d.id, d.clinic_id, d.validation_status, d.created_at,
-        (h.document_id IS NOT NULL) AS revisado,
+        (h.document_id IS NOT NULL OR rr.document_id IS NOT NULL) AS revisado,
         CASE WHEN (p.payload #>> '{brmed_result,data_previsao_liberacao}')
                   ~ '^\d{2}/\d{2}/\d{4}$'
              THEN to_date(p.payload #>> '{brmed_result,data_previsao_liberacao}',
@@ -90,12 +101,19 @@ doc AS (
         COALESCE(d.reviewed_at, d.updated_at)::date AS liberado_em
     FROM documents d
     LEFT JOIN humano h ON h.document_id = d.id
+    LEFT JOIN reenvio_revisado rr ON rr.document_id = d.id
     CROSS JOIN LATERAL (SELECT CASE WHEN d.result_payload LIKE '{%'
                               AND pg_input_is_valid(d.result_payload, 'jsonb')
                          THEN d.result_payload::jsonb END AS payload) p
-    -- Reenvio de prontuário já liberado (migration 015) não conta de novo: o
-    -- liberado original já está na base.
+    -- Reenvio (migration 015) nao conta de novo: o original ja esta na base.
+    -- Reenvio e o documento com `reenvio_de`, ligado a um anterior liberado ou
+    -- ainda em revisao. O status 'reenvio' so existe nos gravados antes de
+    -- 06/11/2026; desde entao o reenvio sai com a decisao da IA e so a coluna o
+    -- marca. O complemento devolvido pelo botao "E um complemento" perde o
+    -- `reenvio_de` e conta como envio proprio, como o documento corrigido
+    -- depois de uma rejeicao.
     WHERE d.validation_status IS DISTINCT FROM 'reenvio'
+      AND d.reenvio_de IS NULL
 ),
 agg AS (
     SELECT

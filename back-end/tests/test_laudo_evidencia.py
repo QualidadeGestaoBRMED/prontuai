@@ -80,6 +80,23 @@ def test_rx_reconhecido_pela_conclusao_do_laudo():
     assert status["RADIOGRAFIA DE COLUNA LOMBO SACRA AP/PERFIL"] == "encontrado"
 
 
+def test_rx_oit_recuperado_pela_folha_de_leitura():
+    # Mediar, 04/11/2026: a comparação não listou a folha e o RX OIT saiu faltante.
+    folha = ("FOLHA DE LEITURA RADIOLÓGICA OIT 2011 CLASSIFICAÇÃO INTERNACIONAL DE RADIOGRAFIAS "
+             "DE PNEUMOCONIOSE 1A QUALIDADE TÉCNICA 1 2 3 4 1B RADIOGRAFIA NORMAL Sim")
+    status, mud = ajusta([("RADIOGRAFIA DE TÓRAX - PADRÃO OIT", "faltante")], folha)
+    assert status["RADIOGRAFIA DE TÓRAX - PADRÃO OIT"] == "encontrado"
+    assert mud[0]["regra"] == "conteudo_do_laudo"
+    assert "OIT" in le.evidencia_de_faltante(norm("RADIOGRAFIA DE TÓRAX - PADRÃO OIT"), md(folha))
+
+
+def test_rx_oit_so_listado_nao_e_recuperado_pela_folha():
+    # A lista do ASO cita o exame, mas não traz nenhum termo da folha OIT.
+    lista = "Procedimentos realizados RADIOGRAFIA DE TÓRAX PADRÃO OIT 04/11/2026 Conclusão / Conclusion apto"
+    motivo = le.evidencia_de_faltante(norm("RADIOGRAFIA DE TÓRAX - PADRÃO OIT"), md(lista)) or ""
+    assert "OIT" not in motivo
+
+
 FICHA_ACUIDADE = ("ACUIDADE VISUAL Método de avaliação: Escala optométrica de Snellen "
                   "Com correção ( ) Sem correção (X) Olho direito {od} Olho esquerdo {oe} "
                   "Teste de Ishihara: normal")
@@ -187,6 +204,78 @@ def test_ergometrico_so_na_lista_vira_faltante_e_com_laudo_continua():
     status, mud = ajusta(item, lista)
     assert status["TESTE ERGOMÉTRICO"] == "faltante" and mud[0]["tipo"] == "ERGOMETRICO"
     assert ajusta(item, f"{lista} LAUDO DE TESTE ERGOMÉTRICO protocolo de Bruce")[0]["TESTE ERGOMÉTRICO"] == "encontrado"
+
+
+# Formatos das divergências de novembro/2026 conferidas no PDF: o exame só aparece
+# na lista "Procedimentos realizados" do ASO ou no voucher BR MED.
+LISTA_ASO = ("ATESTADO DE SAÚDE OCUPACIONAL Procedimentos realizados / Exames complementares: "
+             "AVALIAÇÃO PSICOLÓGICA 05/11/2026 AVALIAÇÃO ODONTOLÓGICA 05/11/2026 "
+             "ELETROENCEFALOGRAMA 05/11/2026 Conclusão / Conclusion: Paciente é considerado apto")
+VOUCHER = ("04 Exames AVALIAÇÃO PSICOLÓGICA AVALIAÇÃO ODONTOLÓGICA ELETROENCEFALOGRAMA "
+           "Todos os exames listados são obrigatórios")
+TRES = [("AVALIAÇÃO PSICOLÓGICA", "encontrado"), ("AVALIAÇÃO ODONTOLÓGICA", "encontrado"),
+        ("ELETROENCEFALOGRAMA", "encontrado")]
+
+
+@pytest.mark.parametrize("lista", [LISTA_ASO, VOUCHER])
+def test_psicologica_odontologica_e_eeg_so_listados_viram_faltantes(lista):
+    status, mud = ajusta(TRES, lista)
+    assert set(status.values()) == {"faltante"}
+    assert {m["tipo"] for m in mud} == {"PSICOLOGICA", "ODONTOLOGICA", "EEG"}
+
+
+@pytest.mark.parametrize("exame,laudo", [
+    ("AVALIAÇÃO PSICOLÓGICA", "PARECER PSICOLÓGICO Conclusão: apto. Psicóloga CRP 06/12345"),
+    # Laudo que só traz a bateria de testes, sem a palavra "psicológica".
+    ("AVALIAÇÃO PSICOLÓGICA", "Instrumentos utilizados: Palográfico, Beta III, CTA AC e entrevista"),
+    ("AVALIAÇÃO PSICOLÓGICA", "Teste de atenção concentrada: médio superior"),
+    ("AVALIAÇÃO ODONTOLÓGICA", "Odontograma sem alterações. Cirurgião-dentista CRO 1234"),
+    # Protegy: o título é o único sinal no texto.
+    ("AVALIAÇÃO ODONTOLÓGICA", "## ATESTADO DE SAÚDE BUCAL Assoalho bucal sem alterações"),
+    ("ELETROENCEFALOGRAMA", "Laudo de eletroencefalograma: atividade de base organizada"),
+    ("ELETROENCEFALOGRAMA", "Fotoestimulação intermitente e hiperpneia sem alterações"),
+])
+def test_psicologica_odontologica_e_eeg_com_laudo_continuam(exame, laudo):
+    status, mud = ajusta([(exame, "encontrado")], f"{LISTA_ASO} {laudo}")
+    assert status[exame] == "encontrado" and not mud
+
+
+def test_psicossocial_nao_e_exigido_como_psicologica():
+    # A anamnese psicossocial de altura não tem marca estável: fica sem exigência.
+    assert le.tipo_do_exame(norm("PSICOSSOCIAL")) is None
+    status, mud = ajusta([("PSICOSSOCIAL", "encontrado")], "Procedimentos realizados PSICOSSOCIAL 26/10/2026")
+    assert status["PSICOSSOCIAL"] == "encontrado" and not mud
+
+
+def test_eeg_e_classificado_antes_do_ecg():
+    assert le.tipo_do_exame(norm("ELETROENCEFALOGRAMA")) == "EEG"
+    assert le.tipo_do_exame(norm("ELETROCARDIOGRAMA")) == "ECG"
+
+
+# Listas que o `sem_listas` passou a reconhecer em 10/11/2026 (casos 21, 51 e 55
+# das divergências de novembro): sem elas, o nome na lista contava como laudo.
+@pytest.mark.parametrize("lista", [
+    # e-mail de agendamento "Exames agendados", até a quebra de página
+    "TEM O AGENDAMENTO DE UM PERIODICO EXAMES AGENDADOS ACUIDADE VISUAL AVALIAÇÃO ODONTOLÓGICA "
+    "AVALIAÇÃO PSICOLÓGICA ELETROENCEFALOGRAMA PAGINA 17 LEITURA PAGINA 17 CONFIANCA 96",
+    # certificado médico marítimo, até "This is to certify"
+    "ADDITIONAL EXAMS EXAMES COMPLEMENTARES AVALIAÇÃO ODONTOLÓGICA DENTAL ASSESSMENT "
+    "AVALIAÇÃO PSICOLÓGICA PSYCHOLOGICAL ASSESSMENT ELETROENCEFALOGRAMA "
+    "THIS IS TO CERTIFY THAT THE SEAFARER IS FIT FOR SERVICE",
+    # tela de atendimento do portal impressa no PDF, até a ficha médica
+    "OLÁ EXCELLENCE VOCÊ ESTÁ LOGADO EM RIO DE JANEIRO ATENDIMENTO ADMISSIONAL EXAMES ACUIDADE VISUAL "
+    "AVALIAÇÃO PSICOLÓGICA AVALIAÇÃO ODONTOLÓGICA ELETROENCEFALOGRAMA FICHA MÉDICA ANAMNESE",
+])
+def test_listas_de_agendamento_certificado_e_tela_nao_contam_como_laudo(lista):
+    status, mud = ajusta(TRES, lista)
+    assert set(status.values()) == {"faltante"}
+    assert {m["tipo"] for m in mud} == {"PSICOLOGICA", "ODONTOLOGICA", "EEG"}
+
+
+def test_tela_de_atendimento_nao_apaga_a_ficha_medica():
+    # O bloco termina antes da ficha: o título dela continua no texto.
+    tela = "VOCÊ ESTÁ LOGADO EM CENTRO EXAMES CLINICO OCUPACIONAL FICHA MÉDICA ANAMNESE"
+    assert "FICHA MEDICA" in le.sem_listas(md(tela))
 
 
 def test_ggt_julgado_pelo_resultado_perto_do_nome():
