@@ -161,6 +161,16 @@ function CelulaNormalidade({ item, parametros, carregando, onLocalizar, ativo }:
               Mostrar mais {Math.min(PASSO_PARAMETROS, restantes)} ({restantes} {restantes === 1 ? "restante" : "restantes"})
             </button>
           )}
+          {/* Com 3 ou menos faltando, "Mostrar mais" já abre tudo. */}
+          {restantes > PASSO_PARAMETROS && (
+            <button
+              type="button"
+              onClick={(e) => mudar(e, ordenados.length)}
+              className="text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+            >
+              Mostrar todos ({ordenados.length})
+            </button>
+          )}
           {visiveis > PASSO_PARAMETROS && (
             <button
               type="button"
