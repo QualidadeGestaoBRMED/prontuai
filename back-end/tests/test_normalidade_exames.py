@@ -133,12 +133,18 @@ def test_vdrl_qualitativo():
 # ---------------------------------------------------------------------------
 
 @pytest.mark.parametrize("exame,esperado", [
-    ("HEMOGRAMA COMPLETO COM PLAQUETAS", ("hemoglobina", "leucocitos", "plaquetas")),
+    ("HEMOGRAMA COMPLETO COM PLAQUETAS", ne._HEMOGRAMA),
+    ("TRIAGEM TOXICOLÓGICO", ne._TOXICOLOGICO),
+    ("EXAME TOXICOLÓGICO DE LARGA JANELA", ne._TOXICOLOGICO),
     ("GLICEMIA DE JEJUM", ("glicemia",)),
     ("GLICOSE", ("glicemia",)),
     ("HEMOGLOBINA GLICADA", ("hba1c",)),
-    ("LIPIDOGRAMA (PERFIL LIPÍDICO)", ("colesterol", "triglic")),
-    ("COLESTEROL TOTAL E FRAÇÕES", ("colesterol", "triglic")),
+    ("LIPIDOGRAMA (PERFIL LIPÍDICO)", ("colesterol", "hdl", "ldl", "triglic")),
+    ("COLESTEROL TOTAL E FRAÇÕES", ("colesterol", "hdl", "ldl", "triglic")),
+    ("COLESTEROL HDL", ("hdl",)),
+    ("COLESTEROL LDL", ("ldl",)),
+    ("COLESTEROL NÃO HDL", ()),
+    ("COLESTEROL VLDL", ()),
     ("COLESTEROL TOTAL", ("colesterol",)),
     ("TRIGLICERÍDEOS", ("triglic",)),
     ("CREATININA SÉRICA", ("creatinina",)),
@@ -197,6 +203,192 @@ def test_texto_faixa():
     assert ne.texto_faixa("plaquetas", ne.FaixaLaudo(150000, 450000)) == "150.000 a 450.000 /mm³"
     assert ne.texto_faixa("glicemia", None) == "faixa não identificada no laudo"
     assert ne.texto_faixa("vdrl", None) == "Não reagente"
+
+
+# Layout do laboratório que trouxe o caso (DB Diagnósticos, nov/2026): a faixa vem
+# depois de repetir o nome do exame, o diferencial traz percentual e contagem com
+# uma faixa cada, e o toxicológico é uma substância por linha.
+LAUDO_DB = """## GLICOSE DE JEJUM
+
+Valor de referência
+Resultado:
+89 mg/dL
+Glicemia em jejum:
+Normal
+70 a 99 mg/dL
+Diagnóstico de Diabetes Mellitus tipo 2:
+Normal Inferior a 100 mg/dL
+Pré-diabetes mellitus...: 100 a 125 mg/dL
+
+## HEMOGRAMA COMPLETO
+
+## SÉRIE VERMELHA
+
+Valores de Referência
+
+## ERITRÓCITOS
+
+5,04 milhões/mm³
+4,10 a 5,60 milhões/mm³
+
+## HEMOGLOBINA
+
+15,4 g/dL
+12,5 a 17,0 g/dL
+
+## VCM
+
+89,9 µm³
+80,0 a 99,9 µm³
+
+## HCM
+
+30,5 pg
+23,8 a 33,4 pg
+
+## LEUCÓCITOS
+
+7.600 /mm³
+3.600 a 12.000 /mm³
+
+## SEGMENTADOS
+
+32 %
+2.432 /mm³
+40 a 75
+1.440 a 9.000 /mm³
+
+## BASÓFILOS
+
+2%
+152 /mm³
+0 2 %
+o a 240 /mm³
+
+## LINFÓCITOS
+
+56 %
+4.256 /mm³
+20 a 45 %
+720 a 5.400 /mm³
+
+## SÉRIE PLAQUETÁRIA
+
+Valor de referência
+Plaquetas: 224.000 /mm³
+150.000 a 450.000 /mm³
+
+## VPM:
+
+## 9,6 fL
+
+Masculino:
+7,4 a 11,4 fL
+Feminino:
+7,9 a 10,8 fL
+
+Sexo: Masculino
+
+## TRIAGEM TOXICOLÓGICA
+
+Valor de referência
+Anfetaminas:
+Negativo
+Negativo
+Cocaína:
+Positivo
+Negativo
+Maconha - Tetrahidrocanabinol: Negativo
+Negativo
+Metanfetamina:
+Negativo
+Negativo
+"""
+
+
+def test_faixa_depois_de_repetir_o_nome_do_exame():
+    glic = leitura(LAUDO_DB, "glicemia")
+    assert (glic.valor, glic.faixa, ne.classificar(glic)) == (89, ne.FaixaLaudo(70, 99), ne.NORMAL)
+
+
+@pytest.mark.parametrize("chave,valor,faixa,situacao", [
+    ("eritrocitos", 5.04, (4.1, 5.6), ne.NORMAL),
+    ("hemoglobina", 15.4, (12.5, 17), ne.NORMAL),
+    ("vcm", 89.9, (80, 99.9), ne.NORMAL),
+    ("hcm", 30.5, (23.8, 33.4), ne.NORMAL),
+    ("leucocitos", 7600, (3600, 12000), ne.NORMAL),
+    # Percentual e contagem, cada um com a sua faixa, uma depois da outra.
+    ("segmentados", 32, (40, 75), ne.ABAIXO),
+    ("segmentados_abs", 2432, (1440, 9000), ne.NORMAL),
+    ("linfocitos", 56, (20, 45), ne.ACIMA),
+    ("linfocitos_abs", 4256, (720, 5400), ne.NORMAL),
+    # "0 2 %" sem conector e "o a 240" com a letra no lugar do zero.
+    ("basofilos", 2, (0, 2), ne.NORMAL),
+    ("basofilos_abs", 152, (0, 240), ne.NORMAL),
+    ("plaquetas", 224000, (150000, 450000), ne.NORMAL),
+    # Faixa por sexo, com o sexo impresso no laudo.
+    ("vpm", 9.6, (7.4, 11.4), ne.NORMAL),
+])
+def test_hemograma_completo(chave, valor, faixa, situacao):
+    lida = leitura(LAUDO_DB, chave)
+    assert (lida.valor, (lida.faixa.minimo, lida.faixa.maximo), ne.classificar(lida)) == (valor, faixa, situacao)
+
+
+def test_hemoglobina_corpuscular_media_nao_e_a_hemoglobina():
+    md = "HEMOGLOBINA CORPUSCULAR MEDIA 30,5 pg 26 a 34 pg\nCONCENTRACAO DE HEMOGLOBINA CORPUSCULAR MEDIA 33 g/dL 32 a 36"
+    assert lido(md, "hemoglobina") is None
+    assert lido(md, "hcm") == 30.5
+    assert lido(md, "chcm") == 33
+
+
+def test_hemacias_do_sedimento_urinario_nao_sao_eritrocitos():
+    assert lido("HEMACIAS 3 /campo\nHEMACIAS 5.000 /mL", "eritrocitos") is None
+
+
+def test_toxicologico_por_substancia():
+    leituras = ne.ler_valores(LAUDO_DB)
+    # Vale a primeira palavra (o resultado); a segunda é a referência.
+    assert leituras["tox_anfetaminas"].valor_texto == "Negativo"
+    assert ne.classificar(leituras["tox_cocaina"]) == ne.ALTERADO
+    assert leituras["tox_maconha"].valor_texto == "Negativo"
+    # "METANFETAMINA" não é lida como anfetamina.
+    assert leituras["tox_metanfetamina"].valor_texto == "Negativo"
+    assert ne.texto_faixa("tox_cocaina", leituras["tox_cocaina"].faixa) == "Negativo"
+    assert lido("Cocaína: Não detectado", "tox_cocaina") == "Não detectado"
+    assert ne.classificar(ne.ler_valores("Cocaína: Não detectado")["tox_cocaina"]) == ne.NORMAL
+
+
+def test_toxicologico_nao_le_resultado_de_outro_campo():
+    # Ficha clínica: o "POSITIVO" é do fator RH, longe da palavra "maconha".
+    assert lido("Uso de maconha\nTipagem sanguínea A B AB O Fator RH positivo negativo", "tox_maconha") is None
+    # Exame de cabelo: "não foi detectado" não é "detectado".
+    assert lido("MORFINA 0.2 ng/mg\nResultado final: não foi detectado o uso de substâncias", "tox_morfina") is None
+    # Dentro do alcance: "COCAINA E METABOLITOS POSITIVO".
+    assert lido("Cocaína e metabólitos Positivo Sem observações", "tox_cocaina") == "Positivo"
+
+
+def test_faixa_estendida_nao_troca_faixa_ja_lida():
+    md = ("COLESTEROL TOTAL Resultado 155 mg/dL Valor de referência com ou sem jejum inferior a 190 mg/dL "
+          "Nota: valores de colesterol total iguais ou superiores a 310 mg/dL em adultos")
+    assert leitura(md, "colesterol").faixa == ne.FaixaLaudo(None, 190, True)
+
+
+def test_opcional_so_aparece_quando_lido():
+    tabela = [
+        {"exame": "HEMOGRAMA COMPLETO", "status": "encontrado"},
+        {"exame": "TRIAGEM TOXICOLÓGICO", "status": "encontrado"},
+    ]
+    hemo, tox = ne.avaliar_documento(LAUDO_DB, tabela)
+    chaves = [p["chave"] for p in hemo["parametros"]]
+    # Ordem do laudo; o que o laboratório não imprimiu (RDW, monócitos) não aparece.
+    assert chaves[:4] == ["eritrocitos", "hemoglobina", "vcm", "hcm"]
+    assert "rdw" not in chaves and "monocitos" not in chaves
+    assert [p["nome"] for p in tox["parametros"]] == ["Anfetaminas", "Metanfetamina", "Cocaína", "Maconha (THC)"]
+    # Hemograma sem nada lido: os três obrigatórios como "Não lido".
+    hemo, tox = ne.avaliar_documento("## HEMOGRAMA\n## TRIAGEM TOXICOLOGICA", tabela)
+    assert [p["chave"] for p in hemo["parametros"]] == ["hemoglobina", "leucocitos", "plaquetas"]
+    # Toxicológico sem substância lida: uma linha "Não lido", não "Não se aplica".
+    assert [(p["nome"], p["situacao"]) for p in tox["parametros"]] == [("Resultado", ne.SEM_RESULTADO)]
 
 
 # ---------------------------------------------------------------------------
@@ -428,3 +620,82 @@ def test_normalidade_do_documento_com_layout(monkeypatch):
     resposta = rota.normalidade_do_documento("doc-1", current_user=usuario(UserRole.CHECKER))
     loc = resposta.itens[0].parametros[0].localizacao
     assert loc.pagina == 1 and len(loc.caixas) == 2
+
+
+# Lipidograma com a faixa por idade (Souza Fidelis, nov/2026): o bloco de adulto
+# vem escrito pela idade, longe do valor, e cada exame tem com e sem jejum.
+LIPIDOGRAMA = """## COLESTEROL TOTAL
+
+Material: Sangue
+Resultado: 132 mg/dL
+Valores de Referência:
+0 a 2 anos: Não existe valores de referência
+estabelecidos para esta faixa etária.
+2 a 19 anos:
+Com jejum: Inferior a 170 mg/dL
+Sem jejum: Inferior a 170 mg/dL
+Superior a 19 anos:
+Com jejum: Inferior a 190 mg/dL
+Sem jejum: Inferior a 190 mg/dL
+
+## COLESTEROL HDL
+
+Resultado: 38 mg/dL
+Valor de Referência: Baixo...: : menor que 40 mg/dL
+Desejável: maior ou igual a 60 mg/dL
+Aceitável: de 41 a 59 mg/dL
+
+## COLESTEROL LDL
+
+Resultado: 135 mg/dL
+Valor de Referência: Ótimo.....: : menor que 100 mg/dL
+Desejável. de 100 a 129 mg/dL
+Limitrofe. : de 130 a 159 mg/dL
+Alto......: : de 160 a 189 mg/dL
+Triglicérides
+Resultado: 160 mg/dL
+Valores de Referência:
+0 a 9 anos:
+Com jejum: Inferior a 75 mg/dL
+Sem jejum: Inferior a 85 mg/dL
+10 a 19 anos:
+Com jejum: Inferior a 90 mg/dL
+Sem jejum: Inferior a 100 mg/dL
+Superior a 19 anos:
+Com jejum: Inferior a 150 mg/dL
+Sem jejum: Inferior a 175 mg/dL
+"""
+
+
+@pytest.mark.parametrize("chave,valor,referencia,situacao", [
+    ("colesterol", 132, "abaixo de 190 mg/dL", ne.NORMAL),
+    # Abaixo do "Baixo: menor que 40"; o "maior ou igual a 60" é a classe de cima.
+    ("hdl", 38, "a partir de 40 mg/dL", ne.ABAIXO),
+    # Ótimo e desejável vão até 129; 130 em diante é limítrofe.
+    ("ldl", 135, "até 129 mg/dL", ne.ACIMA),
+    # Com jejum (150), não sem jejum (175).
+    ("triglic", 160, "abaixo de 150 mg/dL", ne.ACIMA),
+])
+def test_lipidograma_com_faixa_por_idade(chave, valor, referencia, situacao):
+    lida = leitura(LIPIDOGRAMA, chave)
+    assert (lida.valor, ne.texto_faixa(chave, lida.faixa), ne.classificar(lida)) == (valor, referencia, situacao)
+
+
+def test_faixa_por_idade_sem_bloco_de_adulto_continua_sem_referencia():
+    md = "TRIGLICERIDES Resultado: 71 mg/dL Valores de Referência: 0 a 9 anos: Inferior a 75 mg/dL 10 a 19 anos: Inferior a 90 mg/dL"
+    assert leitura(md, "triglic").faixa is None
+
+
+def test_ldl_por_risco_cardiovascular_fica_sem_referencia():
+    md = "COLESTEROL LDL 87 mg/dL < 130 < 130 Baixo < 100 < 100 Intermediário < 70 < 70 Alto"
+    assert leitura(md, "ldl").faixa is None
+
+
+def test_hdl_pelo_sexo_do_laudo():
+    md = "Sexo: Feminino\nHDL COLESTEROL 42 mg/dL Valor de referência: Homens > 40 mg/dL Mulheres > 45 mg/dL"
+    lida = leitura(md, "hdl")
+    assert (lida.faixa, ne.classificar(lida)) == (ne.FaixaLaudo(45, None), ne.ABAIXO)
+
+
+def test_colesterol_nao_hdl_nao_e_o_hdl():
+    assert lido("COLESTEROL NAO HDL 154 mg/dL", "hdl") is None

@@ -89,6 +89,21 @@ class Parametro:
     exclui_antes: tuple[str, ...] = ()
     # Faixa do possível. Fora dela, a leitura pegou outro número.
     plausivel: tuple[float, float] = (0, float("inf"))
+    # Só aparece na tela quando foi lido. Cada laboratório imprime um pedaço do
+    # hemograma e do painel toxicológico; sem isso o modal se enche de "Não lido".
+    opcional: bool = False
+    # O laudo imprime a faixa do percentual e a da contagem uma depois da outra
+    # ("40 a 75 %  1.440 a 9.000 /mm³"): pula a faixa que não é deste parâmetro em
+    # vez de desistir na primeira. Só no diferencial do leucograma.
+    faixa_entre_outras: bool = False
+    # Qualitativo: quantas palavras podem ficar entre o nome e o resultado. Sem o
+    # limite, "MACONHA" numa ficha clínica pegava o "FATOR RH POSITIVO" de baixo.
+    alcance: Optional[int] = None
+    # A referência é só o limite de baixo (HDL: abaixo de 40 é o alterado).
+    piso: bool = False
+    # A referência é a tabela por classe, e o normal vai até o fim da última classe
+    # antes do limítrofe (LDL: ótimo + desejável).
+    teto_da_tabela: bool = False
 
 
 PARAMETROS: dict[str, Parametro] = {p.chave: p for p in (
@@ -102,6 +117,13 @@ PARAMETROS: dict[str, Parametro] = {p.chave: p for p in (
     Parametro("colesterol", "Colesterol total", "mg/dL",
               ("COLESTEROL TOTAL", "COLESTROL TOTAL"),
               (0, 150), (150, 240), unidade_rx=r"MG\s?/\s?DL", plausivel=(50, 1000)),
+    Parametro("hdl", "Colesterol HDL", "mg/dL",
+              ("COLESTEROL HDL", "HDL COLESTEROL", "HDL-COLESTEROL", "HDL"),
+              (35, 55), None, unidade_rx=r"MG\s?/\s?DL", plausivel=(5, 200), piso=True,
+              exclui_antes=("NAO", "NAO-")),
+    Parametro("ldl", "Colesterol LDL", "mg/dL",
+              ("COLESTEROL LDL", "LDL COLESTEROL", "LDL-COLESTEROL", "LDL"),
+              None, (99, 160), unidade_rx=r"MG\s?/\s?DL", plausivel=(5, 600), teto_da_tabela=True),
     Parametro("triglic", "Triglicerídeos", "mg/dL",
               ("TRIGLICERIDEOS", "TRIGLICERIDES", "TRIGLICERIDIOS"),
               (0, 100), (100, 200), unidade_rx=r"MG\s?/\s?DL", plausivel=(10, 5000)),
@@ -135,7 +157,95 @@ PARAMETROS: dict[str, Parametro] = {p.chave: p for p in (
     Parametro("vdrl", "VDRL", "",
               ("VDRL",),
               qualitativo=True, normal_texto="Não reagente"),
+    # --- Resto do hemograma. Opcionais: só entram na tela quando lidos. ---
+    Parametro("eritrocitos", "Eritrócitos", "milhões/mm³",
+              ("ERITROCITOS", "HEMACIAS", "GLOBULOS VERMELHOS"),
+              (3.5, 5.0), (4.8, 6.6), plausivel=(1, 9), opcional=True,
+              # "milhões/mm³", "x10⁶/µL", "T/L". Sem unidade de milhão não vale:
+              # é a hemácia do sedimento urinário ("3 /campo", "5.000 /mL").
+              unidade_rx=r"MILH\w*|MI\s?/|X\s?10\s?\^?\s?6|10\s?\^?\s?6|T\s?/\s?L\b|M\s?/\s?UL",
+              exclui=("NA URINA", "POR CAMPO", "/CAMPO")),
+    Parametro("hematocrito", "Hematócrito", "%",
+              ("HEMATOCRITO",),
+              (33, 46), (43, 56), unidade_rx=r"%", plausivel=(10, 75), opcional=True),
+    Parametro("vcm", "VCM", "fL",
+              ("VCM", "VOLUME CORPUSCULAR MEDIO"),
+              (76, 88), (94, 102), plausivel=(40, 150), opcional=True,
+              # "fL" ou "µm³" (o µ cai na normalização e sobra "M3").
+              unidade_rx=r"F\s?L\b|U?\s?M\s?3\b|FENTOLITROS?\b"),
+    Parametro("hcm", "HCM", "pg",
+              ("HCM", "HEMOGLOBINA CORPUSCULAR MEDIA"),
+              (23, 29), (31, 35), unidade_rx=r"P\s?G\b|PICOGRAMAS?\b", plausivel=(10, 50), opcional=True,
+              exclui_antes=("CONCENTRACAO", "CONCENTRACAO DE", "CONC.", "CONC. DE")),
+    Parametro("chcm", "CHCM", "g/dL",
+              ("CHCM", "CONCENTRACAO DE HEMOGLOBINA CORPUSCULAR MEDIA", "CONCENTRACAO HEMOGLOBINA CORPUSCULAR MEDIA"),
+              (30, 34), (34, 38), unidade_rx=r"G\s?/\s?DL|G\s?%|%", plausivel=(20, 45), opcional=True),
+    Parametro("rdw", "RDW", "%",
+              ("RDW", "RDW-CV"),
+              (10, 13), (14, 17), unidade_rx=r"%", plausivel=(5, 40), opcional=True,
+              exclui=("-SD", "SD")),
+    *(
+        p
+        for chave, nome, nomes, exclui, pct, conta in (
+            ("bastonetes", "Bastonetes", ("BASTONETES", "BASTOES", "NEUTROFILOS EM BASTAO"), (),
+             ((0, 1), (2, 11)), ((0, 100), (300, 1100))),
+            ("segmentados", "Segmentados", ("SEGMENTADOS", "NEUTROFILOS SEGMENTADOS"), (),
+             ((35, 55), (60, 80)), ((1000, 2600), (5500, 9500))),
+            ("neutrofilos", "Neutrófilos", ("NEUTROFILOS",), ("SEGMENTADOS", "BASTONETES", "EM BASTAO"),
+             ((35, 55), (60, 80)), ((1000, 2600), (5500, 9500))),
+            ("eosinofilos", "Eosinófilos", ("EOSINOFILOS",), (),
+             ((0, 2), (4, 8)), ((0, 100), (300, 800))),
+            ("basofilos", "Basófilos", ("BASOFILOS",), (),
+             ((0, 1), (1, 3)), ((0, 50), (100, 300))),
+            ("linfocitos", "Linfócitos", ("LINFOCITOS",), ("ATIPICOS", "REATIVOS"),
+             ((15, 30), (40, 55)), ((500, 1600), (3000, 5500))),
+            ("monocitos", "Monócitos", ("MONOCITOS",), (),
+             ((1, 4), (8, 14)), ((0, 500), (600, 1500))),
+        )
+        # O diferencial vem em percentual e em contagem, cada um com a sua faixa.
+        for p in (
+            Parametro(chave, nome, "%", nomes, *pct, unidade_rx=r"%", plausivel=(0, 100),
+                      exclui=exclui, opcional=True, faixa_entre_outras=True),
+            Parametro(f"{chave}_abs", nome, "/mm³", nomes, *conta, plausivel=(0, 100000),
+                      unidade_rx=r"/?\s?MM\s?3|/\s?UL\b|/\s?CMM|CELS?\s?/\s?MM\s?3",
+                      exclui=exclui, opcional=True, faixa_entre_outras=True),
+        )
+    ),
+    Parametro("vpm", "VPM", "fL",
+              ("VPM", "VOLUME PLAQUETARIO MEDIO", "VOLUME MEDIO PLAQUETARIO"),
+              (6, 8.5), (10, 13), unidade_rx=r"F\s?L\b|U?\s?M\s?3\b|FENTOLITROS?\b", plausivel=(4, 20), opcional=True),
+    # --- Triagem toxicológica: uma linha por substância, resultado em texto. ---
+    *(
+        # Até três palavras entre a substância e o resultado: "COCAINA E METABOLITOS
+        # POSITIVO", "BENZODIAZEPINICOS BZO NEGATIVO".
+        Parametro(chave, nome, "", nomes, qualitativo=True, normal_texto="Negativo", opcional=True, alcance=3)
+        for chave, nome, nomes in (
+            ("tox_anfetaminas", "Anfetaminas", ("ANFETAMINAS", "ANFETAMINA", "AMPHETAMINES", "AMPHETAMINE")),
+            ("tox_metanfetamina", "Metanfetamina", ("METANFETAMINAS", "METANFETAMINA", "METHAMPHETAMINE")),
+            ("tox_mdma", "Ecstasy (MDMA)", ("ECSTASY MDMA", "ECSTASY", "MDMA", "METILENODIOXIMETANFETAMINA")),
+            ("tox_barbituricos", "Barbitúricos", ("BARBITURICOS", "BARBITURICO")),
+            ("tox_benzodiazepinicos", "Benzodiazepínicos", ("BENZODIAZEPINICOS", "BENZODIAZEPINICO", "BENZODIAZEPINAS")),
+            ("tox_cocaina", "Cocaína", ("COCAINA", "BENZOILECGONINA")),
+            ("tox_maconha", "Maconha (THC)",
+             ("MACONHA", "TETRAHIDROCANABINOL", "TETRA-HIDROCANABINOL", "CANABINOIDES", "CANABINOIDE", "CANABINOIS",
+              "THC")),
+            ("tox_fenciclidina", "Fenciclidina", ("FENCICLIDINA",)),
+            ("tox_opiaceos", "Opiáceos", ("OPIACEOS", "OPIACEO", "OPIOIDES")),
+            ("tox_morfina", "Morfina", ("MORFINA",)),
+            ("tox_metadona", "Metadona", ("METADONA",)),
+            ("tox_triciclicos", "Antidepressivos tricíclicos", ("ANTIDEPRESSIVOS TRICICLICOS", "TRICICLICOS")),
+        )
+    ),
 )}
+
+# Ordem do laudo, para o hemograma aparecer na tela como o laboratório imprime.
+_HEMOGRAMA = (
+    "eritrocitos", "hemoglobina", "hematocrito", "vcm", "hcm", "chcm", "rdw", "leucocitos",
+    "bastonetes", "bastonetes_abs", "segmentados", "segmentados_abs", "neutrofilos", "neutrofilos_abs",
+    "eosinofilos", "eosinofilos_abs", "basofilos", "basofilos_abs", "linfocitos", "linfocitos_abs",
+    "monocitos", "monocitos_abs", "plaquetas", "vpm",
+)
+_TOXICOLOGICO = tuple(k for k in PARAMETROS if k.startswith("tox_"))
 
 # Nomes que encerram a janela de um parâmetro: o próximo analito do laudo. Inclui
 # os próprios parâmetros e os vizinhos que têm número com a mesma unidade (CHCM
@@ -144,7 +254,7 @@ _FRONTEIRA_EXTRA = (
     "ERITROCITOS", "HEMACIAS", "HEMATOCRITO", "VCM", "HCM", "CHCM", "RDW", "VPM", "PLAQUETOCRITO",
     "NEUTROFILOS", "SEGMENTADOS", "BASTONETES", "LINFOCITOS", "MONOCITOS", "EOSINOFILOS", "BASOFILOS",
     "HDL", "LDL", "VLDL", "NAO HDL", "LIPIDEOS TOTAIS", "GLICEMIA ESTIMADA", "GLICOSE MEDIA", "HB A1A", "HB A1B", "HB ALA", "HB ALB",
-    "CONCENTRACAO DE HEMOGLOBINA",
+    "CONCENTRACAO DE HEMOGLOBINA", "MIELOCITOS", "METAMIELOCITOS", "PROMIELOCITOS", "BLASTOS",
     # Outros analitos que aparecem no mesmo laudo, com mg/dL ou U/L.
     "BILIRRUBINA", "FOSFATASE", "ACIDO URICO", "ACIDO", "SODIO", "POTASSIO", "CALCIO", "MAGNESIO", "FERRO", "FERRITINA",
     "ALBUMINA", "PROTEINAS", "AMILASE", "LIPASE", "CPK", "CREATINOFOSFOQUINASE", "TSH", "T4", "PSA", "INSULINA",
@@ -156,8 +266,12 @@ _FRONTEIRA_EXTRA = (
 _EXAME_PARAMETROS: tuple[tuple[re.Pattern, tuple[str, ...]], ...] = (
     (re.compile(r"CARBOXI"), ()),
     (re.compile(r"\bHEMOGLOBINA GLICADA\b|\bHBA1C\b"), ("hba1c",)),
-    (re.compile(r"\bHEMOGRAMA\b"), ("hemoglobina", "leucocitos", "plaquetas")),
-    (re.compile(r"\bLIPIDOGRAMA\b|\bPERFIL LIPIDICO\b|\bCOLESTEROL TOTAL E FRACOES\b"), ("colesterol", "triglic")),
+    (re.compile(r"\bHEMOGRAMA\b"), _HEMOGRAMA),
+    (re.compile(r"\bTOXICOLOG"), _TOXICOLOGICO),
+    (re.compile(r"\bLIPIDOGRAMA\b|\bPERFIL LIPIDICO\b|\bCOLESTEROL TOTAL E FRACOES\b"),
+     ("colesterol", "hdl", "ldl", "triglic")),
+    (re.compile(r"(?<!NAO )\bHDL\b"), ("hdl",)),
+    (re.compile(r"(?<!V)\bLDL\b"), ("ldl",)),
     (re.compile(r"\bCOLESTEROL TOTAL\b"), ("colesterol",)),
     (re.compile(r"\bTRIGLICER"), ("triglic",)),
     (re.compile(r"\bCURVA\b|\bTOLERANCIA\b"), ()),
@@ -186,7 +300,13 @@ _ANTES_REFERENCIA = {
 # Comparação um pouco antes do número: "estão acima de [...] 800 mg/dL" é nota
 # do laboratório, com o OCR embaralhando a ordem das palavras.
 _COMPARACAO_PERTO = {"ACIMA", "ABAIXO", "MAIOR", "MENOR", "SUPERIOR", "INFERIOR", "IGUAL", "ATE", "ENTRE", "QUANDO"}
-_QUALITATIVO = re.compile(r"\b(NAO REAGENTE|NAO-REAGENTE|NEGATIVO|REAGENTE|POSITIVO)\b(\s+\d+/\d+)?")
+# "DETECTADO" sozinho fica de fora: "NAO FOI DETECTADO O USO" virava positivo.
+_QUALITATIVO = re.compile(r"\b(NAO REAGENTE|NAO-REAGENTE|NEGATIVO|REAGENTE|POSITIVO|NAO DETECTADO)\b(\s+\d+/\d+)?")
+_TEXTO_QUALITATIVO = {
+    "NAO REAGENTE": "Não reagente", "NEGATIVO": "Negativo", "REAGENTE": "Reagente", "POSITIVO": "Positivo",
+    "NAO DETECTADO": "Não detectado",
+}
+_QUALITATIVO_NORMAL = ("Não reagente", "Negativo", "Não detectado")
 
 
 def normalizar(texto: str) -> str:
@@ -288,6 +408,22 @@ _RX_HOMEM = re.compile(r"\b(?:HOMEM|HOMENS|MASCULINO)\b")
 _RX_MULHER = re.compile(r"\b(?:MULHER|MULHERES|FEMININO)\b")
 _RX_SEXO = re.compile(r"\bSEXO\s*(MASCULINO|FEMININO|M|F)\b")
 _RX_ADULTO = re.compile(r"\bADULTOS?\b(?:\s+(?:ACIMA|MAIOR(?:ES)?)\s+DE\s+\d+\s+ANOS)?")
+# Faixa etária de adulto escrita pela idade: "Superior a 19 anos", "Acima de 18
+# anos", ">= 20 anos", "20 anos ou mais".
+_RX_IDADE_ADULTA = re.compile(
+    r"\b(?:SUPERIOR|ACIMA|MAIOR(?:ES)?|A PARTIR)\s+(?:A|DE|QUE)\s+(?:1[89]|20)\s+ANOS\b"
+    r"|(?:>\s?=?)\s*(?:1[89]|20)\s+ANOS\b"
+    r"|\b(?:1[89]|20)\s+ANOS\s+(?:OU MAIS|OU MAIOR|EM DIANTE)\b"
+)
+_RX_TABELA_DE_RISCO = re.compile(r"\b(?:RISCO|INTERMEDIARIO|META|METAS|CATEGORIA)\b")
+_RX_COM_JEJUM = re.compile(r"\bCOM JEJUM\b")
+_RX_SEM_JEJUM = re.compile(r"\bSEM JEJUM\b")
+# Limite de baixo do HDL. Os dois sentidos dizem o mesmo número: "menor que 40" é
+# o baixo, "maior que 40" é o desejável.
+_RX_PISO = re.compile(
+    rf"(MAIOR OU IGUAL A|MAIOR QUE|MAIOR DE|SUPERIOR A|ACIMA DE|>\s?=|>|MENOR QUE|MENOR DE|INFERIOR A|<\s?=|<)"
+    rf"\s*{_NUM_REF}{_SEM_IDADE}"
+)
 
 
 def _sexo_do_documento(norm: str) -> Optional[str]:
@@ -329,6 +465,25 @@ def _faixa_no_texto(p: Parametro, depois: str, sexo: Optional[str]) -> Optional[
     adulto = _RX_ADULTO.search(texto)
     if adulto:
         texto = texto[adulto.end():]
+    faixa = _faixa_recortada(p, texto, sexo, adulto is not None)
+    if faixa is not None:
+        return faixa
+    # Tabela por idade sem a palavra "adulto": "0 a 2 anos ... 2 a 19 anos ...
+    # Superior a 19 anos: Com jejum: Inferior a 190". Fica longe do valor, por isso
+    # a busca vai mais adiante; e só roda quando a leitura acima não achou nada.
+    etaria = _RX_IDADE_ADULTA.search(depois[:600])
+    if not etaria:
+        return None
+    texto = depois[etaria.end():etaria.end() + 170]
+    # Com e sem jejum lado a lado: vale a de jejum, como é colhido o kit do ASO.
+    jejum = _RX_COM_JEJUM.search(texto)
+    if jejum:
+        sem = _RX_SEM_JEJUM.search(texto, jejum.end())
+        texto = texto[jejum.end():sem.start() if sem else len(texto)]
+    return _faixa_recortada(p, texto, sexo, True)
+
+
+def _faixa_recortada(p: Parametro, texto: str, sexo: Optional[str], adulto: bool) -> Optional[FaixaLaudo]:
     homem, mulher = _RX_HOMEM.search(texto), _RX_MULHER.search(texto)
     if homem or mulher:
         proprio, outro = (homem, mulher) if sexo == "M" else (mulher, homem) if sexo == "F" else (None, None)
@@ -336,14 +491,71 @@ def _faixa_no_texto(p: Parametro, depois: str, sexo: Optional[str]) -> Optional[
             return None
         fim = outro.start() if outro and outro.start() > proprio.start() else len(texto)
         texto = texto[proprio.end():fim]
+    # Meta por risco cardiovascular ("< 130 Baixo, < 100 Intermediário"): o alvo
+    # depende do paciente, não há um normal do laboratório.
+    if p.teto_da_tabela and _RX_TABELA_DE_RISCO.search(texto):
+        return None
     classe = _RX_OUTRA_CLASSE.search(texto)
     if classe:
         texto = texto[:classe.start()]
+    if p.piso:
+        return _piso(p, texto, adulto)
+    if p.teto_da_tabela:
+        return _teto_da_tabela(p, texto, adulto)
 
-    candidatos = [m for m in (_RX_INTERVALO.search(texto), _RX_TETO.search(texto), _RX_PAR.search(texto)) if m]
-    if not candidatos:
-        return None
-    m = min(candidatos, key=lambda c: c.start())
+    rxs = (_RX_INTERVALO, _RX_TETO, _RX_PAR)
+    if p.faixa_entre_outras:
+        candidatos = sorted((m for rx in rxs for m in rx.finditer(texto)), key=lambda c: c.start())
+    else:
+        # Só a primeira faixa do texto: se não for deste parâmetro, desiste.
+        primeiras = [m for m in (rx.search(texto) for rx in rxs) if m]
+        candidatos = [min(primeiras, key=lambda c: c.start())] if primeiras else []
+    for m in candidatos:
+        faixa = _faixa_do_candidato(p, texto, m, adulto)
+        if faixa is not None:
+            return faixa
+    return None
+
+
+def _piso(p: Parametro, texto: str, adulto: bool) -> Optional[FaixaLaudo]:
+    """
+    HDL: o laudo diz onde começa o baixo ("Baixo: menor que 40", "Desejável: maior
+    que 40"). Vale o primeiro limite no lugar do mínimo deste parâmetro; "maior ou
+    igual a 60" é a classe de cima e fica fora pelo `ref_min`.
+    """
+    for m in _RX_PISO.finditer(texto):
+        if not adulto and _RX_NAO_ADULTO.search(texto[:m.start()]):
+            return None
+        minimo = _numero(m.group(2))
+        if p.ref_min and p.ref_min[0] <= minimo <= p.ref_min[1]:
+            return FaixaLaudo(minimo, None)
+    return None
+
+
+def _teto_da_tabela(p: Parametro, texto: str, adulto: bool) -> Optional[FaixaLaudo]:
+    """
+    LDL: tabela por classe ("Ótimo: menor que 100 / Desejável: de 100 a 129 /
+    Limítrofe: ..."). `_RX_OUTRA_CLASSE` já cortou do limítrofe em diante; o maior
+    teto que sobrou é o fim do que o laboratório considera bom. A tabela por risco
+    cardiovascular ("Baixo risco: < 130 / Alto risco: < 70") depende do paciente e
+    é cortada antes de achar número.
+    """
+    melhor: Optional[FaixaLaudo] = None
+    for rx in (_RX_INTERVALO, _RX_TETO):
+        for m in rx.finditer(texto):
+            if not adulto and _RX_NAO_ADULTO.search(texto[:m.start()]):
+                return None
+            if m.re is _RX_TETO:
+                exclusivo = m.group(3) is not None
+                faixa = FaixaLaudo(None, _numero(m.group(4) if exclusivo else m.group(2)), exclusivo)
+            else:
+                faixa = FaixaLaudo(None, _numero(m.group(2)))
+            if _no_lugar_certo(p, None, faixa.maximo) and (melhor is None or faixa.maximo > melhor.maximo):
+                melhor = faixa
+    return melhor
+
+
+def _faixa_do_candidato(p: Parametro, texto: str, m: re.Match, adulto: bool) -> Optional[FaixaLaudo]:
     if not adulto and _RX_NAO_ADULTO.search(texto[:m.start()]):
         return None
     if m.re is _RX_TETO:
@@ -362,12 +574,17 @@ def _faixa_no_texto(p: Parametro, depois: str, sexo: Optional[str]) -> Optional[
     return faixa
 
 
+_RX_ZERO_LIDO_COMO_O = re.compile(r"(?<![A-Z0-9.,/])O(?=\s+(?:A|ATE)\s+\d)")
+
+
 def _faixa_do_laudo(p: Parametro, depois: str, sexo: Optional[str]) -> Optional[FaixaLaudo]:
     """
     A faixa do laudo. O milhar com espaço só entra quando a leitura normal não achou
     nada: assim ele não muda faixa que já era lida ("150 450" sem conector é um par,
     e juntar viraria 150.450).
     """
+    # O OCR lê o zero do começo da faixa como a letra O: "o a 240 /mm³".
+    depois = _RX_ZERO_LIDO_COMO_O.sub("0", depois)
     faixa = _faixa_no_texto(p, depois, sexo)
     if faixa is None and p.milhar:
         corrigido = _RX_MILHAR_COM_ESPACO.sub(r"\1.\2", depois[:170])
@@ -376,7 +593,7 @@ def _faixa_do_laudo(p: Parametro, depois: str, sexo: Optional[str]) -> Optional[
     return faixa
 
 
-def _valor_qualitativo(jan: str) -> Optional[tuple[str, int, int]]:
+def _valor_qualitativo(jan: str, alcance: Optional[int] = None) -> Optional[tuple[str, int, int]]:
     """(como exibir, início e fim do resultado na janela)."""
     # Quando a janela tem "RESULTADO", a resposta vem depois dele; antes pode
     # estar a faixa ("Valor de referência: Não reagente").
@@ -384,9 +601,10 @@ def _valor_qualitativo(jan: str) -> Optional[tuple[str, int, int]]:
     m = _QUALITATIVO.search(jan, pos if pos >= 0 else 0)
     if not m:
         return None
+    if alcance is not None and len(jan[:m.start()].split()) > alcance:
+        return None
     titulo = (m.group(2) or "").strip()
-    palavra = m.group(1).replace("-", " ")
-    texto = {"NAO REAGENTE": "Não reagente", "NEGATIVO": "Negativo", "REAGENTE": "Reagente", "POSITIVO": "Positivo"}[palavra]
+    texto = _TEXTO_QUALITATIVO[m.group(1).replace("-", " ")]
     return f"{texto} {titulo}".strip(), m.start(), m.end()
 
 
@@ -442,7 +660,7 @@ def _ler(markdown: str) -> tuple[dict[str, Leitura], str, list[tuple[int, int]]]
             proxima = next((f for f in fronteiras if f >= ini), len(norm))
             jan = norm[ini:min(ini + JANELA, proxima)]
             if p.qualitativo:
-                achado = _valor_qualitativo(jan)
+                achado = _valor_qualitativo(jan, p.alcance)
                 if achado:
                     texto, a, b = achado
                     leituras[chave] = Leitura(chave, p.nome, p.unidade, None, texto, m.span(), (ini + a, ini + b))
@@ -454,6 +672,16 @@ def _ler(markdown: str) -> tuple[dict[str, Leitura], str, list[tuple[int, int]]]
                 fim_valor = ini + b
                 seguinte = next((f for f in fronteiras if f >= fim_valor), len(norm))
                 faixa = _faixa_do_laudo(p, norm[fim_valor:seguinte], sexo)
+                if faixa is None:
+                    # O mesmo analito de novo logo depois do valor não encerra a
+                    # faixa: "89 mg/dL  Glicemia em jejum: Normal 70 a 99 mg/dL".
+                    # Só quando a leitura normal não achou nada, para não trocar
+                    # faixa já lida pela nota que vem depois ("... em adultos").
+                    estendida = next(
+                        (f for f in fronteiras if f >= fim_valor and not _RX_NOME[chave].match(norm, f)), len(norm)
+                    )
+                    if estendida != seguinte:
+                        faixa = _faixa_do_laudo(p, norm[fim_valor:estendida], sexo)
                 leituras[chave] = Leitura(chave, p.nome, p.unidade, valor, texto, m.span(), (ini + a, fim_valor), faixa)
                 break
     return leituras, norm, inicios
@@ -589,13 +817,15 @@ def texto_faixa(chave: str, faixa: Optional[FaixaLaudo]) -> str:
     un = f" {p.unidade}" if p.unidade else ""
     if faixa.minimo is not None and faixa.maximo is not None:
         return f"{_fmt(faixa.minimo)} a {_fmt(faixa.maximo)}{un}"
+    if faixa.maximo is None:
+        return f"a partir de {_fmt(faixa.minimo)}{un}"
     return f"{'abaixo de' if faixa.teto_exclusivo else 'até'} {_fmt(faixa.maximo)}{un}"
 
 
 def classificar(leitura: Leitura) -> str:
     p = PARAMETROS[leitura.chave]
     if p.qualitativo:
-        return NORMAL if leitura.valor_texto.startswith(("Não reagente", "Negativo")) else ALTERADO
+        return NORMAL if leitura.valor_texto.startswith(_QUALITATIVO_NORMAL) else ALTERADO
     faixa = leitura.faixa
     if faixa is None:
         return SEM_REFERENCIA
@@ -643,6 +873,8 @@ def avaliar_documento(
         for k in chaves:
             p = PARAMETROS[k]
             lida = leituras.get(k)
+            if lida is None and p.opcional:
+                continue
             parametros.append({
                 "chave": k,
                 "nome": p.nome,
@@ -652,6 +884,14 @@ def avaliar_documento(
                 "referencia": texto_faixa(k, lida.faixa if lida else None),
                 "situacao": classificar(lida) if lida else SEM_RESULTADO,
                 "localizacao": localizar_leitura(lida, norm, inicios, por_indice) if lida and por_indice else None,
+            })
+        if not parametros:
+            # Exame só de opcionais (toxicológico) sem nada lido: uma linha avisando,
+            # para não parecer exame sem resultado a ler ("Não se aplica").
+            p = PARAMETROS[chaves[0]]
+            parametros.append({
+                "chave": f"{chaves[0]}_sem_leitura", "nome": "Resultado", "unidade": "", "valor": None,
+                "valor_texto": None, "referencia": p.normal_texto, "situacao": SEM_RESULTADO, "localizacao": None,
             })
         itens.append({"exame": item.get("exame"), "parametros": parametros})
     return itens
