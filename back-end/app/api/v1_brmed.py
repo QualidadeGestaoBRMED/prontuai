@@ -8,6 +8,7 @@ from app.core.database import user_db
 from app.core.logging import set_audit_context
 from app.models.audit_log import AuditLogCreate
 from app.core.config import settings
+from app.core.clients import rodar_em_loop_novo
 from app.core import metrics
 from pydantic import BaseModel
 import logging
@@ -135,7 +136,7 @@ def _run_background_job_in_thread(**kwargs) -> None:
     """
     job_id = kwargs.get("job_id", "unknown")
     try:
-        asyncio.run(process_document_background(**kwargs))
+        rodar_em_loop_novo(process_document_background(**kwargs))
     except Exception as exc:
         logger.exception("[JOB %s] Falha inesperada no worker thread: %s", job_id, exc)
         if isinstance(job_id, str) and job_id:
