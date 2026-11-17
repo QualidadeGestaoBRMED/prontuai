@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react"
+import { useEffect, useRef, useState, type MouseEvent } from "react"
 import { CheckIcon, XIcon, InfoIcon, AlertTriangleIcon } from "lucide-react"
 
 import {
@@ -77,6 +77,18 @@ const SITUACAO: Record<SituacaoParametro, { label: string; className: string }> 
 export const foraDaFaixa = (p: ParametroLido) =>
   p.situacao === "acima" || p.situacao === "abaixo" || p.situacao === "alterado";
 
+// Quantos parâmetros a célula mostra de início e a cada "Mostrar mais". O
+// hemograma completo tem mais de 20 e o toxicológico uma linha por substância.
+const PASSO_PARAMETROS = 3;
+// Os de sempre do hemograma vêm logo depois dos alterados.
+const PARAMETROS_PRINCIPAIS = new Set(["hemoglobina", "leucocitos", "plaquetas"]);
+
+/** Fora da faixa primeiro, depois os principais; no resto, a ordem do laudo. */
+function priorizarParametros(parametros: ParametroLido[]): ParametroLido[] {
+  const peso = (p: ParametroLido) => (foraDaFaixa(p) ? 0 : PARAMETROS_PRINCIPAIS.has(p.chave) ? 1 : 2);
+  return [...parametros].sort((a, b) => peso(a) - peso(b));
+}
+
 function CelulaNormalidade({ item, parametros, carregando, onLocalizar, ativo }: {
   item: TabelaComparacaoItem; parametros?: ParametroLido[]; carregando: boolean;
   /** Leva ao valor no PDF. Sem ela, ou sem posição do valor, o valor é texto. */
@@ -84,12 +96,21 @@ function CelulaNormalidade({ item, parametros, carregando, onLocalizar, ativo }:
   /** `chave` do parâmetro destacado no PDF agora. */
   ativo?: string | null;
 }) {
+  const [visiveis, setVisiveis] = useState(PASSO_PARAMETROS);
   if (item.status === "faltante") return <span className="text-muted-foreground">—</span>;
   if (carregando) return <span className="text-xs text-muted-foreground">Lendo…</span>;
   if (!parametros?.length) return <span className="text-xs text-muted-foreground">Não se aplica</span>;
+  const ordenados = priorizarParametros(parametros);
+  const restantes = ordenados.length - visiveis;
+  // Os botões ficam dentro da linha da tabela, que localiza o exame no PDF ao
+  // clicar: o clique para aqui.
+  const mudar = (e: MouseEvent, quantos: number) => {
+    e.stopPropagation();
+    setVisiveis(quantos);
+  };
   return (
     <div className="flex flex-col gap-1.5">
-      {parametros.map((p) => {
+      {ordenados.slice(0, visiveis).map((p) => {
         const sit = SITUACAO[p.situacao];
         return (
           <div key={p.chave} className="text-xs leading-tight">
@@ -129,6 +150,38 @@ function CelulaNormalidade({ item, parametros, carregando, onLocalizar, ativo }:
           </div>
         );
       })}
+      {ordenados.length > PASSO_PARAMETROS && (
+        <div className="flex flex-wrap gap-3 text-[11px] font-medium">
+          {restantes > 0 && (
+            <button
+              type="button"
+              onClick={(e) => mudar(e, visiveis + PASSO_PARAMETROS)}
+              className="text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+            >
+              Mostrar mais {Math.min(PASSO_PARAMETROS, restantes)} ({restantes} {restantes === 1 ? "restante" : "restantes"})
+            </button>
+          )}
+          {/* Com 3 ou menos faltando, "Mostrar mais" já abre tudo. */}
+          {restantes > PASSO_PARAMETROS && (
+            <button
+              type="button"
+              onClick={(e) => mudar(e, ordenados.length)}
+              className="text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+            >
+              Mostrar todos ({ordenados.length})
+            </button>
+          )}
+          {visiveis > PASSO_PARAMETROS && (
+            <button
+              type="button"
+              onClick={(e) => mudar(e, PASSO_PARAMETROS)}
+              className="text-muted-foreground underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+            >
+              Mostrar menos
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
