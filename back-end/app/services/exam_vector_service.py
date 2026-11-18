@@ -71,10 +71,12 @@ async def gerar_embedding(texto: str) -> bytes:
     """
     from openai import AsyncOpenAI  # import tardio: módulo é carregado no startup
 
-    cliente = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
-    resposta = await cliente.embeddings.create(
-        input=[texto], model=settings.MODELO_EMBEDDING
-    )
+    # `async with` fecha o pool ao sair: cliente avulso não fechado deixa o
+    # socket aberto até o processo morrer (ver app/core/clients.py).
+    async with AsyncOpenAI(api_key=settings.OPENAI_API_KEY) as cliente:
+        resposta = await cliente.embeddings.create(
+            input=[texto], model=settings.MODELO_EMBEDDING
+        )
     vetor = np.array(resposta.data[0].embedding, dtype="float32")
     if vetor.shape[0] != DIMENSOES:
         raise ValueError(

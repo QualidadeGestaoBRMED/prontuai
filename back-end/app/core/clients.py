@@ -21,11 +21,17 @@ chegou a comparar. Infla a fila e contamina a medição de acurácia.
 O OCR nunca sofreu disso porque usa o `OpenAI` **síncrono**, que não depende de
 event loop.
 
-`WeakKeyDictionary`: a entrada morre junto com o loop, sem manter loop vivo nem
-acumular cliente por job. Mesmo padrão que `exam_vector_service` já fazia por
-conta própria, criando o cliente dentro da função.
+O cliente precisa ser FECHADO no fim do loop, e o `WeakKeyDictionary` não basta.
+A ideia era a entrada morrer junto com o loop, mas o valor segura a chave:
+cliente → pool httpx → conexão → transport → `_loop`. Depois da primeira chamada
+de rede o loop nunca vira lixo, e loop, cliente, contexto SSL e socket ficam
+vivos para sempre. Em produção (17/nov/2026) foram 2,3 GB de RSS e 1.119 sockets
+em CLOSE-WAIT para a api.openai.com após ~1.200 documentos, cerca de 1,2 MB por
+documento, até o container ser reiniciado. Por isso o job roda por
+`rodar_em_loop_novo`, que fecha o cliente antes de o loop terminar.
 """
 import asyncio
+from typing import Any, Coroutine, TypeVar
 from weakref import WeakKeyDictionary
 
 from openai import AsyncOpenAI
@@ -55,3 +61,37 @@ def get_client() -> AsyncOpenAI:
         cliente = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
         _clientes_por_loop[loop] = cliente
     return cliente
+
+
+async def fechar_cliente_do_loop() -> None:
+    """Fecha e esquece o cliente do loop corrente, se houver.
+
+    Tem de rodar DENTRO do loop, antes de ele terminar: `close()` é assíncrono e
+    devolve as conexões do pool. Depois que o loop fecha já não há como.
+    """
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        return
+    cliente = _clientes_por_loop.pop(loop, None)
+    if cliente is not None:
+        await cliente.close()
+
+
+T = TypeVar("T")
+
+
+def rodar_em_loop_novo(corrotina: Coroutine[Any, Any, T]) -> T:
+    """`asyncio.run` que fecha o cliente OpenAI do loop no fim, com ou sem erro.
+
+    Use no lugar de `asyncio.run` em todo código que roda trabalho com IA num
+    loop próprio, como o worker de `v1_brmed._run_background_job_in_thread`.
+    """
+
+    async def _com_fechamento() -> T:
+        try:
+            return await corrotina
+        finally:
+            await fechar_cliente_do_loop()
+
+    return asyncio.run(_com_fechamento())
