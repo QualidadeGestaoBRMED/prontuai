@@ -117,9 +117,6 @@
 .tm .kv .pair b { font-weight: 600; }
 .tm .kv .pair b.na { font-weight: 400; color: var(--muted-fg); font-style: italic; }
 
-.tm .tech { margin-top: 32px; font-size: 12px; }
-.tm .tech summary { color: var(--muted-fg); cursor: pointer; }
-.tm .tech pre { margin: 8px 0 0; padding: 12px; background: var(--canvas); border-radius: 8px; overflow-x: auto; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
 
 /* Documento */
 .tm .doc-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }

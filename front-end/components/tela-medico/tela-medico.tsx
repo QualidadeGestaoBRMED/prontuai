@@ -163,6 +163,7 @@ export function TelaMedico({ analise, paciente, pdf, onFechar, decisaoRegistrada
     visivel: false,
   })
 
+  const docRef = useRef<HTMLDivElement>(null)
   const docToggleRef = useRef<HTMLButtonElement>(null)
   const docHideRef = useRef<HTMLButtonElement>(null)
   const focoRef = useRef<string | null>(null)
@@ -184,6 +185,14 @@ export function TelaMedico({ analise, paciente, pdf, onFechar, decisaoRegistrada
     else if (alvo === "doc-toggle") docToggleRef.current?.focus()
     else document.getElementById(alvo)?.focus()
   })
+
+  // Em tela estreita (abaixo de 1100 px, como notebook com zoom de 125%) as
+  // colunas empilham e o documento abre abaixo da lista de exames, fora da
+  // vista: o "Pág. N" parecia não fazer nada. Traz o painel para a tela; em
+  // tela larga ele já está visível e nada rola.
+  useEffect(() => {
+    if (docAberto) docRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" })
+  }, [docAberto, destaque?.chave])
 
   const irPara = (p: ExamePrevisto) => {
     if (!p.localizacao) return
@@ -208,7 +217,6 @@ export function TelaMedico({ analise, paciente, pdf, onFechar, decisaoRegistrada
       decidido_em: decididoEm,
     }
   }
-  const payload = `POST /v1/analises/${analise.analise_id}/decisao\n\n` + JSON.stringify(buildPayload(), null, 2)
 
   const renderItem = ({ p, n, tipo }: Item) => {
     let ico: ReactNode
@@ -476,15 +484,10 @@ export function TelaMedico({ analise, paciente, pdf, onFechar, decisaoRegistrada
                   </dl>
                 )}
               </section>
-
-              <details className="tech">
-                <summary>Ver o que será enviado à API</summary>
-                <pre>{payload}</pre>
-              </details>
             </div>
 
             {/* Documento (recolhido por padrão) */}
-            <div className="doc" id="tm-doc">
+            <div className="doc" id="tm-doc" ref={docRef}>
               <div className="doc-head">
                 <h2 className="eyebrow">
                   {exameDestacado ? `Documento · ${exameDestacado.exame}` : "Documento"}
