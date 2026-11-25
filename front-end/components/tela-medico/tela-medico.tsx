@@ -220,20 +220,6 @@ export function TelaMedico({ analise, paciente, pdf, onFechar, decisaoRegistrada
     toastTimerRef.current = setTimeout(() => setToastMsg((t) => ({ ...t, visivel: false })), 2400)
   }
 
-  const [casoCopiado, setCasoCopiado] = useState(false)
-  const copiarCaso = async () => {
-    if (!analise.caso_id) return
-    try {
-      await navigator.clipboard.writeText(analise.caso_id)
-      setCasoCopiado(true)
-      window.setTimeout(() => setCasoCopiado(false), 2000)
-      mostrarToast("Id do caso copiado", true)
-    } catch {
-      // Sem permissão de área de transferência: o id já fica selecionável na tela.
-      mostrarToast("Selecione o id para copiar", false)
-    }
-  }
-
   const buildPayload = (): DecisaoMedico => {
     const exibida = !!sug
     return {
@@ -646,15 +632,6 @@ export function TelaMedico({ analise, paciente, pdf, onFechar, decisaoRegistrada
                           SUGESTAO_INDISPONIVEL}
                       </p>
                     </>
-                  )}
-                  {analise.caso_id && (
-                    <div className="caso-id">
-                      <span>Caso no ml-exams</span>
-                      <code>{analise.caso_id}</code>
-                      <button type="button" onClick={copiarCaso} aria-label="Copiar o id do caso">
-                        {casoCopiado ? <Icone nome="check" /> : "Copiar"}
-                      </button>
-                    </div>
                   )}
                 </div>
                 <div className="decide">
