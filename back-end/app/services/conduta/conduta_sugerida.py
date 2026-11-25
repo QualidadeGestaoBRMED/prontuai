@@ -70,6 +70,12 @@ _ATRIBUTOS = {"faixa": "", "status": "", "conclusao": "", "resultado": "", "fc_f
 _VALORES = {"sim": "sim", "nao": "não", "nao_informado": "não informado", "sem_alteracao": "sem alteração",
             "alterado": "alterado", "acima": "acima da referência", "abaixo": "abaixo da referência", "ex": "ex-fumante", "mudanca_risco": "mudança de risco", "periodico": "periódico", "retorno_ao_trabalho": "retorno ao trabalho",
             "retorno_trabalho": "retorno ao trabalho", "osteofitos": "osteófitos",
+            # Achados de RX e ECG (colunas *_achado_*): o serviço manda só "sim", o nome vem daqui.
+            "repolarizacao": "alteração da repolarização", "bloqueio_ramo_direito": "bloqueio de ramo direito",
+            "bloqueio_ramo_esquerdo": "bloqueio de ramo esquerdo", "arritmia_outra": "outra arritmia",
+            "alteracao_ossea": "alteração óssea", "bronquite_bronquiectasia": "bronquite ou bronquiectasia",
+            "alteracao_curvatura": "alteração de curvatura", "anomalia_transicao": "anomalia de transição",
+            "degenerativa": "alteração degenerativa", "schmorl_esclerose": "nódulo de Schmorl ou esclerose",
             # Acuidade visual em Snellen (faixas.py): 20/30–20/40, 20/50–20/100, pior que 20/100.
             "leve_20_30_40": "leve (20/30 a 20/40)", "moderada_20_50_100": "moderada (20/50 a 20/100)",
             "grave_20_100+": "grave (pior que 20/100)"}
@@ -109,6 +115,10 @@ def _texto_valor(valor: Any, col: str) -> str:
 
 def _texto_fator(f: dict) -> str:
     col, valor = f["feature"], f.get("valor")
+    pronto = f.get("valor_texto")
+    if pronto not in (None, "") and "_achado_" not in col:
+        # O serviço já traduz o valor (servico/textos.py do ml-exams): só falta o nome da feature.
+        return f"{_nome_fator(col)}: {pronto}"
     if col in _NOMES:
         return f"{_NOMES[col]}: {_texto_valor(valor, col)}"
     if col.startswith("atividade_"):
@@ -126,6 +136,21 @@ def _texto_fator(f: dict) -> str:
         rot = _ATRIBUTOS.get(atributo, atributo.replace("_", " "))
         return f"{nome}{' (' + rot + ')' if rot else ''}: {_texto_valor(valor, col)}"
     return f"{col.replace('_', ' ').capitalize()}: {_texto_valor(valor, col)}"
+
+
+def _nome_fator(col: str) -> str:
+    if col in _NOMES:
+        return _NOMES[col]
+    if col.startswith("atividade_"):
+        return _ATIVIDADES.get(col.removeprefix("atividade_"), col.removeprefix("atividade_").upper().replace("_", "-"))
+    if col.startswith("risco_"):
+        return f"Risco {col.removeprefix('risco_').replace('_', ' ')}"
+    if "__" in col:
+        exame, atributo = col.split("__", 1)
+        nome = _EXAMES.get(exame, exame.replace("_", " ").capitalize())
+        rot = _ATRIBUTOS.get(atributo, atributo.replace("_", " "))
+        return f"{nome} ({rot})" if rot else nome
+    return col.replace("_", " ").capitalize()
 
 
 _LISTAS = {"rx_torax__achados": "rx_torax_achado_", "rx_coluna__achados": "rx_coluna_achado_",
@@ -202,11 +227,15 @@ def _nunca_sai(coluna: str) -> bool:
     return coluna in _NUNCA_SAI or coluna.startswith("rotulo_") or coluna.endswith("_hash")
 
 
+# O ngrok gratuito responde uma página de aviso a quem parece navegador; o header faz ele passar direto (contrato).
+_HEADERS_TUNEL = {"ngrok-skip-browser-warning": "1"}
+
+
 def _saude() -> str:
     """Estado do serviço para o log, chamado a cada falha (contrato: GET /saude)."""
     try:
         with httpx.Client(timeout=5) as cli:
-            d = cli.get(f"{ML_SERVICE_URL}/saude").json()
+            d = cli.get(f"{ML_SERVICE_URL}/saude", headers=_HEADERS_TUNEL).json()
         return f"ok={d.get('ok')} versao_modelo={d.get('versao_modelo')} versao_features={d.get('versao_features')}"
     except Exception as exc:  # noqa: BLE001
         return f"sem resposta ({type(exc).__name__})"
@@ -216,7 +245,9 @@ def _chamar_modelo(casos: list[dict], request_id: Optional[str] = None) -> dict:
     """POST /prever do contrato: {versao_features, casos: [{caso_id, features}]}."""
     if not ML_SERVICE_URL:
         raise RuntimeError("ML_SERVICE_URL não configurada")
-    headers = {"Authorization": f"Bearer {ML_SERVICE_TOKEN}"} if ML_SERVICE_TOKEN else {}
+    headers = dict(_HEADERS_TUNEL)
+    if ML_SERVICE_TOKEN:
+        headers["Authorization"] = f"Bearer {ML_SERVICE_TOKEN}"
     if request_id:
         headers["X-Request-Id"] = request_id
     with httpx.Client(timeout=ML_TIMEOUT) as cli:
@@ -225,12 +256,27 @@ def _chamar_modelo(casos: list[dict], request_id: Optional[str] = None) -> dict:
         return r.json()
 
 
-def _explicacao(situacao: str, especialidades: dict[str, float], ausentes: list[str]) -> Optional[str]:
+_MOTIVOS = {"imc": "IMC", "pressao_arterial": "pressão arterial", "ecg": "ECG", "hba1c": "hemoglobina glicada",
+            "funcao_hepatica": "função hepática", "acuidade_visual": "acuidade visual", "rx": "RX",
+            "rx_torax": "RX de tórax", "rx_coluna": "RX de coluna", "eeg": "EEG"}
+
+
+def _texto_motivo(m: str) -> str:
+    return _MOTIVOS.get(m, m.replace("_", " "))
+
+
+def _explicacao(situacao: str, especialidades: dict[str, float], ausentes: list[str],
+                motivos_por_especialidade: Optional[dict[str, list[str]]] = None) -> Optional[str]:
     if situacao == "RETIDO":
         return f"Exame previsto não encontrado no documento ({', '.join(ausentes)})."
     if situacao == "LIBERADO_COM_ENCAMINHAMENTO" and especialidades:
         esp = sorted(especialidades.items(), key=lambda x: -x[1])
-        return "Especialidade provável: " + ", ".join(f"{_ESPECIALIDADES.get(k, k.replace('_', ' '))} ({v:.0%})" for k, v in esp) + "."
+        partes = []
+        for k, _v in esp:
+            nome = _ESPECIALIDADES.get(k, k.replace("_", " "))
+            motivos = (motivos_por_especialidade or {}).get(k) or []
+            partes.append(f"{nome} ({', '.join(_texto_motivo(m) for m in motivos)})" if motivos else nome)
+        return "Encaminhar para " + "; ".join(partes) + "."
     return None
 
 
@@ -323,7 +369,7 @@ def _conduta_da_resposta(resp: dict, exames_ausentes: list[str], base: dict) -> 
     out = {**base, "versao_modelo": resp.get("versao_modelo"), "confianca_calibrada": ML_CONFIANCA_CALIBRADA,
            "prob_encaminhamento": p,
            "zona_modelo": r["zona"], "especialidades": r.get("especialidades") or {},
-           "features_ausentes": r.get("features_ausentes")}
+           "motivos": r.get("motivos") or {}, "features_ausentes": r.get("features_ausentes")}
     # Salto de features_ausentes = quebra de paridade entre o ProntuAI e o treino (contrato do ml-exams).
     if (r.get("features_ausentes") or 0) > ML_MAX_FEATURES_AUSENTES:
         logger.warning(f"[CONDUTA] {r['features_ausentes']} features ausentes no modelo {resp.get('versao_modelo')}")
@@ -334,12 +380,21 @@ def _conduta_da_resposta(resp: dict, exames_ausentes: list[str], base: dict) -> 
     # Exame previsto ausente nunca libera.
     if exames_ausentes and situacao in ("LIBERADO", "LIBERADO_COM_ENCAMINHAMENTO"):
         situacao = "RETIDO"
-    fatores = [_texto_fator(f) for f in r.get("fatores") or []][:5]
+    # Achado é motivo; contexto (tipo de exame, função, idade, NR, riscos) aparece à parte (contrato v13).
+    fatores = r.get("fatores") or []
+    achados = [_texto_fator(f) for f in fatores if f.get("tipo", "achado") == "achado"][:5]
+    contexto = [_texto_fator(f) for f in fatores if f.get("tipo") == "contexto"][:5]
+    # Confiança = acerto do modelo no teste congelado quando decidiu essa zona sozinho (confianca_zona);
+    # sem ela (serviço antigo), a probabilidade do lado sugerido.
+    confianca = r.get("confianca_zona")
+    if confianca is None:
+        confianca = p if p >= 0.5 else 1 - p
     out["conduta_sugerida"] = {
         "situacao_aso": situacao,
-        "confianca": round(p if p >= 0.5 else 1 - p, 3),
-        "fatores": fatores,
-        "explicacao": _explicacao(situacao, out["especialidades"], exames_ausentes),
+        "confianca": round(float(confianca), 3),
+        "fatores": achados,
+        "contexto": contexto,
+        "explicacao": _explicacao(situacao, out["especialidades"], exames_ausentes, r.get("motivos_por_especialidade")),
         "alertas": alertas,
         "regras_cliente": [],
     }

@@ -82,6 +82,8 @@ export interface CondutaSugerida {
   situacao_aso: SituacaoAso
   confianca: number
   fatores: string[]
+  /** Contexto que pesou (tipo de exame, função, NR, riscos), à parte dos achados (contrato do ml-exams v13). */
+  contexto?: string[]
   explicacao: string | null
   alertas: string[]
   regras_cliente: RegraCliente[]

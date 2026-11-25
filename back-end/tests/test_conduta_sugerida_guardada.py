@@ -88,3 +88,21 @@ def test_nada_identificavel_vai_para_o_modelo(chamadas):
     cs.sugerir(MD, "2026-11-25", [], [], [], Memoria())
     enviadas = chamadas[0][0]["features"]
     assert not [k for k in enviadas if cs._nunca_sai(k)]
+
+
+def test_contrato_v13_confianca_da_zona_achado_contexto_e_motivos():
+    resp = {"versao_modelo": "ml-exams-v13", "resultados": [{
+        "prob_encaminhamento": 0.6551, "zona": "encaminhar", "confianca_zona": 0.798,
+        "fatores": [
+            {"feature": "ficha_pa_sistolica", "tipo": "achado", "valor": "150.0", "valor_texto": "150", "peso": 0.69},
+            {"feature": "atividade_nr_37", "tipo": "contexto", "valor": "sim", "valor_texto": "sim", "peso": 0.44},
+            {"feature": "ecg_achado_repolarizacao", "tipo": "achado", "valor": "sim", "valor_texto": "sim", "peso": 0.11},
+        ],
+        "especialidades": {"cardiologia": 0.683, "endocrinologia": 0.634},
+        "motivos_por_especialidade": {"cardiologia": ["pressao_arterial", "ecg"], "endocrinologia": ["imc"]},
+        "features_ausentes": 6}]}
+    c = cs._conduta_da_resposta(resp, [], {})["conduta_sugerida"]
+    assert c["confianca"] == 0.798
+    assert c["fatores"] == ["PA sistólica: 150", "Eletrocardiograma: alteração da repolarização"]
+    assert c["contexto"] == ["Plataforma de petróleo (NR-37): sim"]
+    assert c["explicacao"] == "Encaminhar para cardiologia (pressão arterial, ECG); endocrinologia (IMC)."

@@ -600,6 +600,14 @@ export function TelaMedico({ analise, paciente, pdf, onFechar, decisaoRegistrada
                       <ul>
                         {sug.fatores.map((f) => <li key={f}>{f}</li>)}
                       </ul>
+                      {!!sug.contexto?.length && (
+                        <>
+                          <h3>Contexto considerado</h3>
+                          <ul>
+                            {sug.contexto.map((f) => <li key={f}>{f}</li>)}
+                          </ul>
+                        </>
+                      )}
                       {sug.regras_cliente.length > 0 && (
                         <>
                           <h3>Regra do cliente aplicada</h3>
