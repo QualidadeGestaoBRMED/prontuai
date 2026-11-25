@@ -17,24 +17,11 @@ from app.core.auth import require_roles
 from app.core.database import user_db
 from app.models.user import User, UserRole
 from app.services.conduta import conduta_sugerida as cs
+from app.services.conduta.fila_aprovacao import fila as fila_conduta, sugerir_para_documento
 
 logger = logging.getLogger(__name__)
 
 SituacaoAso = Literal["LIBERADO", "LIBERADO_COM_ENCAMINHAMENTO", "RETIDO", "INAPTO"]
-
-
-class _Guardada:
-    """As chamadas ao ml-exams do documento na tabela conduta_sugestoes."""
-
-    def __init__(self, document_id: str):
-        self.document_id = document_id
-
-    def ler(self, features_hash):
-        return user_db.ultima_conduta_sugestao(self.document_id, features_hash)
-
-    def gravar(self, features_hash, features, versao_modelo, resposta, status_http, erro, duracao_ms, request_id):
-        return user_db.registrar_conduta_sugestao(self.document_id, features_hash, cs.VERSAO_FEATURES, versao_modelo,
-                                                  features, resposta, status_http, erro, duracao_ms, request_id)
 
 
 router = APIRouter(tags=["Conduta sugerida"])
@@ -52,13 +39,10 @@ async def conduta_do_documento(
     document = user_db.get_document_by_id(document_id)
     if not document:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Documento não encontrado")
-    payload = document.result_payload if isinstance(document.result_payload, dict) else {}
-    ausentes = [t.get("exame") for t in payload.get("tabela_comparacao") or [] if isinstance(t, dict)
-                and t.get("status") == "faltante" and t.get("exame")]
-    data = document.uploaded_at.date().isoformat() if getattr(document, "uploaded_at", None) else None
-    # Leitura + chamada ao modelo fora do loop (são síncronas).
-    out = await asyncio.to_thread(cs.sugerir, document.ocr_markdown or "", data, ausentes,
-                                  document.exams_ocr or [], document.exams_brnet or [], _Guardada(document_id))
+    # Aprovado há pouco, o documento pode estar na fila da aprovação: espera a vez dele em vez de chamar o modelo de
+    # novo. Com a resposta guardada, a chamada abaixo só remonta as features (~0,1 s) e acha a resposta pelo hash.
+    await fila_conduta.aguardar(document_id)
+    out = await asyncio.to_thread(sugerir_para_documento, document)
     sugestao = out.get("conduta_sugerida") or {}
     out["exibicao_id"] = None
     try:

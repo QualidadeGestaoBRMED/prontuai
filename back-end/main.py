@@ -386,6 +386,14 @@ async def startup_event():
     except Exception as e:
         logger.warning(f"Job watchdog falhou ao iniciar: {e}")
 
+    # Fila da conduta sugerida: o documento aprovado na Checagem já chama o ml-exams
+    try:
+        from app.services.conduta.fila_aprovacao import CONDUTA_NA_APROVACAO, fila as fila_conduta
+        if CONDUTA_NA_APROVACAO:
+            fila_conduta.iniciar()
+    except Exception as e:
+        logger.warning(f"Fila da conduta sugerida falhou ao iniciar: {e}")
+
     # Atualização diária dos indicadores do dashboard (7h em São Paulo)
     try:
         from app.services.dashboard_service import atualizacao_diaria_loop
@@ -397,6 +405,11 @@ async def startup_event():
 @app.on_event("shutdown")
 async def shutdown_event():
     """Descarrega métricas/spans pendentes para não perder o último intervalo."""
+    try:
+        from app.services.conduta.fila_aprovacao import fila as fila_conduta
+        await fila_conduta.parar()
+    except Exception as e:
+        logger.warning(f"Falha ao parar a fila da conduta sugerida: {e}")
     shutdown_telemetry()
 
 # Compressão das respostas. O gargalo das telas de lista não é o banco, é o

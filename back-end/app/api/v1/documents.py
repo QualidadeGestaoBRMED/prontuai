@@ -29,6 +29,7 @@ from app.core.config import settings
 from app.core import metrics
 from app.services import drive_service
 from app.services.review_timing import sanitizar_review_timing
+from app.services.conduta import fila_aprovacao as fila_conduta
 import logging
 import time
 import json
@@ -1066,6 +1067,13 @@ async def update_document(
                         "[REENVIO] falha ao devolver os repetidos do rejeitado %s: %s",
                         document_id, type(devolver_error).__name__,
                     )
+        # Aprovado na Checagem (revisor ou filial), o documento vai para a Conduta Médica: a sugestão do modelo começa
+        # a ser calculada agora, na fila, para a primeira abertura não esperar o ml-exams.
+        if e_decisao and payload.validation_status == "validated" and fila_conduta.CONDUTA_NA_APROVACAO:
+            try:
+                fila_conduta.fila.enfileirar(document_id)
+            except Exception as fila_error:  # noqa: BLE001 — a fila nunca impede a aprovação
+                logger.warning("[CONDUTA] falha ao enfileirar %s: %s", document_id, type(fila_error).__name__)
         payload_reviewed_by = None
         if isinstance(payload_result, dict):
             payload_reviewed_by = payload_result.get("reviewed_by") or payload_result.get("reviewedBy")
