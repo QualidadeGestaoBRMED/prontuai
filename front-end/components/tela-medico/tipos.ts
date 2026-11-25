@@ -46,11 +46,12 @@ export interface ExamePrevisto {
   encontrado: boolean
   pagina: number | null
   /**
-   * Onde o exame aparece no PDF, na ordem em que o "Pág. N" e o botão
-   * "ocorrência" passam: primeiro cada valor fora da faixa, depois o próprio
-   * exame (fora do doc).
+   * Onde o exame aparece no PDF: os valores fora da faixa quando há, senão o
+   * próprio exame (fora do doc). Ver `ocorrenciasDo`.
    */
   ocorrencias?: Localizacao[]
+  /** true quando `ocorrencias` são valores alterados: só esses entram na navegação. */
+  ocorrencias_alteradas?: boolean
 }
 
 export interface NormalidadeExame {

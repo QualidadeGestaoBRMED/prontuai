@@ -55,17 +55,22 @@ export function rotuloTipoExame(tipo: string | null | undefined): string {
 const temCaixa = (l: Localizacao | null | undefined): l is Localizacao => !!l?.caixas?.length
 
 /**
- * Onde o exame aparece no PDF, do que mais interessa ao médico para o resto:
- * os valores fora da faixa (o "Pág. N" leva ao primeiro deles, e não a um
- * valor normal do mesmo laudo), depois as ocorrências do próprio exame. Sem
- * nenhuma das duas, o primeiro valor lido.
+ * Onde o exame aparece no PDF. Com valor fora da faixa, SÓ os valores
+ * alterados: o "Pág. N" leva ao primeiro e a navegação do médico passa só por
+ * eles (decisão de 25/11; a Checagem continua com todas as ocorrências). Sem
+ * valor alterado com posição, as ocorrências do próprio exame, senão o
+ * primeiro valor lido: servem só ao "Pág. N".
  */
-function ocorrenciasDo(parametros: ParametroLido[], doExame: Localizacao[] | undefined): Localizacao[] {
+function ocorrenciasDo(
+  parametros: ParametroLido[],
+  doExame: Localizacao[] | undefined,
+): { ocorrencias: Localizacao[]; alteradas: boolean } {
   const alterados = parametros.filter(foraDaFaixa).map((p) => p.localizacao).filter(temCaixa)
+  if (alterados.length) return { ocorrencias: alterados, alteradas: true }
   const exame = (doExame ?? []).filter(temCaixa)
-  if (alterados.length || exame.length) return [...alterados, ...exame]
+  if (exame.length) return { ocorrencias: exame, alteradas: false }
   const lido = parametros.map((p) => p.localizacao).find(temCaixa)
-  return lido ? [lido] : []
+  return { ocorrencias: lido ? [lido] : [], alteradas: false }
 }
 
 function paraNormalidade(exame: string, parametros: ParametroLido[], pagina: number | null): NormalidadeExame {
@@ -102,9 +107,11 @@ export function montarAnalise(
   const normalidades: NormalidadeExame[] = []
   const incluir = (exame: string, encontrado: boolean) => {
     const parametros = (encontrado && normalidade?.[exame]) || []
-    const ocorrencias = encontrado ? ocorrenciasDo(parametros, localizacoes[exame]) : []
+    const { ocorrencias, alteradas } = encontrado
+      ? ocorrenciasDo(parametros, localizacoes[exame])
+      : { ocorrencias: [], alteradas: false }
     const pagina = ocorrencias[0]?.pagina ?? null
-    exames.push({ exame_id: exame, exame, encontrado, pagina, ocorrencias })
+    exames.push({ exame_id: exame, exame, encontrado, pagina, ocorrencias, ocorrencias_alteradas: alteradas })
     if (parametros.length) normalidades.push(paraNormalidade(exame, parametros, pagina))
   }
   doc.exames.forEach((e) => incluir(e.exame, e.encontrado))
