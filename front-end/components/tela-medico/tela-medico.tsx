@@ -3,7 +3,9 @@
 import * as DialogPrimitive from "@radix-ui/react-dialog"
 import { Fragment, useEffect, useRef, useState, type ReactNode } from "react"
 import { foraDaFaixa } from "@/components/exames-comparativo-table"
-import { VisualizadorPdf, type Destaque } from "@/components/visualizador-pdf"
+import { CheckIcon, LinkIcon } from "lucide-react"
+import { useCopiarLink } from "@/components/botao-copiar-link"
+import { VisualizadorPdf, type ControleNavegacao, type Destaque } from "@/components/visualizador-pdf"
 import type { ParametroLido } from "@/types/normalidade"
 import { rotuloTipoExame } from "./documento-medico"
 import type { Analise, DecisaoMedico, ExamePrevisto, MotivoSemSugestao, NormalidadeExame, SituacaoAso, TipoExame } from "./tipos"
@@ -149,7 +151,7 @@ export function TelaMedico({ analise, paciente, pdf, onFechar, decisaoRegistrada
   const [docAberto, setDocAberto] = useState(false)
   // O exame da última ida pela "Pág. N". `chave` muda a cada clique, para o
   // visualizador rolar e marcar de novo.
-  const [destaque, setDestaque] = useState<(Destaque & { exame: string }) | null>(null)
+  const [destaque, setDestaque] = useState<(Destaque & { exame: string; indice: number }) | null>(null)
   const [fixAbertos, setFixAbertos] = useState<Record<string, boolean>>({})
   const [correcoes, setCorrecoes] = useState<Record<string, string>>({})
   const [escolha, setEscolha] = useState<SituacaoAso | null>(null)
@@ -163,6 +165,9 @@ export function TelaMedico({ analise, paciente, pdf, onFechar, decisaoRegistrada
     visivel: false,
   })
 
+  const docRef = useRef<HTMLDivElement>(null)
+  // O link que abre esta revisão direto (`/medico?viewId=`).
+  const { copiado: linkCopiado, copiar: copiarLink } = useCopiarLink(analise.analise_id)
   const docToggleRef = useRef<HTMLButtonElement>(null)
   const docHideRef = useRef<HTMLButtonElement>(null)
   const focoRef = useRef<string | null>(null)
@@ -185,12 +190,25 @@ export function TelaMedico({ analise, paciente, pdf, onFechar, decisaoRegistrada
     else document.getElementById(alvo)?.focus()
   })
 
-  const irPara = (p: ExamePrevisto) => {
-    if (!p.localizacao) return
-    const localizacao = p.localizacao
-    setDestaque((d) => ({ ...localizacao, exame: p.exame_id, chave: (d?.chave ?? 0) + 1 }))
+  // Em tela estreita (abaixo de 1100 px, como notebook com zoom de 125%) as
+  // colunas empilham e o documento abre abaixo da lista de exames, fora da
+  // vista: o "Pág. N" parecia não fazer nada. Traz o painel para a tela; em
+  // tela larga ele já está visível e nada rola.
+  useEffect(() => {
+    if (docAberto) docRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" })
+  }, [docAberto, destaque?.chave])
+
+  // Vai à ocorrência `indice` do exame (dá a volta nas pontas), como na Checagem.
+  const mostrarOcorrencia = (p: ExamePrevisto, indice: number) => {
+    const ocorrencias = p.ocorrencias ?? []
+    if (!ocorrencias.length) return
+    const i = (indice + ocorrencias.length) % ocorrencias.length
+    setDestaque((d) => ({ ...ocorrencias[i], exame: p.exame_id, indice: i, chave: (d?.chave ?? 0) + 1 }))
     setDocAberto(true)
   }
+  // "Pág. N": a primeira ocorrência; clicar de novo no mesmo exame passa para a próxima.
+  const irPara = (p: ExamePrevisto) =>
+    mostrarOcorrencia(p, destaque?.exame === p.exame_id ? destaque.indice + 1 : 0)
 
   const mostrarToast = (texto: string, ok: boolean) => {
     setToastMsg({ texto, ok, visivel: true })
@@ -208,7 +226,6 @@ export function TelaMedico({ analise, paciente, pdf, onFechar, decisaoRegistrada
       decidido_em: decididoEm,
     }
   }
-  const payload = `POST /v1/analises/${analise.analise_id}/decisao\n\n` + JSON.stringify(buildPayload(), null, 2)
 
   const renderItem = ({ p, n, tipo }: Item) => {
     let ico: ReactNode
@@ -347,6 +364,35 @@ export function TelaMedico({ analise, paciente, pdf, onFechar, decisaoRegistrada
 
   // Documento
   const exameDestacado = destaque ? exames.find((p) => p.exame_id === destaque.exame) : undefined
+  // Botão flutuante do visualizador, igual ao da Checagem: passar de exame em
+  // exame (na ordem da tela, pontos de atenção primeiro) e entre as ocorrências
+  // do exame aberto.
+  const navegacao: ControleNavegacao[] = []
+  if (destaque && exameDestacado) {
+    const sequencia = itens.map((i) => i.p).filter((p) => p.ocorrencias?.length)
+    const posicao = sequencia.findIndex((p) => p.exame_id === destaque.exame)
+    if (posicao >= 0 && sequencia.length > 1) {
+      const vizinho = (passo: number) => sequencia[(posicao + passo + sequencia.length) % sequencia.length]
+      navegacao.push({
+        rotulo: `exame ${posicao + 1} de ${sequencia.length}`,
+        dica: exameDestacado.exame,
+        rotuloAnterior: "Exame anterior",
+        rotuloProximo: "Próximo exame",
+        onAnterior: () => mostrarOcorrencia(vizinho(-1), 0),
+        onProximo: () => mostrarOcorrencia(vizinho(1), 0),
+      })
+    }
+    const total = exameDestacado.ocorrencias?.length ?? 0
+    if (total > 1) {
+      navegacao.push({
+        rotulo: `ocorrência ${destaque.indice + 1} de ${total}`,
+        rotuloAnterior: "Ocorrência anterior",
+        rotuloProximo: "Próxima ocorrência",
+        onAnterior: () => mostrarOcorrencia(exameDestacado, destaque.indice - 1),
+        onProximo: () => mostrarOcorrencia(exameDestacado, destaque.indice + 1),
+      })
+    }
+  }
 
   // Sugestão
   const pct = sug ? Math.round(sug.confianca * 100) : 0
@@ -406,6 +452,15 @@ export function TelaMedico({ analise, paciente, pdf, onFechar, decisaoRegistrada
               </div>
             </div>
             <div className="tools">
+              <button
+                className="btn icon-btn"
+                type="button"
+                onClick={copiarLink}
+                aria-label="Copiar link do documento"
+                title={linkCopiado ? "Link copiado" : "Copiar link do documento"}
+              >
+                {linkCopiado ? <CheckIcon className="i" /> : <LinkIcon className="i" />}
+              </button>
               <button
                 ref={docToggleRef}
                 className="btn doc-toggle"
@@ -476,15 +531,10 @@ export function TelaMedico({ analise, paciente, pdf, onFechar, decisaoRegistrada
                   </dl>
                 )}
               </section>
-
-              <details className="tech">
-                <summary>Ver o que será enviado à API</summary>
-                <pre>{payload}</pre>
-              </details>
             </div>
 
             {/* Documento (recolhido por padrão) */}
-            <div className="doc" id="tm-doc">
+            <div className="doc" id="tm-doc" ref={docRef}>
               <div className="doc-head">
                 <h2 className="eyebrow">
                   {exameDestacado ? `Documento · ${exameDestacado.exame}` : "Documento"}
@@ -512,6 +562,7 @@ export function TelaMedico({ analise, paciente, pdf, onFechar, decisaoRegistrada
                     url={pdf.url}
                     titulo="Documento do ASO"
                     destaque={destaque}
+                    navegacao={navegacao}
                     carregarTexto={pdf.carregarTexto}
                   />
                 ) : (

@@ -1,6 +1,7 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { Suspense, useMemo, useState } from "react"
+import { toast } from "sonner"
 import { AppSidebar } from "@/components/app-sidebar"
 import { NotificationBell } from "@/components/notification-bell"
 import { NotificationCenter } from "@/components/notification-center"
@@ -9,10 +10,12 @@ import { paraDocumentoAprovado } from "@/components/tela-medico/documento-medico
 import { ListaAnalises } from "@/components/tela-medico/lista-analises"
 import { ModalRevisaoAso } from "@/components/tela-medico/modal-revisao-aso"
 import type { DocumentoAprovado, SituacaoAso } from "@/components/tela-medico/tipos"
+import type { DocumentApi } from "@/types/document"
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
 import UserDropdown from "@/components/user-dropdown"
 import { useClinicOptions } from "@/hooks/use-clinic-options"
 import { useDocumentsPaged } from "@/hooks/use-documents-paged"
+import { useDocumentoDoLink } from "@/hooks/use-documento-do-link"
 import { useNotifications } from "@/hooks/use-notifications"
 
 /**
@@ -23,6 +26,35 @@ import { useNotifications } from "@/hooks/use-notifications"
  * a sugestão de conduta ainda não (a API não existe), e a decisão fica só na
  * memória da página. Só ADMIN e MANAGER, até haver um cargo de médico.
  */
+/**
+ * `?viewId=<id>` (o "Copiar link" da Revisão do ASO) abre o documento. À parte,
+ * dentro de um `<Suspense>`, por causa do `useSearchParams`. Só abre o que está
+ * na fila do médico: um documento ainda não aprovado pelo revisor não chega
+ * aqui por link também.
+ */
+function AbrirDoLink({
+  documentos,
+  carregando,
+  onAbrir,
+}: {
+  documentos: DocumentApi[]
+  carregando: boolean
+  onAbrir: (documento: DocumentoAprovado) => void
+}) {
+  useDocumentoDoLink({
+    carregando,
+    naPagina: (id) => documentos.find((d) => d.id === id),
+    abrir: (doc) => {
+      if (doc.validation_status !== "validated" || !doc.reviewed_by) {
+        toast.error("Este documento não está na Conduta Médica: ele ainda não foi aprovado por um revisor.")
+        return
+      }
+      onAbrir(paraDocumentoAprovado(doc))
+    },
+  })
+  return null
+}
+
 export default function Page() {
   const { unreadCount, activeProcess, setNotificationCenterOpen } = useNotifications()
   const [selecionada, setSelecionada] = useState<DocumentoAprovado | null>(null)
@@ -74,6 +106,9 @@ export default function Page() {
         <NotificationCenter />
       </SidebarProvider>
 
+      <Suspense fallback={null}>
+        <AbrirDoLink documentos={fila.documents} carregando={fila.loading} onAbrir={setSelecionada} />
+      </Suspense>
       <ModalRevisaoAso
         documento={selecionada}
         onOpenChange={(open) => {

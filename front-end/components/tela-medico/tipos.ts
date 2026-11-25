@@ -45,8 +45,12 @@ export interface ExamePrevisto {
   exame: string
   encontrado: boolean
   pagina: number | null
-  /** Onde ir no PDF ao clicar em "Pág. N" (fora do doc). */
-  localizacao?: Localizacao | null
+  /**
+   * Onde o exame aparece no PDF, na ordem em que o "Pág. N" e o botão
+   * "ocorrência" passam: primeiro cada valor fora da faixa, depois o próprio
+   * exame (fora do doc).
+   */
+  ocorrencias?: Localizacao[]
 }
 
 export interface NormalidadeExame {

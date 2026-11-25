@@ -52,11 +52,20 @@ export function rotuloTipoExame(tipo: string | null | undefined): string {
   return minusculo.charAt(0).toLocaleUpperCase("pt-BR") + minusculo.slice(1)
 }
 
-/** Primeiro lugar do PDF onde o exame aparece: um valor lido, senão o próprio exame. */
-function localizacaoDo(parametros: ParametroLido[], ocorrencias: Localizacao[] | undefined): Localizacao | null {
-  const doValor = parametros.find((p) => p.localizacao?.caixas?.length)?.localizacao
-  if (doValor) return doValor
-  return ocorrencias?.find((o) => o.caixas.length) ?? null
+const temCaixa = (l: Localizacao | null | undefined): l is Localizacao => !!l?.caixas?.length
+
+/**
+ * Onde o exame aparece no PDF, do que mais interessa ao médico para o resto:
+ * os valores fora da faixa (o "Pág. N" leva ao primeiro deles, e não a um
+ * valor normal do mesmo laudo), depois as ocorrências do próprio exame. Sem
+ * nenhuma das duas, o primeiro valor lido.
+ */
+function ocorrenciasDo(parametros: ParametroLido[], doExame: Localizacao[] | undefined): Localizacao[] {
+  const alterados = parametros.filter(foraDaFaixa).map((p) => p.localizacao).filter(temCaixa)
+  const exame = (doExame ?? []).filter(temCaixa)
+  if (alterados.length || exame.length) return [...alterados, ...exame]
+  const lido = parametros.map((p) => p.localizacao).find(temCaixa)
+  return lido ? [lido] : []
 }
 
 function paraNormalidade(exame: string, parametros: ParametroLido[], pagina: number | null): NormalidadeExame {
@@ -93,9 +102,9 @@ export function montarAnalise(
   const normalidades: NormalidadeExame[] = []
   const incluir = (exame: string, encontrado: boolean) => {
     const parametros = (encontrado && normalidade?.[exame]) || []
-    const localizacao = encontrado ? localizacaoDo(parametros, localizacoes[exame]) : null
-    const pagina = localizacao?.pagina ?? null
-    exames.push({ exame_id: exame, exame, encontrado, pagina, localizacao })
+    const ocorrencias = encontrado ? ocorrenciasDo(parametros, localizacoes[exame]) : []
+    const pagina = ocorrencias[0]?.pagina ?? null
+    exames.push({ exame_id: exame, exame, encontrado, pagina, ocorrencias })
     if (parametros.length) normalidades.push(paraNormalidade(exame, parametros, pagina))
   }
   doc.exames.forEach((e) => incluir(e.exame, e.encontrado))

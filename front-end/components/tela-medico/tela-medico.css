@@ -52,6 +52,8 @@
 .tm .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 34px; border-radius: 8px; padding: 0 14px; cursor: pointer; font-size: 13px; font-weight: 500; border: 1px solid var(--border); background: var(--surface); white-space: nowrap; }
 .tm .btn:hover { border-color: var(--secondary); color: var(--secondary); }
 .tm .btn svg.i { width: 14px; height: 14px; }
+/* Botão só com ícone (copiar link): quadrado, na altura dos outros. */
+.tm .btn.icon-btn { width: 34px; padding: 0; }
 
 /* Dialog */
 .tm .shell { max-width: 1320px; margin: 0 auto; padding: 20px; height: 100%; transition: max-width .25s ease; }
@@ -117,9 +119,6 @@
 .tm .kv .pair b { font-weight: 600; }
 .tm .kv .pair b.na { font-weight: 400; color: var(--muted-fg); font-style: italic; }
 
-.tm .tech { margin-top: 32px; font-size: 12px; }
-.tm .tech summary { color: var(--muted-fg); cursor: pointer; }
-.tm .tech pre { margin: 8px 0 0; padding: 12px; background: var(--canvas); border-radius: 8px; overflow-x: auto; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
 
 /* Documento */
 .tm .doc-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
