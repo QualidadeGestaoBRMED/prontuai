@@ -8,6 +8,7 @@ import { NotificationBell } from "@/components/notification-bell"
 import { NotificationCenter } from "@/components/notification-center"
 import { PainelChecagem } from "@/components/painel-checagem"
 import { RequireRole } from "@/components/require-role"
+import { Suspense } from "react"
 
 export default function Page() {
   const { unreadCount, activeProcess, setNotificationCenterOpen } = useNotifications()
@@ -32,7 +33,10 @@ export default function Page() {
 
           <div className="flex flex-col h-[calc(100svh-4rem)] bg-[hsl(240_5%_92.16%)] md:rounded-s-3xl md:group-peer-data-[state=collapsed]/sidebar-inset:rounded-s-none transition-all ease-in-out duration-300">
             <div className="flex-1 min-h-0 flex flex-col p-4 md:p-6 lg:p-8 overflow-hidden">
-              <PainelChecagem />
+              {/* Suspense: o painel lê o `?viewId=` do link do documento. */}
+              <Suspense fallback={null}>
+                <PainelChecagem />
+              </Suspense>
             </div>
           </div>
         </SidebarInset>

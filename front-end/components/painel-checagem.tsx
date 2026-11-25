@@ -17,6 +17,7 @@ import {
   type FeedbackAlvo,
 } from "@/components/feedback-checagem-dialog"
 import { useDocumentsPaged } from "@/hooks/use-documents-paged"
+import { useDocumentoDoLink } from "@/hooks/use-documento-do-link"
 import { useReviewTimer } from "@/hooks/use-review-timer"
 import { usePermissions } from "@/hooks/usePermissions"
 import { useClinicOptions } from "@/hooks/use-clinic-options"
@@ -415,6 +416,23 @@ export function PainelChecagem({ atualizarACadaMs = 0 }: { atualizarACadaMs?: nu
     setSelectedResult(result)
     reviewTimer.abrir(id)
   }, [reviewTimer])
+
+  // `?viewId=<id>` (o "Copiar link" do modal) abre o documento, esteja ele na
+  // página carregada ou não. Fora da página, abre mesmo que ele não esteja na
+  // fila da Checagem, como o Histórico faz.
+  useDocumentoDoLink({
+    carregando: loading,
+    naPagina: (id) => documents.find((d) => d.id === id),
+    abrir: (doc) => {
+      setDocumentPreviewUrl((prev) => {
+        if (prev) URL.revokeObjectURL(prev)
+        return null
+      })
+      setDocumentPreviewBlob(null)
+      setSelectedResult(documentToProcessResult(doc))
+      reviewTimer.abrir(doc.id)
+    },
+  })
 
   return (
     <>

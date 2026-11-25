@@ -1,7 +1,6 @@
 "use client"
 
 import { useState, useEffect, Suspense, useCallback, useMemo } from "react"
-import { useSearchParams } from "next/navigation"
 import { AppSidebar } from "@/components/app-sidebar"
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
 import UserDropdown from "@/components/user-dropdown"
@@ -10,6 +9,7 @@ import { NotificationCenter } from "@/components/notification-center"
 import { useNotifications } from "@/hooks/use-notifications"
 import { useDocumentsPaged } from "@/hooks/use-documents-paged"
 import { useClinicOptions } from "@/hooks/use-clinic-options"
+import { useDocumentoDoLink } from "@/hooks/use-documento-do-link"
 import { documentToProcessResult } from "@/lib/document-mapper"
 import { ProcessProgressBar } from "@/components/process-progress-bar"
 import { ResultsTable } from "@/components/results-table"
@@ -22,7 +22,6 @@ import { DocumentoArquivadoError } from "@/lib/document-archive"
 import { toast } from "sonner"
 
 function PendentesContent() {
-  const searchParams = useSearchParams()
   const [selectedResult, setSelectedResult] = useState<ProcessResult | null>(null)
   const [detailsModalOpen, setDetailsModalOpen] = useState(false)
   const { unreadCount, activeProcess, setNotificationCenterOpen } = useNotifications()
@@ -72,16 +71,16 @@ function PendentesContent() {
     if (!canFilterByClinic) setClinicFilter("all")
   }, [canFilterByClinic, setClinicFilter])
 
-  useEffect(() => {
-    const viewId = searchParams.get("viewId")
-    if (viewId && displayResults.length > 0) {
-      const result = displayResults.find((r) => r.id === viewId)
-      if (result) {
-        setSelectedResult(result)
-        setDetailsModalOpen(true)
-      }
-    }
-  }, [searchParams, displayResults])
+  // `?viewId=<id>` abre o documento, esteja ele na página carregada ou não.
+  // Antes só abria se o documento estivesse entre os 10 da página.
+  useDocumentoDoLink({
+    carregando: loading,
+    naPagina: (id) => documents.find((d) => d.id === id),
+    abrir: (doc) => {
+      setSelectedResult(documentToProcessResult(doc))
+      setDetailsModalOpen(true)
+    },
+  })
 
   const handleDownloadPDF = useCallback(
     async (result: ProcessResult) => {

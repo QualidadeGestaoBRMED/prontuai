@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useRef, useState } from "react"
+import { Suspense, useCallback, useRef, useState } from "react"
 import { useSession } from "next-auth/react"
 import { toast } from "sonner"
 import { AppSidebar } from "@/components/app-sidebar"
@@ -110,7 +110,10 @@ export default function Page() {
               {/* A altura mínima mantém a lista usável com a área de envio aberta:
                   sem ela, a tabela é espremida e quem rola é a página. */}
               <section aria-label="Documentos enviados" className="flex-1 min-h-[640px] flex flex-col">
-                <PainelChecagem atualizarACadaMs={processando ? ATUALIZACAO_DURANTE_ENVIO_MS : 0} />
+                {/* Suspense: o painel lê o `?viewId=` do link do documento. */}
+                <Suspense fallback={null}>
+                  <PainelChecagem atualizarACadaMs={processando ? ATUALIZACAO_DURANTE_ENVIO_MS : 0} />
+                </Suspense>
               </section>
             </div>
           </div>

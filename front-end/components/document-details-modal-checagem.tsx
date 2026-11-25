@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/dialog"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { BotaoCopiarLink } from "@/components/botao-copiar-link"
 import { Separator } from "@/components/ui/separator"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { FieldCheck, OutraPessoa, ProcessResult, TabelaComparacaoItem } from "@/types/process"
@@ -375,6 +376,7 @@ export function DocumentDetailsModalChecagem({
               <DialogDescription>{result.filename}</DialogDescription>
             </div>
             <div className="absolute top-4 right-12 flex items-center gap-2">
+              <BotaoCopiarLink documentoId={result.id} />
               <TagReenvio reenvio={result.result.reenvio} />
               {getStatusBadge(result)}
             </div>

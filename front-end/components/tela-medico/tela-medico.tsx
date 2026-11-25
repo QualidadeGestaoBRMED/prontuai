@@ -3,6 +3,8 @@
 import * as DialogPrimitive from "@radix-ui/react-dialog"
 import { Fragment, useEffect, useRef, useState, type ReactNode } from "react"
 import { foraDaFaixa } from "@/components/exames-comparativo-table"
+import { CheckIcon, LinkIcon } from "lucide-react"
+import { useCopiarLink } from "@/components/botao-copiar-link"
 import { VisualizadorPdf, type ControleNavegacao, type Destaque } from "@/components/visualizador-pdf"
 import type { ParametroLido } from "@/types/normalidade"
 import { rotuloTipoExame } from "./documento-medico"
@@ -164,6 +166,8 @@ export function TelaMedico({ analise, paciente, pdf, onFechar, decisaoRegistrada
   })
 
   const docRef = useRef<HTMLDivElement>(null)
+  // O link que abre esta revisão direto (`/medico?viewId=`).
+  const { copiado: linkCopiado, copiar: copiarLink } = useCopiarLink(analise.analise_id)
   const docToggleRef = useRef<HTMLButtonElement>(null)
   const docHideRef = useRef<HTMLButtonElement>(null)
   const focoRef = useRef<string | null>(null)
@@ -448,6 +452,15 @@ export function TelaMedico({ analise, paciente, pdf, onFechar, decisaoRegistrada
               </div>
             </div>
             <div className="tools">
+              <button
+                className="btn icon-btn"
+                type="button"
+                onClick={copiarLink}
+                aria-label="Copiar link do documento"
+                title={linkCopiado ? "Link copiado" : "Copiar link do documento"}
+              >
+                {linkCopiado ? <CheckIcon className="i" /> : <LinkIcon className="i" />}
+              </button>
               <button
                 ref={docToggleRef}
                 className="btn doc-toggle"
