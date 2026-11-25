@@ -125,7 +125,8 @@ interface TelaMedicoProps {
   onFechar: () => void
   /** Conduta já registrada nesta análise, para reabrir com o selo "Registrado". */
   decisaoRegistrada?: SituacaoAso | null
-  onRegistrar?: (decisao: DecisaoMedico) => void
+  /** Grava a decisão; `false` (ou erro) mantém a tela sem o selo "Registrado" e avisa. */
+  onRegistrar?: (decisao: DecisaoMedico) => Promise<boolean> | boolean | void
 }
 
 export function TelaMedico({ analise, paciente, pdf, onFechar, decisaoRegistrada = null, onRegistrar }: TelaMedicoProps) {
@@ -157,6 +158,7 @@ export function TelaMedico({ analise, paciente, pdf, onFechar, decisaoRegistrada
   const [escolha, setEscolha] = useState<SituacaoAso | null>(null)
   const [obs, setObs] = useState("")
   const [registrado, setRegistrado] = useState<SituacaoAso | null>(decisaoRegistrada)
+  const [enviando, setEnviando] = useState(false)
   // A hora da decisão só anda quando o médico mexe em algo, como no protótipo.
   const [decididoEm, setDecididoEm] = useState("")
   const [toastMsg, setToastMsg] = useState<{ texto: string; ok: boolean; visivel: boolean }>({
@@ -397,7 +399,8 @@ export function TelaMedico({ analise, paciente, pdf, onFechar, decisaoRegistrada
   }
 
   // Sugestão
-  const pct = sug ? Math.round(sug.confianca * 100) : 0
+  // A probabilidade de encaminhamento do modelo, não a confiança do lado sugerido: 0,06 aparece como 6%.
+  const pct = sug ? Math.round((analise.prob_encaminhamento ?? sug.confianca) * 100) : 0
 
   // Decisão
   const libera = escolha === "LIBERADO" || escolha === "LIBERADO_COM_ENCAMINHAMENTO"
@@ -584,11 +587,11 @@ export function TelaMedico({ analise, paciente, pdf, onFechar, decisaoRegistrada
                     <>
                       <div className={`sugg-val ${sug.situacao_aso}`}>{CONDUTA[sug.situacao_aso]}</div>
                       <div className="conf">
-                        <span className="meter" role="img" aria-label={`Confiança ${pct}%`}>
+                        <span className="meter" role="img" aria-label={`Probabilidade de encaminhamento ${pct}%`}>
                           <span style={{ width: `${pct}%` }} />
                         </span>
                         <span>
-                          Confiança <b>{pct}%</b>
+                          Probabilidade de encaminhamento <b>{pct}%</b>
                           {analise.confianca_calibrada ? "" : " · não calibrada"}
                         </span>
                       </div>
@@ -597,6 +600,14 @@ export function TelaMedico({ analise, paciente, pdf, onFechar, decisaoRegistrada
                       <ul>
                         {sug.fatores.map((f) => <li key={f}>{f}</li>)}
                       </ul>
+                      {!!sug.contexto?.length && (
+                        <>
+                          <h3>Contexto considerado</h3>
+                          <ul>
+                            {sug.contexto.map((f) => <li key={f}>{f}</li>)}
+                          </ul>
+                        </>
+                      )}
                       {sug.regras_cliente.length > 0 && (
                         <>
                           <h3>Regra do cliente aplicada</h3>
@@ -674,14 +685,25 @@ export function TelaMedico({ analise, paciente, pdf, onFechar, decisaoRegistrada
                 <button
                   className="submit"
                   type="button"
-                  disabled={!escolha}
-                  onClick={() => {
-                    if (!escolha) return
+                  disabled={!escolha || enviando}
+                  onClick={async () => {
+                    if (!escolha || enviando) return
                     const agora = agoraIso()
                     setDecididoEm(agora)
-                    setRegistrado(escolha)
-                    onRegistrar?.({ ...buildPayload(), decidido_em: agora })
-                    mostrarToast("Decisão registrada", true)
+                    setEnviando(true)
+                    let ok = true
+                    try {
+                      ok = (await onRegistrar?.({ ...buildPayload(), decidido_em: agora })) !== false
+                    } catch {
+                      ok = false
+                    }
+                    setEnviando(false)
+                    if (ok) {
+                      setRegistrado(escolha)
+                      mostrarToast("Decisão registrada", true)
+                    } else {
+                      mostrarToast("Não foi possível registrar a decisão. Tente de novo.", false)
+                    }
                   }}
                 >
                   Registrar decisão

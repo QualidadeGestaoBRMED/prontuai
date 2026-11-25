@@ -71,6 +71,50 @@ class UserDatabaseProtocol(Protocol):
     ) -> int: ...
     def save_document_layout(self, document_id: str, layout: dict) -> None: ...
     def get_document_layout(self, document_id: str) -> Optional[dict]: ...
+    def registrar_conduta_sugestao(
+        self,
+        document_id: str,
+        features_hash: str,
+        versao_features: str,
+        versao_modelo: Optional[str],
+        features: dict,
+        resposta: Optional[dict],
+        status_http: Optional[int],
+        erro: Optional[str],
+        duracao_ms: Optional[int],
+        request_id: Optional[str],
+    ) -> int: ...
+    def ultima_conduta_sugestao(self, document_id: str, features_hash: str) -> Optional[dict]: ...
+    def registrar_conduta_exibicao(
+        self,
+        document_id: str,
+        sugestao_id: Optional[int],
+        situacao_aso: Optional[str],
+        motivo_sem_sugestao: Optional[str],
+        confianca: Optional[float],
+        versao_modelo: Optional[str],
+        user_id: Optional[str],
+        user_email: Optional[str],
+    ) -> int: ...
+    def obter_conduta_exibicao(
+        self, document_id: str, exibicao_id: Optional[int] = None, user_id: Optional[str] = None
+    ) -> Optional[dict]: ...
+    def registrar_conduta_decisao(
+        self,
+        document_id: str,
+        exibicao_id: Optional[int],
+        sugestao_exibida: bool,
+        situacao_sugerida: Optional[str],
+        concordou_com_sugestao: Optional[bool],
+        situacao_final: str,
+        observacao: Optional[str],
+        normalidade_final: list,
+        versao_modelo: Optional[str],
+        decidido_em: datetime,
+        user_id: Optional[str],
+        user_email: Optional[str],
+    ) -> dict: ...
+    def ultima_conduta_decisao(self, document_id: str) -> Optional[dict]: ...
     def get_document_feedback(self, document_id: str) -> Optional[DocumentFeedback]: ...
     def upsert_document_feedback(
         self,

@@ -11,7 +11,25 @@ import { montarAnalise } from "./documento-medico"
 import { TelaMedico, type PdfDocumento } from "./tela-medico"
 import type { Analise, DecisaoMedico, DocumentoAprovado, SituacaoAso } from "./tipos"
 
-type Sugestao = Pick<Analise, "conduta_sugerida" | "motivo_sem_sugestao" | "versao_modelo" | "confianca_calibrada">
+type Sugestao = Pick<
+  Analise,
+  "conduta_sugerida" | "motivo_sem_sugestao" | "versao_modelo" | "confianca_calibrada" | "prob_encaminhamento"
+> & {
+  /** A exibição registrada no back-end: a decisão aponta para ela (o que o médico viu). */
+  exibicao_id: number | null
+  /** A última decisão gravada para o documento, para reabrir com o selo "Registrado". */
+  decisao_registrada: SituacaoAso | null
+}
+
+const SEM_SUGESTAO_CARREGADA: Sugestao = {
+  conduta_sugerida: null,
+  motivo_sem_sugestao: null,
+  versao_modelo: "",
+  confianca_calibrada: false,
+  prob_encaminhamento: null,
+  exibicao_id: null,
+  decisao_registrada: null,
+}
 
 /** A conduta sugerida pelo modelo (`GET /v1/documents/{id}/conduta-sugerida`); null enquanto calcula. */
 function useCondutaSugerida(documentoId: string | null): Sugestao | null {
@@ -30,11 +48,14 @@ function useCondutaSugerida(documentoId: string | null): Sugestao | null {
           motivo_sem_sugestao: dados.motivo_sem_sugestao ?? null,
           versao_modelo: dados.versao_modelo ?? "",
           confianca_calibrada: !!dados.confianca_calibrada,
+          prob_encaminhamento: typeof dados.prob_encaminhamento === "number" ? dados.prob_encaminhamento : null,
+          exibicao_id: typeof dados.exibicao_id === "number" ? dados.exibicao_id : null,
+          decisao_registrada: dados.decisao_registrada?.situacao_aso ?? null,
         })
       })
       .catch(() => {
         // Rota ou modelo fora do ar: a tela abre sem sugestão, com a mensagem de indisponível.
-        if (ativo) setSugestao({ conduta_sugerida: null, motivo_sem_sugestao: null, versao_modelo: "", confianca_calibrada: false })
+        if (ativo) setSugestao(SEM_SUGESTAO_CARREGADA)
       })
     return () => {
       ativo = false
@@ -95,16 +116,30 @@ export function ModalRevisaoAso({ documento, onOpenChange, decisaoRegistrada, on
   const pdf = usePdf(id)
   const sugestao = useCondutaSugerida(id)
 
-  const analise = useMemo(
-    () =>
-      documento && normalidade.fase !== "carregando" && sugestao
-        ? {
-            ...montarAnalise(documento, normalidade.fase === "pronta" ? normalidade.porExame : null, localizacoes.porExame),
-            ...sugestao,
-          }
-        : null,
-    [documento, normalidade, localizacoes.porExame, sugestao],
-  )
+  const analise = useMemo(() => {
+    if (!documento || normalidade.fase === "carregando" || !sugestao) return null
+    return {
+      ...montarAnalise(documento, normalidade.fase === "pronta" ? normalidade.porExame : null, localizacoes.porExame),
+      conduta_sugerida: sugestao.conduta_sugerida,
+      motivo_sem_sugestao: sugestao.motivo_sem_sugestao,
+      versao_modelo: sugestao.versao_modelo,
+      confianca_calibrada: sugestao.confianca_calibrada,
+      prob_encaminhamento: sugestao.prob_encaminhamento,
+    }
+  }, [documento, normalidade, localizacoes.porExame, sugestao])
+
+  /** Grava a decisão no back-end (trilha de auditoria) antes de marcar como registrada. */
+  const registrar = async (decisao: DecisaoMedico): Promise<boolean> => {
+    if (!documento) return false
+    const resposta = await authFetch(API_ENDPOINTS.DOCUMENT_CONDUTA_DECISAO(documento.documento_id), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...decisao, exibicao_id: sugestao?.exibicao_id ?? null }),
+    })
+    if (!resposta.ok) return false
+    onRegistrar?.(decisao)
+    return true
+  }
 
   return (
     <Dialog open={!!documento} onOpenChange={onOpenChange}>
@@ -119,8 +154,8 @@ export function ModalRevisaoAso({ documento, onOpenChange, decisaoRegistrada, on
             paciente={documento.paciente_nome}
             pdf={pdf}
             onFechar={() => onOpenChange(false)}
-            decisaoRegistrada={decisaoRegistrada}
-            onRegistrar={onRegistrar}
+            decisaoRegistrada={decisaoRegistrada ?? sugestao?.decisao_registrada ?? null}
+            onRegistrar={registrar}
           />
         ) : (
           // Enquanto a leitura de normalidade chega: a tela abriria sem os

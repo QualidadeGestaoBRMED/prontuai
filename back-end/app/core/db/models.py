@@ -462,3 +462,65 @@ class DocumentoLayoutModel(Base):
     document_id = Column(String, ForeignKey("documents.id", ondelete="CASCADE"), primary_key=True)
     layout = Column(JSONB, nullable=False)
     criado_em = Column(DateTime, nullable=False, default=datetime.utcnow)
+
+
+class CondutaSugestaoModel(Base):
+    """
+    Cada chamada ao POST /prever do ml-exams (migration 020), com a resposta
+    inteira ou a falha. Só recebe linhas novas. Abrir o documento de novo
+    reaproveita a última resposta com as mesmas features (`features_hash`).
+    Sem nome, CPF nem texto: as features são as que já saem para o ml-exams.
+    """
+    __tablename__ = "conduta_sugestoes"
+    __table_args__ = (Index("ix_conduta_sugestoes_documento", "document_id", "criado_em"),)
+
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    document_id = Column(String, ForeignKey("documents.id", ondelete="CASCADE"), nullable=False)
+    features_hash = Column(String(64), nullable=False)
+    versao_features = Column(String, nullable=False)
+    versao_modelo = Column(String, nullable=True)
+    features = Column(JSONB, nullable=False)
+    resposta = Column(JSONB, nullable=True)
+    status_http = Column(Integer, nullable=True)
+    erro = Column(String, nullable=True)
+    duracao_ms = Column(Integer, nullable=True)
+    request_id = Column(String(64), nullable=True)
+    criado_em = Column(DateTime, nullable=False, default=datetime.utcnow)
+
+
+class CondutaExibicaoModel(Base):
+    """Cada vez que a tela Conduta Médica mostrou a sugestão (ou a falta dela) a alguém (migration 020)."""
+    __tablename__ = "conduta_exibicoes"
+    __table_args__ = (Index("ix_conduta_exibicoes_documento", "document_id", "exibido_em"),)
+
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    document_id = Column(String, ForeignKey("documents.id", ondelete="CASCADE"), nullable=False)
+    sugestao_id = Column(BigInteger, ForeignKey("conduta_sugestoes.id", ondelete="SET NULL"), nullable=True)
+    situacao_aso = Column(String, nullable=True)
+    motivo_sem_sugestao = Column(String, nullable=True)
+    confianca = Column(Float, nullable=True)
+    versao_modelo = Column(String, nullable=True)
+    user_id = Column(String, nullable=True)
+    user_email = Column(String, nullable=True)
+    exibido_em = Column(DateTime, nullable=False, default=datetime.utcnow)
+
+
+class CondutaDecisaoModel(Base):
+    """Cada decisão do médico na tela Conduta Médica, com a sugestão que ele viu (migration 020). A última vale."""
+    __tablename__ = "conduta_decisoes"
+    __table_args__ = (Index("ix_conduta_decisoes_documento", "document_id", "registrado_em"),)
+
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    document_id = Column(String, ForeignKey("documents.id", ondelete="CASCADE"), nullable=False)
+    exibicao_id = Column(BigInteger, ForeignKey("conduta_exibicoes.id", ondelete="SET NULL"), nullable=True)
+    sugestao_exibida = Column(Boolean, nullable=False)
+    situacao_sugerida = Column(String, nullable=True)
+    concordou_com_sugestao = Column(Boolean, nullable=True)
+    situacao_final = Column(String, nullable=False)
+    observacao = Column(Text, nullable=True)
+    normalidade_final = Column(JSONB, nullable=False, default=list)
+    versao_modelo = Column(String, nullable=True)
+    decidido_em = Column(DateTime, nullable=False)
+    user_id = Column(String, nullable=True)
+    user_email = Column(String, nullable=True)
+    registrado_em = Column(DateTime, nullable=False, default=datetime.utcnow)
