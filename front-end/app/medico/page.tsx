@@ -59,7 +59,9 @@ export default function Page() {
   const { unreadCount, activeProcess, setNotificationCenterOpen } = useNotifications()
   const [selecionada, setSelecionada] = useState<DocumentoAprovado | null>(null)
   const [decisoes, setDecisoes] = useState<Record<string, SituacaoAso>>({})
-  const fila = useDocumentsPaged({ queue: "medico", pageSize: 10 })
+  // Tamanho da página = linhas que cabem no bloco da tabela (medido pela lista); 10 até a primeira medida.
+  const [linhasPorPagina, setLinhasPorPagina] = useState(10)
+  const fila = useDocumentsPaged({ queue: "medico", pageSize: linhasPorPagina })
   const clinicas = useClinicOptions()
   const documentos = useMemo(() => fila.documents.map(paraDocumentoAprovado), [fila.documents])
 
@@ -99,6 +101,7 @@ export default function Page() {
                   enabled: clinicas.enabled,
                 }}
                 paginacao={{ page: fila.page, totalPages: fila.totalPages, onPageChange: fila.setPage }}
+                onLinhasPorPagina={setLinhasPorPagina}
               />
             </div>
           </div>
