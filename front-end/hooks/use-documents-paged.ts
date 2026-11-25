@@ -22,8 +22,11 @@ type UseDocumentsPagedOptions = {
  */
 export type PeriodoDias = { from?: string; to?: string }
 
-/** Qual data do documento o filtro recorta: o envio ou a previsão de liberação do BRNET. */
-export type CampoData = "envio" | "previsao"
+/**
+ * Qual data do documento o filtro recorta: o envio, a previsão de liberação do
+ * BRNET ou a aprovação na Checagem (esta só a tela do médico usa).
+ */
+export type CampoData = "envio" | "previsao" | "aprovacao"
 
 export type FiltroData = { campo: CampoData; periodo: PeriodoDias } | null
 
@@ -86,8 +89,10 @@ export function useDocumentsPaged(options: UseDocumentsPagedOptions) {
         // Filtrando pela previsão, a lista vem na ordem dela — atrasados primeiro.
         // Na ordem de envio, o topo da lista quase não mudava: os documentos mais
         // recentes costumam vencer nos próximos dias e caíam em qualquer período.
+        // Na tela do médico, a aprovação mais recente no topo: é a ordem em que
+        // os documentos chegam até ele.
         const porPrevisao = dataFilter?.campo === "previsao"
-        url.searchParams.set("sort_by", porPrevisao ? "previsao" : "uploaded_at")
+        url.searchParams.set("sort_by", porPrevisao ? "previsao" : queue === "medico" ? "reviewed_at" : "uploaded_at")
         url.searchParams.set("sort_dir", porPrevisao ? "asc" : "desc")
         if (search.trim()) url.searchParams.set("search", search.trim())
         if (statusFilter !== "all") url.searchParams.set("status_filter", statusFilter)
@@ -103,6 +108,10 @@ export function useDocumentsPaged(options: UseDocumentsPagedOptions) {
           // fuso, com as duas pontas inclusas.
           if (periodo.from) url.searchParams.set("previsao_from", periodo.from)
           if (periodo.to) url.searchParams.set("previsao_to", periodo.to)
+        } else if (dataFilter?.campo === "aprovacao" && periodo) {
+          // Mesmo intervalo semiaberto do envio, sobre a aprovação do revisor.
+          if (periodo.from) url.searchParams.set("aprovado_from", inicioDoDia(periodo.from).toISOString())
+          if (periodo.to) url.searchParams.set("aprovado_to", inicioDoDia(periodo.to, 1).toISOString())
         }
 
         const response = await authFetch(url.toString(), {

@@ -1495,6 +1495,8 @@ class PostgresUserDatabase:
         uploaded_to: Optional[datetime] = None,
         previsao_from: Optional[date] = None,
         previsao_to: Optional[date] = None,
+        aprovado_from: Optional[datetime] = None,
+        aprovado_to: Optional[datetime] = None,
     ) -> dict:
         """
         Lista documentos paginados com escopo por role e filtros de fila.
@@ -1508,6 +1510,10 @@ class PostgresUserDatabase:
         as duas pontas inclusas. É data de calendário, sem fuso: não há
         conversão a fazer. Qualquer uma das pontas pode faltar ("atrasados" é
         só o `previsao_to`), e documento sem previsão sai do recorte.
+
+        `aprovado_from`/`aprovado_to` recortam pela aprovação do revisor
+        (`reviewed_at`), no mesmo intervalo semiaberto do envio. É o recorte da
+        fila `medico`: o documento chega ao médico quando o revisor aprova.
         """
         session = self._get_session()
         try:
@@ -1552,6 +1558,14 @@ class PostgresUserDatabase:
             if filtros_previsao:
                 scoped_query = scoped_query.filter(*filtros_previsao)
 
+            filtros_aprovacao = []
+            if aprovado_from:
+                filtros_aprovacao.append(DocumentModel.reviewed_at >= aprovado_from)
+            if aprovado_to:
+                filtros_aprovacao.append(DocumentModel.reviewed_at < aprovado_to)
+            if filtros_aprovacao:
+                scoped_query = scoped_query.filter(*filtros_aprovacao)
+
             if queue == "pendentes":
                 # Reenvio de prontuário já liberado não espera nada da clínica:
                 # fica no Histórico, com o alerta da liberação.
@@ -1571,6 +1585,13 @@ class PostgresUserDatabase:
                             DocumentModel.reviewed_by.is_(None),
                         ),
                     )
+                )
+            elif queue == "medico":
+                # Só o aprovado pelo revisor: o "validated" sem `reviewed_by` é a
+                # IA aprovando sozinha, ainda à espera da Checagem.
+                scoped_query = scoped_query.filter(
+                    DocumentModel.validation_status == "validated",
+                    DocumentModel.reviewed_by.isnot(None),
                 )
 
             if status_filter == "approved":
@@ -1631,6 +1652,9 @@ class PostgresUserDatabase:
             if filtros_previsao:
                 scoped_summary_query = scoped_summary_query.filter(*filtros_previsao)
 
+            if filtros_aprovacao:
+                scoped_summary_query = scoped_summary_query.filter(*filtros_aprovacao)
+
             summary_row = scoped_summary_query.one()
             summary_map = summary_row._mapping if hasattr(summary_row, "_mapping") else {}
 
@@ -1645,6 +1669,7 @@ class PostgresUserDatabase:
                 "cpf": DocumentModel.cpf,
                 "status": DocumentModel.validation_status,
                 "previsao": DocumentModel.data_previsao_liberacao,
+                "reviewed_at": DocumentModel.reviewed_at,
             }
             sort_column = sort_columns.get(sort_by, DocumentModel.uploaded_at)
             ordem = sort_column.asc() if sort_dir.lower() == "asc" else sort_column.desc()
@@ -1655,6 +1680,10 @@ class PostgresUserDatabase:
                 scoped_query = scoped_query.order_by(
                     ordem.nulls_last(), DocumentModel.uploaded_at.desc(), DocumentModel.id
                 )
+            elif sort_by == "reviewed_at":
+                # Desempate estável pelo mesmo motivo: aprovações em lote têm o
+                # mesmo segundo.
+                scoped_query = scoped_query.order_by(ordem.nulls_last(), DocumentModel.id)
             else:
                 scoped_query = scoped_query.order_by(ordem)
 

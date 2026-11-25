@@ -55,6 +55,10 @@ class DocumentQueue(str, Enum):
     # paginação sem precisar omitir o parâmetro — omitir significaria "sem
     # fila", que é o mesmo resultado mas não diz a intenção em log nem em trace.
     HISTORICO = "historico"
+    # Tela do médico (`/medico`): só o que um REVISOR aprovou na Checagem. O
+    # "validated" que a IA grava sozinha (sem `reviewed_by`) ainda espera o
+    # revisor e não chega ao médico; rejeitado também não.
+    MEDICO = "medico"
 
 
 # Motivos de rejeição estruturados: o que a CLÍNICA precisa corrigir.

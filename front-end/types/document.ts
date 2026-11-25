@@ -27,7 +27,8 @@ export type DocumentApi = {
   updated_at?: string | null
 }
 
-export type DocumentQueue = "pendentes" | "checagem" | "historico"
+/** `medico`: só o que um revisor aprovou na Checagem (tela do médico). */
+export type DocumentQueue = "pendentes" | "checagem" | "historico" | "medico"
 
 export type DocumentSummaryCounts = {
   approved: number

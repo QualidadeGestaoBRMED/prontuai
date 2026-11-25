@@ -3,7 +3,7 @@ Endpoints para gerenciamento de documentos.
 """
 from fastapi import APIRouter, HTTPException, status, Depends, Query, Request, BackgroundTasks
 from fastapi.responses import FileResponse
-from typing import Any, List, Optional
+from typing import Annotated, Any, List, Optional
 from pydantic import BaseModel, Field
 from app.core.auth import (
     decide_qualquer_documento,
@@ -193,6 +193,8 @@ def _in_memory_paged_documents(
     uploaded_to: datetime | None = None,
     previsao_from: date | None = None,
     previsao_to: date | None = None,
+    aprovado_from: datetime | None = None,
+    aprovado_to: datetime | None = None,
 ) -> dict[str, Any]:
     normalized_search = (search or "").strip().lower()
 
@@ -229,6 +231,13 @@ def _in_memory_paged_documents(
             )
 
         filtered = [d for d in filtered if _na_previsao(d)]
+    if aprovado_from or aprovado_to:
+        filtered = [
+            d for d in filtered
+            if d.reviewed_at
+            and (not aprovado_from or _utc_sem_fuso(d.reviewed_at) >= aprovado_from)
+            and (not aprovado_to or _utc_sem_fuso(d.reviewed_at) < aprovado_to)
+        ]
 
     summary_counts ={"approved": 0, "rejected": 0, "pending_review": 0, "total": len(filtered)}
     for doc in filtered:
@@ -242,6 +251,8 @@ def _in_memory_paged_documents(
             if d.validation_status in {"validated", "pending"}
             or (d.validation_status == "rejected" and not d.reviewed_by)
         ]
+    elif queue == DocumentQueue.MEDICO:
+        filtered = [d for d in filtered if d.validation_status == "validated" and d.reviewed_by]
 
     if status_filter == "approved":
         filtered = [d for d in filtered if d.validation_status == "validated"]
@@ -261,6 +272,8 @@ def _in_memory_paged_documents(
     reverse = sort_dir.lower() != "asc"
     if sort_by == "updated_at":
         filtered.sort(key=lambda d: _to_ts(d.updated_at), reverse=reverse)
+    elif sort_by == "reviewed_at":
+        filtered.sort(key=lambda d: _to_ts(d.reviewed_at), reverse=reverse)
     elif sort_by == "filename":
         filtered.sort(key=lambda d: (d.filename or "").lower(), reverse=reverse)
     elif sort_by == "cpf":
@@ -320,13 +333,21 @@ async def list_documents_paged(
     page_size: int = Query(20, ge=1, le=100),
     search: str | None = Query(None, max_length=120),
     status_filter: str | None = Query(None, pattern="^(approved|rejected|pending_review)$"),
-    sort_by: str = Query("uploaded_at", pattern="^(uploaded_at|updated_at|filename|cpf|status|previsao)$"),
+    sort_by: str = Query("uploaded_at", pattern="^(uploaded_at|updated_at|filename|cpf|status|previsao|reviewed_at)$"),
     sort_dir: str = Query("desc", pattern="^(asc|desc)$"),
     filter_clinic_id: str | None = Query(None, alias="clinic_id", description="Filtra documentos de uma clínica específica"),
     uploaded_from: datetime | None = Query(None, description="Enviados a partir deste instante (inclusive), ISO 8601"),
     uploaded_to: datetime | None = Query(None, description="Enviados antes deste instante (exclusive), ISO 8601"),
     previsao_from: date | None = Query(None, description="Previsão de liberação a partir deste dia (inclusive), AAAA-MM-DD"),
     previsao_to: date | None = Query(None, description="Previsão de liberação até este dia (inclusive), AAAA-MM-DD"),
+    # `Annotated` para o padrão ser None de verdade quando a função é chamada
+    # direto (os testes fazem isso): com `= Query(None)` viria o objeto Query.
+    aprovado_from: Annotated[
+        datetime | None, Query(description="Aprovados pelo revisor a partir deste instante (inclusive), ISO 8601")
+    ] = None,
+    aprovado_to: Annotated[
+        datetime | None, Query(description="Aprovados pelo revisor antes deste instante (exclusive), ISO 8601")
+    ] = None,
 ):
     """
     Lista documentos com paginação e filtros server-side.
@@ -338,6 +359,10 @@ async def list_documents_paged(
             status_code=422,  # literal: o nome da constante mudou entre versões do Starlette
             detail="uploaded_from deve ser anterior a uploaded_to.",
         )
+    aprovado_from = _utc_sem_fuso(aprovado_from) if aprovado_from else None
+    aprovado_to = _utc_sem_fuso(aprovado_to) if aprovado_to else None
+    if aprovado_from and aprovado_to and aprovado_from >= aprovado_to:
+        raise HTTPException(status_code=422, detail="aprovado_from deve ser anterior a aprovado_to.")
     # Pontas inclusas: o mesmo dia nas duas é um dia só, e vale.
     if previsao_from and previsao_to and previsao_from > previsao_to:
         raise HTTPException(
@@ -372,6 +397,8 @@ async def list_documents_paged(
                 uploaded_to=uploaded_to,
                 previsao_from=previsao_from,
                 previsao_to=previsao_to,
+                aprovado_from=aprovado_from,
+                aprovado_to=aprovado_to,
             )
         else:
             docs = _load_documents(
@@ -394,6 +421,8 @@ async def list_documents_paged(
                 uploaded_to=uploaded_to,
                 previsao_from=previsao_from,
                 previsao_to=previsao_to,
+                aprovado_from=aprovado_from,
+                aprovado_to=aprovado_to,
             )
 
         items = payload.get("items", [])
