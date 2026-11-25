@@ -17,6 +17,11 @@ import { CONDUTA } from "./tela-medico"
 import type { DocumentoAprovado, SituacaoAso } from "./tipos"
 import { useNormalidadesDaPagina } from "./use-normalidades-da-pagina"
 
+// Antes da primeira linha chegar: altura do cabeçalho (h-10) e de uma linha com badge, medidas na tela.
+const ALTURA_CABECALHO = 41
+const ALTURA_LINHA = 38
+const LINHAS_MINIMAS = 5
+
 function formatarCpf(cpf: string | null): string {
   const digitos = (cpf || "").replace(/\D/g, "")
   if (digitos.length === 11) return digitos.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4")
@@ -86,6 +91,8 @@ interface ListaAnalisesProps {
     enabled: boolean
   }
   paginacao: { page: number; totalPages: number; onPageChange: (page: number) => void }
+  /** Quantas linhas cabem no bloco da tabela sem rolagem; a página usa como tamanho da página. */
+  onLinhasPorPagina?: (linhas: number) => void
 }
 
 /**
@@ -104,6 +111,7 @@ export function ListaAnalises({
   data,
   clinica,
   paginacao,
+  onLinhasPorPagina,
 }: ListaAnalisesProps) {
   const [paciente, setPaciente] = useState("")
   const [cpf, setCpf] = useState("")
@@ -123,6 +131,30 @@ export function ListaAnalises({
     const espera = window.setTimeout(() => onBuscarRef.current(termo), 400)
     return () => window.clearTimeout(espera)
   }, [paciente, cpf])
+
+  // A página traz tantas linhas quantas cabem no bloco: mede a área da tabela (o bloco estica até o rodapé) e a
+  // altura de uma linha. Mede de novo quando a janela muda de tamanho e quando as linhas chegam.
+  const areaRef = useRef<HTMLDivElement>(null)
+  const onLinhasRef = useRef(onLinhasPorPagina)
+  onLinhasRef.current = onLinhasPorPagina
+  const medirRef = useRef(() => {})
+  medirRef.current = () => {
+    const area = areaRef.current
+    if (!area || !onLinhasRef.current) return
+    const cabecalho = area.querySelector("thead")?.getBoundingClientRect().height || ALTURA_CABECALHO
+    const linha = area.querySelector("tbody tr[data-linha]")?.getBoundingClientRect().height || ALTURA_LINHA
+    onLinhasRef.current(Math.max(LINHAS_MINIMAS, Math.floor((area.clientHeight - cabecalho) / linha)))
+  }
+  useEffect(() => {
+    const area = areaRef.current
+    if (!area) return
+    const observador = new ResizeObserver(() => medirRef.current())
+    observador.observe(area)
+    return () => observador.disconnect()
+  }, [])
+  useEffect(() => {
+    medirRef.current()
+  }, [documentos.length])
 
   const normalidades = useNormalidadesDaPagina(documentos.map((d) => d.documento_id))
   const visiveis = documentos.filter((d) => {
@@ -171,7 +203,7 @@ export function ListaAnalises({
           />
         )}
       </div>
-      <div className="flex-1 min-h-0 overflow-auto rounded-lg border">
+      <div ref={areaRef} className="flex-1 min-h-0 overflow-auto rounded-lg border">
         <Table>
           <TableHeader>
             <TableRow className="bg-muted/50">
@@ -192,7 +224,12 @@ export function ListaAnalises({
                 const pontos = contarPontos(d, leitura ?? null)
                 const decisao = decisoes[d.documento_id]
                 return (
-                  <TableRow key={d.documento_id} className="cursor-pointer hover:bg-muted/50" onClick={() => onAbrir(d)}>
+                  <TableRow
+                    key={d.documento_id}
+                    data-linha
+                    className="cursor-pointer hover:bg-muted/50"
+                    onClick={() => onAbrir(d)}
+                  >
                     <TableCell>
                       <div className="font-mono text-sm">{formatarCpf(d.paciente_cpf)}</div>
                     </TableCell>
