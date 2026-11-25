@@ -14,6 +14,8 @@ import type { CampoData, FiltroData, PeriodoDias } from "@/hooks/use-documents-p
 type DateFilterProps = {
   value: FiltroData
   onChange: (value: FiltroData) => void
+  /** Datas oferecidas, na ordem dos botões. Sem isso, as da Checagem: envio e previsão. */
+  campos?: CampoData[]
   className?: string
 }
 
@@ -83,20 +85,32 @@ const CAMPOS: Record<CampoData, { nome: string; curto: string; atalhos: Atalho[]
       { label: "Próximos 7 dias", periodo: () => ({ from: diaRelativo(0), to: diaRelativo(6) }) },
     ],
   },
+  // "O que a Checagem liberou para o médico ontem?" Também não há futuro.
+  aprovacao: {
+    nome: "Aprovação",
+    curto: "Aprovação",
+    ateHoje: true,
+    atalhos: [
+      { label: "Hoje", periodo: () => ({ from: diaRelativo(0), to: diaRelativo(0) }) },
+      { label: "Ontem", periodo: () => ({ from: diaRelativo(-1), to: diaRelativo(-1) }) },
+      { label: "Últimos 7 dias", periodo: () => ({ from: diaRelativo(-6), to: diaRelativo(0) }) },
+      { label: "Últimos 30 dias", periodo: () => ({ from: diaRelativo(-29), to: diaRelativo(0) }) },
+    ],
+  },
 }
 
-const ORDEM_CAMPOS: CampoData[] = ["envio", "previsao"]
+const CAMPOS_CHECAGEM: CampoData[] = ["envio", "previsao"]
 
 function rotulo(filtro: NonNullable<FiltroData>): string {
   return `${CAMPOS[filtro.campo].curto}: ${rotuloPeriodo(filtro.periodo)}`
 }
 
-export function DateFilter({ value, onChange, className }: DateFilterProps) {
+export function DateFilter({ value, onChange, campos = CAMPOS_CHECAGEM, className }: DateFilterProps) {
   const [open, setOpen] = useState(false)
   // Qual data o calendário está escolhendo. Trocar não filtra nada: só muda os
   // atalhos e o calendário, e o filtro vale no próximo clique — senão a lista
   // mudaria duas vezes até o revisor chegar ao período que queria.
-  const [campo, setCampo] = useState<CampoData>(value?.campo ?? "envio")
+  const [campo, setCampo] = useState<CampoData>(value?.campo ?? campos[0])
   const config = CAMPOS[campo]
   const periodo = value?.campo === campo ? value.periodo : null
 
@@ -154,7 +168,7 @@ export function DateFilter({ value, onChange, className }: DateFilterProps) {
           </PopoverTrigger>
           <PopoverContent align="start" className="w-auto p-0">
             <div className="flex gap-1 border-b p-2" role="group" aria-label="Filtrar pela data de">
-              {ORDEM_CAMPOS.map((c) => (
+              {campos.map((c) => (
                 <button
                   key={c}
                   type="button"

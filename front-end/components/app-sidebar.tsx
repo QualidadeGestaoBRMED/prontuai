@@ -28,6 +28,7 @@ import {
   RiTestTubeLine,
   RiBarChartBoxLine,
   RiPulseLine,
+  RiStethoscopeLine,
 } from "@remixicon/react";
 import { CentroAjudaDialog } from "@/components/centro-ajuda-dialog";
 import { TourGuiado } from "@/components/tour-guiado";
@@ -83,6 +84,13 @@ const data = {
           url: "/checagem",
           icon: RiCheckDoubleLine,
           roles: ["ADMIN", "CHECKER", "CURATOR"],
+        },
+        {
+          // Só a gestão vê enquanto não houver cargo de médico (ver app/medico/page.tsx).
+          title: "Conduta Médica",
+          url: "/medico",
+          icon: RiStethoscopeLine,
+          roles: ["ADMIN", "MANAGER"],
         },
       ],
     },
