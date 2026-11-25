@@ -9,7 +9,39 @@ import { authFetch } from "@/lib/auth-fetch"
 import { API_ENDPOINTS } from "@/lib/config"
 import { montarAnalise } from "./documento-medico"
 import { TelaMedico, type PdfDocumento } from "./tela-medico"
-import type { DecisaoMedico, DocumentoAprovado, SituacaoAso } from "./tipos"
+import type { Analise, DecisaoMedico, DocumentoAprovado, SituacaoAso } from "./tipos"
+
+type Sugestao = Pick<Analise, "conduta_sugerida" | "motivo_sem_sugestao" | "versao_modelo" | "confianca_calibrada">
+
+/** A conduta sugerida pelo modelo (`GET /v1/documents/{id}/conduta-sugerida`); null enquanto calcula. */
+function useCondutaSugerida(documentoId: string | null): Sugestao | null {
+  const [sugestao, setSugestao] = useState<Sugestao | null>(null)
+  useEffect(() => {
+    setSugestao(null)
+    if (!documentoId) return
+    let ativo = true
+    authFetch(API_ENDPOINTS.DOCUMENT_CONDUTA_SUGERIDA(documentoId))
+      .then(async (resposta) => {
+        if (!resposta.ok) throw new Error(String(resposta.status))
+        const dados = await resposta.json()
+        if (!ativo) return
+        setSugestao({
+          conduta_sugerida: dados.conduta_sugerida ?? null,
+          motivo_sem_sugestao: dados.motivo_sem_sugestao ?? null,
+          versao_modelo: dados.versao_modelo ?? "",
+          confianca_calibrada: !!dados.confianca_calibrada,
+        })
+      })
+      .catch(() => {
+        // Rota ou modelo fora do ar: a tela abre sem sugestão, com a mensagem de indisponível.
+        if (ativo) setSugestao({ conduta_sugerida: null, motivo_sem_sugestao: null, versao_modelo: "", confianca_calibrada: false })
+      })
+    return () => {
+      ativo = false
+    }
+  }, [documentoId])
+  return sugestao
+}
 
 interface ModalRevisaoAsoProps {
   documento: DocumentoAprovado | null
@@ -53,20 +85,25 @@ function usePdf(documentoId: string | null): PdfDocumento | null {
  * protótipo. Por isso o X padrão do Dialog fica escondido.
  *
  * Monta a análise com o que já existe: o documento aprovado, a leitura de
- * normalidade pela faixa do laudo e a posição dos exames no PDF.
+ * normalidade pela faixa do laudo, a posição dos exames no PDF e a conduta
+ * sugerida pelo modelo.
  */
 export function ModalRevisaoAso({ documento, onOpenChange, decisaoRegistrada, onRegistrar }: ModalRevisaoAsoProps) {
   const id = documento?.documento_id ?? null
   const normalidade = useNormalidade(id)
   const localizacoes = useLocalizacoes(id)
   const pdf = usePdf(id)
+  const sugestao = useCondutaSugerida(id)
 
   const analise = useMemo(
     () =>
-      documento && normalidade.fase !== "carregando"
-        ? montarAnalise(documento, normalidade.fase === "pronta" ? normalidade.porExame : null, localizacoes.porExame)
+      documento && normalidade.fase !== "carregando" && sugestao
+        ? {
+            ...montarAnalise(documento, normalidade.fase === "pronta" ? normalidade.porExame : null, localizacoes.porExame),
+            ...sugestao,
+          }
         : null,
-    [documento, normalidade, localizacoes.porExame],
+    [documento, normalidade, localizacoes.porExame, sugestao],
   )
 
   return (
