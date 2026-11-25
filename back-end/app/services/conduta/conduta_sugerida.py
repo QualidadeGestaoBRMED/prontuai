@@ -331,10 +331,12 @@ def sugerir(markdown: str, data_documento: Optional[str], exames_ausentes: list[
             logger.warning(f"[CONDUTA] Falha ao ler a resposta guardada: {type(exc).__name__}")
     if anterior:
         resp, guardada_em, sugestao_id = anterior["resposta"], anterior.get("criado_em"), anterior.get("id")
+        caso_id = ((resp.get("resultados") or [{}])[0]).get("caso_id")
     else:
-        request_id, inicio = uuid.uuid4().hex, time.monotonic()
+        # caso_id: o id da chamada no ml-exams (aparece na tela para achar o caso no log do serviço).
+        request_id, caso_id, inicio = uuid.uuid4().hex, uuid.uuid4().hex, time.monotonic()
         try:
-            resp = _chamar_modelo([{"caso_id": uuid.uuid4().hex, "features": features}], request_id)
+            resp = _chamar_modelo([{"caso_id": caso_id, "features": features}], request_id)
             status_http, erro = 200, None
         except Exception as exc:  # noqa: BLE001 — erro ou demora nunca bloqueiam: segue sem sugestão
             resp, erro = None, type(exc).__name__
@@ -354,10 +356,12 @@ def sugerir(markdown: str, data_documento: Optional[str], exames_ausentes: list[
             except Exception as exc:  # noqa: BLE001 — não guardar só faz a próxima abertura chamar de novo
                 logger.warning(f"[CONDUTA] Falha ao guardar a chamada ao modelo: {type(exc).__name__}")
         if resp is None:
-            return {**base, "motivo_sem_sugestao": "CONFIANCA_BAIXA", "erro_modelo": erro, "sugestao_id": sugestao_id}
+            return {**base, "motivo_sem_sugestao": "CONFIANCA_BAIXA", "erro_modelo": erro, "sugestao_id": sugestao_id,
+                    "caso_id": caso_id, "request_id": request_id}
     out = _conduta_da_resposta(resp, exames_ausentes, base)
     out["sugestao_guardada_em"] = guardada_em.isoformat() if hasattr(guardada_em, "isoformat") else guardada_em
     out["sugestao_id"] = sugestao_id
+    out["caso_id"] = caso_id
     return out
 
 

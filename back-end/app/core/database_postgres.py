@@ -2607,6 +2607,25 @@ class PostgresUserDatabase:
         finally:
             session.close()
 
+    def obter_conduta_sugestao(self, document_id: str, sugestao_id: Optional[int] = None) -> Optional[dict]:
+        """A chamada ao ml-exams pelo id (se for deste documento) ou a última com resposta, com features e resposta."""
+        session = self._get_session()
+        try:
+            q = session.query(CondutaSugestaoModel).filter(CondutaSugestaoModel.document_id == document_id)
+            if sugestao_id is not None:
+                q = q.filter(CondutaSugestaoModel.id == sugestao_id)
+            else:
+                q = q.filter(CondutaSugestaoModel.resposta.isnot(None))
+            m = q.order_by(CondutaSugestaoModel.criado_em.desc()).first()
+            if not m:
+                return None
+            return {"id": m.id, "features_hash": m.features_hash, "versao_features": m.versao_features,
+                    "versao_modelo": m.versao_modelo, "features": m.features, "resposta": m.resposta,
+                    "status_http": m.status_http, "erro": m.erro, "duracao_ms": m.duracao_ms,
+                    "request_id": m.request_id, "criado_em": m.criado_em}
+        finally:
+            session.close()
+
     def registrar_conduta_exibicao(
         self, document_id: str, sugestao_id: Optional[int], situacao_aso: Optional[str],
         motivo_sem_sugestao: Optional[str], confianca: Optional[float], versao_modelo: Optional[str],

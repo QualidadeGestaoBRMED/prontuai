@@ -13,7 +13,7 @@ import type { Analise, DecisaoMedico, DocumentoAprovado, SituacaoAso } from "./t
 
 type Sugestao = Pick<
   Analise,
-  "conduta_sugerida" | "motivo_sem_sugestao" | "versao_modelo" | "confianca_calibrada" | "prob_encaminhamento"
+  "conduta_sugerida" | "motivo_sem_sugestao" | "versao_modelo" | "confianca_calibrada" | "prob_encaminhamento" | "caso_id" | "sugestao_id"
 > & {
   /** A exibição registrada no back-end: a decisão aponta para ela (o que o médico viu). */
   exibicao_id: number | null
@@ -27,6 +27,8 @@ const SEM_SUGESTAO_CARREGADA: Sugestao = {
   versao_modelo: "",
   confianca_calibrada: false,
   prob_encaminhamento: null,
+  caso_id: null,
+  sugestao_id: null,
   exibicao_id: null,
   decisao_registrada: null,
 }
@@ -49,6 +51,8 @@ function useCondutaSugerida(documentoId: string | null): Sugestao | null {
           versao_modelo: dados.versao_modelo ?? "",
           confianca_calibrada: !!dados.confianca_calibrada,
           prob_encaminhamento: typeof dados.prob_encaminhamento === "number" ? dados.prob_encaminhamento : null,
+          caso_id: typeof dados.caso_id === "string" ? dados.caso_id : null,
+          sugestao_id: typeof dados.sugestao_id === "number" ? dados.sugestao_id : null,
           exibicao_id: typeof dados.exibicao_id === "number" ? dados.exibicao_id : null,
           decisao_registrada: dados.decisao_registrada?.situacao_aso ?? null,
         })
@@ -125,6 +129,8 @@ export function ModalRevisaoAso({ documento, onOpenChange, decisaoRegistrada, on
       versao_modelo: sugestao.versao_modelo,
       confianca_calibrada: sugestao.confianca_calibrada,
       prob_encaminhamento: sugestao.prob_encaminhamento,
+      caso_id: sugestao.caso_id,
+      sugestao_id: sugestao.sugestao_id,
     }
   }, [documento, normalidade, localizacoes.porExame, sugestao])
 
