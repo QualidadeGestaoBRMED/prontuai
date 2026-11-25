@@ -216,6 +216,16 @@ def check_if_migration_needed() -> tuple[bool, list[str]]:
             logger.warning("⚠️  Migration 019 necessária: tabela exam_report_rules não existe")
             migrations_needed.append("019_add_exam_report_rules.sql")
 
+        # Verificar migration 020: trilha da conduta sugerida (resposta do ml-exams, exibição, decisão).
+        cursor.execute("""
+            SELECT count(*)
+            FROM information_schema.tables
+            WHERE table_name IN ('conduta_sugestoes', 'conduta_exibicoes', 'conduta_decisoes')
+        """)
+        if cursor.fetchone()[0] < 3:
+            logger.warning("⚠️  Migration 020 necessária: tabelas da conduta sugerida não existem")
+            migrations_needed.append("020_add_conduta_sugestoes.sql")
+
         cursor.close()
         conn.close()
 

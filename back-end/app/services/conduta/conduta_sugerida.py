@@ -11,14 +11,17 @@
 """
 from __future__ import annotations
 
+import hashlib
+import json
 import logging
 import os
 import re
+import time
 import uuid
 import sys
 from datetime import date
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Optional, Protocol
 
 import httpx
 
@@ -209,11 +212,13 @@ def _saude() -> str:
         return f"sem resposta ({type(exc).__name__})"
 
 
-def _chamar_modelo(casos: list[dict]) -> dict:
+def _chamar_modelo(casos: list[dict], request_id: Optional[str] = None) -> dict:
     """POST /prever do contrato: {versao_features, casos: [{caso_id, features}]}."""
     if not ML_SERVICE_URL:
         raise RuntimeError("ML_SERVICE_URL não configurada")
     headers = {"Authorization": f"Bearer {ML_SERVICE_TOKEN}"} if ML_SERVICE_TOKEN else {}
+    if request_id:
+        headers["X-Request-Id"] = request_id
     with httpx.Client(timeout=ML_TIMEOUT) as cli:
         r = cli.post(f"{ML_SERVICE_URL}/prever", json={"versao_features": VERSAO_FEATURES, "casos": casos}, headers=headers)
         r.raise_for_status()
@@ -238,9 +243,29 @@ _ESPECIALIDADES = {"clinica_medica": "clínica médica", "otorrinolaringologia":
                    "fonoaudiologia": "fonoaudiologia", "ginecologia": "ginecologia", "hepatologia": "hepatologia"}
 
 
+class Guardada(Protocol):
+    """Trilha das chamadas ao ml-exams do documento (tabela conduta_sugestoes, só linhas novas)."""
+
+    def ler(self, features_hash: str) -> Optional[dict]: ...
+    def gravar(self, features_hash: str, features: dict, versao_modelo: Optional[str], resposta: Optional[dict],
+               status_http: Optional[int], erro: Optional[str], duracao_ms: int, request_id: str) -> Optional[int]: ...
+
+
+def hash_features(features: dict) -> str:
+    """Mesmas features (e mesma versão delas) = mesmo hash = não chama o ml-exams de novo."""
+    corpo = json.dumps({"versao_features": VERSAO_FEATURES, "features": features}, sort_keys=True, default=str)
+    return hashlib.sha256(corpo.encode("utf-8")).hexdigest()
+
+
 def sugerir(markdown: str, data_documento: Optional[str], exames_ausentes: list[str],
-            exames_ocr: Optional[list[str]] = None, exames_brnet: Optional[list[str]] = None) -> dict[str, Any]:
-    """{conduta_sugerida, motivo_sem_sugestao, versao_modelo, confianca_calibrada, prob_encaminhamento, especialidades}."""
+            exames_ocr: Optional[list[str]] = None, exames_brnet: Optional[list[str]] = None,
+            guardada: Optional[Guardada] = None) -> dict[str, Any]:
+    """{conduta_sugerida, motivo_sem_sugestao, versao_modelo, confianca_calibrada, prob_encaminhamento, especialidades}.
+
+    Com `guardada`, cada chamada ao ml-exams vira uma linha da trilha (resposta inteira ou falha, com tempo, código e
+    request id), e a resposta bem-sucedida é reaproveitada enquanto as features do documento não mudam: abrir o
+    documento de novo não chama o POST /prever. Depois de uma falha, a próxima abertura tenta de novo.
+    """
     base = {"conduta_sugerida": None, "motivo_sem_sugestao": None, "versao_modelo": None, "confianca_calibrada": False,
             "versao_features": VERSAO_FEATURES}
     if not (markdown or "").strip():
@@ -250,17 +275,48 @@ def sugerir(markdown: str, data_documento: Optional[str], exames_ausentes: list[
     except Exception as exc:  # noqa: BLE001
         logger.warning(f"[CONDUTA] Falha ao montar as features: {type(exc).__name__}")
         return {**base, "motivo_sem_sugestao": "FALHA_NA_LEITURA"}
-    try:
-        features = {k: v for k, v in linha.items() if not _nunca_sai(k)}
-        resp = _chamar_modelo([{"caso_id": uuid.uuid4().hex, "features": features}])
-    except Exception as exc:  # noqa: BLE001 — erro ou demora nunca bloqueiam: segue sem sugestão
-        codigo = exc.response.status_code if isinstance(exc, httpx.HTTPStatusError) else None
-        if codigo == 409:
-            logger.error(f"[CONDUTA] versao_features {VERSAO_FEATURES} diferente da do modelo: treino e produção se "
-                         f"descolaram ({_saude()})")
-        else:
-            logger.warning(f"[CONDUTA] Serviço de ML sem resposta válida: {codigo or type(exc).__name__} ({_saude()})")
-        return {**base, "motivo_sem_sugestao": "CONFIANCA_BAIXA", "erro_modelo": type(exc).__name__}
+    features = {k: v for k, v in linha.items() if not _nunca_sai(k)}
+    chave = hash_features(features)
+    anterior = None
+    if guardada is not None:
+        try:
+            anterior = guardada.ler(chave)
+        except Exception as exc:  # noqa: BLE001 — sem a tabela, segue chamando o modelo
+            logger.warning(f"[CONDUTA] Falha ao ler a resposta guardada: {type(exc).__name__}")
+    if anterior:
+        resp, guardada_em, sugestao_id = anterior["resposta"], anterior.get("criado_em"), anterior.get("id")
+    else:
+        request_id, inicio = uuid.uuid4().hex, time.monotonic()
+        try:
+            resp = _chamar_modelo([{"caso_id": uuid.uuid4().hex, "features": features}], request_id)
+            status_http, erro = 200, None
+        except Exception as exc:  # noqa: BLE001 — erro ou demora nunca bloqueiam: segue sem sugestão
+            resp, erro = None, type(exc).__name__
+            status_http = exc.response.status_code if isinstance(exc, httpx.HTTPStatusError) else None
+            if status_http == 409:
+                logger.error(f"[CONDUTA] versao_features {VERSAO_FEATURES} diferente da do modelo: treino e produção se "
+                             f"descolaram ({_saude()})")
+            else:
+                logger.warning(f"[CONDUTA] Serviço de ML sem resposta válida: {status_http or erro} ({_saude()})")
+        duracao_ms = int((time.monotonic() - inicio) * 1000)
+        guardada_em = sugestao_id = None
+        if guardada is not None:
+            # Falha também fica na trilha; só a resposta bem-sucedida é reaproveitada na próxima abertura.
+            try:
+                sugestao_id = guardada.gravar(chave, features, (resp or {}).get("versao_modelo"), resp, status_http,
+                                              erro, duracao_ms, request_id)
+            except Exception as exc:  # noqa: BLE001 — não guardar só faz a próxima abertura chamar de novo
+                logger.warning(f"[CONDUTA] Falha ao guardar a chamada ao modelo: {type(exc).__name__}")
+        if resp is None:
+            return {**base, "motivo_sem_sugestao": "CONFIANCA_BAIXA", "erro_modelo": erro, "sugestao_id": sugestao_id}
+    out = _conduta_da_resposta(resp, exames_ausentes, base)
+    out["sugestao_guardada_em"] = guardada_em.isoformat() if hasattr(guardada_em, "isoformat") else guardada_em
+    out["sugestao_id"] = sugestao_id
+    return out
+
+
+def _conduta_da_resposta(resp: dict, exames_ausentes: list[str], base: dict) -> dict[str, Any]:
+    """Resposta do POST /prever → objeto Conduta da API. Roda a cada abertura: exame ausente pode mudar na Checagem."""
     r = resp["resultados"][0]
     p = float(r["prob_encaminhamento"])
     # Contrato da API: confianca_calibrada fica false enquanto o modelo não for validado (ML_CONFIANCA_CALIBRADA=true depois).

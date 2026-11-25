@@ -58,6 +58,9 @@ from app.core.db.models import (
     CredenciadoAbordagemModel,
     FaixaNormalidadeModel,
     DocumentoLayoutModel,
+    CondutaSugestaoModel,
+    CondutaExibicaoModel,
+    CondutaDecisaoModel,
 )
 
 logger = logging.getLogger(__name__)
@@ -2551,6 +2554,121 @@ class PostgresUserDatabase:
         try:
             model = session.get(DocumentoLayoutModel, document_id)
             return model.layout if model else None
+        finally:
+            session.close()
+
+    # ------------------------------------------------------------------
+    # Trilha da conduta sugerida: ml-exams, exibição e decisão (app/services/conduta)
+    # ------------------------------------------------------------------
+
+    def _inserir(self, modelo, **valores) -> int:
+        """Insere uma linha e devolve o id (tabelas da trilha da conduta: só recebem linhas novas)."""
+        session = self._get_session()
+        try:
+            linha = modelo(**valores)
+            session.add(linha)
+            session.commit()
+            return linha.id
+        except Exception:
+            session.rollback()
+            raise
+        finally:
+            session.close()
+
+    def registrar_conduta_sugestao(
+        self, document_id: str, features_hash: str, versao_features: str, versao_modelo: Optional[str],
+        features: dict, resposta: Optional[dict], status_http: Optional[int], erro: Optional[str],
+        duracao_ms: Optional[int], request_id: Optional[str],
+    ) -> int:
+        """Uma chamada ao ml-exams: resposta inteira (sucesso) ou só o erro (falha)."""
+        return self._inserir(
+            CondutaSugestaoModel, document_id=document_id, features_hash=features_hash,
+            versao_features=versao_features, versao_modelo=versao_modelo, features=features, resposta=resposta,
+            status_http=status_http, erro=erro, duracao_ms=duracao_ms, request_id=request_id,
+            criado_em=datetime.utcnow(),
+        )
+
+    def ultima_conduta_sugestao(self, document_id: str, features_hash: str) -> Optional[dict]:
+        """A última resposta bem-sucedida do ml-exams para essas features do documento, ou None."""
+        session = self._get_session()
+        try:
+            m = (
+                session.query(CondutaSugestaoModel)
+                .filter(CondutaSugestaoModel.document_id == document_id,
+                        CondutaSugestaoModel.features_hash == features_hash,
+                        CondutaSugestaoModel.resposta.isnot(None))
+                .order_by(CondutaSugestaoModel.criado_em.desc())
+                .first()
+            )
+            if not m:
+                return None
+            return {"id": m.id, "features_hash": m.features_hash, "versao_modelo": m.versao_modelo,
+                    "resposta": m.resposta, "criado_em": m.criado_em}
+        finally:
+            session.close()
+
+    def registrar_conduta_exibicao(
+        self, document_id: str, sugestao_id: Optional[int], situacao_aso: Optional[str],
+        motivo_sem_sugestao: Optional[str], confianca: Optional[float], versao_modelo: Optional[str],
+        user_id: Optional[str], user_email: Optional[str],
+    ) -> int:
+        """O que a tela Conduta Médica mostrou, a quem e quando."""
+        return self._inserir(
+            CondutaExibicaoModel, document_id=document_id, sugestao_id=sugestao_id, situacao_aso=situacao_aso,
+            motivo_sem_sugestao=motivo_sem_sugestao, confianca=confianca, versao_modelo=versao_modelo,
+            user_id=user_id, user_email=user_email, exibido_em=datetime.utcnow(),
+        )
+
+    def obter_conduta_exibicao(self, document_id: str, exibicao_id: Optional[int] = None,
+                               user_id: Optional[str] = None) -> Optional[dict]:
+        """A exibição pelo id (se for deste documento) ou a última deste documento para o usuário."""
+        session = self._get_session()
+        try:
+            q = session.query(CondutaExibicaoModel).filter(CondutaExibicaoModel.document_id == document_id)
+            if exibicao_id is not None:
+                q = q.filter(CondutaExibicaoModel.id == exibicao_id)
+            elif user_id is not None:
+                q = q.filter(CondutaExibicaoModel.user_id == user_id)
+            m = q.order_by(CondutaExibicaoModel.exibido_em.desc()).first()
+            if not m:
+                return None
+            return {"id": m.id, "situacao_aso": m.situacao_aso, "versao_modelo": m.versao_modelo,
+                    "user_id": m.user_id, "exibido_em": m.exibido_em}
+        finally:
+            session.close()
+
+    def registrar_conduta_decisao(
+        self, document_id: str, exibicao_id: Optional[int], sugestao_exibida: bool,
+        situacao_sugerida: Optional[str], concordou_com_sugestao: Optional[bool], situacao_final: str,
+        observacao: Optional[str], normalidade_final: list, versao_modelo: Optional[str], decidido_em: datetime,
+        user_id: Optional[str], user_email: Optional[str],
+    ) -> dict:
+        """Grava a decisão do médico. Devolve {id, registrado_em}."""
+        agora = datetime.utcnow()
+        id_ = self._inserir(
+            CondutaDecisaoModel, document_id=document_id, exibicao_id=exibicao_id, sugestao_exibida=sugestao_exibida,
+            situacao_sugerida=situacao_sugerida, concordou_com_sugestao=concordou_com_sugestao,
+            situacao_final=situacao_final, observacao=observacao, normalidade_final=normalidade_final,
+            versao_modelo=versao_modelo, decidido_em=decidido_em, user_id=user_id, user_email=user_email,
+            registrado_em=agora,
+        )
+        return {"id": id_, "registrado_em": agora}
+
+    def ultima_conduta_decisao(self, document_id: str) -> Optional[dict]:
+        """A decisão que vale para o documento (a última registrada), ou None."""
+        session = self._get_session()
+        try:
+            m = (
+                session.query(CondutaDecisaoModel)
+                .filter(CondutaDecisaoModel.document_id == document_id)
+                .order_by(CondutaDecisaoModel.registrado_em.desc())
+                .first()
+            )
+            if not m:
+                return None
+            return {"id": m.id, "situacao_final": m.situacao_final, "observacao": m.observacao,
+                    "concordou_com_sugestao": m.concordou_com_sugestao, "user_email": m.user_email,
+                    "decidido_em": m.decidido_em, "registrado_em": m.registrado_em}
         finally:
             session.close()
 

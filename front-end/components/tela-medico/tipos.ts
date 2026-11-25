@@ -94,6 +94,8 @@ export interface Analise {
   origem_pedido: "informado" | "encontrado"
   versao_modelo: string
   confianca_calibrada: boolean
+  /** Probabilidade de COM encaminhamento que o modelo deu (0 a 1); null sem resposta do modelo. */
+  prob_encaminhamento?: number | null
   disponivel_ate: string
   decisao_ate: string
   contexto: ContextoAnalise

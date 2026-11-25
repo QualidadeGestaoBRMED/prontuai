@@ -153,9 +153,10 @@
 .tm .sugg-val.LIBERADO, .tm .sugg-val.LIBERADO_COM_ENCAMINHAMENTO { color: var(--ok-fg); }
 .tm .sugg-val.INAPTO { color: var(--bad-fg); }
 .tm .sugg-val.none { color: var(--muted-fg); font-size: 20px; }
-.tm .conf { display: flex; align-items: center; gap: 10px; margin-top: 10px; font-size: 12px; color: var(--muted-fg); }
+/* Texto embaixo da barra: "Probabilidade de encaminhamento" não cabe ao lado dela na coluna. */
+.tm .conf { display: flex; flex-direction: column-reverse; align-items: flex-start; gap: 6px; margin-top: 10px; font-size: 12px; color: var(--muted-fg); }
 .tm .conf b { color: var(--foreground); font-size: 13px; font-variant-numeric: tabular-nums; }
-.tm .meter { flex: 1; max-width: 140px; height: 6px; border-radius: 999px; background: rgba(0, 120, 145, .15); overflow: hidden; }
+.tm .meter { flex: none; width: 100%; max-width: 260px; height: 6px; border-radius: 999px; background: rgba(0, 120, 145, .15); overflow: hidden; }
 .tm .meter span { display: block; height: 100%; background: var(--secondary); border-radius: inherit; }
 .tm .sugg-expl { margin: 12px 0 0; line-height: 1.5; }
 .tm .sugg h3 { margin: 12px 0 4px; font-size: 12px; font-weight: 600; color: var(--muted-fg); }
