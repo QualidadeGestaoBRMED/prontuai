@@ -3,7 +3,7 @@
 import * as DialogPrimitive from "@radix-ui/react-dialog"
 import { Fragment, useEffect, useRef, useState, type ReactNode } from "react"
 import { foraDaFaixa } from "@/components/exames-comparativo-table"
-import { VisualizadorPdf, type Destaque } from "@/components/visualizador-pdf"
+import { VisualizadorPdf, type ControleNavegacao, type Destaque } from "@/components/visualizador-pdf"
 import type { ParametroLido } from "@/types/normalidade"
 import { rotuloTipoExame } from "./documento-medico"
 import type { Analise, DecisaoMedico, ExamePrevisto, MotivoSemSugestao, NormalidadeExame, SituacaoAso, TipoExame } from "./tipos"
@@ -149,7 +149,7 @@ export function TelaMedico({ analise, paciente, pdf, onFechar, decisaoRegistrada
   const [docAberto, setDocAberto] = useState(false)
   // O exame da última ida pela "Pág. N". `chave` muda a cada clique, para o
   // visualizador rolar e marcar de novo.
-  const [destaque, setDestaque] = useState<(Destaque & { exame: string }) | null>(null)
+  const [destaque, setDestaque] = useState<(Destaque & { exame: string; indice: number }) | null>(null)
   const [fixAbertos, setFixAbertos] = useState<Record<string, boolean>>({})
   const [correcoes, setCorrecoes] = useState<Record<string, string>>({})
   const [escolha, setEscolha] = useState<SituacaoAso | null>(null)
@@ -194,12 +194,17 @@ export function TelaMedico({ analise, paciente, pdf, onFechar, decisaoRegistrada
     if (docAberto) docRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" })
   }, [docAberto, destaque?.chave])
 
-  const irPara = (p: ExamePrevisto) => {
-    if (!p.localizacao) return
-    const localizacao = p.localizacao
-    setDestaque((d) => ({ ...localizacao, exame: p.exame_id, chave: (d?.chave ?? 0) + 1 }))
+  // Vai à ocorrência `indice` do exame (dá a volta nas pontas), como na Checagem.
+  const mostrarOcorrencia = (p: ExamePrevisto, indice: number) => {
+    const ocorrencias = p.ocorrencias ?? []
+    if (!ocorrencias.length) return
+    const i = (indice + ocorrencias.length) % ocorrencias.length
+    setDestaque((d) => ({ ...ocorrencias[i], exame: p.exame_id, indice: i, chave: (d?.chave ?? 0) + 1 }))
     setDocAberto(true)
   }
+  // "Pág. N": a primeira ocorrência; clicar de novo no mesmo exame passa para a próxima.
+  const irPara = (p: ExamePrevisto) =>
+    mostrarOcorrencia(p, destaque?.exame === p.exame_id ? destaque.indice + 1 : 0)
 
   const mostrarToast = (texto: string, ok: boolean) => {
     setToastMsg({ texto, ok, visivel: true })
@@ -355,6 +360,35 @@ export function TelaMedico({ analise, paciente, pdf, onFechar, decisaoRegistrada
 
   // Documento
   const exameDestacado = destaque ? exames.find((p) => p.exame_id === destaque.exame) : undefined
+  // Botão flutuante do visualizador, igual ao da Checagem: passar de exame em
+  // exame (na ordem da tela, pontos de atenção primeiro) e entre as ocorrências
+  // do exame aberto.
+  const navegacao: ControleNavegacao[] = []
+  if (destaque && exameDestacado) {
+    const sequencia = itens.map((i) => i.p).filter((p) => p.ocorrencias?.length)
+    const posicao = sequencia.findIndex((p) => p.exame_id === destaque.exame)
+    if (posicao >= 0 && sequencia.length > 1) {
+      const vizinho = (passo: number) => sequencia[(posicao + passo + sequencia.length) % sequencia.length]
+      navegacao.push({
+        rotulo: `exame ${posicao + 1} de ${sequencia.length}`,
+        dica: exameDestacado.exame,
+        rotuloAnterior: "Exame anterior",
+        rotuloProximo: "Próximo exame",
+        onAnterior: () => mostrarOcorrencia(vizinho(-1), 0),
+        onProximo: () => mostrarOcorrencia(vizinho(1), 0),
+      })
+    }
+    const total = exameDestacado.ocorrencias?.length ?? 0
+    if (total > 1) {
+      navegacao.push({
+        rotulo: `ocorrência ${destaque.indice + 1} de ${total}`,
+        rotuloAnterior: "Ocorrência anterior",
+        rotuloProximo: "Próxima ocorrência",
+        onAnterior: () => mostrarOcorrencia(exameDestacado, destaque.indice - 1),
+        onProximo: () => mostrarOcorrencia(exameDestacado, destaque.indice + 1),
+      })
+    }
+  }
 
   // Sugestão
   const pct = sug ? Math.round(sug.confianca * 100) : 0
@@ -515,6 +549,7 @@ export function TelaMedico({ analise, paciente, pdf, onFechar, decisaoRegistrada
                     url={pdf.url}
                     titulo="Documento do ASO"
                     destaque={destaque}
+                    navegacao={navegacao}
                     carregarTexto={pdf.carregarTexto}
                   />
                 ) : (
