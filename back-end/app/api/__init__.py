@@ -3,6 +3,7 @@ from app.api import v1_ocr, v1_brmed, v1_validacao, v1_jobs, v1_notifications
 from app.api.v1 import audit_logs
 from app.api.v1 import auth, users, documents, clinics, admin, maintenance, exams, dashboard, feedback, normalidade
 from app.api.v1 import localizacao
+from app.api.v1 import analises, conduta
 from app.staging import rotas as rotas_de_staging
 
 api_router = APIRouter()
@@ -27,5 +28,7 @@ api_router.include_router(feedback.router, prefix="/v1")
 # Também depois de documents: /documents/{id}/normalidade.
 api_router.include_router(normalidade.router, prefix="/v1")
 api_router.include_router(localizacao.router, prefix="/v1")
+api_router.include_router(analises.router, prefix="/v1")
+api_router.include_router(conduta.router, prefix="/v1")
 # Ferramentas só de staging (`app/staging`): fora de lá, 404. Ver `app.staging.ativo`.
 api_router.include_router(rotas_de_staging.router, prefix="/v1")
