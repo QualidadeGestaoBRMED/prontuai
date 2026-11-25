@@ -206,9 +206,10 @@ export function TelaMedico({ analise, paciente, pdf, onFechar, decisaoRegistrada
     setDestaque((d) => ({ ...ocorrencias[i], exame: p.exame_id, indice: i, chave: (d?.chave ?? 0) + 1 }))
     setDocAberto(true)
   }
-  // "Pág. N": a primeira ocorrência; clicar de novo no mesmo exame passa para a próxima.
+  // "Pág. N": o primeiro valor alterado; clicar de novo no mesmo exame passa
+  // para o próximo alterado. Exame sem alteração vai sempre ao mesmo lugar.
   const irPara = (p: ExamePrevisto) =>
-    mostrarOcorrencia(p, destaque?.exame === p.exame_id ? destaque.indice + 1 : 0)
+    mostrarOcorrencia(p, p.ocorrencias_alteradas && destaque?.exame === p.exame_id ? destaque.indice + 1 : 0)
 
   const mostrarToast = (texto: string, ok: boolean) => {
     setToastMsg({ texto, ok, visivel: true })
@@ -364,14 +365,15 @@ export function TelaMedico({ analise, paciente, pdf, onFechar, decisaoRegistrada
 
   // Documento
   const exameDestacado = destaque ? exames.find((p) => p.exame_id === destaque.exame) : undefined
-  // Botão flutuante do visualizador, igual ao da Checagem: passar de exame em
-  // exame (na ordem da tela, pontos de atenção primeiro) e entre as ocorrências
-  // do exame aberto.
+  // Botão flutuante do visualizador, no visual do da Checagem, mas SÓ com os
+  // alterados (decisão de 25/11): passa pelos exames com valor fora da faixa e
+  // pelos valores alterados do exame aberto. Num exame sem alteração, aberto
+  // pelo "Pág. N", o botão não aparece. A Checagem segue com todos.
   const navegacao: ControleNavegacao[] = []
-  if (destaque && exameDestacado) {
-    const sequencia = itens.map((i) => i.p).filter((p) => p.ocorrencias?.length)
-    const posicao = sequencia.findIndex((p) => p.exame_id === destaque.exame)
-    if (posicao >= 0 && sequencia.length > 1) {
+  const sequencia = itens.filter((i) => i.tipo === "alterado" && i.p.ocorrencias?.length).map((i) => i.p)
+  const posicao = destaque ? sequencia.findIndex((p) => p.exame_id === destaque.exame) : -1
+  if (destaque && exameDestacado && posicao >= 0) {
+    if (sequencia.length > 1) {
       const vizinho = (passo: number) => sequencia[(posicao + passo + sequencia.length) % sequencia.length]
       navegacao.push({
         rotulo: `exame ${posicao + 1} de ${sequencia.length}`,
@@ -382,12 +384,12 @@ export function TelaMedico({ analise, paciente, pdf, onFechar, decisaoRegistrada
         onProximo: () => mostrarOcorrencia(vizinho(1), 0),
       })
     }
-    const total = exameDestacado.ocorrencias?.length ?? 0
+    const total = exameDestacado.ocorrencias_alteradas ? exameDestacado.ocorrencias?.length ?? 0 : 0
     if (total > 1) {
       navegacao.push({
         rotulo: `ocorrência ${destaque.indice + 1} de ${total}`,
-        rotuloAnterior: "Ocorrência anterior",
-        rotuloProximo: "Próxima ocorrência",
+        rotuloAnterior: "Valor alterado anterior",
+        rotuloProximo: "Próximo valor alterado",
         onAnterior: () => mostrarOcorrencia(exameDestacado, destaque.indice - 1),
         onProximo: () => mostrarOcorrencia(exameDestacado, destaque.indice + 1),
       })
