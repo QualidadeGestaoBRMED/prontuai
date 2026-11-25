@@ -84,6 +84,43 @@ async def conduta_do_documento(
     return out
 
 
+@router.get("/documents/{document_id}/conduta-sugerida/detalhes")
+async def detalhes_da_sugestao(
+    document_id: str,
+    sugestao_id: Optional[int] = None,
+    current_user: User = Depends(require_roles([UserRole.ADMIN, UserRole.MANAGER])),
+) -> dict:
+    """O que foi enviado ao ml-exams e o que ele respondeu, mais o que o OCR leu do documento.
+
+    Só para conferência na tela Conduta Médica (bloco recolhido, carregado ao abrir). O texto do OCR é o mesmo que o
+    PDF mostra a quem já tem acesso ao documento; nada disto sai do ProntuAI além das features, que já foram ao modelo.
+    """
+    document = user_db.get_document_by_id(document_id)
+    if not document:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Documento não encontrado")
+    chamada = await asyncio.to_thread(user_db.obter_conduta_sugestao, document_id, sugestao_id)
+    resultado = ((chamada or {}).get("resposta") or {}).get("resultados") or [{}]
+    payload = document.result_payload if isinstance(document.result_payload, dict) else {}
+    return {
+        "sugestao_id": (chamada or {}).get("id"),
+        "caso_id": resultado[0].get("caso_id"),
+        "request_id": (chamada or {}).get("request_id"),
+        "versao_features": (chamada or {}).get("versao_features") or cs.VERSAO_FEATURES,
+        "versao_modelo": (chamada or {}).get("versao_modelo"),
+        "chamado_em": _iso((chamada or {}).get("criado_em")),
+        "duracao_ms": (chamada or {}).get("duracao_ms"),
+        "status_http": (chamada or {}).get("status_http"),
+        "erro": (chamada or {}).get("erro"),
+        "features": (chamada or {}).get("features"),
+        "resposta": (chamada or {}).get("resposta"),
+        "exames_ocr": document.exams_ocr or [],
+        "exames_brnet": document.exams_brnet or [],
+        "exames_faltantes": [t.get("exame") for t in payload.get("tabela_comparacao") or []
+                             if isinstance(t, dict) and t.get("status") == "faltante" and t.get("exame")],
+        "texto_ocr": document.ocr_markdown or "",
+    }
+
+
 class CondutaFinal(BaseModel):
     situacao_aso: SituacaoAso
     observacao: Optional[str] = Field(None, max_length=4000)

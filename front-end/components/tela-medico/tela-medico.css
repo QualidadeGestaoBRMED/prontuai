@@ -163,6 +163,11 @@
 .tm .sugg ul { margin: 0; padding-left: 18px; font-size: 13px; list-style: disc; /* preflight */ }
 .tm .sugg li + li { margin-top: 3px; }
 .tm .sugg .eff { color: var(--muted-fg); }
+/* Id do caso no ml-exams: para achar a previsão no log do serviço. Selecionável inteiro com um clique. */
+.tm .caso-id { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin-top: 14px; font-size: 11.5px; color: var(--muted-fg); }
+.tm .caso-id code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; color: var(--foreground); user-select: all; word-break: break-all; }
+.tm .caso-id button { border: 0; background: none; padding: 0; font: inherit; color: var(--secondary); cursor: pointer; text-decoration: underline; }
+.tm .caso-id button .i { width: 14px; height: 14px; }
 
 .tm .decide { padding: 18px 24px 20px; }
 .tm .decide h2 { margin: 0 0 12px; font-size: 16px; font-weight: 600; }
@@ -216,3 +221,17 @@
   .tm .kv { grid-template-columns: minmax(0, 1fr); }
   .tm .kv dd { box-shadow: none; padding-top: 0; }
 }
+
+/* "Ver o que foi enviado ao modelo": features, resposta do ml-exams e texto do OCR, para conferência. */
+.tm .tech { margin-top: 32px; font-size: 12px; }
+.tm .tech summary { color: var(--muted-fg); cursor: pointer; }
+.tm .tech details { margin-top: 10px; }
+.tm .tech h4 { margin: 16px 0 6px; font-size: 12px; font-weight: 600; }
+.tm .tech h5 { margin: 10px 0 4px; font-size: 11.5px; font-weight: 600; color: var(--muted-fg); }
+.tm .tech pre { margin: 6px 0 0; padding: 12px; background: var(--canvas); border-radius: 8px; max-height: 360px; overflow: auto; white-space: pre-wrap; word-break: break-word; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 11.5px; }
+.tm .tech .tech-ocr { max-height: 520px; }
+.tm .tech .tech-msg { margin: 10px 0 0; color: var(--muted-fg); }
+.tm .tech .tech-link { border: 0; background: none; padding: 0; font: inherit; color: var(--secondary); text-decoration: underline; cursor: pointer; }
+.tm .tech .tech-ids { display: grid; grid-template-columns: max-content 1fr; gap: 4px 12px; margin: 12px 0 0; }
+.tm .tech .tech-ids dt { color: var(--muted-fg); }
+.tm .tech .tech-ids dd { margin: 0; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; word-break: break-all; user-select: all; }

@@ -98,6 +98,10 @@ export interface Analise {
   confianca_calibrada: boolean
   /** Probabilidade de COM encaminhamento que o modelo deu (0 a 1); null sem resposta do modelo. */
   prob_encaminhamento?: number | null
+  /** Id do caso na chamada ao ml-exams: acha a previsão no log do serviço. Null sem chamada. */
+  caso_id?: string | null
+  /** A chamada ao ml-exams que gerou a sugestão (trilha `conduta_sugestoes`). */
+  sugestao_id?: number | null
   disponivel_ate: string
   decisao_ate: string
   contexto: ContextoAnalise

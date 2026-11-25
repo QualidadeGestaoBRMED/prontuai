@@ -61,6 +61,7 @@ export const API_ENDPOINTS = {
   // Valores lidos no laudo e a situação de cada um (normal / acima / abaixo).
   DOCUMENT_NORMALIDADE: (id: string) => `${API_PROXY_BASE}/v1/documents/${id}/normalidade`,
   DOCUMENT_CONDUTA_SUGERIDA: (id: string) => `${API_PROXY_BASE}/v1/documents/${id}/conduta-sugerida`,
+  DOCUMENT_CONDUTA_DETALHES: (id: string) => `${API_PROXY_BASE}/v1/documents/${id}/conduta-sugerida/detalhes`,
   DOCUMENT_CONDUTA_DECISAO: (id: string) => `${API_PROXY_BASE}/v1/documents/${id}/conduta-decisao`,
   DOCUMENT_ENVIOS: (id: string) => `${API_PROXY_BASE}/v1/documents/${id}/envios`,
   DOCUMENTS_ENVIOS_ANTERIORES: `${API_PROXY_BASE}/v1/documents/envios-anteriores`,
