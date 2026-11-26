@@ -26,6 +26,15 @@ class Memoria:
         return len(self.linhas)
 
 
+@pytest.fixture(autouse=True)
+def sem_openai(monkeypatch):
+    """Os testes nunca chamam a OpenAI: ficha só por regras, salvo onde o teste liga o 4o mini com um falso."""
+    monkeypatch.setattr(cs, "CONDUTA_FICHA_LLM", False)
+    cs._ficha_plana_cache.cache_clear()
+    yield
+    cs._ficha_plana_cache.cache_clear()
+
+
 @pytest.fixture
 def chamadas(monkeypatch):
     feitas = []
@@ -106,3 +115,31 @@ def test_contrato_v13_confianca_da_zona_achado_contexto_e_motivos():
     assert c["fatores"] == ["PA sistólica: 150", "Eletrocardiograma: alteração da repolarização"]
     assert c["contexto"] == ["Plataforma de petróleo (NR-37): sim"]
     assert c["explicacao"] == "Encaminhar para cardiologia (pressão arterial, ECG); endocrinologia (IMC)."
+
+
+def test_ficha_com_4o_mini_ligado_passa_valores_conhecidos_e_chama_uma_vez(monkeypatch, chamadas):
+    vistos = []
+
+    def extrair_falso(texto, *, usar_llm=True, valores_conhecidos=()):
+        vistos.append((usar_llm, valores_conhecidos))
+        return None
+
+    monkeypatch.setattr(cs, "CONDUTA_FICHA_LLM", True)
+    monkeypatch.setattr(cs._fc, "extrair_ficha", extrair_falso)
+    memoria = Memoria()
+    for _ in range(3):  # aprovação + duas aberturas: o 4o mini é chamado uma vez só
+        r = cs.sugerir(MD, "2026-11-25", [], [], [], memoria, ("12345678909", "FULANO DE TAL"))
+    assert vistos == [(True, ("12345678909", "FULANO DE TAL"))]
+    assert r["ficha_fonte"] == "sem_ficha"
+
+
+def test_ficha_so_regras_com_a_variavel_desligada(monkeypatch, chamadas):
+    vistos = []
+
+    def extrair_falso(texto, *, usar_llm=True, valores_conhecidos=()):
+        vistos.append(usar_llm)
+        return None
+
+    monkeypatch.setattr(cs._fc, "extrair_ficha", extrair_falso)
+    cs.sugerir(MD, "2026-11-25", [], [], [], Memoria())
+    assert vistos == [False]
