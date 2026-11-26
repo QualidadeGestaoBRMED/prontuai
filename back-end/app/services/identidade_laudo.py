@@ -27,6 +27,17 @@ coletor, OCR inventando, empresa, vocabulário de nomes). Pega laudo de outro
 colaborador que não traz CPF; a tela o mostra como "Nome diferente no laudo",
 para o revisor saber que é aviso de outra natureza.
 
+Laudo em tabela (laboratório, espirometria): o OCR lê por colunas e põe o
+rótulo numa linha e o nome em outra ("Nome:" / "FULANO", "CLIENTE:" / "SEXO:" /
+... / "FULANO", "IDENTIFICAÇÃO" / títulos / "Fulano"). Com o vocabulário de
+nomes, os dois avisos leem o nome abaixo do rótulo (`_nome_da_linha`), com
+cortes próprios. Replay de 26/11/2026 na cópia de produção (20.402 documentos):
+pega 4 das 6 rejeições de novembro por outra pessoa que a regra perdia, e passa
+a avisar em 2 aprovados da base inteira (os dois, bloco de identificação de
+outra pessoa no texto). O nome do paciente com CPF de outra pessoa não vira
+aviso: no mesmo replay, 41 aprovados eram o próprio paciente com CPF errado no
+laudo, contra 1 rejeição.
+
 Os dois avisos rejeitam o documento ("Rejeitado pela IA", 30/10/2026): o
 chamador grava as ocorrências no payload para a tela do revisor e tira a
 liberação com `motivo_rejeicao`. O exame continua encontrado — não vira
@@ -83,6 +94,43 @@ _PROFISSIONAL = re.compile(
     r"FONOAUDI[ÓO]LOG[OA]|PSIC[ÓO]LOG[OA]|ENFERMEIR[OA]|BIOM[ÉE]DIC[OA]|FARMAC[ÊE]UTIC[OA]|"
     r"CERTIFICADO)"
 )
+# Rótulo sozinho na linha, com o valor numa linha de baixo. É como o OCR lê o
+# cabeçalho em tabela dos laboratórios: os rótulos de uma coluna e depois os
+# valores ("## CLIENTE:" / "## SEXO:" / "## IDADE:" / "## CARLOS ..."). Só com
+# os dois-pontos: "Nome" solto é título de coluna de formulário. "Cliente" só
+# aqui, sozinho — na mesma linha ele costuma trazer a empresa.
+_ROTULO_NOME_SOZINHO = re.compile(
+    r"(?i)^[\s#*>|-]*"
+    r"(?:nome(?:\s+do\s+paciente|\s+completo)?(?:\s*/\s*(?:full\s+)?name)?"
+    r"|paciente|patient(?:\s+name)?|cliente|colaborador[a]?|funcion[aá]ri[oa]|trabalhador[a]?)"
+    r"\s*:\s*$"
+)
+# Cabeçalho de identificação sem rótulo de nome, com o nome logo abaixo
+# (espirometria da Phenix: "## IDENTIFICAÇÃO" / "## DATA DO EXAME" / "Carlos ...").
+_CABECALHO_IDENTIFICACAO = re.compile(
+    r"(?i)^[\s#*>|\-\d.]*identifica[cç][aã]o"
+    r"(?:\s+d[oa]\s+(?:paciente|colaborador[a]?|funcion[aá]ri[oa]|trabalhador[a]?))?\s*:?\s*$"
+)
+# "CPF:" sozinho, com o número na linha de baixo.
+_ROTULO_CPF_SOZINHO = re.compile(r"(?i)^[\s#*>|-]*C\.?P\.?F\.?\s*:?\s*$")
+# Rótulos da mesma tabela pulados abaixo de um rótulo sozinho atrás do valor
+# (Climed: "CLIENTE:", "SEXO:", "DT.NASCIMENTO:", "IDADE:" e só então o nome).
+ALCANCE_VALOR = 5
+# Título do bloco de quem atende: o "Nome:" logo abaixo é do profissional.
+# "Médico" não: "CLÍNICA MÉDICA" é cabeçalho de laboratório (Climed).
+_BLOCO_DO_PROFISSIONAL = re.compile(r"(?i)PROFISSIONAL|EXAMINADOR|RESPONS[ÁA]VEL")
+# O valor abaixo de um rótulo sozinho só vale se soar como nome — e com mais
+# rigor do que o nome ao lado do rótulo, porque ali embaixo vêm também os
+# outros títulos e valores da tabela: "Data de Nascimento" (NASCIMENTO é
+# sobrenome), "OPERADOR JUNIOR", "MODEC DO BRASIL". O primeiro nome precisa
+# estar no vocabulário e, das palavras, esta fração.
+FRACAO_NOMES_VALOR_ABAIXO = 2 / 3
+PALAVRAS_VALOR_ABAIXO = 6
+# Quando o CPF vem com o rótulo sozinho na linha de cima, o documento é uma
+# tabela lida por colunas, e o rótulo do nome fica mais longe: no laboratório
+# LABAC (Clínica Bahia, 19/11/2026), 13 linhas acima, depois de cadastro,
+# procedência, OS, local e data.
+JANELA_LINHAS_TABELA = 15
 _LINHA_CNPJ_OU_PASSAPORTE = re.compile(r"(?i)CNPJ|PASSAPORTE|PASSPORT")
 # O CPF de paciente vem rotulado ("CPF:", "Identificação:") ou na própria linha
 # do nome. Sem rótulo, o número colado num nome ("FULANO DE TAL:12345678900") é
@@ -99,6 +147,9 @@ ALCANCE_EXAME = 10
 # Força do aviso: nome e CPF de outra pessoa, ou só o nome (ver `pessoas_no_documento`).
 NOME_E_CPF = "nome_e_cpf"
 SO_NOME = "so_nome"
+# Nome que o extrator grava quando não acha o do paciente: com ele, todo nome
+# do documento pareceria de outra pessoa.
+_SEM_NOME_DO_PACIENTE = {"NAO", "IDENTIFICADO"}
 
 # Cortes do aviso só pelo nome (ver `_nome_de_outra_pessoa`).
 # Abaixo disso o nome não "soa" como o do paciente: o OCR estraga o nome escrito
@@ -111,8 +162,10 @@ FRACAO_NOMES_CONHECIDOS = 0.5
 _CONSELHO = re.compile(r"(?i)\b(?:CRM|CRO|CRFA|CRF|CRP|COREN|CRBM|CREFITO|CRN|RQE|CRMV)\b|ASSINAD[OA]")
 # Formulário de cadeia de custódia do toxicológico: o "Nome:" é do coletor.
 _COLETA_TOXICOLOGICO = re.compile(r"(?i)SUPERVISOR DA COLETA|\bCOLLECTION\b|CUST[ÓO]DIA|CUSTODY")
+# "S.A." só com o ponto: "SA" sozinho é sobrenome ("CARLOS DE SA ROCHA",
+# 23/11/2026). "S/A" já cai pela barra.
 _EMPRESA = re.compile(
-    r"(?i)\b(?:LTDA|S\.?A\.?|EIRELI|ME|EPP|MED|SERVI[CÇ]OS|MARITIMA|NAVIO|EMPRESA|CL[IÍ]NICA|HOSPITAL|"
+    r"(?i)\b(?:LTDA|S\.A\.?|EIRELI|ME|EPP|MED|SERVI[CÇ]OS|MARITIMA|NAVIO|EMPRESA|CL[IÍ]NICA|HOSPITAL|"
     r"LABORAT[OÓ]RIO)\b|[()/]"
 )
 
@@ -187,6 +240,101 @@ def _nome_rotulado(linha: str) -> Optional[str]:
     return _clean_candidate(m.group("valor"))
 
 
+def _soa_como_nome(nome: str, nomes_conhecidos: Collection[str]) -> bool:
+    """O valor achado abaixo de um rótulo sozinho é nome de pessoa: até
+    `PALAVRAS_VALOR_ABAIXO` palavras, o primeiro nome no vocabulário e
+    `FRACAO_NOMES_VALOR_ABAIXO` das palavras também."""
+    tokens = _tokens(nome)
+    if len(tokens) < 2 or len(tokens) > PALAVRAS_VALOR_ABAIXO or tokens[0] not in nomes_conhecidos:
+        return False
+    return sum(t in nomes_conhecidos for t in tokens) / len(tokens) >= FRACAO_NOMES_VALOR_ABAIXO
+
+
+def _valor_abaixo(
+    linhas: list[str],
+    i: int,
+    nomes_conhecidos: Collection[str],
+    paginas: Optional[list[Optional[int]]],
+    linhas_de_valor: int,
+) -> Optional[tuple[str, int]]:
+    """O nome de um rótulo sozinho na linha `i`, numa linha de baixo, sem passar
+    de página. Os outros rótulos da mesma tabela (linha com dois-pontos) são
+    pulados; das demais linhas, só as `linhas_de_valor` primeiras podem ser o
+    nome — abaixo do "Nome:" é a primeira: se ela não soa como nome (o nome do
+    paciente escrito à mão, só o primeiro nome), a de baixo já é outra coisa.
+    Para na assinatura ou no profissional: dali para baixo o nome é de quem
+    assina. Devolve (nome, índice da linha)."""
+    vistas = rotulos = 0
+    for j in range(i + 1, len(linhas)):
+        linha = linhas[j]
+        if _PAGINA.search(linha) or (paginas is not None and paginas[j] != paginas[i]):
+            return None
+        if not linha.strip():
+            continue
+        if _PROFISSIONAL.search(linha):
+            return None
+        if ":" in linha:
+            rotulos += 1
+            if rotulos > ALCANCE_VALOR:
+                return None
+            continue
+        vistas += 1
+        candidato = _clean_candidate(linha)
+        if candidato and _soa_como_nome(candidato, nomes_conhecidos):
+            # Ficha em branco: o primeiro nome abaixo do "Paciente:" é o de quem
+            # assina, com "Examinador:" e o conselho logo depois (odontológico).
+            if _profissional_abaixo(linhas, j):
+                return None
+            return candidato, j
+        if vistas >= linhas_de_valor:
+            return None
+    return None
+
+
+def _profissional_abaixo(linhas: list[str], j: int, quantas: int = 3) -> bool:
+    vistas = 0
+    for k in range(j + 1, len(linhas)):
+        if _PAGINA.search(linhas[k]):
+            return False
+        if linhas[k].strip():
+            if _PROFISSIONAL.search(linhas[k]) or _CONSELHO.search(linhas[k]):
+                return True
+            vistas += 1
+            if vistas >= quantas:
+                return False
+    return False
+
+
+def _nome_da_linha(
+    linhas: list[str],
+    i: int,
+    nomes_conhecidos: Optional[Collection[str]] = None,
+    paginas: Optional[list[Optional[int]]] = None,
+) -> Optional[tuple[str, int]]:
+    """O nome de paciente que a linha `i` rotula, e a linha onde ele está: a
+    própria ("Nome: FULANO"), ou, com o vocabulário de nomes, uma de baixo
+    quando o rótulo veio sozinho ("Nome:" / "FULANO") ou é o cabeçalho
+    "IDENTIFICAÇÃO" com o nome abaixo dos títulos de coluna. Sem vocabulário,
+    só a própria linha: sem ele não há como separar o nome do resto da tabela."""
+    linha = linhas[i]
+    nome = _nome_rotulado(linha)
+    if nome:
+        return nome, i
+    if not nomes_conhecidos or _PROFISSIONAL.search(linha):
+        return None
+    if _ROTULO_NOME_SOZINHO.match(linha):
+        linhas_de_valor = 1
+    elif _CABECALHO_IDENTIFICACAO.match(linha):
+        linhas_de_valor = 3
+    else:
+        return None
+    # "IDENTIFICAÇÃO DO PROFISSIONAL" / "NOME:": a psicóloga, não o paciente.
+    acima = [linhas[j] for j in range(max(0, i - 3), i) if linhas[j].strip()][-2:]
+    if any(_BLOCO_DO_PROFISSIONAL.search(a) for a in acima):
+        return None
+    return _valor_abaixo(linhas, i, nomes_conhecidos, paginas, linhas_de_valor)
+
+
 def _paginas(linhas: list[str]) -> list[Optional[int]]:
     """Página de cada linha, pelos marcadores do OCR; None antes do primeiro."""
     pagina, saida = None, []
@@ -217,6 +365,7 @@ def outra_pessoa(
     cpf_paciente: Optional[str],
     nome_paciente: Optional[str],
     paginas: Optional[list[Optional[int]]] = None,
+    nomes_conhecidos: Optional[Collection[str]] = None,
 ) -> list[dict]:
     """
     Cada pessoa diferente do paciente identificada no documento, na ordem em que
@@ -225,6 +374,8 @@ def outra_pessoa(
     `linhas` é o texto linha a linha — do markdown, ou das linhas posicionadas
     do layout na rota de localização, para o clique levar às mesmas linhas.
     `paginas` é a página de cada linha; sem ela, sai dos marcadores do OCR.
+    Com `nomes_conhecidos`, vale também o rótulo sozinho na linha com o nome
+    numa linha de baixo (cabeçalho em tabela, ver `_nome_da_linha`).
     Sem o CPF do paciente a regra não opina: devolve lista vazia.
     """
     linhas = list(linhas)
@@ -242,21 +393,31 @@ def outra_pessoa(
         linha = linhas[i]
         if _LINHA_CNPJ_OU_PASSAPORTE.search(linha) or _PROFISSIONAL.search(linha):
             continue
-        if not _ROTULO_CPF.search(linha) and not _ROTULO_NOME.match(linha):
+        # "CPF:" sozinho na linha de cima e o número nesta: tabela lida por
+        # colunas, com o rótulo do nome mais longe.
+        em_tabela = (
+            p > 0
+            and paginas[com_texto[p - 1]] == paginas[i]
+            and bool(_ROTULO_CPF_SOZINHO.match(linhas[com_texto[p - 1]]))
+        )
+        if not em_tabela and not _ROTULO_CPF.search(linha) and not _ROTULO_NOME.match(linha):
             continue
+        janela = JANELA_LINHAS_TABELA if em_tabela else JANELA_LINHAS
         for m in _CPF.finditer(linha):
             cpf = _digits_only(m.group(0))
             if cpf == cpf_paciente or not _is_valid_cpf(cpf):
                 continue
             # O rótulo mais perto do CPF, na mesma página: a própria linha
             # primeiro ("Paciente: FULANO  CPF: ..."), depois a vizinhança.
+            # Rótulo sozinho ("Nome:") conta pela posição dele, e o nome é o
+            # da linha de baixo.
             nome, linha_nome = None, None
-            for distancia in range(JANELA_LINHAS + 1):
+            for distancia in range(janela + 1):
                 for q in dict.fromkeys((p - distancia, p + distancia)):
                     if 0 <= q < len(com_texto) and paginas[com_texto[q]] == paginas[i]:
-                        candidato = _nome_rotulado(linhas[com_texto[q]])
-                        if candidato:
-                            nome, linha_nome = candidato, com_texto[q]
+                        achado = _nome_da_linha(linhas, com_texto[q], nomes_conhecidos, paginas)
+                        if achado:
+                            nome, linha_nome = achado
                             break
                 if nome:
                     break
@@ -358,16 +519,21 @@ def pessoas_no_documento(
     laudo sem CPF) entra nas linhas dela, e não como outra pessoa.
     """
     linhas = list(linhas)
-    pessoas = outra_pessoa(linhas, cpf_paciente, nome_paciente, paginas)
-    if not _tokens(nome_paciente):
+    pessoas = outra_pessoa(linhas, cpf_paciente, nome_paciente, paginas, nomes_conhecidos)
+    if not _tokens(nome_paciente) or set(_tokens(nome_paciente)) <= _SEM_NOME_DO_PACIENTE:
         return pessoas
     usadas = {i for pessoa in pessoas for i in pessoa["linhas"]}
     so_nome: list[dict] = []
-    for i, linha in enumerate(linhas):
+
+    for i in range(len(linhas)):
+        achado = _nome_da_linha(linhas, i, nomes_conhecidos, paginas)
+        if not achado:
+            continue
+        nome, i = achado
         if i in usadas:
             continue
-        nome = _nome_rotulado(linha)
-        if not nome or len(_tokens(nome)) < 2 or mesma_pessoa(nome, nome_paciente):
+        usadas.add(i)
+        if len(_tokens(nome)) < 2 or mesma_pessoa(nome, nome_paciente):
             continue
         # A mesma pessoa lida de novo, inclusive com outro erro de OCR.
         pessoa = next((p for p in pessoas + so_nome if mesma_pessoa(nome, p["nome"])), None)

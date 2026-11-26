@@ -423,6 +423,70 @@ def test_metade_das_palavras_conhecidas_basta():
     assert pessoa["tipo"] == il.SO_NOME
 
 
+def test_sobrenome_sa_nao_e_empresa():
+    # "SA" sozinho é sobrenome; empresa é "S.A." (Climed, 23/11/2026).
+    nomes = NOMES | {"CARLOS", "ROCHA"}
+    (pessoa,) = _pessoas(ASO_DA_PACIENTE + "<!-- pagina 2 -->\nNome: CARLOS DE SA ROCHA\n", nomes=nomes)
+    assert pessoa["nome"] == "CARLOS DE SA ROCHA"
+    assert _pessoas(ASO_DA_PACIENTE + "<!-- pagina 2 -->\nNome: CARLOS ROCHA S.A.\n", nomes=nomes) == []
+
+
+# ── Rótulo sozinho na linha, valor abaixo (tabela lida por colunas) ─────────
+
+def test_laboratorio_com_nome_e_cpf_em_colunas_vira_aviso_forte():
+    # LABAC (Clínica Bahia, 19/11/2026): "Nome:" e o nome em linhas separadas,
+    # e o CPF longe, depois de cadastro, procedência, OS, local e data.
+    bloco = (
+        "Laboratório de Análises Clínicas\nNome:\n## JOAO FICTICIO SOUZA\nData cadastro:\n09/11/2026\n"
+        "Procedência:\n## CLINICA\n## OS n°.:\n100.579688\nLocal de Coleta:\n## CLINICA\nData:\n"
+        f"09/11/2026\n## CPF:\n{CPF_OUTRO}\n## HEMOGRAMA\n"
+    )
+    (pessoa,) = _pessoas(ASO_DA_PACIENTE + "<!-- pagina 2 -->\n" + bloco)
+    assert (pessoa["nome"], pessoa["cpf"], pessoa["tipo"]) == ("JOAO FICTICIO SOUZA", "11144477735", il.NOME_E_CPF)
+
+
+def test_rotulo_sozinho_sem_vocabulario_nao_le_a_linha_de_baixo():
+    # Sem vocabulário não há como separar o nome do resto da tabela.
+    bloco = f"Nome:\n## JOAO FICTICIO SOUZA\n## CPF:\n{CPF_OUTRO}\n"
+    assert _achar(ASO_DA_PACIENTE + "<!-- pagina 2 -->\n" + bloco) == []
+
+
+def test_cliente_com_os_outros_rotulos_da_tabela_no_meio():
+    # Laboratório da Climed (17/11/2026): rótulos numa coluna, valores na outra.
+    bloco = "## CLÍNICA MÉDICA\n## CLIENTE:\n## SEXO:\n## DT.NASCIMENTO:\n## IDADE:\n## CARLOS LIMA ROCHA DA\n## MASC.\n"
+    (pessoa,) = _pessoas(ASO_DA_PACIENTE + "<!-- pagina 2 -->\n" + bloco)
+    assert (pessoa["nome"], pessoa["tipo"]) == ("CARLOS LIMA ROCHA DA", il.SO_NOME)
+
+
+def test_nome_abaixo_do_cabecalho_identificacao():
+    # Espirometria da Phenix (24/11/2026): títulos de coluna e então o nome.
+    bloco = "## LAUDO DE ESPIROMETRIA\n## IDENTIFICAÇÃO\n## DATA DO EXAME\n## IDADE / SEXO\nCarlos Lima Rocha\n23/11/2026\n"
+    (pessoa,) = _pessoas(ASO_DA_PACIENTE + "<!-- pagina 2 -->\n" + bloco)
+    assert (pessoa["nome"], pessoa["tipo"]) == ("Carlos Lima Rocha", il.SO_NOME)
+
+
+@pytest.mark.parametrize("bloco", [
+    # Título de coluna abaixo do rótulo ("NASCIMENTO" também é sobrenome).
+    "Nome:\nData de Nascimento\n",
+    # O valor é o nome do paciente escrito à mão, estragado; abaixo, quem assina.
+    "## NOME:\nMarlta Fictca\n## ASSINATURA DO COLABORADOR\nCarlos Lima Rocha\n## MÉDICO\n",
+    # Ficha em branco: o primeiro nome abaixo é o da dentista.
+    "Paciente:\nCarlos Lima Rocha\nExaminador:\nCirurgia Dentista\n## CRO-RJ 55660\n",
+    # Bloco do profissional.
+    "02. IDENTIFICAÇÃO DO PROFISSIONAL DE PSICOLOGIA\n## NOME:\n## CARLOS LIMA ROCHA\n## FORMAÇÃO:\n",
+    # Primeiro nome fora do vocabulário: título ou empresa ("MODEC DO BRASIL").
+    "Colaborador:\nOPERADOR SILVA\n",
+])
+def test_o_que_nao_vira_aviso_abaixo_do_rotulo(bloco):
+    assert _pessoas(ASO_DA_PACIENTE + "<!-- pagina 2 -->\n" + bloco) == []
+
+
+def test_paciente_nao_identificado_nao_tem_aviso_so_pelo_nome():
+    # Sem o nome do paciente, todo nome do documento pareceria de outra pessoa.
+    markdown = ASO_DA_PACIENTE + "<!-- pagina 2 -->\nPaciente: CARLOS LIMA ROCHA\n"
+    assert _pessoas(markdown, nome="Não identificado") == []
+
+
 def test_aviso_so_pelo_nome_vai_no_exame_e_no_payload_sem_cpf():
     markdown = ASO_DA_PACIENTE + "<!-- pagina 2 -->\n## ESPIROMETRIA\nNome: CARLOS LIMA ROCHA\n"
     linhas = markdown.splitlines()
