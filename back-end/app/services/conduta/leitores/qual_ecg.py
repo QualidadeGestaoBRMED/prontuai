@@ -89,6 +89,9 @@ _ALTERADO = re.compile(
     r"|SOBRECARGA (?:ATRIAL|VENTRICULAR|DE (?:VENTRICULO|ATRIO|CAMARA)|BI|SISTOLICA|DIASTOLICA)"
     r"|EXTRA ?-?S+IST|ECTOPIA|FIBRILACAO|FLUTTER|ARRITMIA|"
     r"(?:ALTERACA?O?E?S?|DISTURBIOS?) (?:\w+ )?(?:\w+ )?(?:DA|DE|NA) REPOLARIZ|REPOLARIZ\w{0,5} PRECOCE"
+    # OCR de "alterações" ("ALTERAQ6ES", "ALTERA^OES"), até 3 palavras antes de "da repolarização" ("difusas e inespecíficas"),
+    # repolarização ventricular precoce e inversão de onda T (conferência da v.24, 27/11).
+    r"|ALTERA\S{0,4}E?S? (?:\S+ ){0,3}(?:DA|DE|NA) REPOLARIZ|REPOLARIZ\S{0,5} VENTRICULAR PRECOCE|INVERSAO DE (?:ONDA )?T\b"
     r"|PRE ?-? ?EXCITA|PREEXCITA|WOLFF|\bWPW\b|ONDA DELTA|PR CURTO|QT (?:LONGO|PROLONGADO)"
     r"|ISQUEMI|AREA ELETRICAMENTE INATIVA|INFARTO|NECROSE"
     r"|DESVIO (?:DO |DE )?EIXO|DESVIO ACENTUADO DO SAQRS|EIXO DESVIADO"
@@ -324,14 +327,44 @@ def detalhes(js: list[str]) -> dict:
             "ecg_qrs_ms": inter["qrs"], "ecg_qtc_ms": inter["qtc"], "ecg_achados": "|".join(sorted(achados))}
 
 
+# ECG de repouso descrito no laudo do teste ergométrico ("Comentários do ECG de repouso e no pré-esforço: ritmo sinusal
+# com BRD de 1º grau", "ECG basal: ...", "Alterações ECG pré-teste: ..."). Só entra quando o documento não tem laudo de
+# ECG próprio que decida: é o único ECG que o médico viu (auditoria de exames sem dado, 27/11: 75 casos).
+_ECG_REPOUSO_ERGO = re.compile(r"COMENTARIOS DO ECG DE REPOUSO|^-? ?ECG (?:DE REPOUSO|BASAL)\b|ALTERA\w* (?:D[OE] )?ECG (?:PRE-? ?TESTE|BASAL|DE REPOUSO)")
+_FIM_REPOUSO = re.compile(r"ESFOR\S?O|RECUPERA|COMENTARIOS DO ECG DURANTE|CONCLUS|OBJETIVO|PROTOCOLO|\bMETS?\b|ISQUEMIA")
+
+
+def _ecg_da_ergometria(texto_entrada: str) -> list[str]:
+    linhas = [l for l in (_norm(x) for x in (texto_entrada or "").splitlines()) if l]
+    trechos = []
+    for i, l in enumerate(linhas):
+        if not _ECG_REPOUSO_ERGO.search(l):
+            continue
+        resto = l.split(":", 1)[1] if ":" in l else ""
+        parte = [resto] if resto.strip() else []
+        for k in range(i + 1, min(i + 3, len(linhas))):
+            if _FIM_REPOUSO.search(linhas[k]) or _ECG_REPOUSO_ERGO.search(linhas[k]):
+                break
+            parte.append(linhas[k])
+        if parte and not _FIM_REPOUSO.search(parte[0]):
+            trechos.append(" | ".join(parte))
+    return trechos
+
+
 def ler(texto_entrada: str) -> dict[str, Optional[str]]:
     js = janelas(texto_entrada)
-    if not js:
-        return {"ecg": None}
-    # Texto do teste ergométrico dentro da janela não decide o ECG: em 13 de 62 "alterados" de uma amostra de 400
-    # (23/11) a alteração vinha dos objetivos/achados da ergometria ("detectar isquemia", "isquemia: ausentes").
-    cortadas = [_sem_ergometria(j) for j in js]
-    return {**_ler_conclusao(texto_entrada, cortadas), **detalhes(js)}
+    res: dict[str, Optional[str]] = {"ecg": None}
+    if js:
+        # Texto do teste ergométrico dentro da janela não decide o ECG: em 13 de 62 "alterados" de uma amostra de 400
+        # (23/11) a alteração vinha dos objetivos/achados da ergometria ("detectar isquemia", "isquemia: ausentes").
+        cortadas = [_sem_ergometria(j) for j in js]
+        res = {**_ler_conclusao(texto_entrada, cortadas), **detalhes(js)}
+    if res.get("ecg") in (None, "sem_conclusao"):
+        trechos = _ecg_da_ergometria(texto_entrada)
+        decs = [d for d in (_decidir(t) for t in trechos) if d]
+        if decs:
+            return {"ecg": "alterado" if "alterado" in decs else "normal", **detalhes(trechos)}
+    return res
 
 
 def _ler_conclusao(texto_entrada: str, js: list[str]) -> dict[str, Optional[str]]:

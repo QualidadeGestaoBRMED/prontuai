@@ -60,7 +60,9 @@ _EVIDENCIA = re.compile(r"\bCVF\b|\bFVC\b|\bVEF ?1|\bFEV ?1|TIFFENEAU|\bPEF|\bFE
 _BOILERPLATE = re.compile(
     r"A INTERPRETACAO DO RESULTADO DESTE EXAME[^.]*(?:\.|$)|CONCLUSAO DIAGNOSTICA SAO ATOS MEDICOS[^.]*"
     r"|UMA ESPIROMETRIA ALTERAD[OA] OU NORMAL[^.]*|ALTERAD[OA] OU NORMAL NAO EXCLU[^.]*"
-    r"|DEVE SER ANALISADO PELO MEDICO[^.]*|ANALISE DO MEDICO ASSISTENTE[^.]*")
+    r"|DEVE SER ANALISADO PELO MEDICO[^.]*|ANALISE DO MEDICO ASSISTENTE[^.]*"
+    # Ficha clínica (limitações para uso de respirador) e escala de falta de ar do questionário: não são laudo (27/11).
+    r"|DOENCAS PULMONARES OBSTRUTIVAS|^RESTRITIVAS$|ASMA BRONQUICA (?:LEVE|MODERADA)(?: ?/ ?GRAVE)?|GRAU \d \((?:LEVE|MODERADA|ACENTUADA|GRAVE)\)")
 _CAIXA_VAZIA = re.compile(r"[\(\[]\s*[\)\]]\s*(?:NORMAL|ALTERAD[OA]|ENCAMINHAD[OA]|LIMITROFE|OBSTRUTIV[OA]"
                           r"|RESTRITIV[OA]|MIST[OA])")
 _NEGACAO = re.compile(r"\b(?:AUSENCIA DE|SEM|NAO HA|NAO APRESENTA|NAO SE OBSERVA|NAO FORAM OBSERVAD[OA]S|NAO EVIDENCIA)"
@@ -73,7 +75,10 @@ ALTERADO = re.compile(
     r"|(?:SUGESTIV[OA]|COMPATIVEL) (?:DE|COM) (?:OBSTRU|RESTRI)|PROVAVEL RESTRICAO|LIMITACAO AO FLUXO"
     r"|CVF\)? ?REDUZIDA|CAPACIDADE VITAL FORCADA (?:\(CVF\) ?)?REDUZIDA|REDUCAO (?:DA|DE) (?:CVF|CAPACIDADE VITAL)"
     r"|FORA DOS (?:LIMITES|PADROES) DA NORMALIDADE|ESPIROMETRIA ALTERADA|EXAME ALTERADO"
-    r"|[\(\[] ?X ?[\)\]] ?ALTERAD")
+    r"|[\(\[] ?X ?[\)\]] ?ALTERAD"
+    # OCR colado ou corrompido na conclusão do médico: "RESTRITIVODISFUNCAO VENTILATORIALEVE", "DISTURB10 RESTRITIVO DE GRAU
+    # LEVE", "POSSIVEL DIST RBIO VENTILATURIO RESTRITIVO" (auditoria do Breno, 27/11).
+    r"|(?:RESTRITIV|OBSTRUTIV|MIST)\w*DISFUN|(?:RESTRI|OBSTRU)T\w* DE GRAU|\bDIST ?\w?RBIO\b")
 NORMAL = re.compile(
     r"[A-Z]*ROMETRIA (?:OCUPACIONAL )?(?:COM PADRAO )?NORMAL|EXAME DE ESPIROMETRIA NORMAL|ESPIROMETRIA DENTRO"
     r"|FUNCAO VENTILATORIA (?:DENTRO|NORMAL)|CVF[^.]{0,30}DENTRO DOS VALORES DE REFERENCIA"
@@ -162,7 +167,13 @@ def ler(texto_entrada: str) -> dict:
         return {"espirometria": None}
     base = medico or todos
     if not base:
-        return {"espirometria": "sem_conclusao", **_detalhe(linhas_medico or linhas_laudo, "sem_conclusao")}
+        detalhe = _detalhe(linhas_medico or linhas_laudo, "sem_conclusao")
+        # Sem frase de conclusão, mas com o padrão do distúrbio afirmado (interpretação automática do aparelho,
+        # "possível restrição", "Restrictive anomaly: slight"): conta como alterado. Regra do Breno, 27/11; a amostra
+        # de 15 conferida no PDF confirmou 14, e o falso (caixa vazia da ficha) saiu pelo _BOILERPLATE.
+        if detalhe.get("espirometria_padrao") in ("restritivo", "obstrutivo", "misto"):
+            return {"espirometria": "alterado", **detalhe}
+        return {"espirometria": "sem_conclusao", **detalhe}
     conclusao = "alterado" if "alterado" in base else "normal"
     return {"espirometria": conclusao, **_detalhe(linhas_medico or linhas_laudo, conclusao)}
 
