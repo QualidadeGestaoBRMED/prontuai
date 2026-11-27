@@ -699,3 +699,69 @@ def test_hdl_pelo_sexo_do_laudo():
 
 def test_colesterol_nao_hdl_nao_e_o_hdl():
     assert lido("COLESTEROL NAO HDL 154 mg/dL", "hdl") is None
+
+
+# ---------------------------------------------------------------------------
+# Auditoria da tabela de treino da conduta (27/11): textos do OCR em que o
+# leitor perdia o resultado ou pegava a referência. Conferidos no PDF.
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("md, chave, esperado", [
+    # Nome seguido de pontilhado: o ponto solto não é número de faixa.
+    ("COLESTEROL TOTAL.\n260 mg/dl", "colesterol", 260),
+    ("TRIGLICERIDEOS.\n80 mg/dl", "triglic", 80),
+    ("HEMACIAS... 4,72 MILHOES/MM3 4,70 A 6,00 MILHOES/MM3", "eritrocitos", 4.72),
+    # "mg/dl" com o l lido como 1.
+    ("COLESTEROL HDL.\n65 mg/d1", "hdl", 65),
+    # Nome longo das transaminases.
+    ("TRANSAMINASE GLUTAMICA OXALACETICA\n26 U/L", "tgo", 26),
+    ("TRANSAMINASE GLUTAMICA PIRUVICA\n21 U/L", "tgp", 21),
+    # Hífen solto antes do nome.
+    ("-COLESTEROL TOTAL.:174 MG/DL", "colesterol", 174),
+    ("COLESTEROL -HDL\n42,0 mg/dL", "hdl", 42),
+    # HbA1c com o "%" lido como 8, ou sem unidade antes da referência.
+    ("Hb A1c:\n4,9 8\nNormal: Menor que 5,7%\nPré-diabetes: 5,7% a 6,4%", "hba1c", 4.9),
+    ("Hb Alc:\n4,98\nNormal: Menor que 5,7%", "hba1c", 4.9),
+    ("HB A1C 5,4 NORMAL MENOR QUE 5,7% PRE-DIABETES 5,7% A 6,4%", "hba1c", 5.4),
+    # Textract: letras trocadas por outro alfabeto e "%" lido como "응".
+    ("нь Alc:\n4,8\nNormal: Menor que 5,7%", "hba1c", 4.8),
+    ("HBA1C\n:\n4,5\n응", "hba1c", 4.5),
+    # Hora da coleta com segundos logo antes do resultado.
+    ("GAMA GLUTAMIL TRANSFERASE\nData de recebimento:\n25/07/2025 05:13:28\n8,0 U/L\nHomens até 60,0 U/L", "ggt", 8),
+])
+def test_auditoria_conduta_resultado_lido(md, chave, esperado):
+    assert lido(md, chave) == pytest.approx(esperado)
+
+
+@pytest.mark.parametrize("md, chave", [
+    # Sem o resultado no texto, a referência não vira resultado.
+    ("HEMOGLOBINA GLICADA\nNormal: Menor que 5,7%\nPré-diabetes: 5,7% a 6,4%", "hba1c"),
+    # "ATÉ" lido como AT6/AID: o limite da referência não é o resultado.
+    ("GAMA GLUTAMILTRANSFERASE\nHOMENS AT6 60,0 U/L MULHERES ATE 43,0 U/L", "ggt"),
+    ("ALANINA AMINOTRANSFERASE\nMULHERES ATE 31,0 U/L HOMENS AID 41,0 U/L", "tgp"),
+    # O hífen colado continua fora.
+    ("COLESTEROL NAO-HDL 131 mg/dL", "hdl"),
+])
+def test_auditoria_conduta_referencia_nao_e_resultado(md, chave):
+    assert lido(md, chave) is None
+
+
+def test_auditoria_conduta_decimal_quebrado_nao_vira_inteiro():
+    assert lido("HB A1C . 4 , 7 % VR NORMAL MENOR QUE 5,7%", "hba1c") != 7
+
+
+@pytest.mark.parametrize("md, chave, esperado", [
+    # Nomes da HbA1c do laboratório do RJ e do scanner; "Manor qua" (Menor que) é referência.
+    ("HEMOGLOBINA GLICADA\nHb SA1c - Forma estável 8,0 %", "hba1c", 8.0),
+    ("HEMOGLOBINA GLICADA\nNormal: Manor qua 5,7%\nHb Ale: 4,8 %\nPre-diabetes: 5,7% a 6,4%", "hba1c", 4.8),
+    # Ícone do laudo lido como "0" entre o nome e o resultado.
+    ("CREATININA 0 1,11 MG/DL 0,70 A 1,30 MG/DL", "creatinina", 1.11),
+    ("GLICOSE 0 95 MG/DL 70 A 99 MG/DL", "glicemia", 95),
+])
+def test_auditoria_conduta_v23(md, chave, esperado):
+    assert lido(md, chave) == pytest.approx(esperado)
+
+
+def test_zero_de_faixa_continua_referencia():
+    # "0 A 5" é faixa, não ícone: o valor de verdade vem depois.
+    assert lido("BASTONETES 2 % 0 A 5 %", "bastonetes") == pytest.approx(2)

@@ -109,37 +109,38 @@ class Parametro:
 PARAMETROS: dict[str, Parametro] = {p.chave: p for p in (
     Parametro("glicemia", "Glicose em jejum", "mg/dL",
               ("GLICEMIA DE JEJUM", "GLICEMIA EM JEJUM", "GLICOSE DE JEJUM", "GLICOSE EM JEJUM", "GLICEMIA", "GLICOSE"),
-              (40, 100), (80, 140), unidade_rx=r"MG\s?/\s?DL", plausivel=(20, 1000),
+              (40, 100), (80, 140), unidade_rx=r"MG\s?/\s?D[L1]", plausivel=(20, 1000),
               exclui=("MEDIA", "ESTIMADA", "POS", "NA URINA", "URINA", "1 HORA", "2 HORAS")),
     Parametro("hba1c", "Hemoglobina glicada (HbA1c)", "%",
-              ("HEMOGLOBINA GLICADA", "HBA1C", "HB A1C", "HB ALC", "HBALC", "A1C"),
+              # "HB SA1C - forma estável" (laboratório do RJ) e "Hb Ale" (A1c lido pelo scanner): 27/11.
+              ("HEMOGLOBINA GLICADA", "HBA1C", "HB A1C", "HB ALC", "HBALC", "HB SA1C", "SA1C", "HB ALE", "A1C"),
               (3, 5), (5, 7.5), unidade_rx=r"%", plausivel=(3, 20)),
     Parametro("colesterol", "Colesterol total", "mg/dL",
               ("COLESTEROL TOTAL", "COLESTROL TOTAL"),
-              (0, 150), (150, 240), unidade_rx=r"MG\s?/\s?DL", plausivel=(50, 1000)),
+              (0, 150), (150, 240), unidade_rx=r"MG\s?/\s?D[L1]", plausivel=(50, 1000)),
     Parametro("hdl", "Colesterol HDL", "mg/dL",
               ("COLESTEROL HDL", "HDL COLESTEROL", "HDL-COLESTEROL", "HDL"),
-              (35, 55), None, unidade_rx=r"MG\s?/\s?DL", plausivel=(5, 200), piso=True,
+              (35, 55), None, unidade_rx=r"MG\s?/\s?D[L1]", plausivel=(5, 200), piso=True,
               exclui_antes=("NAO", "NAO-")),
     Parametro("ldl", "Colesterol LDL", "mg/dL",
               ("COLESTEROL LDL", "LDL COLESTEROL", "LDL-COLESTEROL", "LDL"),
-              None, (99, 160), unidade_rx=r"MG\s?/\s?DL", plausivel=(5, 600), teto_da_tabela=True),
+              None, (99, 160), unidade_rx=r"MG\s?/\s?D[L1]", plausivel=(5, 600), teto_da_tabela=True),
     Parametro("triglic", "Triglicerídeos", "mg/dL",
               ("TRIGLICERIDEOS", "TRIGLICERIDES", "TRIGLICERIDIOS"),
-              (0, 100), (100, 200), unidade_rx=r"MG\s?/\s?DL", plausivel=(10, 5000)),
+              (0, 100), (100, 200), unidade_rx=r"MG\s?/\s?D[L1]", plausivel=(10, 5000)),
     Parametro("creatinina", "Creatinina", "mg/dL",
               ("CREATININA",),
-              (0.3, 1.1), (0.8, 1.7), unidade_rx=r"MG\s?/\s?DL", plausivel=(0.1, 20),
+              (0.3, 1.1), (0.8, 1.7), unidade_rx=r"MG\s?/\s?D[L1]", plausivel=(0.1, 20),
               exclui=("NA URINA", "URINARIA", "CLEARANCE")),
     Parametro("ureia", "Ureia", "mg/dL",
               ("UREIA",),
-              (5, 30), (30, 80), unidade_rx=r"MG\s?/\s?DL", plausivel=(2, 400),
+              (5, 30), (30, 80), unidade_rx=r"MG\s?/\s?D[L1]", plausivel=(2, 400),
               exclui=("NA URINA", "URINARIA")),
     Parametro("tgo", "TGO (AST)", "U/L",
-              ("ASPARTATO AMINOTRANSFERASE", "TRANSAMINASE OXALACETICA", "TGO", "AST"),
+              ("ASPARTATO AMINOTRANSFERASE", "TRANSAMINASE GLUTAMICA OXALACETICA", "TRANSAMINASE OXALACETICA", "TGO", "AST"),
               (0, 20), (20, 70), unidade_rx=r"U\s?/\s?L", plausivel=(1, 5000)),
     Parametro("tgp", "TGP (ALT)", "U/L",
-              ("ALANINA AMINOTRANSFERASE", "TRANSAMINASE PIRUVICA", "TGP", "ALT"),
+              ("ALANINA AMINOTRANSFERASE", "TRANSAMINASE GLUTAMICA PIRUVICA", "TRANSAMINASE PIRUVICA", "TGP", "ALT"),
               (0, 20), (20, 70), unidade_rx=r"U\s?/\s?L", plausivel=(1, 5000)),
     Parametro("ggt", "Gama GT", "U/L",
               ("GAMA GLUTAMIL TRANSFERASE", "GAMA GLUTAMILTRANSFERASE", "GAMA-GT", "GAMA GT", "GGT"),
@@ -286,6 +287,10 @@ _EXAME_PARAMETROS: tuple[tuple[re.Pattern, tuple[str, ...]], ...] = (
 )
 
 _DATA = re.compile(r"\b\d{1,2}/\d{1,2}/\d{2,4}\b")
+# Hora com segundos ("Data de recebimento: 25/07/2025 05:13:28 / 8,0 U/L"): sem os dois-pontos, o "28" parecia o
+# início de uma faixa e o resultado logo depois era descartado (GGT, TGP e HDL; 27/11). Só com segundos, para não
+# apagar titulação ("1:16").
+_HORA = re.compile(r"\b\d{1,2}:\d{2}:\d{2}\b")
 # O número não pode ser pedaço de outro token: nem cauda ("MM3" de
 # "MILHOES/MM3") nem começo ("52.012" de "CRM 52.0123237-1").
 _NUMERO = r"(?<![A-Z0-9/.,])(\d{1,3}(?:\.\d{3})+|\d+(?:[.,]\d+)?)(?![0-9]|[.,][0-9])"
@@ -296,6 +301,10 @@ _UNIDADE_CONTAGEM = re.compile(r"\s*(?:/?\s?MM\s?3|/\s?MM\b|/\s?UL|/\s?L\b|/\s?C
 _ANTES_REFERENCIA = {
     "A", "ATE", "DE", "QUE", "E", "MAIOR", "MENOR", "IGUAL", "INFERIOR", "SUPERIOR", "ACIMA", "ABAIXO",
     "ENTRE", "<", ">", "<=", ">=", "-",
+    # "ATE" lido pelo OCR ("HOMENS AT6 60,0 U/L"): GGT 60/43 e TGP 41 saíam da referência (auditoria do Breno, 27/11).
+    "AT6", "AT", "AID", "ATB", "AT8",
+    # "Menor que" lido pelo scanner como "Manor qua" (27/11).
+    "QUA",
 }
 # Comparação um pouco antes do número: "estão acima de [...] 800 mg/dL" é nota
 # do laboratório, com o OCR embaralhando a ordem das palavras.
@@ -309,10 +318,20 @@ _TEXTO_QUALITATIVO = {
 _QUALITATIVO_NORMAL = ("Não reagente", "Negativo", "Não detectado")
 
 
+# Letras que o OCR troca por outro alfabeto e que o ASCII apagaria: o Textract escreve "нь Alc" para "Hb A1c" e "응"
+# para "%" (laudos DB Diagnósticos e HPLC, comparação RapidOCR × Textract de 27/11).
+_CONFUNDIVEIS = str.maketrans({
+    "н": "H", "Н": "H", "ь": "B", "Ь": "B", "в": "B", "В": "B", "а": "A", "А": "A", "е": "E", "Е": "E",
+    "к": "K", "К": "K", "м": "M", "М": "M", "о": "O", "О": "O", "р": "P", "Р": "P", "с": "C", "С": "C",
+    "т": "T", "Т": "T", "х": "X", "Х": "X", "응": "%",
+})
+
+
 def normalizar(texto: str) -> str:
     """Sem acento, maiúsculo, espaço simples. Mantém dígitos, vírgula, ponto, "%",
     "/", "-" e "<>" (fazem parte de valor, unidade e faixa)."""
-    texto = unicodedata.normalize("NFKD", texto or "").encode("ascii", "ignore").decode().upper()
+    texto = (texto or "").translate(_CONFUNDIVEIS)
+    texto = unicodedata.normalize("NFKD", texto).encode("ascii", "ignore").decode().upper()
     texto = texto.replace("³", "3")
     return re.sub(r"[^A-Z0-9,.%/<>\-]+", " ", texto).strip()
 
@@ -328,14 +347,19 @@ def _regex_nomes(nomes: Iterable[str]) -> str:
     return "|".join(re.escape(n).replace(r"\ ", r"\s+") for n in alts)
 
 
+# Nome colado em letra, número ou hífen de palavra ("NAO-HDL", "HDL-COLESTEROL") não vale. Hífen solto, de marcador de
+# lista, vale: "-COLESTEROL TOTAL.:174 MG/DL" e "COLESTEROL -HDL 42,0" ficavam sem leitura (auditoria do LDL, 27/11).
+_ANTES_DO_NOME = r"(?<![A-Z0-9])(?<![A-Z0-9]-)"
+
+
 def _compilar(p: Parametro) -> re.Pattern:
     exclui = "".join(f"(?!\\s*{re.escape(e)})" for e in p.exclui)
-    return re.compile(rf"(?<![A-Z0-9\-])(?:{_regex_nomes(p.nomes)})(?![A-Z0-9]){exclui}")
+    return re.compile(rf"{_ANTES_DO_NOME}(?:{_regex_nomes(p.nomes)})(?![A-Z0-9]){exclui}")
 
 
 _RX_NOME = {k: _compilar(p) for k, p in PARAMETROS.items()}
 _RX_FRONTEIRA = re.compile(
-    rf"(?<![A-Z0-9\-])(?:{_regex_nomes([n for p in PARAMETROS.values() for n in p.nomes] + list(_FRONTEIRA_EXTRA))})(?![A-Z0-9])"
+    rf"{_ANTES_DO_NOME}(?:{_regex_nomes([n for p in PARAMETROS.values() for n in p.nomes] + list(_FRONTEIRA_EXTRA))})(?![A-Z0-9])"
 )
 
 
@@ -346,14 +370,32 @@ def _palavra_antes(texto: str, fim: int) -> str:
 
 def _referencia_antes(jan: str, inicio: int) -> bool:
     antes = _palavra_antes(jan, inicio)
-    if antes in _ANTES_REFERENCIA or re.fullmatch(r"[\d.,]+", antes):
+    # Ícone do laudo lido como "0" entre o nome e o resultado ("CREATININA ○ 1,11 MG/DL 0,70 A 1,30"): o zero solto
+    # logo depois do nome não é início de faixa (27/11).
+    if antes == "0" and len(jan[:inicio].split()) == 1:
+        return False
+    # Número antes ("100 - 200") é faixa; pontuação sozinha não é número: "COLESTEROL TOTAL. 260 mg/dl" (Labore, que
+    # imprime o nome seguido de pontilhado) perdia colesterol, HDL e triglicerídeos (unicodoc-8513620, 27/11).
+    if antes in _ANTES_REFERENCIA or (re.fullmatch(r"[\d.,]+", antes) and re.search(r"\d", antes)):
         return True
+    # Pontuação solta logo depois de um número é decimal quebrado pelo OCR: "HB A1C . 4 , 7 %" não é 7.
+    if antes and re.fullmatch(r"[.,]+", antes):
+        anteriores = jan[:inicio].split()[-2:-1]
+        if anteriores and re.fullmatch(r"[\d.,]*\d[\d.,]*", anteriores[0]):
+            return True
     return bool(_COMPARACAO_PERTO.intersection(jan[:inicio].split()[-3:]))
 
 
 def _valor_numerico(p: Parametro, jan: str) -> Optional[tuple[float, str, int, int]]:
     """(valor, como exibir, início e fim do número na janela)."""
     lo, hi = p.plausivel
+    # HbA1c com um decimal logo depois do nome e o "%" lido como 8 ("HB A1C 4,9 8" e "HB A1C 4,98" no laudo
+    # DB Diagnósticos, que imprime "4,9 %"): conferido no PDF em 27/11 (8048992, 8197264, 8688305).
+    if p.chave == "hba1c":
+        # Também sem o "%": "HB A1C 5,4 NORMAL MENOR QUE 5,7%" (o resultado vem colado no nome e a referência depois).
+        m = re.match(r"\s*[:.]?\s*(\d{1,2},\d)(?:\s?8(?![\d.,%])|(?=\s+(?:NORMAL|NOTMAL|VALOR|VR\b|V\.R|VIDE)))", jan)
+        if m and lo <= _numero(m.group(1)) <= hi:
+            return _numero(m.group(1)), m.group(1), m.start(1), m.end(1)
     if p.milhar:
         m = re.search(rf"{_NUMERO}(\s*(?:MIL\b|X\s?10\s?\^?\s?3|X\s?10E3))?", jan)
         if not m or _referencia_antes(jan, m.start()):
@@ -373,6 +415,12 @@ def _valor_numerico(p: Parametro, jan: str) -> Optional[tuple[float, str, int, i
         return (valor, texto, m.start(1), m.end(1)) if lo <= valor <= hi else None
     for m in re.finditer(rf"{_NUMERO}\s*(?:{p.unidade_rx})", jan):
         if _referencia_antes(jan, m.start()):
+            continue
+        # Número que abre uma faixa ("PRE-DIABETES 5,7% A 6,4%") é a referência, não o resultado: com o resultado
+        # ilegível, a HbA1c ficava 5,7 em 432 documentos (auditoria do Breno, 27/11).
+        # Só faixa com a unidade dos dois lados: "35 U/L ATE 40 U/L" é resultado seguido da referência, e
+        # "188 MG/DL A 2 ANOS" é a tabela por idade que vem depois.
+        if re.match(rf"\s*A\s+\d+(?:[.,]\d+)?\s*(?:{p.unidade_rx})", jan[m.end():]):
             continue
         valor = _numero(m.group(1))
         return (valor, m.group(1), m.start(1), m.end(1)) if lo <= valor <= hi else None
@@ -636,7 +684,7 @@ def _texto_normalizado(markdown: str) -> tuple[str, list[tuple[int, int]]]:
     inicios: list[tuple[int, int]] = []
     tamanho = 0
     for indice, linha in enumerate((markdown or "").split("\n")):
-        trecho = re.sub(r" {2,}", " ", _DATA.sub(" ", normalizar(linha))).strip()
+        trecho = re.sub(r" {2,}", " ", _DATA.sub(" ", normalizar(_HORA.sub(" ", linha)))).strip()
         if not trecho:
             continue
         if partes:
