@@ -50,8 +50,11 @@ def sugerir_para_documento(document) -> dict[str, Any]:
     ausentes = [t.get("exame") for t in payload.get("tabela_comparacao") or [] if isinstance(t, dict)
                 and t.get("status") == "faltante" and t.get("exame")]
     data = document.uploaded_at.date().isoformat() if getattr(document, "uploaded_at", None) else None
+    # Nome e CPF já extraídos localmente reforçam a redação antes de a ficha ir ao 4o mini (pii_redaction).
+    conhecidos = tuple(v for v in (getattr(document, "cpf", None), payload.get("patient_name"),
+                                   getattr(document, "patient_name", None)) if v)
     return cs.sugerir(document.ocr_markdown or "", data, ausentes, document.exams_ocr or [],
-                      document.exams_brnet or [], Guardada(document.id))
+                      document.exams_brnet or [], Guardada(document.id), conhecidos)
 
 
 class FilaConduta:

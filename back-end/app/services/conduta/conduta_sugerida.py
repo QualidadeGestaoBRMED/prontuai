@@ -11,6 +11,7 @@
 """
 from __future__ import annotations
 
+import functools
 import hashlib
 import json
 import logging
@@ -41,6 +42,8 @@ ML_SERVICE_URL = os.getenv("ML_SERVICE_URL", "").rstrip("/")
 ML_SERVICE_TOKEN = os.getenv("ML_SERVICE_TOKEN", "")
 ML_TIMEOUT = float(os.getenv("ML_TIMEOUT", "20"))
 # Hoje faltam só as 6 psico_* (lidas na imagem no treino); acima disso, quebra de paridade.
+# Ficha clínica com o 4o mini nas lacunas das regras (STC-1068): o caminho de produção. "false" volta a só regras.
+CONDUTA_FICHA_LLM = os.getenv("CONDUTA_FICHA_LLM", "true").strip().lower() not in ("false", "0", "nao", "não", "no")
 ML_MAX_FEATURES_AUSENTES = int(os.getenv("ML_MAX_FEATURES_AUSENTES", "10"))
 ML_CONFIANCA_CALIBRADA = os.getenv("ML_CONFIANCA_CALIBRADA", "false").lower() == "true"
 VERSAO_FEATURES = _mf.VERSAO
@@ -157,9 +160,16 @@ _LISTAS = {"rx_torax__achados": "rx_torax_achado_", "rx_coluna__achados": "rx_co
            "ecg__achados": "ecg_achado_", "exame_fisico__achados": "exame_fisico_achado_"}
 
 
-def _ficha_plana(entrada: str) -> dict[str, Any]:
-    """Ficha da produção (só regras) achatada nas chaves da tabela, como extrair_caso._ficha_plana do treino."""
-    f = _fc.extrair_ficha(entrada, usar_llm=False)
+def _ficha_plana(entrada: str, valores_conhecidos: tuple[str, ...] = ()) -> dict[str, Any]:
+    """Ficha da produção (regras + 4o mini nas lacunas, CONDUTA_FICHA_LLM) achatada nas chaves da tabela."""
+    return dict(_ficha_plana_cache(entrada, tuple(v for v in valores_conhecidos if v), CONDUTA_FICHA_LLM))
+
+
+@functools.lru_cache(maxsize=512)
+def _ficha_plana_cache(entrada: str, valores_conhecidos: tuple[str, ...], usar_llm: bool) -> dict[str, Any]:
+    # A abertura do documento remonta as features para achar a resposta guardada pelo hash: sem este cache, cada
+    # abertura chamaria o 4o mini de novo (o cache em disco da ficha só existe com FICHA_CACHE_DIR).
+    f = _fc.extrair_ficha(entrada, usar_llm=usar_llm, valores_conhecidos=valores_conhecidos)
     if f is None:
         return {"fonte": "sem_ficha"}
     f = f.model_dump()
@@ -199,14 +209,17 @@ def _travas_da_ficha(linha: dict[str, Any]) -> None:
 
 
 def features_do_documento(markdown: str, data_documento: Optional[str], exames_ocr: Optional[list[str]] = None,
-                          exames_brnet: Optional[list[str]] = None) -> dict[str, Any]:
+                          exames_brnet: Optional[list[str]] = None,
+                          valores_conhecidos: tuple[str, ...] = ()) -> dict[str, Any]:
     """A linha da tabela de features para um documento, a partir do texto do OCR e dos exames do documento."""
     doc = {"document_id": "doc", "data": data_documento, "exams_ocr": list(exames_ocr or []),
            "exams_brnet": list(exames_brnet or [])}
     caso, _ = _ec.extrair_caso(doc, markdown)
     entrada, _ = _ec.separar_rotulo(markdown)
-    caso["ficha"] = _ficha_plana(entrada)
+    caso["ficha"] = _ficha_plana(entrada, valores_conhecidos)
     linha = _mf.montar_features(caso)
+    # De onde veio a ficha (regras, regras+llm, llm, sem_ficha): fica na resposta, não vai ao modelo (_NUNCA_SAI).
+    linha["ficha_fonte"] = caso["ficha"].get("fonte")
     _travas_da_ficha(linha)
     # Listas viram uma coluna sim/não por valor, como no gerar_parquet; o serviço de ML completa as ausentes com "nao".
     for col, prefixo in _LISTAS.items():
@@ -305,7 +318,7 @@ def hash_features(features: dict) -> str:
 
 def sugerir(markdown: str, data_documento: Optional[str], exames_ausentes: list[str],
             exames_ocr: Optional[list[str]] = None, exames_brnet: Optional[list[str]] = None,
-            guardada: Optional[Guardada] = None) -> dict[str, Any]:
+            guardada: Optional[Guardada] = None, valores_conhecidos: tuple[str, ...] = ()) -> dict[str, Any]:
     """{conduta_sugerida, motivo_sem_sugestao, versao_modelo, confianca_calibrada, prob_encaminhamento, especialidades}.
 
     Com `guardada`, cada chamada ao ml-exams vira uma linha da trilha (resposta inteira ou falha, com tempo, código e
@@ -317,7 +330,7 @@ def sugerir(markdown: str, data_documento: Optional[str], exames_ausentes: list[
     if not (markdown or "").strip():
         return {**base, "motivo_sem_sugestao": "FALHA_NA_LEITURA"}
     try:
-        linha = features_do_documento(markdown, data_documento, exames_ocr, exames_brnet)
+        linha = features_do_documento(markdown, data_documento, exames_ocr, exames_brnet, valores_conhecidos)
     except Exception as exc:  # noqa: BLE001
         logger.warning(f"[CONDUTA] Falha ao montar as features: {type(exc).__name__}")
         return {**base, "motivo_sem_sugestao": "FALHA_NA_LEITURA"}
@@ -361,6 +374,7 @@ def sugerir(markdown: str, data_documento: Optional[str], exames_ausentes: list[
     out = _conduta_da_resposta(resp, exames_ausentes, base)
     out["sugestao_guardada_em"] = guardada_em.isoformat() if hasattr(guardada_em, "isoformat") else guardada_em
     out["sugestao_id"] = sugestao_id
+    out["ficha_fonte"] = linha.get("ficha_fonte")
     out["caso_id"] = caso_id
     return out
 
